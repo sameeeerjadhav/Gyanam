@@ -1,0 +1,44 @@
+# Secrets / local config
+.env
+.env.*
+!.env.example
+gyanamindia/config/db.php
+gyanamindia/config/razorpay.php
+**/credentials.json
+**/*secret*
+
+# Dependencies
+**/node_modules/
+**/vendor/
+gyanamexam/gyanam-backend/vendor/
+
+# Build / cache
+**/dist/
+**/.cache/
+**/bootstrap/cache/*.php
+!**/bootstrap/cache/.gitignore
+**/storage/framework/cache/**
+**/storage/framework/sessions/**
+**/storage/framework/views/**
+**/storage/logs/**
+!**/storage/**/.gitignore
+
+# Uploads & user media
+gyanamindia/uploads/**
+!gyanamindia/uploads/.gitkeep
+**/storage/app/public/**
+!**/storage/app/public/.gitignore
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.kiro/
+*.swp
+*.zip
+
+# Logs / temp
+*.log
+*.tmp
+*.bak

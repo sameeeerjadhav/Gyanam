@@ -1,0 +1,159 @@
+<!-- Student Details Modal -->
+<div class="modal-overlay" id="detailsModal">
+    <div class="modal-card" style="max-width: 900px;">
+        <div class="modal-header">
+            <h3>
+                <svg class="modal-header-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Student Fees Details
+            </h3>
+            <button type="button" class="modal-close" onclick="closeDetailsModal()" aria-label="Close">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        
+        <div class="modal-body" id="detailsContent">
+            <!-- Content will be populated by JavaScript -->
+        </div>
+        
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="closeDetailsModal()">
+                <svg class="btn-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Close
+            </button>
+            <button type="button" class="btn-primary btn-payment" id="recordPaymentBtn" onclick="recordPaymentFromDetails()">
+                <svg class="btn-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                Record Payment
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Record Payment Modal -->
+<div class="modal-overlay" id="paymentModal">
+    <div class="modal-card" style="max-width: 650px;">
+        <div class="modal-header">
+            <h3>
+                <svg class="modal-header-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                Record Fee Payment
+            </h3>
+            <button type="button" class="modal-close" onclick="closePaymentModal()" aria-label="Close">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        
+        <form id="paymentForm" novalidate>
+            <input type="hidden" id="payment_student_id" name="student_id">
+            <input type="hidden" name="action" value="record_payment">
+            
+            <div class="modal-body">
+                
+                <!-- Student Info Display -->
+                <div class="payment-info-banner">
+                    <div class="payment-info-header">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <div class="payment-info-student">
+                            <strong id="paymentStudentName"></strong>
+                            <div id="paymentStudentRoll"></div>
+                        </div>
+                    </div>
+                    <div class="payment-info-amounts">
+                        <div class="payment-info-item">
+                            <div class="payment-info-label">Pending Amount</div>
+                            <div class="payment-info-value" id="paymentPendingAmount">₹ 0.00</div>
+                        </div>
+                        <div class="payment-info-item">
+                            <div class="payment-info-label">Total Fees</div>
+                            <div class="payment-info-value" id="paymentTotalFees">₹ 0.00</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-section">
+                    <div class="form-section-title">
+                        <svg class="section-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        Payment Details
+                    </div>
+                    
+                    <div class="profile-form-grid">
+                        <div class="form-field full-width">
+                            <label for="amount">Payment Amount <span class="required">*</span></label>
+                            <input type="number" id="amount" name="amount" required min="1" step="0.01" placeholder="0.00">
+                            <small class="field-hint">
+                                <svg class="hint-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                Enter the amount received from student
+                            </small>
+                        </div>
+                        
+                        <div class="form-field">
+                            <label for="payment_mode">Payment Mode <span class="required">*</span></label>
+                            <select id="payment_mode" name="payment_mode" required>
+                                <option value="">Select Mode</option>
+                                <option value="Cash">Cash</option>
+                                <option value="UPI">UPI</option>
+                                <option value="Card">Debit/Credit Card</option>
+                                <option value="Net Banking">Net Banking</option>
+                                <option value="Cheque">Cheque</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-field">
+                            <label for="transaction_ref">Transaction Ref/Cheque No</label>
+                            <input type="text" id="transaction_ref" name="transaction_ref" maxlength="100" placeholder="Optional">
+                        </div>
+                        
+                        <div class="form-field full-width">
+                            <label for="remarks">Remarks</label>
+                            <textarea id="remarks" name="remarks" rows="3" placeholder="Any additional notes about this payment"></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closePaymentModal()">
+                    <svg class="btn-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    Cancel
+                </button>
+                <button type="submit" class="btn-primary btn-payment" id="paymentSubmitBtn">
+                    <svg class="btn-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <span id="paymentSubmitBtnText">Record Payment</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Receipt Modal -->
+<div class="modal-overlay" id="receiptModal">
+    <div class="modal-card" style="max-width: 800px;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #ec4899, #db2777); color: white; border-bottom: 1px solid #be185d;">
+            <h3>
+                <svg style="width: 22px; height: 22px; color: white;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                Fee Receipt
+            </h3>
+            <button type="button" class="modal-close" onclick="closeReceiptModal()" aria-label="Close" style="color: white;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        
+        <div class="modal-body" id="receiptContent" style="padding: 0;">
+            <!-- Receipt will be generated here -->
+        </div>
+        
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="closeReceiptModal()">
+                <svg class="btn-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Close
+            </button>
+            <button type="button" class="btn-primary btn-payment" onclick="printReceipt()">
+                <svg class="btn-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                Print Receipt
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="../assets/js/dashboard.js"></script>

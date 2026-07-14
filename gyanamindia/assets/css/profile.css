@@ -1,0 +1,335 @@
+/* ============================================================
+   Gyanam Portal — Profile Page Styles
+   ============================================================ */
+
+.profile-page {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+}
+
+/* ---- Profile Header Card — spans full width ---- */
+.profile-header-card {
+    grid-column: 1 / -1;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 1.25rem 1.75rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    animation: cardSlideUp 0.4s var(--ease-spring) both;
+}
+
+.profile-header-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-400), var(--teal-400));
+}
+
+.profile-avatar-lg {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, var(--primary-400), var(--primary-600));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 1.6rem;
+    color: #fff;
+    flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(67, 97, 238, 0.2);
+}
+
+.profile-header-info {
+    min-width: 0;
+}
+
+.profile-header-info h2 {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0 0 0.25rem;
+    line-height: 1.2;
+}
+
+.profile-role-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.65rem;
+    border-radius: var(--radius-full);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.3rem;
+}
+
+.profile-role-badge.admin {
+    background: var(--primary-100);
+    color: var(--primary-700);
+}
+
+.profile-role-badge.dlc {
+    background: var(--warning-100);
+    color: var(--warning-600);
+}
+
+.profile-role-badge.atc {
+    background: var(--success-100);
+    color: var(--success-600);
+}
+
+.profile-meta {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.profile-meta svg {
+    width: 13px;
+    height: 13px;
+    opacity: 0.5;
+}
+
+/* ---- Form Cards — side by side ---- */
+.profile-form-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 1.25rem 1.5rem 1.5rem;
+    box-shadow: var(--shadow-sm);
+    animation: cardSlideUp 0.4s var(--ease-spring) 0.06s both;
+    display: flex;
+    flex-direction: column;
+}
+
+.password-section {
+    animation-delay: 0.12s;
+}
+
+.profile-form-card h3 {
+    font-size: 0.92rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0 0 1rem;
+    padding-bottom: 0.65rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.profile-form-card h3 svg {
+    width: 17px;
+    height: 17px;
+    color: var(--primary-500);
+}
+
+/* ---- Form Fields ---- */
+.profile-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem 1rem;
+    flex: 1;
+}
+
+.profile-form-grid .form-field.full-width {
+    grid-column: 1 / -1;
+}
+
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.form-field label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+    padding: 0.55rem 0.8rem;
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.84rem;
+    font-family: inherit;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+    border-color: var(--primary-400);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.08);
+}
+
+.form-field input:read-only {
+    background: var(--gray-50);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    border-color: var(--gray-200);
+}
+
+.form-field input:read-only:focus {
+    border-color: var(--gray-200);
+    box-shadow: none;
+}
+
+/* ---- Form Actions ---- */
+.profile-form-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1.15rem;
+    border: none;
+    border-radius: var(--radius-md);
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-700));
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.25s var(--ease-spring);
+    box-shadow: 0 3px 10px rgba(67, 97, 238, 0.2);
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(67, 97, 238, 0.3);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-primary svg {
+    width: 15px;
+    height: 15px;
+}
+
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1.15rem;
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.btn-secondary:hover {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+}
+
+/* ---- Alerts — span full width ---- */
+.alert-success,
+.alert-danger {
+    grid-column: 1 / -1;
+    border-radius: var(--radius-md);
+    padding: 0.7rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    animation: cardSlideUp 0.3s var(--ease-spring) both;
+}
+
+.alert-success svg,
+.alert-danger svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.alert-success {
+    background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+    color: var(--success-600);
+    border: 1px solid rgba(18, 183, 106, 0.12);
+    border-left: 4px solid var(--success-500);
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, #fef2f2, #fee4e2);
+    color: var(--danger-600);
+    border: 1px solid rgba(240, 68, 56, 0.12);
+    border-left: 4px solid var(--danger-500);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+    .profile-page {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-header-card {
+        flex-direction: column;
+        text-align: center;
+        padding: 1.25rem;
+    }
+
+    .profile-meta {
+        justify-content: center;
+    }
+
+    .profile-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-avatar-lg {
+        width: 56px;
+        height: 56px;
+        font-size: 1.4rem;
+    }
+
+    .profile-form-actions {
+        flex-direction: column;
+    }
+
+    .profile-form-actions .btn-primary {
+        width: 100%;
+        justify-content: center;
+    }
+}

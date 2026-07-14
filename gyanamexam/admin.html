@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Portal — Gyanam Exam System</title>
+  <link rel="icon" href="assets/logo.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Laravel Echo + Pusher JS for Reverb WebSocket connection -->
+  <script src="https://cdn.jsdelivr.net/npm/pusher-js@8.3.0/dist/web/pusher.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="src/styles/main.css?v=4">
+</head>
+
+<body>
+
+  <!-- ─── Login Screen ────────────────────────────────────────────────────────── -->
+  <div id="login-screen" class="login-page">
+    <div class="login-left">
+      <div class="portal-icon">
+        <img src="assets/logo.png" alt="Gyanam" style="width:56px;height:56px;border-radius:16px;object-fit:contain;">
+      </div>
+      <h1>Gyanam Exam Portal</h1>
+      <p>Secure examination management system for administrators, assessment centres, and digital learning centres.</p>
+
+      <!-- Features list instead of credentials -->
+      <div style="margin-top: 2.5rem; width: 100%; max-width: 340px;">
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <div style="display: flex; align-items: center; gap: 0.875rem;">
+            <div style="width: 36px; height: 36px; background: rgba(37,99,235,0.15); border: 1px solid rgba(37,99,235,0.25); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" style="width:18px;height:18px"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z"/></svg>
+            </div>
+            <div>
+              <div style="font-size: 0.85rem; font-weight: 600; color: white;">Question Bank Management</div>
+              <div style="font-size: 0.72rem; color: rgba(255,255,255,0.45);">Create, import & organize exam questions</div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.875rem;">
+            <div style="width: 36px; height: 36px; background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.25); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" style="width:18px;height:18px"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </div>
+            <div>
+              <div style="font-size: 0.85rem; font-weight: 600; color: white;">Live Exam Monitoring</div>
+              <div style="font-size: 0.72rem; color: rgba(255,255,255,0.45);">Real-time student activity tracking</div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.875rem;">
+            <div style="width: 36px; height: 36px; background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.25); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2" style="width:18px;height:18px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+            </div>
+            <div>
+              <div style="font-size: 0.85rem; font-weight: 600; color: white;">Results & Analytics</div>
+              <div style="font-size: 0.72rem; color: rgba(255,255,255,0.45);">Detailed performance insights & exports</div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.875rem;">
+            <div style="width: 36px; height: 36px; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.25); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" style="width:18px;height:18px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+            </div>
+            <div>
+              <div style="font-size: 0.85rem; font-weight: 600; color: white;">Proctored Exams</div>
+              <div style="font-size: 0.72rem; color: rgba(255,255,255,0.45);">Anti-cheating with camera & tab detection</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.08);">
+          <div style="font-size: 0.7rem; color: rgba(255,255,255,0.35); text-align: center;">Powered by Gyanam India Educational Services</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="login-right">
+      <div class="login-form-box">
+        <h2>Welcome Back</h2>
+        <p>Sign in to access the Admin Portal</p>
+        <div id="login-alert" class="alert alert-error hidden">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 9v3.75m9.303 3.376c.866 1.5-.217 3.374-1.948 3.374H4.645c-1.73 0-2.813-1.874-1.948-3.374L10.05 3.378c.866-1.5 3.032-1.5 3.898 0L21.303 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <span id="login-alert-text"></span>
+        </div>
+        <form id="login-form">
+          <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" id="username" class="form-input" placeholder="Enter username" autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" id="password" class="form-input" placeholder="Enter password"
+              autocomplete="current-password">
+          </div>
+          <button type="submit" id="login-btn" class="login-submit">Sign In</button>
+        </form>
+        <div style="margin-top:1.5rem;text-align:center;font-size:0.75rem;color:#94a3b8">
+          Contact your administrator if you need access credentials
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Portal App ──────────────────────────────────────────────────────────── -->
+  <div id="portal-app" style="display:none" class="portal-layout">
+    <!-- Sidebar -->
+    <aside class="portal-sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-icon">
+          <img src="assets/logo.png" alt="Gyanam" style="width:32px;height:32px;border-radius:8px;object-fit:contain;">
+        </div>
+        <div>
+          <div class="sidebar-brand-name">Gyanam</div>
+          <div class="sidebar-brand-role">Admin Portal</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="sidebar-nav-section">Overview</div>
+        <button class="sidebar-link active" data-page="dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+          </svg>
+          Dashboard
+        </button>
+        <button class="sidebar-link" data-page="live">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Live Monitoring
+        </button>
+        <div class="sidebar-nav-section">Exam Management</div>
+        <button class="sidebar-link" data-page="questions">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+          </svg>
+          Question Banks
+        </button>
+        <button class="sidebar-link" data-page="exams">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+          </svg>
+          Exam Configurations
+        </button>
+        <div class="sidebar-nav-section">Students</div>
+        <button class="sidebar-link" data-page="students">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+          </svg>
+          Student Records
+        </button>
+        <button class="sidebar-link" data-page="results">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+          </svg>
+          Results & Analytics
+        </button>
+        <div class="sidebar-nav-section">ATC Portal</div>
+        <button class="sidebar-link active" data-page="atc">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+          </svg>
+          ATC Dashboard
+        </button>
+        <div class="sidebar-nav-section">Settings</div>
+        <button class="sidebar-link" data-page="credentials">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+          </svg>
+          Portal Credentials
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="sidebar-avatar" id="sidebar-avatar">A</div>
+          <div>
+            <div class="sidebar-user-name" id="sidebar-uname">Admin</div>
+            <div class="sidebar-user-role" id="sidebar-urole">Administrator</div>
+            <span id="centre-badge" style="display:none"></span>
+          </div>
+
+        </div>
+        <button id="logout-btn" class="btn btn-ghost btn-sm"
+          style="width:100%;color:var(--gray-400);justify-content:flex-start;gap:0.5rem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+          </svg>
+          Sign Out
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="portal-main">
+      <div class="portal-topbar">
+        <span class="portal-topbar-title" id="page-title">Dashboard</span>
+        <div class="portal-topbar-right">
+          <span id="live-indicator"
+            style="display:flex;align-items:center;gap:4px;font-size:0.78rem;color:var(--success);font-weight:600">
+            <span class="live-dot"></span> <span id="live-count">0</span> Live
+          </span>
+          <button class="btn btn-outline btn-sm" onclick="location.href='index.html'" target="_blank">🌐 Student
+            Portal</button>
+        </div>
+      </div>
+      <div class="portal-content" id="page-content"></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { CONFIG } from './src/config.js?v=3';
+    import ApiClient from './src/services/APIClient.js?v=4';
+    import modalService from './src/services/ModalService.js?v=2';
+    import { renderDashboard } from './src/modules/DashboardModule.js?v=2';
+    import { renderLive } from './src/modules/LiveMonitorModule.js?v=2';
+    import { renderQuestions } from './src/modules/QuestionsModule.js?v=5';
+    import { renderExams } from './src/modules/ExamsModule.js?v=4';
+    import { renderStudents } from './src/modules/StudentsModule.js?v=4';
+    import { renderResults } from './src/modules/ResultsModule.js?v=2';
+    import { renderATC } from './src/modules/ATCModule.js?v=3';
+    import { renderCredentials } from './src/modules/CredentialsModule.js?v=1';
+
+    // ── CRITICAL: Set admin scope FIRST so we never share tokens with the student portal ──
+    ApiClient.setScope('admin');
+
+    let currentUser = null;
+    let liveRefreshTimer = null;
+    let currentPageTimer = null;
+
+    // ─── Reverb WebSocket ───────────────────────────────────────────────────
+    let _pusher = null;
+    const _wsSessions = {};
+
+    function setupReverbWebSocket() {
+      if (!CONFIG.USE_WEBSOCKETS) {
+        console.log('WebSocket (Reverb) disabled via config. Polling in effect.');
+        return;
+      }
+      try {
+        _pusher = new Pusher(CONFIG.WS_KEY, {
+          wsHost: CONFIG.WS_HOST,
+          wsPort: CONFIG.WS_PORT,
+          forceTLS: false,
+          disableStats: true,
+          enabledTransports: ['ws'],
+        });
+        const ch = _pusher.subscribe('live-monitoring');
+        ch.bind('student.activity', ({ type, session }) => {
+          const key = `${session.studentId}:${session.examId}`;
+          if (type === 'started' || type === 'heartbeat') { _wsSessions[key] = { ...session, _wsUpdated: true }; }
+          else if (type === 'submitted') { delete _wsSessions[key]; }
+          const el = document.getElementById('live-count');
+          if (el) el.textContent = Object.keys(_wsSessions).length;
+        });
+        _pusher.connection.bind('connected', () => {
+          const dot = document.getElementById('ws-status-dot');
+          if (dot) { dot.style.background = '#22c55e'; dot.title = 'WebSocket Connected'; }
+        });
+      } catch (e) { console.warn('Reverb WebSocket setup failed', e); }
+    }
+
+    // ─── Session restore on load ───────────────────────────────────────
+    window.addEventListener('load', async () => {
+      const userStr = localStorage.getItem('gyanam_admin_user');
+      const token = localStorage.getItem('gyanam_admin_token');
+      if (userStr && token) {
+        currentUser = JSON.parse(userStr);
+        ApiClient.setToken(token);
+        showPortal();
+        const defaultPage = (currentUser.role === 'atc' || currentUser.role === 'dlc') ? 'atc' : 'dashboard';
+        loadPage(defaultPage);
+        startLiveRefresh();
+        setupReverbWebSocket();
+      }
+    });
+
+    // ─── Login ──────────────────────────────────────────────────────────
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const al = document.getElementById('login-alert');
+      const alText = document.getElementById('login-alert-text');
+      try {
+        const { user } = await ApiClient.login(username, password);
+        currentUser = user;
+        document.getElementById('sidebar-uname').textContent = username;
+        document.getElementById('sidebar-urole').textContent = user.role;
+        document.getElementById('sidebar-avatar').textContent = username.charAt(0).toUpperCase();
+        showPortal();
+        const defaultPage = (user.role === 'atc' || user.role === 'dlc') ? 'atc' : 'dashboard';
+        loadPage(defaultPage);
+        startLiveRefresh();
+        setupReverbWebSocket();
+      } catch (error) {
+        alText.textContent = error.message || 'Invalid username or password.';
+        al.classList.remove('hidden');
+      }
+    });
+
+    function showPortal() {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('portal-app').style.display = 'flex';
+      document.getElementById('sidebar-uname').textContent = currentUser.username;
+      document.getElementById('sidebar-urole').textContent = currentUser.role === 'atc' ? 'ATC Login' : currentUser.role === 'dlc' ? 'DLC Login' : 'Administrator';
+      document.getElementById('sidebar-avatar').textContent = (currentUser.username || 'A').charAt(0).toUpperCase();
+      setupSidebar();
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+      const ok = await modalService.confirm('Sign out of Admin Portal?', { title: 'Sign Out', confirmText: 'Sign Out', type: 'warning' });
+      if (ok) { if (liveRefreshTimer) clearTimeout(liveRefreshTimer); await ApiClient.logout(); location.reload(); }
+    });
+
+    // ─── Sidebar ──────────────────────────────────────────────────────────
+    function setupSidebar() {
+      const badge = document.getElementById('centre-badge');
+      if (badge) {
+        badge.textContent = currentUser.centre_id ? '📍 ' + currentUser.centre_id : '🌐 All Centres';
+        badge.style.cssText = 'display:block;font-size:0.72rem;padding:0.25rem 0.5rem;background:var(--primary-50,#eff6ff);color:var(--primary-700,#1d4ed8);border-radius:999px;margin:0.25rem auto 0;text-align:center;max-width:90%';
+      }
+
+      const isATC = currentUser.role === 'atc' || currentUser.role === 'dlc';
+
+      // Hide admin-only nav items for ATC/DLC, and hide atc-only nav for admin
+      document.querySelectorAll('.sidebar-link[data-page]').forEach(btn => {
+        const page = btn.dataset.page;
+        if (isATC) {
+          // ATC sees only: atc, results
+          btn.style.display = ['atc', 'results'].includes(page) ? '' : 'none';
+        } else {
+          // Admin sees all EXCEPT the atc-specific page
+          btn.style.display = page === 'atc' ? 'none' : '';
+        }
+      });
+
+      // Show/hide nav sections only relevant to role
+      document.querySelectorAll('.sidebar-nav-section').forEach(sec => {
+        // Check if any visible link follows this section
+        let next = sec.nextElementSibling;
+        let hasVisible = false;
+        while (next && !next.classList.contains('sidebar-nav-section')) {
+          if (next.style.display !== 'none') hasVisible = true;
+          next = next.nextElementSibling;
+        }
+        sec.style.display = hasVisible ? '' : 'none';
+      });
+
+      // Set active highlight on the correct default link
+      const defaultPage = isATC ? 'atc' : 'dashboard';
+      document.querySelectorAll('.sidebar-link[data-page]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.page === defaultPage);
+      });
+    }
+
+    document.querySelectorAll('.sidebar-link[data-page]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+        btn.classList.add('active');
+        loadPage(btn.dataset.page);
+      });
+    });
+
+    // ─── Routing ─────────────────────────────────────────────────────────
+    async function loadPage(page) {
+      if (currentPageTimer) {
+        if (typeof currentPageTimer === 'object' && currentPageTimer.stop) currentPageTimer.stop();
+        else clearTimeout(currentPageTimer);
+        currentPageTimer = null;
+      }
+      document.getElementById('page-content').innerHTML =
+        '<div style="display:flex;align-items:center;justify-content:center;height:200px"><div class="loader"></div></div>';
+      const titles = {
+        dashboard: 'Dashboard', live: 'Live Monitoring',
+        questions: 'Question Banks', exams: 'Exam Configurations',
+        students: 'Student Records', results: 'Results & Analytics',
+        atc: 'ATC Dashboard', credentials: 'Portal Credentials',
+      };
+      document.getElementById('page-title').textContent = titles[page] || page;
+
+      const ctx = { currentUser, loadPage, getScopedLive };
+      const pages = {
+        dashboard: () => renderDashboard(ApiClient, ctx),
+        live:      () => renderLive(ApiClient, ctx),
+        questions: () => renderQuestions(ApiClient, ctx),
+        exams:     () => renderExams(ApiClient, ctx),
+        students:  () => renderStudents(ApiClient, ctx),
+        results:   () => renderResults(ApiClient, ctx),
+        atc:       () => renderATC(ApiClient, ctx),
+        credentials: () => renderCredentials(ApiClient, ctx),
+      };
+      if (pages[page]) {
+        const timer = await pages[page]();
+        if (timer && typeof timer === 'object' && timer.stop) currentPageTimer = timer;
+      }
+    }
+
+    window.loadPage = loadPage;
+
+    // â”€â”€â”€ Live-count refresh â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    async function getScopedLive() {
+      try { return await ApiClient.getLiveSessions(); } catch { return []; }
+    }
+
+    let _liveRefreshRunning = false;
+    async function startLiveRefresh() {
+      if (liveRefreshTimer) clearTimeout(liveRefreshTimer);
+      async function poll() {
+        if (_liveRefreshRunning) return;
+        _liveRefreshRunning = true;
+        try {
+          const active = await getScopedLive();
+          const el = document.getElementById('live-count');
+          if (el) el.textContent = active.length;
+        } finally { _liveRefreshRunning = false; liveRefreshTimer = setTimeout(poll, 15000); }
+      }
+      poll();
+    }
+
+    // â”€â”€â”€ Modal helpers (shared) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    window.closeModal = () => { const ov = document.getElementById('modal-overlay'); if (ov) ov.style.display = 'none'; };
+
+  </script>
+
+</body>
+
+</html>
