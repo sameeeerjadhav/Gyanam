@@ -1,0 +1,45 @@
+# Apache Configuration for Gyanam Exam Portal
+# This file ensures SPA routing and security on Hostinger Shared Hosting.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # RewriteBase is usually not needed if rules are relative, but helps in subfolders
+    # If in /gyanam/, Hostinger might need: RewriteBase /gyanam/
+
+    # 1. Force HTTPS (Uncomment if you have SSL)
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # 2. API Proxy / Subdirectory handling
+    # If the backend is in /gyanam-backend/public but you want /api requests
+    # to go there automatically:
+    # If you hit gyanam/api/v1/, redirect to gyanam/gyanam-backend/public/api/v1/
+    # This allows you to use a cleaner URL: https://yourdomain.com/gyanam/api/v1/
+    RewriteRule ^api/v1/(.*)$ gyanam-backend/public/api/v1/$1 [L,QSA]
+
+    # 3. Handle SPA routes for both Admin and Student
+    # Always serve .php files directly (never route through SPA)
+    RewriteRule \.php$ - [L]
+
+    # If a file or directory exists, serve it
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # If the URL is for admin, route back to admin.html for SPA routing
+    # Adjust this if your router handles /login etc differently
+    RewriteRule ^admin/.*$ admin.html [L]
+
+    # All other routes go to index.html (Student Portal)
+    RewriteRule ^.*$ index.html [L]
+</IfModule>
+
+# Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# Disable Directory Listing
+Options -Indexes

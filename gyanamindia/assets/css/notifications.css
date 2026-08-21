@@ -1,0 +1,522 @@
+/* ============================================================
+   Gyanam Portal — Notification Styles
+   ============================================================ */
+
+/* ---- Bell Icon in Header ---- */
+.notif-bell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.notif-bell:hover {
+    background: var(--gray-100);
+    color: var(--text-primary);
+}
+
+.notif-bell svg {
+    width: 20px;
+    height: 20px;
+}
+
+.notif-badge {
+    position: absolute;
+    top: 4px;
+    right: 2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--radius-full);
+    background: var(--danger-500);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(240, 68, 56, 0.3);
+    animation: notifPop 0.35s var(--ease-spring) both;
+}
+
+@keyframes notifPop {
+    0% {
+        transform: scale(0);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* ---- Notifications Page ---- */
+.notif-page {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* Compose Card (Admin) */
+.notif-compose {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 1.5rem;
+    animation: cardSlideUp 0.4s var(--ease-spring) both;
+}
+
+.notif-compose h3 {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0 0 1rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.notif-compose h3 svg {
+    width: 18px;
+    height: 18px;
+    color: var(--primary-500);
+}
+
+.notif-compose .compose-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem 1.25rem;
+}
+
+.notif-compose .compose-grid .form-field.full-width {
+    grid-column: 1 / -1;
+}
+
+.notif-compose textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.notif-compose .compose-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.65rem;
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Target selector */
+.target-select-group {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.target-option {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--radius-full);
+    border: 1.5px solid var(--border-color);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--text-secondary);
+    background: var(--bg-surface);
+}
+
+.target-option:hover {
+    border-color: var(--primary-300);
+}
+
+.target-option input[type="radio"] {
+    display: none;
+}
+
+.target-option.selected {
+    background: var(--primary-100);
+    border-color: var(--primary-400);
+    color: var(--primary-700);
+}
+
+/* ---- Notification List ---- */
+.notif-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.notif-list-header h3 {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.notif-list-header h3 .badge-count {
+    background: var(--primary-500);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--radius-full);
+    box-shadow: 0 2px 8px rgba(67, 97, 238, 0.25);
+}
+
+.btn-mark-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 1rem;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--gray-100);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.btn-mark-all:hover {
+    background: var(--primary-500);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(67, 97, 238, 0.2);
+}
+
+.btn-mark-all svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Notification Items */
+.notif-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.notif-item {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    transition: all 0.25s ease;
+    animation: cardSlideUp 0.35s var(--ease-spring) both;
+    position: relative;
+    cursor: pointer;
+}
+
+.notif-item:hover {
+    border-color: var(--primary-300);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    transform: translateY(-2px);
+}
+
+.notif-item.unread {
+    border-left: 4px solid var(--primary-500);
+    background: linear-gradient(135deg, rgba(67, 97, 238, 0.04), var(--bg-surface));
+    box-shadow: 0 2px 8px rgba(67, 97, 238, 0.08);
+}
+
+.notif-item.unread::after {
+    content: '';
+    position: absolute;
+    top: 1.25rem;
+    right: 1.25rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+    animation: notifPulse 2s ease-in-out infinite;
+}
+
+@keyframes notifPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.notif-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, var(--warning-100), var(--warning-200));
+    color: var(--warning-600);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.15);
+}
+
+.notif-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.notif-icon.broadcast {
+    background: linear-gradient(135deg, var(--warning-100), var(--warning-200));
+    color: var(--warning-600);
+}
+
+.notif-body {
+    min-width: 0;
+    flex: 1;
+}
+
+.notif-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.35rem;
+    padding-right: 1.5rem;
+}
+
+.notif-text {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 0.65rem;
+    word-break: break-word;
+}
+
+.notif-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.notif-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.notif-meta svg {
+    width: 13px;
+    height: 13px;
+    opacity: 0.7;
+}
+
+.notif-target-badge {
+    padding: 0.12rem 0.45rem;
+    border-radius: var(--radius-full);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.notif-target-badge.all {
+    background: var(--warning-100);
+    color: var(--warning-600);
+}
+
+.notif-target-badge.dlc {
+    background: var(--primary-100);
+    color: var(--primary-700);
+}
+
+.notif-target-badge.atc {
+    background: var(--success-100);
+    color: var(--success-600);
+}
+
+.notif-target-badge.specific {
+    background: var(--gray-100);
+    color: var(--text-secondary);
+}
+
+.notif-target-badge.dlc_atcs {
+    background: var(--primary-100);
+    color: var(--primary-700);
+}
+
+.notif-target-badge.atc_students {
+    background: var(--success-100);
+    color: var(--success-600);
+}
+
+/* Mark-as-read quick action button */
+.btn-mark-read {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-md);
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.btn-mark-read:hover {
+    background: var(--success-500);
+    border-color: var(--success-500);
+    color: #fff;
+    transform: scale(1.05);
+}
+
+.btn-mark-read svg {
+    width: 16px;
+    height: 16px;
+}
+
+
+/* Empty state */
+.notif-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-muted);
+}
+
+.notif-empty svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 0.75rem;
+    opacity: 0.25;
+}
+
+.notif-empty p {
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+/* ---- Tabs Navigation ---- */
+.notif-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    padding: 0.35rem;
+    background: var(--gray-100);
+    border-radius: var(--radius-lg);
+    width: fit-content;
+}
+
+.notif-tab {
+    padding: 0.6rem 1.25rem;
+    border-radius: var(--radius-md);
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.notif-tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.notif-tab.active {
+    background: #fff;
+    color: var(--primary-600);
+    box-shadow: var(--shadow-sm);
+}
+
+.notif-tab .notif-count {
+    background: var(--primary-100);
+    color: var(--primary-700);
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--radius-full);
+    font-size: 0.65rem;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease both;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .notif-compose .compose-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .target-select-group {
+        flex-direction: column;
+    }
+
+    .notif-list-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .notif-item {
+        padding: 1rem;
+    }
+
+    .notif-icon {
+        width: 42px;
+        height: 42px;
+    }
+
+    .notif-icon svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .notif-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.35rem;
+    }
+}
