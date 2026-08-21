@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Gyanam Online Examination Portal — Student Exam Interface">
+    <title>Gyanam Exam Portal — Student</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="src/styles/main.css">
+</head>
+
+<body>
+
+    <!-- ─── Login Screen ─────────────────────────────────────────── -->
+    <div id="login-screen">
+        <div class="login-page">
+            <div class="login-left">
+                <div class="portal-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                    </svg>
+                </div>
+                <h1>Gyanam Exam Portal</h1>
+                <p>Secure online examination system. Enter your credentials provided by your examination centre.</p>
+                <div
+                    style="margin-top:2rem;padding:1rem;background:rgba(255,255,255,0.05);border-radius:8px;border:1px solid rgba(255,255,255,0.1);width:100%;max-width:280px">
+                    <div
+                        style="font-size:0.72rem;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem">
+                        Demo — Any of these</div>
+                    <div style="font-size:0.8rem;color:var(--gray-300)">ID: <strong
+                            style="color:white">STUDENT001</strong> · Centre: <strong style="color:white">Center
+                            A</strong></div>
+                    <div style="font-size:0.8rem;color:var(--gray-300);margin-top:4px">ID: <strong
+                            style="color:white">TEST123</strong> · Centre: <strong style="color:white">Test
+                            Center</strong></div>
+                    <div style="font-size:0.72rem;color:var(--gray-500);margin-top:6px">(Slot & Time: any selection)
+                    </div>
+                </div>
+            </div>
+            <div class="login-right">
+                <div class="login-form-box">
+                    <h2>Student Login</h2>
+                    <p>Enter the credentials provided on your Admit Card.</p>
+
+                    <div id="login-alert" class="alert alert-error hidden" role="alert">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M12 9v3.75m9.303 3.376c.866 1.5-.217 3.374-1.948 3.374H4.645c-1.73 0-2.813-1.874-1.948-3.374L10.05 3.378c.866-1.5 3.032-1.5 3.898 0L21.303 16.126zM12 15.75h.007v.008H12v-.008z" />
+                        </svg>
+                        <span id="login-alert-text"></span>
+                    </div>
+
+                    <form id="login-form" novalidate>
+                        <div class="form-group">
+                            <label class="form-label" for="identifier">Student ID / Hall Ticket No.</label>
+                            <input type="text" id="identifier" class="form-input" placeholder="e.g. STUDENT001"
+                                autocomplete="username" required>
+                            <p class="form-error" id="identifier-error">This field is required</p>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="centerName">Examination Centre</label>
+                            <input type="text" id="centerName" class="form-input" placeholder="e.g. Center A" required>
+                            <p class="form-error" id="centerName-error">This field is required</p>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="examSlot">Exam Slot</label>
+                            <select id="examSlot" class="form-select" required>
+                                <option value="">Select slot</option>
+                                <option value="SLOT1">SLOT1 — Morning (9:00 AM)</option>
+                                <option value="SLOT2">SLOT2 — Afternoon (2:00 PM)</option>
+                                <option value="SLOT3">SLOT3 — Evening (5:00 PM)</option>
+                            </select>
+                            <p class="form-error" id="examSlot-error">Please select your slot</p>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="timeWindow">Time Window</label>
+                            <select id="timeWindow" class="form-select" required>
+                                <option value="">Select time window</option>
+                                <option value="MORNING">Morning</option>
+                                <option value="AFTERNOON">Afternoon</option>
+                                <option value="EVENING">Evening</option>
+                            </select>
+                            <p class="form-error" id="timeWindow-error">Please select your time window</p>
+                        </div>
+                        <button type="submit" id="login-btn" class="login-submit">
+                            <span id="login-btn-text">Continue to Portal</span>
+                            <span id="login-btn-loading" style="display:none">
+                                <svg style="width:16px;height:16px;animation:spin 0.8s linear infinite"
+                                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path
+                                        d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"
+                                        stroke-linecap="round" />
+                                </svg>
+                                Verifying...
+                            </span>
+                        </button>
+                    </form>
+
+                    <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:var(--border);text-align:center">
+                        <span style="font-size:0.78rem;color:var(--text-muted)">Admin / ATC / DLC staff? Use your portal
+                            login.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Exam Selection Screen ────────────────────────────────── -->
+    <div id="selection-screen" style="display:none">
+        <div class="selection-page">
+            <div class="selection-inner">
+                <div class="selection-topbar">
+                    <div>
+                        <div
+                            style="font-size:0.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px">
+                            Examination Portal</div>
+                        <h2>Welcome, <span id="student-name" style="color:var(--primary)"></span></h2>
+                        <p style="font-size:0.82rem;color:var(--text-secondary);margin-top:2px">
+                            ID: <strong id="student-id-display"></strong> &nbsp;|&nbsp;
+                            Centre: <strong id="student-centre-display"></strong>
+                        </p>
+                    </div>
+                    <button id="selection-logout" class="btn btn-outline btn-sm">Sign Out</button>
+                </div>
+
+                <!-- Attempt history banner if student has previous attempts -->
+                <div id="history-banner" style="display:none" class="alert alert-info" style="margin-bottom:1.25rem">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                    </svg>
+                    <span id="history-banner-text"></span>
+                </div>
+
+                <div id="exam-cards-container" class="exam-cards-grid"></div>
+
+                <!-- Previous attempt history table -->
+                <div id="history-section" style="display:none;margin-top:2rem">
+                    <hr class="divider">
+                    <h3
+                        style="font-size:0.9rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:1rem">
+                        My Exam History</h3>
+                    <div class="card">
+                        <div class="table-wrap">
+                            <table id="history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Exam</th>
+                                        <th>Attempt #</th>
+                                        <th>Score</th>
+                                        <th>Correct</th>
+                                        <th>Result</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="history-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Exam Screen ───────────────────────────────────────────── -->
+    <div id="exam-screen" style="display:none">
+        <div class="exam-layout">
+            <header class="exam-header">
+                <div class="exam-header-inner">
+                    <div class="exam-header-left">
+                        <h2 id="exam-title">Loading...</h2>
+                        <p id="exam-type-label" style="font-size:0.75rem;color:var(--text-muted)"></p>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:1rem">
+                        <div style="font-size:0.8rem;color:var(--text-secondary)">
+                            <strong id="header-student-name"></strong>
+                        </div>
+                        <div id="timer-display" class="exam-timer" role="timer" aria-live="polite">--:--</div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="exam-body">
+                <!-- Question Area -->
+                <div class="exam-question-area">
+                    <div class="question-card">
+                        <div class="question-progress">
+                            <span class="question-number">Question <span id="q-num">1</span> of <span
+                                    id="q-total">—</span></span>
+                            <span class="question-marks">+1 Mark</span>
+                        </div>
+                        <div id="question-text" class="question-text"></div>
+                        <div id="options-container" class="options-list"></div>
+                        <div class="exam-nav">
+                            <button id="prev-btn" class="btn btn-outline">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                                </svg>
+                                Previous
+                            </button>
+                            <button id="mark-btn" class="btn btn-warning">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                                </svg>
+                                Mark for Review
+                            </button>
+                            <button id="next-btn" class="btn btn-primary">
+                                Next
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Palette -->
+                <aside class="exam-palette">
+                    <div class="palette-header">
+                        <div class="palette-title">Question Palette</div>
+                        <div class="palette-stats">
+                            <div class="palette-stat answered"><span class="num" id="stat-answered">0</span>Answered
+                            </div>
+                            <div class="palette-stat marked"><span class="num" id="stat-marked">0</span>Marked</div>
+                            <div class="palette-stat pending"><span class="num" id="stat-pending">0</span>Pending</div>
+                        </div>
+                    </div>
+                    <div class="palette-grid" id="palette"></div>
+                    <div class="palette-legend">
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background:var(--success)"></div> Answered
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background:var(--warning)"></div> Marked for Review
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background:var(--gray-200);border:1px solid var(--gray-300)">
+                            </div> Not Answered
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot"
+                                style="border:2px solid var(--primary);background:var(--primary-light)"></div> Current
+                        </div>
+                    </div>
+                    <button id="submit-btn" class="palette-submit">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            style="width:16px;height:16px">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Submit Exam
+                    </button>
+                </aside>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Result Screen ─────────────────────────────────────────── -->
+    <div id="result-screen" style="display:none">
+        <div class="result-page">
+            <div class="result-card">
+                <div id="result-icon" class="result-icon pass">
+                    <svg id="result-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <h2 class="result-title" id="result-heading">Exam Submitted</h2>
+                <p class="result-subtitle" id="result-sub"></p>
+
+                <div class="result-stats">
+                    <div class="result-stat">
+                        <div class="result-stat-label">Score</div>
+                        <div class="result-stat-value" id="r-score">—</div>
+                    </div>
+                    <div class="result-stat">
+                        <div class="result-stat-label">Result</div>
+                        <div class="result-stat-value" id="r-result">—</div>
+                    </div>
+                    <div class="result-stat">
+                        <div class="result-stat-label">Correct Answers</div>
+                        <div class="result-stat-value" id="r-correct" style="color:var(--text-primary)">—</div>
+                    </div>
+                    <div class="result-stat">
+                        <div class="result-stat-label">Total Questions</div>
+                        <div class="result-stat-value" id="r-total" style="color:var(--text-primary)">—</div>
+                    </div>
+                </div>
+
+                <!-- Attempt history summary shown after result -->
+                <div id="r-history" style="display:none;margin-bottom:1.5rem;text-align:left">
+                    <h4
+                        style="font-size:0.8rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.625rem">
+                        Your Attempts for This Exam</h4>
+                    <div class="table-wrap" style="border:var(--border);border-radius:var(--radius-md)">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Score</th>
+                                    <th>Result</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="r-history-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:0.75rem;justify-content:center">
+                    <button id="result-back" class="btn btn-primary">Back to Selection</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes spin {
+            from {
+                transform: rotate(0)
+            }
+
+            to {
+                transform: rotate(360deg)
+            }
+        }
+    </style>
+
+    <script type="module">
+        import ApiClient from './src/services/ApiClient.js';
+        import modalService from './src/services/ModalService.js';
+
+        let currentStudent = null;
+        let examState = null;  // { examId, config, questions, answers, startTime }
+        let timerInterval = null;
+        let heartbeatInterval = null;
+
+        // Check for existing session
+        (async () => {
+            const user = ApiClient.getUser();
+            if (user && user.role === 'student') {
+                currentStudent = user;
+                showSelectionScreen();
+            }
+        })();
+
+        // ── Screens ───────────────────────────────────────────────────
+        function showScreen(id) {
+            ['login-screen', 'selection-screen', 'exam-screen', 'result-screen'].forEach(s => {
+                document.getElementById(s).style.display = s === id ? 'block' : 'none';
+            });
+        }
+
+        // ── Login ─────────────────────────────────────────────────────
+        const form = document.getElementById('login-form');
+        form.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (!validateForm()) return;
+            setLoading(true);
+
+            const payload = {
+                identifier: v('identifier'),
+                center_name: v('centerName'),
+                exam_slot: v('examSlot'),
+                time_window: v('timeWindow'),
+            };
+
+            try {
+                const resp = await ApiClient.studentLogin(payload);
+                currentStudent = resp.user;
+                await showSelectionScreen();
+            } catch (err) {
+                showLoginError(err.message || 'Login failed. Check credentials.');
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        function v(id) { return document.getElementById(id).value.trim(); }
+
+        function validateForm() {
+            const fields = ['identifier', 'centerName', 'examSlot', 'timeWindow'];
+            let ok = true;
+            fields.forEach(f => {
+                const el = document.getElementById(f);
+                const err = document.getElementById(f + '-error');
+                if (!el.value.trim()) {
+                    el.classList.add('invalid'); err?.classList.add('visible'); ok = false;
+                } else {
+                    el.classList.remove('invalid'); err?.classList.remove('visible');
+                }
+            });
+            return ok;
+        }
+
+        ['identifier', 'centerName', 'examSlot', 'timeWindow'].forEach(f => {
+            document.getElementById(f)?.addEventListener('input', () => {
+                document.getElementById(f)?.classList.remove('invalid');
+                document.getElementById(f + '-error')?.classList.remove('visible');
+                document.getElementById('login-alert').classList.add('hidden');
+            });
+        });
+
+        function showLoginError(msg) {
+            const al = document.getElementById('login-alert');
+            document.getElementById('login-alert-text').textContent = msg;
+            al.classList.remove('hidden');
+        }
+
+        function setLoading(on) {
+            document.getElementById('login-btn').disabled = on;
+            document.getElementById('login-btn-text').style.display = on ? 'none' : 'inline';
+            document.getElementById('login-btn-loading').style.display = on ? 'inline-flex' : 'none';
+        }
+
+        // ── Exam Selection ────────────────────────────────────────────
+        async function showSelectionScreen() {
+            document.getElementById('student-name').textContent = currentStudent.name;
+            document.getElementById('student-id-display').textContent = currentStudent.identifier;
+            document.getElementById('student-centre-display').textContent = currentStudent.centre_name;
+
+            const [exams, allAttempts] = await Promise.all([
+                ApiClient.getStudentExams(),
+                ApiClient.getStudentHistory(currentStudent.id)
+            ]);
+
+            const container = document.getElementById('exam-cards-container');
+
+            if (exams.length === 0) {
+                container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+      <h3>No Exams Available</h3>
+      <p>No active exams are assigned to your account. Contact your examination centre.</p>
+    </div>`;
+            } else {
+                container.innerHTML = exams.map(cfg => {
+                    const attempts = allAttempts.filter(a => a.exam_config_id == cfg.id);
+                    const best = attempts.length ? Math.max(...attempts.map(a => a.score || 0)) : null;
+                    return `
+      <div class="exam-select-card">
+        <div class="exam-select-card-top">
+          <span class="badge ${cfg.exam_type === 'demo' ? 'badge-blue' : 'badge-gray'}">${cfg.exam_type === 'demo' ? 'Practice' : 'Official'}</span>
+          ${attempts.length ? `<span class="badge badge-yellow">Attempted ${attempts.length}×</span>` : ''}
+        </div>
+        <h3 class="exam-select-title">${cfg.title}</h3>
+        <p class="exam-select-subject">${cfg.subject}</p>
+        <div class="exam-select-metas">
+          <span class="exam-meta-chip">⏱ ${cfg.duration} min</span>
+          <span class="exam-meta-chip">📝 ${cfg.total_questions} questions</span>
+          <span class="exam-meta-chip">🏆 Pass: ${cfg.passing_score}%</span>
+          ${best !== null ? `<span class="exam-meta-chip">Best: ${best}%</span>` : ''}
+        </div>
+        ${cfg.instructions ? `<p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:1rem">${cfg.instructions}</p>` : ''}
+        <button class="btn btn-primary" style="width:100%" onclick="startExam('${cfg.id}')">
+          ${attempts.length ? 'Attempt Again' : 'Start Exam'}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+        </button>
+      </div>`;
+                }).join('');
+            }
+
+            if (allAttempts.length > 0) {
+                document.getElementById('history-section').style.display = 'block';
+                const bannerTitles = [...new Set(allAttempts.map(a => a.exam_title))];
+                document.getElementById('history-banner').style.display = 'flex';
+                document.getElementById('history-banner-text').textContent = 'You have previous attempts — ' + bannerTitles.join(', ');
+
+                const tbody = document.getElementById('history-tbody');
+                tbody.innerHTML = allAttempts.map((a, i) => `
+        <tr>
+          <td style="font-size:0.82rem">${a.exam_title}</td>
+          <td><span class="badge badge-gray">Attempt</span></td>
+          <td><strong>${a.score}%</strong></td>
+          <td>${a.correct_answers}/${a.total_questions}</td>
+          <td><span class="badge ${a.result === 'pass' ? 'badge-green' : 'badge-red'}">${a.result}</span></td>
+          <td style="font-size:0.78rem;color:var(--text-muted)">${new Date(a.submitted_at).toLocaleDateString('en-IN')}</td>
+        </tr>`).join('');
+            }
+
+            showScreen('selection-screen');
+        }
+
+        document.getElementById('selection-logout').addEventListener('click', async () => {
+            const ok = await modalService.confirm('Are you sure you want to sign out?',
+                { title: 'Sign Out', confirmText: 'Sign Out', type: 'warning' });
+            if (ok) {
+                await ApiClient.logout();
+                currentStudent = null;
+                showScreen('login-screen');
+            }
+        });
+
+        // ── Start Exam ────────────────────────────────────────────────
+        window.startExam = async (examId) => {
+            try {
+                const exams = await ApiClient.getStudentExams();
+                const cfg = exams.find(e => e.id == examId);
+
+                if (!cfg) throw new Error('Exam not found or assigned');
+
+                // Previous attempts check (already scoped in History API if needed, but let's re-verify)
+                const history = await ApiClient.getStudentHistory(currentStudent.id);
+                const prevAttempts = history.filter(h => h.exam_id == examId);
+
+                if (prevAttempts.length > 0) {
+                    const best = Math.max(...prevAttempts.map(a => a.score || 0));
+                    const ok = await modalService.confirm(
+                        `You have already attempted this exam <strong>${prevAttempts.length} time(s)</strong>. Best score: <strong>${best}%</strong>.<br><br>Do you want to attempt again?`,
+                        { title: 'Re-Attempt', confirmText: 'Yes, Attempt Again', cancelText: 'Cancel', type: 'warning' }
+                    );
+                    if (!ok) return;
+                }
+
+                const resp = await ApiClient.getExamQuestions(examId);
+
+                examState = {
+                    examId: cfg.id,
+                    examTitle: cfg.title,
+                    config: cfg,
+                    questions: resp.questions.map(q => ({ ...q, answered: null, markedForReview: false })),
+                    currentIndex: 0,
+                    startTime: Date.now(),
+                };
+
+                // Register live session & pulse heartbeat
+                await ApiClient.pulseHeartbeat(examId);
+
+                if (heartbeatInterval) clearInterval(heartbeatInterval);
+                heartbeatInterval = setInterval(() => {
+                    ApiClient.pulseHeartbeat(examId);
+                }, 30000);
+
+                setupExamScreen(cfg);
+                startTimer(cfg.duration);
+                renderQuestion();
+                renderPalette();
+                showScreen('exam-screen');
+            } catch (e) {
+                alert('Start failed: ' + e.message);
+            }
+        };
+
+        function setupExamScreen(cfg) {
+            document.getElementById('exam-title').textContent = cfg.title;
+            document.getElementById('exam-type-label').textContent = cfg.examType === 'demo' ? 'Practice Exam' : `Official Examination — ${cfg.subject}`;
+            document.getElementById('q-total').textContent = examState.questions.length;
+            document.getElementById('header-student-name').textContent = currentStudent.name;
+        }
+
+        // ── Timer ─────────────────────────────────────────────────────
+        function startTimer(durationMin) {
+            if (timerInterval) clearInterval(timerInterval);
+            let rem = durationMin * 60;
+            const display = document.getElementById('timer-display');
+
+            function tick() {
+                const m = Math.floor(rem / 60), s = rem % 60;
+                display.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+                if (rem <= 60) { display.className = 'exam-timer danger timer-pulse'; }
+                else if (rem <= 300) { display.className = 'exam-timer warning'; }
+                else { display.className = 'exam-timer'; }
+                if (rem <= 0) { clearInterval(timerInterval); handleAutoSubmit(); }
+                rem--;
+            }
+            tick();
+            timerInterval = setInterval(tick, 1000);
+        }
+
+        async function handleAutoSubmit() {
+            await modalService.alert('Time is up! Your exam will be submitted now.', { title: 'Time Expired', type: 'warning', buttonText: 'OK' });
+            await doSubmit(true);
+        }
+
+        // ── Question Render ───────────────────────────────────────────
+        function renderQuestion() {
+            const q = examState.questions[examState.currentIndex];
+            document.getElementById('q-num').textContent = examState.currentIndex + 1;
+            document.getElementById('question-text').textContent = q.text;
+
+            const opts = document.getElementById('options-container');
+            opts.innerHTML = '';
+            q.options.forEach((opt, i) => {
+                const div = document.createElement('div');
+                div.className = 'option-item' + (q.answered === opt.id ? ' selected' : '');
+                div.setAttribute('role', 'button'); div.setAttribute('tabindex', '0');
+                div.innerHTML = `<div class="option-letter">${String.fromCharCode(65 + i)}</div><div class="option-text">${opt.text}</div>${q.answered === opt.id ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;color:var(--primary);flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>' : ''}`;
+                const select = () => {
+                    examState.questions[examState.currentIndex].answered = opt.id;
+                    renderQuestion(); renderPalette();
+                    // Heartbeat pulse on answer can also be done but throttled
+                    ApiClient.pulseHeartbeat(examState.examId);
+                };
+                div.addEventListener('click', select);
+                div.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } });
+                opts.appendChild(div);
+            });
+
+            document.getElementById('prev-btn').disabled = examState.currentIndex === 0;
+            document.getElementById('next-btn').disabled = examState.currentIndex === examState.questions.length - 1;
+        }
+
+        // ── Palette ───────────────────────────────────────────────────
+        function renderPalette() {
+            const palette = document.getElementById('palette');
+            palette.innerHTML = '';
+            let answered = 0, marked = 0;
+
+            examState.questions.forEach((q, i) => {
+                const btn = document.createElement('button');
+                btn.textContent = i + 1;
+                btn.className = 'palette-btn';
+                if (i === examState.currentIndex) btn.classList.add('current');
+                if (q.answered) { btn.classList.add('answered'); answered++; }
+                if (q.markedForReview) { btn.classList.add('marked'); if (!q.answered) marked++; }
+                btn.addEventListener('click', () => { examState.currentIndex = i; renderQuestion(); renderPalette(); });
+                palette.appendChild(btn);
+            });
+
+            document.getElementById('stat-answered').textContent = answered;
+            document.getElementById('stat-marked').textContent = marked;
+            document.getElementById('stat-pending').textContent = examState.questions.length - answered - marked;
+        }
+
+        // ── Navigation ────────────────────────────────────────────────
+        document.getElementById('prev-btn').addEventListener('click', () => {
+            if (examState.currentIndex > 0) { examState.currentIndex--; renderQuestion(); renderPalette(); }
+        });
+        document.getElementById('next-btn').addEventListener('click', () => {
+            if (examState.currentIndex < examState.questions.length - 1) { examState.currentIndex++; renderQuestion(); renderPalette(); }
+        });
+        document.getElementById('mark-btn').addEventListener('click', () => {
+            examState.questions[examState.currentIndex].markedForReview = !examState.questions[examState.currentIndex].markedForReview;
+            renderPalette();
+        });
+
+        // ── Submit ────────────────────────────────────────────────────
+        document.getElementById('submit-btn').addEventListener('click', async () => {
+            const unanswered = examState.questions.filter(q => !q.answered).length;
+            const msg = unanswered > 0
+                ? `You have <strong>${unanswered} unanswered question(s)</strong>. Submit anyway?`
+                : 'All questions answered. Submit your exam now? <strong>This cannot be undone.</strong>';
+            const ok = await modalService.confirm(msg, { title: 'Submit Exam', confirmText: 'Submit', cancelText: 'Continue', type: 'danger' });
+            if (ok) await doSubmit(false);
+        });
+
+        async function doSubmit(auto) {
+            if (timerInterval) clearInterval(timerInterval);
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+
+            const payload = {
+                exam_id: examState.examId,
+                answers: examState.questions.map(q => ({
+                    question_id: q.id,
+                    answer: q.answered,
+                    marked: q.markedForReview
+                })),
+                auto_submit: auto
+            };
+
+            try {
+                modalService.alert('Submitting exam... Please wait.', { title: 'Processing', buttonText: 'Please wait' });
+                const result = await ApiClient.submitExam(examState.examId, payload);
+
+                // Poll for result logic could be here, but for now we expect a quick response or we can poll /submissions/{id}
+                // Given the ProcessSubmission job is async, we should poll.
+                pollForResult(result.submission_id);
+            } catch (e) {
+                alert('Submission failed: ' + e.message);
+            }
+        }
+
+        async function pollForResult(submissionId) {
+            try {
+                const resp = await ApiClient.getSubmissionResult(submissionId);
+                if (resp.status === 'processing') {
+                    setTimeout(() => pollForResult(submissionId), 2000);
+                    return;
+                }
+                modalService.close(); // Close "Processing" alert
+                showResult(resp.submission);
+            } catch (e) {
+                console.error('Polling failed', e);
+            }
+        }
+
+        // ── Result ────────────────────────────────────────────────────
+        async function showResult(sub) {
+            const pass = sub.result === 'pass';
+
+            document.getElementById('result-icon').className = 'result-icon ' + (pass ? 'pass' : 'fail');
+            document.getElementById('result-svg').style.color = pass ? 'var(--success)' : 'var(--danger)';
+            document.getElementById('result-heading').textContent = pass ? '🎉 Congratulations!' : 'Exam Completed';
+            document.getElementById('result-sub').textContent = pass
+                ? `You passed with ${sub.score}%. Your record has been updated.`
+                : `You scored ${sub.score}%. The passing mark is ${examState.config.passing_score || 40}%. You may attempt again.`;
+
+            if (!pass) document.getElementById('result-svg').innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+
+            document.getElementById('r-score').textContent = sub.score + '%';
+            document.getElementById('r-score').className = 'result-stat-value ' + (pass ? 'pass' : 'fail');
+            document.getElementById('r-result').textContent = sub.result.toUpperCase();
+            document.getElementById('r-result').className = 'result-stat-value ' + (pass ? 'pass' : 'fail');
+            document.getElementById('r-correct').textContent = `${sub.correct_answers} / ${sub.total_questions}`;
+            document.getElementById('r-total').textContent = sub.total_questions;
+
+            // Show all attempts for this exam
+            try {
+                const history = await ApiClient.getStudentHistory(currentStudent.id);
+                const attempts = history.filter(h => h.exam_id == sub.exam_id);
+                if (attempts.length > 0) {
+                    document.getElementById('r-history').style.display = 'block';
+                    document.getElementById('r-history-tbody').innerHTML = attempts.map((a, i) => `
+        <tr>
+          <td><strong>#${i + 1}</strong></td>
+          <td><strong>${a.score}%</strong></td>
+          <td><span class="badge ${a.result === 'pass' ? 'badge-green' : 'badge-red'}">${a.result}</span></td>
+          <td style="font-size:0.78rem;color:var(--text-muted)">${new Date(a.submitted_at).toLocaleString('en-IN')}</td>
+        </tr>`).join('');
+                }
+            } catch (e) { console.error('Result history load failed', e); }
+
+            showScreen('result-screen');
+        }
+
+        document.getElementById('result-back').addEventListener('click', () => {
+            examState = null;
+            showSelectionScreen();
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,10 @@
+<?php
+/**
+ * Razorpay Configuration — Gyanam India
+ * Copy this file to razorpay.php and fill in your keys.
+ * Keep razorpay.php PRIVATE — never commit secrets.
+ */
+define('RAZORPAY_KEY_ID',     'rzp_test_xxxxxxxx');
+define('RAZORPAY_KEY_SECRET', 'your_razorpay_secret');
+define('RAZORPAY_CURRENCY',   'INR');
+define('RAZORPAY_COMPANY',    'Gyanam India Educational Services');

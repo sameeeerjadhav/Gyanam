@@ -1,0 +1,656 @@
+/**
+ * Analytics Dashboard Styles
+ * Gyanam Portal — ATC Center
+ */
+
+:root {
+    --brand: #4361ee;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --purple: #8b5cf6;
+    --blue: #3b82f6;
+}
+
+/* Analytics Container */
+.analytics-container {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* KPI Grid */
+.analytics-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+}
+
+.analytics-kpi-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border-left: 4px solid;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.analytics-kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle, currentColor 0%, transparent 70%);
+    opacity: 0.03;
+    pointer-events: none;
+}
+
+.analytics-kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.kpi-blue { border-left-color: var(--blue); }
+.kpi-green { border-left-color: var(--emerald); }
+.kpi-purple { border-left-color: var(--purple); }
+.kpi-amber { border-left-color: var(--amber); }
+
+.kpi-icon-wrap {
+    flex-shrink: 0;
+}
+
+.kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(67, 97, 238, 0.1), rgba(67, 97, 238, 0.05));
+}
+
+.kpi-blue .kpi-icon { background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.05)); }
+.kpi-green .kpi-icon { background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05)); }
+.kpi-purple .kpi-icon { background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.05)); }
+.kpi-amber .kpi-icon { background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05)); }
+
+.kpi-icon svg {
+    width: 24px;
+    height: 24px;
+    stroke-width: 2;
+}
+
+.kpi-blue .kpi-icon svg { stroke: var(--blue); }
+.kpi-green .kpi-icon svg { stroke: var(--emerald); }
+.kpi-purple .kpi-icon svg { stroke: var(--purple); }
+.kpi-amber .kpi-icon svg { stroke: var(--amber); }
+
+.kpi-content {
+    flex: 1;
+}
+
+.kpi-value {
+    font-size: 2rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    color: #1e293b;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.kpi-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #64748b;
+    margin-bottom: 0.25rem;
+}
+
+.kpi-sub {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+/* Charts Row */
+.analytics-charts-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+.analytics-chart-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.chart-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.chart-title svg {
+    width: 20px;
+    height: 20px;
+    stroke: var(--brand);
+}
+
+.chart-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    background: #f1f5f9;
+    color: #64748b;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
+.chart-body {
+    min-height: 250px;
+}
+
+.chart-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 250px;
+    color: #94a3b8;
+}
+
+.chart-empty svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+}
+
+.chart-empty p {
+    font-size: 0.875rem;
+}
+
+/* Bar Chart */
+.bar-chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    height: 220px;
+    gap: 1rem;
+    padding: 0 0.5rem;
+}
+
+.bar-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.bar-wrapper {
+    width: 100%;
+    height: 180px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.bar-fill {
+    width: 100%;
+    max-width: 60px;
+    background: linear-gradient(180deg, var(--brand), rgba(67, 97, 238, 0.7));
+    border-radius: 8px 8px 0 0;
+    transition: all 0.3s ease;
+    position: relative;
+    cursor: pointer;
+}
+
+.bar-fill.bar-green {
+    background: linear-gradient(180deg, var(--emerald), rgba(16, 185, 129, 0.7));
+}
+
+.bar-fill:hover {
+    opacity: 0.8;
+    transform: scaleY(1.02);
+}
+
+.bar-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.bar-tooltip {
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* Grid Layouts */
+.analytics-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+.analytics-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+}
+
+/* Analytics Card */
+.analytics-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.card-title svg {
+    width: 20px;
+    height: 20px;
+    stroke: var(--brand);
+}
+
+.card-link {
+    font-size: 0.875rem;
+    color: var(--brand);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.card-link:hover {
+    color: var(--emerald);
+}
+
+.card-body {
+    min-height: 200px;
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: #94a3b8;
+}
+
+.empty-state svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    font-size: 0.875rem;
+}
+
+/* Course List */
+.course-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.course-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.course-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.course-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.course-stats {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.course-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 8px;
+    background: #f1f5f9;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand), var(--emerald));
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.progress-percent {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    font-family: 'JetBrains Mono', monospace;
+    min-width: 40px;
+    text-align: right;
+}
+
+/* Top Courses List */
+.top-courses-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.top-course-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 12px;
+    transition: all 0.2s;
+}
+
+.top-course-item:hover {
+    background: #f1f5f9;
+    transform: translateX(4px);
+}
+
+.rank-badge {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+}
+
+.rank-1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: white; }
+.rank-2 { background: linear-gradient(135deg, #94a3b8, #64748b); color: white; }
+.rank-3 { background: linear-gradient(135deg, #fb923c, #f97316); color: white; }
+.rank-4, .rank-5 { background: #e2e8f0; color: #64748b; }
+
+.top-course-info {
+    flex: 1;
+}
+
+.top-course-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.25rem;
+}
+
+.top-course-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.top-course-meta .revenue {
+    font-weight: 600;
+    color: var(--emerald);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Stat Cards */
+.analytics-stat-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.stat-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.stat-header svg {
+    width: 18px;
+    height: 18px;
+    stroke: var(--brand);
+}
+
+.stat-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    color: #1e293b;
+}
+
+.stat-value.stat-success { color: var(--emerald); }
+.stat-value.stat-warning { color: var(--amber); }
+.stat-value.stat-danger { color: var(--rose); }
+
+/* Recent List */
+.recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.recent-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 12px;
+    transition: all 0.2s;
+}
+
+.recent-item:hover {
+    background: #f1f5f9;
+}
+
+.recent-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.recent-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--brand), var(--emerald));
+    color: white;
+    font-weight: 700;
+    font-size: 1.25rem;
+}
+
+.recent-info {
+    flex: 1;
+}
+
+.recent-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.25rem;
+}
+
+.recent-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.recent-badge span {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.badge-active {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--emerald);
+}
+
+.badge-inactive {
+    background: rgba(100, 116, 139, 0.1);
+    color: #64748b;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .analytics-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .analytics-charts-row,
+    .analytics-grid-2 {
+        grid-template-columns: 1fr;
+    }
+    
+    .analytics-grid-3 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .analytics-container {
+        padding: 1rem;
+    }
+    
+    .analytics-kpi-grid,
+    .analytics-grid-3 {
+        grid-template-columns: 1fr;
+    }
+    
+    .analytics-kpi-card {
+        padding: 1rem;
+    }
+    
+    .kpi-value {
+        font-size: 1.5rem;
+    }
+    
+    .bar-chart {
+        gap: 0.5rem;
+    }
+    
+    .bar-fill {
+        max-width: 40px;
+    }
+}
+
+@media (max-width: 640px) {
+    .chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .course-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+}
