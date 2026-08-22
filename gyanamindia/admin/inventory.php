@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             case 'add_item':
                 $name = trim($_POST['item_name'] ?? '');
-                $cat  = $_POST['category'] ?? 'Books';
+                $cat  = trim($_POST['category'] ?? 'Books') ?: 'Books';
                 $unit = trim($_POST['unit'] ?? 'pcs');
                 $min  = max(0, intval($_POST['min_stock_level'] ?? 10));
                 $desc = trim($_POST['description'] ?? '');
@@ -50,6 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $dup = $pdo->prepare("SELECT id FROM inventory_items WHERE item_name = ?");
                 $dup->execute([$name]);
                 if ($dup->fetch()) { echo json_encode(['success'=>false,'message'=>'Item with this name already exists']); exit; }
+                // Ensure category exists in master list
+                try { $pdo->prepare("INSERT IGNORE INTO inventory_categories (name) VALUES (?)")->execute([$cat]); } catch (Exception $e) {}
                 $stmt = $pdo->prepare("INSERT INTO inventory_items (item_name,category,unit,cost,min_stock_level,description) VALUES (?,?,?,NULL,?,?)");
                 $stmt->execute([$name, $cat, $unit, $min, $desc]);
                 echo json_encode(['success'=>true,'message'=>'Item added successfully','id'=>$pdo->lastInsertId()]);
@@ -58,15 +60,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             case 'edit_item':
                 $id   = intval($_POST['id']);
                 $name = trim($_POST['item_name'] ?? '');
-                $cat  = $_POST['category'] ?? 'Books';
+                $cat  = trim($_POST['category'] ?? 'Books') ?: 'Books';
                 $unit = trim($_POST['unit'] ?? 'pcs');
                 $min  = max(0, intval($_POST['min_stock_level'] ?? 10));
                 $desc = trim($_POST['description'] ?? '');
                 $status = $_POST['status'] ?? 'Active';
                 if (!$name || !$id) { echo json_encode(['success'=>false,'message'=>'Invalid data']); exit; }
+                try { $pdo->prepare("INSERT IGNORE INTO inventory_categories (name) VALUES (?)")->execute([$cat]); } catch (Exception $e) {}
                 $stmt = $pdo->prepare("UPDATE inventory_items SET item_name=?,category=?,unit=?,min_stock_level=?,description=?,status=? WHERE id=?");
                 $stmt->execute([$name, $cat, $unit, $min, $desc, $status, $id]);
                 echo json_encode(['success'=>true,'message'=>'Item updated']);
+                exit;
+
+            case 'add_category':
+                $catName = trim($_POST['name'] ?? '');
+                if ($catName === '') { echo json_encode(['success'=>false,'message'=>'Category name is required']); exit; }
+                if (mb_strlen($catName) > 100) { echo json_encode(['success'=>false,'message'=>'Category name too long']); exit; }
+                try {
+                    $pdo->prepare("INSERT INTO inventory_categories (name) VALUES (?)")->execute([$catName]);
+                    echo json_encode(['success'=>true,'message'=>'Category created','name'=>$catName]);
+                } catch (Exception $e) {
+                    echo json_encode(['success'=>false,'message'=>'Category already exists']);
+                }
                 exit;
 
             case 'stock_in':
@@ -134,10 +149,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 // ── Fetch data ────────────────────────────────────────────────────────────
-$catFilter = $_GET['category'] ?? 'all';
+$catFilter = trim($_GET['category'] ?? 'all');
+$searchQ   = trim($_GET['q'] ?? '');
+
+// Categories master list
+$categories = [];
+try {
+    $categories = $pdo->query("SELECT name FROM inventory_categories ORDER BY name ASC")->fetchAll(PDO::FETCH_COLUMN);
+} catch (Exception $e) {}
+if (empty($categories)) {
+    $categories = ['Books', 'T-Shirts', 'Certificates', 'Stationery', 'Other'];
+}
+
 $sql = "SELECT * FROM inventory_items WHERE status = 'Active'";
 $params = [];
-if ($catFilter !== 'all') { $sql .= " AND category = ?"; $params[] = $catFilter; }
+if ($catFilter !== 'all' && $catFilter !== '') {
+    $sql .= " AND category = ?";
+    $params[] = $catFilter;
+}
+if ($searchQ !== '') {
+    $sql .= " AND (item_name LIKE ? OR description LIKE ?)";
+    $params[] = '%' . $searchQ . '%';
+    $params[] = '%' . $searchQ . '%';
+}
 $sql .= " ORDER BY category, item_name";
 $stmt = $pdo->prepare($sql); $stmt->execute($params);
 $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -150,10 +184,36 @@ $totalStock = array_sum(array_column($allItems, 'current_stock'));
 $lowStock = count(array_filter($allItems, fn($i) => $i['current_stock'] <= $i['min_stock_level'] && $i['current_stock'] > 0));
 $outOfStock = count(array_filter($allItems, fn($i) => $i['current_stock'] == 0));
 
+// Category-wise stock summary (with min stock visibility)
+$categorySummary = [];
+try {
+    $categorySummary = $pdo->query("
+        SELECT
+            category,
+            COUNT(*) AS item_count,
+            COALESCE(SUM(current_stock), 0) AS total_stock,
+            COALESCE(SUM(min_stock_level), 0) AS total_min_level,
+            SUM(CASE WHEN current_stock <= 0 THEN 1 ELSE 0 END) AS out_count,
+            SUM(CASE WHEN current_stock > 0 AND current_stock <= min_stock_level THEN 1 ELSE 0 END) AS low_count
+        FROM inventory_items
+        WHERE status = 'Active'
+        GROUP BY category
+        ORDER BY category ASC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $categorySummary = [];
+}
+
 // Recent transactions
 $recentTxns = $pdo->query("SELECT t.*, i.item_name, i.category, u.name as user_name FROM inventory_transactions t JOIN inventory_items i ON t.item_id = i.id LEFT JOIN users u ON t.created_by = u.id ORDER BY t.created_at DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
 
 function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+function invCatQuery(string $cat, string $q = ''): string {
+    $params = [];
+    if ($cat !== 'all' && $cat !== '') $params['category'] = $cat;
+    if ($q !== '') $params['q'] = $q;
+    return $params ? ('?' . http_build_query($params)) : '?category=all';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -175,7 +235,7 @@ function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 body{font-family:var(--font);background:var(--bg);color:var(--text)}
 
 /* KPI */
-.inv-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.75rem}
+.inv-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.25rem}
 .inv-kpi-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-xl);padding:1.25rem 1.5rem;position:relative;overflow:hidden;box-shadow:var(--shadow-sm);transition:transform var(--t)}
 .inv-kpi-card:hover{transform:translateY(-3px)}
 .inv-kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
@@ -185,6 +245,21 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
 .inv-kpi-card.rose::before{background:linear-gradient(90deg,#f43f5e,#fb7185)}
 .inv-kpi-val{font-size:2rem;font-weight:800;line-height:1;margin-bottom:.3rem}
 .inv-kpi-lbl{font-size:.72rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em}
+
+.cat-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.85rem;margin-bottom:1.5rem}
+.cat-sum-card{background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:1rem 1.1rem;box-shadow:var(--shadow-sm)}
+.cat-sum-name{font-size:.88rem;font-weight:800;color:var(--text);margin-bottom:.65rem}
+.cat-sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:.45rem .6rem}
+.cat-sum-metric{display:flex;flex-direction:column;gap:.1rem}
+.cat-sum-metric span{font-size:.65rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
+.cat-sum-metric strong{font-size:.95rem;font-weight:800;color:var(--text)}
+.cat-sum-metric strong.low{color:#d97706}
+.cat-sum-metric strong.out{color:#e11d48}
+.cat-sum-metric strong.ok{color:#059669}
+
+.inv-search{height:38px;padding:0 .9rem;border:1.5px solid var(--border);border-radius:10px;font:800 .82rem var(--font);outline:none;min-width:200px;flex:1;max-width:280px}
+.inv-search:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(67,97,238,.12)}
+.inv-search-form{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap;flex:1}
 
 /* Toolbar */
 .inv-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem}
@@ -291,16 +366,53 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
         <div class="inv-kpi-card rose"><div class="inv-kpi-val"><?= $outOfStock ?></div><div class="inv-kpi-lbl">Out of Stock</div></div>
     </div>
 
+    <!-- Category-wise Stock -->
+    <?php if (!empty($categorySummary)): ?>
+    <div class="inv-panel" style="margin-bottom:1.25rem">
+        <div class="inv-panel-head">
+            <div class="inv-panel-title">📊 Category-wise Stock</div>
+            <span style="font-size:.75rem;font-weight:700;color:var(--text-3)"><?= count($categorySummary) ?> categories</span>
+        </div>
+        <div style="padding:1rem 1.15rem 1.15rem">
+            <div class="cat-summary" style="margin:0">
+                <?php foreach ($categorySummary as $cs):
+                    $alertClass = ((int)$cs['out_count'] > 0) ? 'out' : (((int)$cs['low_count'] > 0) ? 'low' : 'ok');
+                ?>
+                <a href="<?= e(invCatQuery($cs['category'], $searchQ)) ?>" class="cat-sum-card" style="text-decoration:none;color:inherit;display:block;transition:border-color .15s,transform .15s" onmouseover="this.style.borderColor='#a5b4fc';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='';this.style.transform=''">
+                    <div class="cat-sum-name"><?= e($cs['category']) ?></div>
+                    <div class="cat-sum-grid">
+                        <div class="cat-sum-metric"><span>Items</span><strong><?= (int)$cs['item_count'] ?></strong></div>
+                        <div class="cat-sum-metric"><span>Total Stock</span><strong class="ok"><?= number_format((int)$cs['total_stock']) ?></strong></div>
+                        <div class="cat-sum-metric"><span>Min Levels (sum)</span><strong><?= number_format((int)$cs['total_min_level']) ?></strong></div>
+                        <div class="cat-sum-metric"><span>Alerts</span><strong class="<?= $alertClass ?>"><?= (int)$cs['low_count'] ?> low · <?= (int)$cs['out_count'] ?> out</strong></div>
+                    </div>
+                </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <!-- Toolbar -->
     <div class="inv-toolbar">
-        <div class="inv-toolbar-left">
-            <a href="?category=all" class="inv-cat-btn <?= $catFilter==='all'?'active':'' ?>">All</a>
-            <a href="?category=Books" class="inv-cat-btn <?= $catFilter==='Books'?'active':'' ?>">📚 Books</a>
-            <a href="?category=T-Shirts" class="inv-cat-btn <?= $catFilter==='T-Shirts'?'active':'' ?>">👕 T-Shirts</a>
-            <a href="?category=Stationery" class="inv-cat-btn <?= $catFilter==='Stationery'?'active':'' ?>">✏️ Stationery</a>
-            <a href="?category=Other" class="inv-cat-btn <?= $catFilter==='Other'?'active':'' ?>">📎 Other</a>
+        <div class="inv-toolbar-left" style="flex-wrap:wrap;flex:1;gap:.45rem">
+            <a href="<?= e(invCatQuery('all', $searchQ)) ?>" class="inv-cat-btn <?= $catFilter==='all'?'active':'' ?>">All</a>
+            <?php foreach ($categories as $catName): ?>
+            <a href="<?= e(invCatQuery($catName, $searchQ)) ?>" class="inv-cat-btn <?= $catFilter===$catName?'active':'' ?>"><?= e($catName) ?></a>
+            <?php endforeach; ?>
+            <button type="button" class="inv-cat-btn" onclick="openModal('addCategoryModal')" title="Create category" style="border-style:dashed">+ Category</button>
         </div>
         <div class="inv-toolbar-right">
+            <form class="inv-search-form" method="GET" action="">
+                <?php if ($catFilter !== 'all' && $catFilter !== ''): ?>
+                <input type="hidden" name="category" value="<?= e($catFilter) ?>">
+                <?php endif; ?>
+                <input class="inv-search" type="search" name="q" value="<?= e($searchQ) ?>" placeholder="Search item by name…" aria-label="Search items">
+                <button type="submit" class="btn-inv outline" style="height:38px">Search</button>
+                <?php if ($searchQ !== ''): ?>
+                <a class="btn-inv outline" style="height:38px;display:inline-flex;align-items:center" href="<?= e(invCatQuery($catFilter === 'all' ? 'all' : $catFilter)) ?>">Clear</a>
+                <?php endif; ?>
+            </form>
             <button class="btn-inv green" onclick="openModal('stockInModal')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Stock In
@@ -315,7 +427,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
     <!-- Inventory Table -->
     <div class="inv-panel">
         <div class="inv-panel-head">
-            <div class="inv-panel-title">📦 Inventory Items</div>
+            <div class="inv-panel-title">📦 Inventory Items<?= $searchQ !== '' ? ' — search: “' . e($searchQ) . '”' : '' ?></div>
             <span style="font-size:.75rem;font-weight:700;color:var(--text-3)"><?= count($items) ?> items</span>
         </div>
         <div style="overflow-x:auto">
@@ -323,7 +435,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
             <thead><tr><th>#</th><th>Item Name</th><th>Category</th><th>Cost (₹)</th><th>Current Stock</th><th>Total Cost (₹)</th><th>Min Level</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
             <?php if (empty($items)): ?>
-            <tr><td colspan="7" style="text-align:center;padding:2.5rem;color:var(--text-3)">No inventory items found. Click <strong>Add Item</strong> to get started.</td></tr>
+            <tr><td colspan="9" style="text-align:center;padding:2.5rem;color:var(--text-3)">
+                <?= $searchQ !== '' ? 'No items match “' . e($searchQ) . '”.' : 'No inventory items found. Click <strong>Add Item</strong> to get started.' ?>
+            </td></tr>
             <?php else: ?>
             <?php $n=0; foreach ($items as $item): $n++;
                 $stockClass = $item['current_stock'] <= 0 ? 'out' : ($item['current_stock'] <= $item['min_stock_level'] ? 'low' : 'ok');
@@ -403,7 +517,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
     <div class="inv-modal-body">
         <div class="inv-field"><label>Item Name *</label><input type="text" id="ai_name" placeholder="e.g. Abacus Book - English"></div>
         <div class="inv-field-row">
-            <div class="inv-field"><label>Category *</label><select id="ai_cat"><option>Books</option><option>T-Shirts</option><option>Stationery</option><option>Other</option></select></div>
+            <div class="inv-field"><label>Category *</label>
+                <select id="ai_cat">
+                    <?php foreach ($categories as $catName): ?>
+                    <option value="<?= e($catName) ?>"><?= e($catName) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="inv-field"><label>Unit</label><input type="text" id="ai_unit" value="pcs" placeholder="pcs, sets, boxes"></div>
         </div>
         <div class="inv-field"><label>Min Stock Level (alert threshold) *</label><input type="number" id="ai_min" value="10" min="0"></div>
@@ -424,7 +544,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
         <input type="hidden" id="ei_id">
         <div class="inv-field"><label>Item Name *</label><input type="text" id="ei_name"></div>
         <div class="inv-field-row">
-            <div class="inv-field"><label>Category *</label><select id="ei_cat"><option>Books</option><option>T-Shirts</option><option>Stationery</option><option>Other</option></select></div>
+            <div class="inv-field"><label>Category *</label>
+                <select id="ei_cat">
+                    <?php foreach ($categories as $catName): ?>
+                    <option value="<?= e($catName) ?>"><?= e($catName) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="inv-field"><label>Unit</label><input type="text" id="ei_unit" placeholder="pcs, sets, boxes"></div>
         </div>
         <div class="inv-field-row">
@@ -480,6 +606,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
     </div>
 </div></div>
 
+<!-- Add Category Modal -->
+<div class="inv-modal-overlay" id="addCategoryModal">
+<div class="inv-modal" style="max-width:440px">
+    <div class="inv-modal-header"><h3>➕ Create Category</h3><button class="inv-modal-close" onclick="closeModal('addCategoryModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="inv-modal-body">
+        <div class="inv-field"><label>Category Name *</label><input type="text" id="ac_name" maxlength="100" placeholder="e.g. Uniforms, Kits, Badges"></div>
+    </div>
+    <div class="inv-modal-footer">
+        <button class="btn-inv outline" onclick="closeModal('addCategoryModal')">Cancel</button>
+        <button class="btn-inv primary" onclick="addCategory()">Create Category</button>
+    </div>
+</div></div>
+
 <!-- Adjustment Modal -->
 <div class="inv-modal-overlay" id="adjustModal">
 <div class="inv-modal">
@@ -529,10 +668,24 @@ function addItem(){
     });
 }
 
+function addCategory(){
+    const name=document.getElementById('ac_name').value.trim();
+    if(!name){toast('Category name is required','error');return;}
+    post({action:'add_category',name}).then(r=>{
+        if(r.success){toast(r.message);setTimeout(()=>location.reload(),800);}else toast(r.message,'error');
+    });
+}
+
 function openEditItem(item){
     document.getElementById('ei_id').value=item.id;
     document.getElementById('ei_name').value=item.item_name||'';
-    document.getElementById('ei_cat').value=item.category||'Books';
+    const catSel=document.getElementById('ei_cat');
+    if(item.category && ![...catSel.options].some(o=>o.value===item.category)){
+        const opt=document.createElement('option');
+        opt.value=item.category; opt.textContent=item.category;
+        catSel.appendChild(opt);
+    }
+    catSel.value=item.category||'Books';
     document.getElementById('ei_unit').value=item.unit||'pcs';
     document.getElementById('ei_min').value=item.min_stock_level??10;
     document.getElementById('ei_status').value=item.status||'Active';

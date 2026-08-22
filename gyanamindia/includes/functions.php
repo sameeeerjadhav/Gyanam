@@ -1096,6 +1096,39 @@ function ensureDispatchTables(PDO $pdo): void {
 }
 
 function ensureInventoryTables(PDO $pdo): void {
+    // Always ensure category column can hold custom names + categories table
+    if (!isSchemaFlagSet('schema_inventory_categories_v1')) {
+        try {
+            $pdo->query("SELECT 1 FROM inventory_items LIMIT 1");
+            try {
+                $col = $pdo->query("SHOW COLUMNS FROM inventory_items LIKE 'category'")->fetch(PDO::FETCH_ASSOC);
+                if ($col && stripos((string)($col['Type'] ?? ''), 'enum(') === 0) {
+                    $pdo->exec("ALTER TABLE inventory_items MODIFY COLUMN category VARCHAR(100) NOT NULL DEFAULT 'Books'");
+                }
+            } catch (Exception $e) {}
+            try {
+                $pdo->exec("
+                    CREATE TABLE IF NOT EXISTS inventory_categories (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        name VARCHAR(100) NOT NULL UNIQUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                ");
+            } catch (Exception $e) {}
+            // Seed defaults + sync from existing items
+            $defaults = ['Books', 'T-Shirts', 'Certificates', 'Stationery', 'Other'];
+            $insCat = $pdo->prepare("INSERT IGNORE INTO inventory_categories (name) VALUES (?)");
+            foreach ($defaults as $d) { $insCat->execute([$d]); }
+            try {
+                $existing = $pdo->query("SELECT DISTINCT category FROM inventory_items WHERE category IS NOT NULL AND category <> ''")->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($existing as $c) { $insCat->execute([trim($c)]); }
+            } catch (Exception $e) {}
+            markSchemaFlag('schema_inventory_categories_v1');
+        } catch (Exception $e) {
+            // inventory_items may not exist yet — created below
+        }
+    }
+
     if (isSchemaFlagSet('schema_inventory_tables_v1')) {
         return;
     }
@@ -1106,6 +1139,22 @@ function ensureInventoryTables(PDO $pdo): void {
         try { $pdo->exec("ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS total_amount DECIMAL(12,2) DEFAULT NULL AFTER rate_per_item"); } catch (Exception $e) {}
         try { $pdo->exec("ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS purchase_date DATE DEFAULT NULL AFTER supplier"); } catch (Exception $e) {}
         try { $pdo->exec("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS cost DECIMAL(10,2) DEFAULT NULL AFTER unit"); } catch (Exception $e) {}
+        // Allow custom categories (ENUM → VARCHAR)
+        try {
+            $col = $pdo->query("SHOW COLUMNS FROM inventory_items LIKE 'category'")->fetch(PDO::FETCH_ASSOC);
+            if ($col && stripos((string)($col['Type'] ?? ''), 'enum(') === 0) {
+                $pdo->exec("ALTER TABLE inventory_items MODIFY COLUMN category VARCHAR(100) NOT NULL DEFAULT 'Books'");
+            }
+        } catch (Exception $e) {}
+        try {
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS inventory_categories (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL UNIQUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ");
+        } catch (Exception $e) {}
         markSchemaFlag('schema_inventory_tables_v1');
         return;
     } catch (Exception $e) {
@@ -1116,7 +1165,7 @@ function ensureInventoryTables(PDO $pdo): void {
             CREATE TABLE IF NOT EXISTS inventory_items (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 item_name VARCHAR(150) NOT NULL,
-                category ENUM('Books','T-Shirts','Certificates','Stationery','Other') DEFAULT 'Books',
+                category VARCHAR(100) NOT NULL DEFAULT 'Books',
                 unit VARCHAR(30) DEFAULT 'pcs',
                 cost DECIMAL(10,2) DEFAULT NULL,
                 current_stock INT DEFAULT 0,
@@ -1144,6 +1193,13 @@ function ensureInventoryTables(PDO $pdo): void {
                 created_by INT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS inventory_categories (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL UNIQUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
         markSchemaFlag('schema_inventory_tables_v1');
