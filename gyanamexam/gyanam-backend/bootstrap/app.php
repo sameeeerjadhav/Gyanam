@@ -17,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
+
+        $middleware->alias([
+            'portal'  => \App\Http\Middleware\EnsurePortalUser::class,
+            'student' => \App\Http\Middleware\EnsureStudent::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

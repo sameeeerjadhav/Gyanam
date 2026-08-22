@@ -4,6 +4,20 @@ To test the Gyanam Exam Portal on your machine, you need to run three separate c
 
 ---
 
+## 0. Configure environment (required for real exams)
+
+```bash
+cd gyanam-backend
+cp .env.example .env
+php artisan key:generate
+# Set DB_CONNECTION=mysql and CACHE_STORE=redis for anything beyond a solo smoke test
+php artisan migrate
+```
+
+See `docs/PRODUCTION_CAPACITY.md` before any large concurrent exam.
+
+---
+
 ## 1. Start the Laravel Backend API
 This server handles the database logic, authentication, students, questions, and saving exam results.
 

@@ -1,6 +1,7 @@
 /**
- * SecurityMonitor - Proctoring enforcement and event logging
- * 
+ * LEGACY / UNUSED on the live ExamPage path.
+ * SecurityMonitor - Proctoring enforcement and event logging (ExamEngine only)
+ *
  * Fixed: Replaced alert()/confirm() with CustomEvents for modal handling
  * The UI layer listens for 'security:warning' and 'security:fullscreen-exit' events.
  */

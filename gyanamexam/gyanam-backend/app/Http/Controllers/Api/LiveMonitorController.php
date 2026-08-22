@@ -3,48 +3,33 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Cache;
+use App\Services\LiveSessionService;
 use Illuminate\Http\Request;
 
 class LiveMonitorController extends Controller
 {
+    public function __construct(private LiveSessionService $liveSessions) {}
+
     /**
-     * Get all currently active exam sessions.
-     * Uses file cache (no Redis dependency), falls back to empty array gracefully.
+     * Get all currently active exam sessions (DB-backed, briefly cacheable).
      */
     public function active(Request $request)
     {
-        $user     = $request->user();
-        $sessions = [];
+        $user = $request->user();
 
         try {
-            // Scan known live session keys stored by StudentExamController
-            // Since we can't enumerate file cache keys, we store an index
-            $liveIndex = Cache::get('live_session_index', []);
+            $centre = $user->isAdmin() ? null : $user->centre_id;
+            $cacheKey = 'live_active:' . ($centre ?? 'all');
 
-            foreach ($liveIndex as $key) {
-                $session = Cache::get($key);
-                if (!$session) continue;
+            $sessions = cache()->remember($cacheKey, 3, function () use ($centre) {
+                return $this->liveSessions->activeSessions($centre)->values()->all();
+            });
 
-                // Check staleness: last seen within 10 minutes = still live
-                $lastSeen = isset($session['lastSeen'])
-                    ? \Carbon\Carbon::parse($session['lastSeen'])
-                    : null;
-
-                if (!$lastSeen || now()->diffInMinutes($lastSeen) > 10) continue;
-
-                // Scope by centre for non-admin users
-                if (!$user->isAdmin() && ($session['centreName'] ?? '') !== $user->centre_id) {
-                    continue;
-                }
-
-                $sessions[] = $session;
-            }
+            return response()->json($sessions);
         } catch (\Throwable $e) {
             \Log::warning('LiveMonitor: error reading sessions: ' . $e->getMessage());
+            return response()->json([]);
         }
-
-        return response()->json($sessions);
     }
 
     /**
@@ -55,24 +40,31 @@ class LiveMonitorController extends Controller
         $user = $request->user();
         $data = $request->validate(['extra_minutes' => 'required|integer|min:1|max:60']);
 
-        $key     = "live:{$studentId}:{$examId}";
-        $session = Cache::get($key);
+        // Prefer exam_config_id (numeric); fall back to exam_code string
+        $session = is_numeric($examId)
+            ? $this->liveSessions->find((int) $studentId, (int) $examId)
+            : \App\Models\LiveExamSession::where('student_id', $studentId)
+                ->where('exam_code', $examId)
+                ->first();
 
         if (!$session) {
             abort(404, 'Active session not found. The student may have already submitted or disconnected.');
         }
 
-        // Scope check for non-admin
-        if (!$user->isAdmin() && ($session['centreName'] ?? '') !== $user->centre_id) {
+        if (!$user->isAdmin() && ($session->centre_name ?? '') !== $user->centre_id) {
             abort(403, 'You can only extend time for students in your centre.');
         }
 
-        $session['extraMinutes'] = ($session['extraMinutes'] ?? 0) + $data['extra_minutes'];
-        Cache::put($key, $session, 7200);
+        $session = $this->liveSessions->extend((int) $session->student_id, (int) $session->exam_config_id, (int) $data['extra_minutes']);
+
+        cache()->forget('live_active:all');
+        if ($session->centre_name) {
+            cache()->forget('live_active:' . $session->centre_name);
+        }
 
         return response()->json([
             'message'     => "Added {$data['extra_minutes']} minutes successfully.",
-            'total_extra' => $session['extraMinutes'],
+            'total_extra' => $session->extra_minutes,
         ]);
     }
 }

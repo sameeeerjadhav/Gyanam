@@ -1,10 +1,7 @@
 /**
- * ExamEngine - Core exam execution orchestrator
- * 
- * Fixed:
- * - Uses ModalService instead of confirm()/alert()
- * - Listens for SecurityMonitor CustomEvents and shows proper modals
- * - Removed monkey-patching pattern
+ * LEGACY / UNUSED in production.
+ * Live student exams use ExamPage.js + Laravel StudentExamController.
+ * Kept for reference only — do not wire into main.js.
  */
 
 import { Timer } from '../components/Timer.js';

@@ -303,9 +303,9 @@ export class StudentDashboard {
     if (this.router) {
       window.history.pushState(null, '', `/exam?id=${examId}`);
       this.router.handleRoute(`/exam`);
-    } else {
-      window.location.href = `/exam.html?id=${examId}`;
+      return;
     }
+    window.location.href = `/index.html#/exam?id=${examId}`;
   }
 
   renderError(error) {

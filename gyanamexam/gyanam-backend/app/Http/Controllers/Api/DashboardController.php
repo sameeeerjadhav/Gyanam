@@ -8,10 +8,12 @@ use App\Models\Submission;
 use App\Models\QuestionBank;
 use App\Models\ExamConfig;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use App\Services\LiveSessionService;
 
 class DashboardController extends Controller
 {
+    public function __construct(private LiveSessionService $liveSessions) {}
+
     /**
      * Get high-level summary stats for the admin dashboard.
      * Replaces multiple heavy API calls with one fast summary.
@@ -44,12 +46,8 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
-        // 4. Live Sessions (retrieve count from cache index)
-        $liveIndex = Cache::get('live_session_index', []);
-        $activeLiveCount = 0;
-        foreach ($liveIndex as $key) {
-            if (Cache::has($key)) $activeLiveCount++;
-        }
+        // 4. Live Sessions (DB-backed registry)
+        $activeLiveCount = $this->liveSessions->activeCount($user->isAdmin() ? null : $centreId);
 
         return response()->json([
             'counts' => [

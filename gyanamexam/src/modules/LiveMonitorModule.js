@@ -16,7 +16,7 @@ export async function renderLive(ApiClient, { getScopedLive }) {
       const oneHourAgo = new Date(Date.now() - 3600 * 1000).toISOString();
       const [live, resultData] = await Promise.all([
         getScopedLive(),
-        ApiClient.getResults({ since: oneHourAgo })
+        ApiClient.getResults({ since: oneHourAgo, per_page: 100 })
       ]);
       const subs = resultData?.submissions || [];
 
@@ -49,7 +49,7 @@ export async function renderLive(ApiClient, { getScopedLive }) {
                   <td style="font-size:0.8rem">${new Date(s.lastSeen).toLocaleTimeString('en-IN')}</td>
                   <td><span class="badge badge-blue">${dur} min</span></td>
                   <td>
-                    <button class="btn btn-outline btn-sm" onclick="addStudentTime('${s.studentId}','${s.examId}','${s.studentName || 'Student'}')" title="Extend time">
+                    <button class="btn btn-outline btn-sm" onclick="addStudentTime('${s.studentId}','${s.examConfigId || s.examId}','${s.studentName || 'Student'}')" title="Extend time">
                       ⏱ +Time
                     </button>
                   </td>
