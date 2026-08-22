@@ -36,6 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Title is required.';
         } elseif (!isset($_FILES['banner_image']) || $_FILES['banner_image']['error'] !== UPLOAD_ERR_OK) {
             $error = 'Please select a valid file (image or video).';
+        } elseif (($_FILES['banner_image']['size'] ?? 0) > 12 * 1024 * 1024) {
+            $error = 'File too large. Max 12 MB (images are auto-compressed after upload).';
         } else {
             $fileInfo = pathinfo($_FILES['banner_image']['name']);
             $ext = strtolower($fileInfo['extension']);
@@ -50,11 +52,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $orientation = ($dim && $dim[1] > $dim[0]) ? 'vertical' : 'horizontal';
                 }
                 if (move_uploaded_file($_FILES['banner_image']['tmp_name'], $targetFile)) {
-                    $stmt = $pdo->prepare("INSERT INTO announcements (title, image_path, target_audience, status, orientation) VALUES (?, ?, ?, ?, ?)");
-                    if ($stmt->execute([$title, $uniqueName, $targetAudience, $status, $orientation])) {
-                        $message = 'Banner uploaded successfully!';
-                    } else {
-                        $error = 'Database error while saving banner info.';
+                    $finalName = $uniqueName;
+                    if (in_array($ext, $allowedImg, true)) {
+                        $optimized = optimizeUploadedImage($targetFile, $targetFile);
+                        if ($optimized && is_file($optimized)) {
+                            $finalName = basename($optimized);
+                            if ($finalName !== $uniqueName && is_file($uploadDir . $uniqueName) && $uniqueName !== $finalName) {
+                                @unlink($uploadDir . $uniqueName);
+                            }
+                            $targetFile = $uploadDir . $finalName;
+                        }
+                        // Reject absurdly large leftovers (>1.5MB after optimize)
+                        if (is_file($targetFile) && filesize($targetFile) > 1572864) {
+                            @unlink($targetFile);
+                            $error = 'Image is still too large after compression. Please use a smaller file (under ~2MB).';
+                        }
+                    } elseif (filesize($targetFile) > 15 * 1024 * 1024) {
+                        @unlink($targetFile);
+                        $error = 'Video must be under 15 MB.';
+                    }
+                    if (!$error) {
+                        $stmt = $pdo->prepare("INSERT INTO announcements (title, image_path, target_audience, status, orientation) VALUES (?, ?, ?, ?, ?)");
+                        if ($stmt->execute([$title, $finalName, $targetAudience, $status, $orientation])) {
+                            $message = 'Banner uploaded successfully!';
+                        } else {
+                            $error = 'Database error while saving banner info.';
+                        }
                     }
                 } else {
                     $error = 'Failed to upload. Ensure the uploads folder has correct permissions.';
@@ -104,11 +127,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $newOrientation = ($dim && $dim[1] > $dim[0]) ? 'vertical' : 'horizontal';
                     }
                     if (move_uploaded_file($_FILES['banner_image']['tmp_name'], $uploadDir . $uniqueName)) {
+                        $finalName = $uniqueName;
+                        if (in_array($ext, $allowedImg, true)) {
+                            $optimized = optimizeUploadedImage($uploadDir . $uniqueName);
+                            if ($optimized && is_file($optimized)) {
+                                $finalName = basename($optimized);
+                            }
+                        }
                         $old = $pdo->prepare("SELECT image_path FROM announcements WHERE id=?");
                         $old->execute([$id]);
                         $oldFile = $old->fetchColumn();
                         if ($oldFile && file_exists($uploadDir . $oldFile)) @unlink($uploadDir . $oldFile);
-                        $newImagePath = $uniqueName;
+                        $newImagePath = $finalName;
                     } else {
                         $error = 'Failed to upload new file.';
                     }

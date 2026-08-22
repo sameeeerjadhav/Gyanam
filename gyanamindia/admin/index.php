@@ -14,6 +14,8 @@ $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 $greeting = getGreeting();
 
+try { ensurePerformanceIndexes($pdo); } catch (Exception $e) {}
+
 // Birthday push notifications: use cron/birthday_notifications.php (not every dashboard load)
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
@@ -47,7 +49,7 @@ try {
         JOIN atc_centers atc ON atc.id = a.atc_id
         WHERE a.status = 'Active'
         ORDER BY atc.name ASC, a.first_name ASC
-        LIMIT 500
+        LIMIT 200
     ");
     $allStudents = $peStmt->fetchAll(PDO::FETCH_ASSOC);
 

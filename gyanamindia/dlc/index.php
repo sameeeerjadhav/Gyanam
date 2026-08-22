@@ -13,6 +13,7 @@ $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 $greeting = getGreeting();
 $dlcId = $_SESSION['dlc_id'] ?? null;
+try { ensurePerformanceIndexes($pdo); } catch (Exception $e) {}
 
 // Fetch analytics for this DLC — wrapped in try-catch to prevent blank page
 $totalATC = 0; $totalInquiries = 0; $totalAdmissions = 0; $activeStudents = 0;
@@ -58,8 +59,7 @@ try {
 
 $activeBanners = [];
 try {
-    $stmt = $pdo->query("SELECT * FROM announcements WHERE status = 'Active' AND target_audience IN ('All', 'DLC') ORDER BY created_at DESC");
-    $activeBanners = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $activeBanners = getActiveAnnouncements($pdo, 'DLC', 8);
 } catch (Exception $e) {}
 
 $shareSummary = ['due' => 0, 'paid' => 0, 'pending' => 0, 'student_count' => 0];

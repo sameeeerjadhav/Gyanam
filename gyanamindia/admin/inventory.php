@@ -13,68 +13,25 @@ requireLogin(['Admin']);
 $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 
-// ── Auto-create tables if missing ─────────────────────────────────────────
+// ── Auto-create tables if missing (once, then flagged) ────────────────────
+ensureInventoryTables($pdo);
+// Seed defaults only on first create (when flag was just missing and table empty)
 try {
-    $pdo->query("SELECT 1 FROM inventory_items LIMIT 1");
-} catch (Exception $e) {
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS inventory_items (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            item_name VARCHAR(150) NOT NULL,
-            category ENUM('Books','T-Shirts','Certificates','Stationery','Other') DEFAULT 'Books',
-            unit VARCHAR(30) DEFAULT 'pcs',
-            cost DECIMAL(10,2) DEFAULT NULL,
-            current_stock INT DEFAULT 0,
-            min_stock_level INT DEFAULT 10,
-            description TEXT,
-            status ENUM('Active','Inactive') DEFAULT 'Active',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS inventory_transactions (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            item_id INT NOT NULL,
-            type ENUM('Stock In','Stock Out','Adjustment','Dispatch','Return') NOT NULL,
-            quantity INT NOT NULL,
-            rate_per_item DECIMAL(10,2) DEFAULT NULL,
-            total_amount DECIMAL(12,2) DEFAULT NULL,
-            running_balance INT DEFAULT 0,
-            reference_no VARCHAR(100),
-            supplier VARCHAR(200),
-            dispatch_id INT DEFAULT NULL,
-            atc_id INT DEFAULT NULL,
-            notes TEXT,
-            created_by INT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-    // Migrate columns for existing installations
-    try { $pdo->exec("ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS rate_per_item DECIMAL(10,2) DEFAULT NULL AFTER quantity"); } catch (Exception $e) {}
-    try { $pdo->exec("ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS total_amount DECIMAL(12,2) DEFAULT NULL AFTER rate_per_item"); } catch (Exception $e) {}
-    try { $pdo->exec("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS cost DECIMAL(10,2) DEFAULT NULL AFTER unit"); } catch (Exception $e) {}
-    // Pre-populate T-Shirt sizes
-    $check = $pdo->query("SELECT COUNT(*) FROM inventory_items WHERE category='T-Shirts'")->fetchColumn();
-    if ($check == 0) {
-        $sizes = ['36','38','40','42','44','46'];
-        $ins = $pdo->prepare("INSERT INTO inventory_items (item_name, category, unit, current_stock, min_stock_level, description) VALUES (?,?,?,0,?,?)");
-        foreach ($sizes as $sz) {
-            $min = in_array($sz, ['M','L','XL']) ? 10 : 5;
-            $ins->execute(["T-Shirt - Size $sz", 'T-Shirts', 'pcs', $min, "T-Shirt size $sz for Abacus students"]);
+    if (!isSchemaFlagSet('schema_inventory_seeded_v1')) {
+        $check = (int)$pdo->query("SELECT COUNT(*) FROM inventory_items")->fetchColumn();
+        if ($check === 0) {
+            $sizes = ['36','38','40','42','44','46'];
+            $ins = $pdo->prepare("INSERT INTO inventory_items (item_name, category, unit, current_stock, min_stock_level, description) VALUES (?,?,?,0,?,?)");
+            foreach ($sizes as $sz) {
+                $ins->execute(["T-Shirt - Size $sz", 'T-Shirts', 'pcs', 5, "T-Shirt size $sz for Abacus students"]);
+            }
+            $certIns = $pdo->prepare("INSERT INTO inventory_items (item_name, category, unit, current_stock, min_stock_level, description) VALUES (?,?,?,0,?,?)");
+            $certIns->execute(['Course Completion Certificate', 'Certificates', 'pcs', 10, 'Physical course completion certificate dispatched to ATCs']);
+            $certIns->execute(['Exam Certificate', 'Certificates', 'pcs', 10, 'Physical exam certificate dispatched to ATCs']);
         }
+        markSchemaFlag('schema_inventory_seeded_v1');
     }
-    // Pre-populate Certificate items
-    $certCheck = $pdo->query("SELECT COUNT(*) FROM inventory_items WHERE category='Certificates'")->fetchColumn();
-    if ($certCheck == 0) {
-        $certIns = $pdo->prepare("INSERT INTO inventory_items (item_name, category, unit, current_stock, min_stock_level, description) VALUES (?,?,?,0,?,?)");
-        $certIns->execute(['Course Completion Certificate', 'Certificates', 'pcs', 10, 'Physical course completion certificate dispatched to ATCs']);
-        $certIns->execute(['Exam Certificate', 'Certificates', 'pcs', 10, 'Physical exam certificate dispatched to ATCs']);
-    }
-    // Migrate category ENUM for existing installs
-    try { $pdo->exec("ALTER TABLE inventory_items MODIFY category ENUM('Books','T-Shirts','Certificates','Stationery','Other') DEFAULT 'Books'"); } catch (Exception $e) {}
-}
+} catch (Exception $e) {}
 
 // ── AJAX handlers ─────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -94,8 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $dup = $pdo->prepare("SELECT id FROM inventory_items WHERE item_name = ?");
                 $dup->execute([$name]);
                 if ($dup->fetch()) { echo json_encode(['success'=>false,'message'=>'Item with this name already exists']); exit; }
-                // Ensure cost column exists
-                try { $pdo->exec("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS cost DECIMAL(10,2) DEFAULT NULL AFTER unit"); } catch(Exception $e){}
                 $stmt = $pdo->prepare("INSERT INTO inventory_items (item_name,category,unit,cost,min_stock_level,description) VALUES (?,?,?,?,?,?)");
                 $stmt->execute([$name, $cat, $unit, $cost, $min, $desc]);
                 echo json_encode(['success'=>true,'message'=>'Item added successfully','id'=>$pdo->lastInsertId()]);
@@ -111,7 +66,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $desc = trim($_POST['description'] ?? '');
                 $status = $_POST['status'] ?? 'Active';
                 if (!$name || !$id) { echo json_encode(['success'=>false,'message'=>'Invalid data']); exit; }
-                try { $pdo->exec("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS cost DECIMAL(10,2) DEFAULT NULL AFTER unit"); } catch(Exception $e){}
                 $stmt = $pdo->prepare("UPDATE inventory_items SET item_name=?,category=?,unit=?,cost=?,min_stock_level=?,description=?,status=? WHERE id=?");
                 $stmt->execute([$name, $cat, $unit, $cost, $min, $desc, $status, $id]);
                 echo json_encode(['success'=>true,'message'=>'Item updated']);
@@ -125,10 +79,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $notes        = trim($_POST['notes'] ?? '');
                 $purchaseDate = trim($_POST['purchase_date'] ?? '') ?: null;
                 if (!$itemId || $qty <= 0) { echo json_encode(['success'=>false,'message'=>'Invalid item or quantity']); exit; }
-                // Migrate columns BEFORE transaction (DDL causes implicit commit in MySQL)
-                try { $pdo->exec("ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS rate_per_item DECIMAL(10,2) DEFAULT NULL AFTER quantity"); } catch(Exception $e){}
-                try { $pdo->exec("ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS total_amount DECIMAL(12,2) DEFAULT NULL AFTER rate_per_item"); } catch(Exception $e){}
-                try { $pdo->exec("ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS purchase_date DATE DEFAULT NULL AFTER supplier"); } catch(Exception $e){}
                 // Read cost from item record
                 $itemRow = $pdo->prepare("SELECT current_stock, cost FROM inventory_items WHERE id = ?");
                 $itemRow->execute([$itemId]);

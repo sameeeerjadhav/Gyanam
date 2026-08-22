@@ -46,7 +46,7 @@ if ($paymentId) {
 
 if (!$payment) die('Receipt not found or access denied.');
 
-$hasAtcId = $pdo->query("SHOW COLUMNS FROM fee_payments LIKE 'atc_id'")->rowCount() > 0;
+$hasAtcId = feePaymentsHasAtcId($pdo);
 $isAuthorized = false;
 if ($hasAtcId && !empty($payment['atc_id']) && intval($payment['atc_id']) === intval($atcId)) {
     $isAuthorized = true;
