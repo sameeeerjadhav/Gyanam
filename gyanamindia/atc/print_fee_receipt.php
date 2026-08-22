@@ -421,8 +421,8 @@ body {
     font-size: 15px;
 }
 .slip-head { display: flex; gap: 16px; align-items: flex-start; border-bottom: 1px solid #e5e7eb; padding-bottom: 14px; }
-.slip-logo { width: 115px; height: 115px; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center; }
-.slip-logo img { width: 100%; height: 100%; object-fit: contain; }
+.slip-logo { width: auto; height: auto; max-width: 115px; max-height: 115px; border: none; border-radius: 0; overflow: visible; background: transparent; display: flex; align-items: flex-start; justify-content: flex-start; }
+.slip-logo img { width: auto; height: auto; max-width: 115px; max-height: 115px; object-fit: contain; display: block; }
 .slip-atc-name { font-size: 40px; font-weight: 800; line-height: 1.1; color: #111827; }
 .slip-atc-line { color: #374151; margin-top: 4px; font-size: 14px; }
 .slip-grid {
@@ -441,7 +441,7 @@ body {
 .fee-table td { padding: 10px 4px; border-bottom: 1px solid #f3f4f6; color: #1f2937; }
 .slip-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 14px; }
 .slip-note { font-size: 13px; color: #111827; line-height: 1.7; }
-.slip-sign { font-size: 30px; color: #374151; text-align: right; min-width: 240px; }
+.slip-sign { font-size: 13px; font-weight: 700; color: #111827; text-align: right; min-width: 180px; line-height: 1.7; }
 .print-btn-inline {
     margin-top: 14px;
     background: #0ea5e9;
@@ -469,7 +469,7 @@ body {
         break-inside: avoid;
     }
     .slip-head { gap: 10px; padding-bottom: 8px; }
-    .slip-logo { width: 78px; height: 78px; }
+    .slip-logo { width: auto; height: auto; max-width: 78px; max-height: 78px; }
     .slip-atc-name { font-size: 26px; }
     .slip-atc-line { font-size: 11px; margin-top: 2px; }
     .slip-grid { gap: 5px 14px; padding-top: 8px; padding-bottom: 7px; }
@@ -479,7 +479,7 @@ body {
     .fee-table td { font-size: 11px; padding: 6px 3px; }
     .slip-footer { margin-top: 8px; }
     .slip-note { font-size: 10.5px; line-height: 1.45; }
-    .slip-sign { font-size: 16px; min-width: 180px; }
+    .slip-sign { font-size: 10.5px; min-width: 140px; line-height: 1.45; }
     .print-btn-inline { display: none !important; }
 }
 </style>
@@ -497,7 +497,7 @@ body {
     </div>
 
     <div class="slip-grid">
-        <div class="slip-row"><span class="lbl">User ID:</span><span class="val"><?= htmlspecialchars($student['registration_id'] ?? '—') ?></span></div>
+        <div class="slip-row"><span class="lbl">Student ID:</span><span class="val"><?= htmlspecialchars($student['registration_id'] ?? '—') ?></span></div>
         <div class="slip-row"><span class="lbl">Course Fees:</span><span class="val"><?= number_format($netPayable, 0) ?></span></div>
         <div class="slip-row"><span class="lbl">Student Name:</span><span class="val"><?= htmlspecialchars($studentName) ?></span></div>
         <div class="slip-row"><span class="lbl">Contact No:</span><span class="val"><?= htmlspecialchars($student['mobile'] ?? '—') ?></span></div>
