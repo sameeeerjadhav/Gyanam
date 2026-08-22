@@ -788,7 +788,8 @@ function admissionFormBrandLogoPath(string $variant): string {
     $baseFs = __DIR__ . '/../assets/';
     $candidates = $variant === 'abacus'
         ? ['gyanam_abacus_logo.png', 'abacus_logo.png', 'logo.png']
-        : ['giit_logo.png', 'logo.png'];
+        // Prefer cache-busted brand filename first, then legacy name
+        : ['giit_brand_logo.png', 'giit_logo.png', 'logo.png'];
 
     foreach ($candidates as $file) {
         $path = $baseFs . $file;
