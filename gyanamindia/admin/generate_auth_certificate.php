@@ -68,6 +68,9 @@ $codePrefix = $chosen['code_prefix'];
 
 // ── Build dynamic values ──────────────────────────────────────────────────────
 $atcName = trim($atc['name'] ?? 'N/A');
+if ($atcName !== 'N/A' && !preg_match('/^m\/s\.?\s/i', $atcName)) {
+    $atcName = 'M/S. ' . $atcName;
+}
 
 $rawCode = !empty($atc['atc_code'])
     ? (string)$atc['atc_code']
@@ -76,7 +79,19 @@ $atcCode = $codePrefix . $rawCode;
 
 $city     = trim($atc['city'] ?? $atc['taluka'] ?? '');
 $district = trim($atc['district'] ?? '');
-$location = $city ? "at $city, Dist. $district." : "at Dist. $district.";
+if ($variant === 'abacus') {
+    if ($city && $district) {
+        $location = "at $city, $district";
+    } elseif ($city) {
+        $location = "at $city";
+    } elseif ($district) {
+        $location = "at $district";
+    } else {
+        $location = '';
+    }
+} else {
+    $location = $city ? "at $city, Dist. $district." : "at Dist. $district.";
+}
 
 $authStart = !empty($atc['date_created'])
     ? $atc['date_created']
@@ -84,8 +99,13 @@ $authStart = !empty($atc['date_created'])
 $authEnd = !empty($atc['authorization_expires_at'])
     ? $atc['authorization_expires_at']
     : date('Y-m-d', strtotime($authStart . ' +1 year'));
-$period = 'for the period ' . date('d/m/Y', strtotime($authStart))
-        . ' to ' . date('d/m/Y', strtotime($authEnd));
+if ($variant === 'abacus') {
+    $period = 'For the period from ' . date('d/m/Y', strtotime($authStart))
+            . ' to ' . date('d/m/Y', strtotime($authEnd));
+} else {
+    $period = 'for the period ' . date('d/m/Y', strtotime($authStart))
+            . ' to ' . date('d/m/Y', strtotime($authEnd));
+}
 
 // ── Template path ─────────────────────────────────────────────────────────────
 $templatePath = atcAuthCertificateTemplatePath($variant);
@@ -123,12 +143,26 @@ try {
         $pdf->Cell($W, 0, $text, 0, 0, 'C');
     };
 
-    $put($atcName, 140, 18, 'BI', '0,0,128');
-    $put('Centre registration code ' . $atcCode, 155, 11, 'B', '30,30,30');
-    $put('Has been recognized as our Authorized Training Centre for', 164, 11, 'B', '30,30,30');
-    $put($conductingLine, 172, 11, 'B', '30,30,30');
-    $put($location, 180, 11, 'B', '30,30,30');
-    $put($period, 188, 11, 'B', '30,30,30');
+    // Y positions tuned per template (Abacus page is taller with lower body area)
+    if ($variant === 'abacus') {
+        $put($atcName, 148, 20, 'BI', '0,0,128');
+        $put('Centre registration code ' . $atcCode, 162, 11, 'B', '30,30,30');
+        $put('Has been recognized as our Authorized Training Centre for', 171, 11, 'B', '30,30,30');
+        $put($conductingLine, 180, 11, 'B', '30,30,30');
+        if ($location !== '') {
+            $put($location, 189, 11, 'B', '30,30,30');
+            $put($period, 198, 11, 'B', '30,30,30');
+        } else {
+            $put($period, 189, 11, 'B', '30,30,30');
+        }
+    } else {
+        $put($atcName, 140, 18, 'BI', '0,0,128');
+        $put('Centre registration code ' . $atcCode, 155, 11, 'B', '30,30,30');
+        $put('Has been recognized as our Authorized Training Centre for', 164, 11, 'B', '30,30,30');
+        $put($conductingLine, 172, 11, 'B', '30,30,30');
+        $put($location, 180, 11, 'B', '30,30,30');
+        $put($period, 188, 11, 'B', '30,30,30');
+    }
 
     $inline   = isset($_GET['preview']);
     $dest     = $inline ? 'I' : 'D';
