@@ -23,32 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         switch ($_POST['action']) {
 
             case 'add':
-                // Ensure new columns exist
-                try {
-                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_fees DECIMAL(12,2) DEFAULT NULL");
-                } catch (Exception $e) {
-                }
-                try {
-                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_payment_mode VARCHAR(20) DEFAULT NULL");
-                } catch (Exception $e) {
-                }
-                try {
-                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_paid_date DATE DEFAULT NULL");
-                } catch (Exception $e) {
-                }
-                try {
-                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_username VARCHAR(100) DEFAULT NULL");
-                } catch (Exception $e) {
-                }
-                try {
-                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_password VARCHAR(100) DEFAULT NULL");
-                } catch (Exception $e) {
-                }
-
-                try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS alternate_mobile VARCHAR(15) DEFAULT NULL"); } catch (Exception $e) {}
-                try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS date_created DATE DEFAULT NULL"); } catch (Exception $e) {}
-                try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT NULL"); } catch (Exception $e) {}
-
+                // Schema columns are ensured on page load via flags — avoid ALTER on every save
                 $rawFees = $_POST['franchise_fees'] ?? '';
                 $franchiseFees = ($rawFees !== '' && $rawFees !== null) ? floatval($rawFees) : null;
                 $allowedPayModes = ['Cash', 'UPI', 'Cheque'];
@@ -159,30 +134,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
 
             case 'edit':
-                try {
-                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_fees DECIMAL(12,2) DEFAULT NULL");
-                } catch (Exception $e) {
-                }
-                try {
-                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_payment_mode VARCHAR(20) DEFAULT NULL");
-                } catch (Exception $e) {
-                }
-                try {
-                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_paid_date DATE DEFAULT NULL");
-                } catch (Exception $e) {
-                }
-                try {
-                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_username VARCHAR(100) DEFAULT NULL");
-                } catch (Exception $e) {
-                }
-                try {
-                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_password VARCHAR(100) DEFAULT NULL");
-                } catch (Exception $e) {
-                }
-                try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS alternate_mobile VARCHAR(15) DEFAULT NULL"); } catch (Exception $e) {}
-                try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS date_created DATE DEFAULT NULL"); } catch (Exception $e) {}
-                try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT NULL"); } catch (Exception $e) {}
-
                 $rawFees = $_POST['franchise_fees'] ?? '';
                 $franchiseFees = ($rawFees !== '' && $rawFees !== null) ? floatval($rawFees) : null;
                 $allowedPayModes = ['Cash', 'UPI', 'Cheque'];
@@ -686,6 +637,42 @@ try {
         @file_put_contents($atcFeePayFlag, date('c') . "\n");
     }
 } catch (Exception $e) { /* non-fatal */ }
+
+// Edit modal cache — open instantly without waiting for AJAX
+$atcEditCache = [];
+foreach ($atcCenters as $row) {
+    $tid = (int)$row['id'];
+    $atcEditCache[$tid] = [
+        'id' => $tid,
+        'name' => $row['name'] ?? '',
+        'center_type' => $row['center_type'] ?? '',
+        'dlc_id' => $row['dlc_id'] ?? '',
+        'authorization_expires_at' => $row['authorization_expires_at'] ?? '',
+        'franchise_payment_mode' => $row['franchise_payment_mode'] ?? '',
+        'franchise_fees' => $row['franchise_fees'] ?? null,
+        'franchise_paid_date' => $row['franchise_paid_date'] ?? '',
+        'district' => $row['district'] ?? '',
+        'taluka' => $row['taluka'] ?? '',
+        'city' => $row['city'] ?? '',
+        'pin_code' => $row['pin_code'] ?? '',
+        'state' => $row['state'] ?? 'Maharashtra',
+        'address' => $row['address'] ?? '',
+        'contact_person' => $row['contact_person'] ?? '',
+        'dob' => $row['dob'] ?? '',
+        'mobile' => $row['mobile'] ?? '',
+        'alternate_mobile' => $row['alternate_mobile'] ?? '',
+        'email' => $row['email'] ?? '',
+        'date_created' => $row['date_created'] ?? '',
+        'status' => $row['status'] ?? 'Active',
+        'atc_code' => $row['atc_code'] ?? '',
+        'login_username' => $row['login_username'] ?? '',
+        'login_password' => $row['login_password'] ?? '',
+        'training_user' => isset($trainingLookup[$tid]) ? [
+            'username' => $trainingLookup[$tid]['username'] ?? '',
+            'password' => $trainingLookup[$tid]['password'] ?? '',
+        ] : null,
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -2965,6 +2952,8 @@ try {
 
     <script src="../assets/js/dashboard.js"></script>
     <script>
+        const ATC_EDIT_CACHE = <?= json_encode($atcEditCache, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
+
         /* ── Toast ── */
         function showToast(msg, type = 'success') {
             const existing = document.querySelector('.atc-toast-container') || (() => {
@@ -3052,86 +3041,95 @@ try {
             }
         }
 
-        /* ── Edit ATC ── */
-        async function editATC(id) {
-            try {
-                const fd = new FormData();
-                fd.append('action', 'get'); fd.append('atc_id', id);
-                const res = await fetch('', { method: 'POST', body: new URLSearchParams(fd) });
-                const data = await res.json();
-                if (!data.success) { showToast('Error loading data', 'error'); return; }
-                const a = data.data;
-                document.getElementById('atcFormTitle').textContent = 'Edit ATC Center';
-                document.getElementById('atcFormAction').value = 'edit';
-                document.getElementById('atcFormId').value = a.id;
-                document.getElementById('f_name').value = a.name || '';
-                document.getElementById('f_center_type').value = a.center_type || '';
-                document.getElementById('f_dlc_id').value = a.dlc_id || '';
-                document.getElementById('f_authorization_expires_at').value = a.authorization_expires_at || '';
-                document.getElementById('f_franchise_payment_mode').value = a.franchise_payment_mode || '';
-                document.getElementById('f_franchise_fees').value = (a.franchise_fees !== null && a.franchise_fees !== undefined) ? a.franchise_fees : '';
-                document.getElementById('f_franchise_paid_date').value = a.franchise_paid_date || '';
-                document.getElementById('f_district').value = a.district || '';
-                document.getElementById('f_taluka').value = a.taluka || '';
-                document.getElementById('f_city').value = a.city || '';
-                document.getElementById('f_pin_code').value = a.pin_code || '';
-                document.getElementById('f_state').value = a.state || 'Maharashtra';
-                document.getElementById('f_address').value = a.address || '';
-                document.getElementById('f_contact_person').value = a.contact_person || '';
-                document.getElementById('f_dob').value = a.dob || '';
-                document.getElementById('f_mobile').value = a.mobile || '';
-                document.getElementById('f_alternate_mobile').value = a.alternate_mobile || '';
-                document.getElementById('f_email').value = a.email || '';
-                document.getElementById('f_date_created').value = a.date_created || '';
-                document.getElementById('f_status').value = a.status || 'Active';
-                document.getElementById('atcSaveBtnText').textContent = 'Update ATC Center';
-                // Login: username locked to ATC code; show current password so Admin can see it
-                document.getElementById('loginAccountSection').style.display = '';
-                const uEl = document.getElementById('f_login_username');
-                const pEl = document.getElementById('f_login_password');
-                const code = a.atc_code || a.login_username || '';
-                uEl.value = code;
-                uEl.readOnly = true;
-                uEl.style.background = '#f8fafc';
-                uEl.style.cursor = 'not-allowed';
-                pEl.value = a.login_password || '';
-                pEl.placeholder = 'Current password (editable to reset)';
-                pEl.readOnly = false;
-                pEl.style.background = '#fff';
-                pEl.style.cursor = 'text';
-                document.getElementById('loginPasswordReq').style.display = 'none';
-                document.getElementById('loginPasswordHint').style.display = '';
-                document.getElementById('loginPasswordHint').innerHTML = 'Admin can view / reset password here. Leave as-is to keep.';
-                document.getElementById('loginAccountHint').innerHTML = '🔐 Username is fixed to <strong>ATC Code</strong>. Password is visible below — change it here if you need to reset.';
-                document.getElementById('loginAccountHint').style.background = 'linear-gradient(135deg,#f0fdf4,#dcfce7)';
-                document.getElementById('loginAccountHint').style.borderColor = '#86efac';
-                document.getElementById('loginAccountHint').style.color = '#15803d';
-                // Populate training login info
-                const badge = document.getElementById('trainingBadge');
-                const tU = document.getElementById('f_training_username');
-                const tP = document.getElementById('f_training_password');
-                document.getElementById('f_same_training_creds').checked = false;
-                tU.readOnly = false; tU.style.opacity = '1';
-                tP.readOnly = false; tP.style.opacity = '1';
-                if (a.training_user) {
-                    badge.textContent = '✓ Active';
-                    badge.style.display = 'inline';
-                    badge.style.background = '#d1fae5'; badge.style.color = '#065f46'; badge.style.border = '1px solid #a7f3d0';
-                    tU.value = a.training_user.username;
-                    tP.value = a.training_user.password || '';
-                    tP.placeholder = 'Leave blank to keep current';
-                    document.getElementById('f_create_training').checked = true;
-                    document.getElementById('trainingFieldsATC').style.display = 'block';
-                } else {
-                    badge.textContent = 'Not Created';
-                    badge.style.display = 'inline';
-                    badge.style.background = '#fef3c7'; badge.style.color = '#92400e'; badge.style.border = '1px solid #fde68a';
-                    tU.value = ''; tP.value = ''; tP.placeholder = 'e.g., Train@123';
-                    document.getElementById('f_create_training').checked = false;
-                    document.getElementById('trainingFieldsATC').style.display = 'none';
-                }
-                document.getElementById('atcFormModal').classList.add('active');
-            } catch (e) { showToast('Error loading ATC data', 'error'); }
+        /* ── Edit ATC (instant from page cache) ── */
+        function fillATCEditForm(a) {
+            document.getElementById('atcFormTitle').textContent = 'Edit ATC Center';
+            document.getElementById('atcFormAction').value = 'edit';
+            document.getElementById('atcFormId').value = a.id;
+            document.getElementById('f_name').value = a.name || '';
+            document.getElementById('f_center_type').value = a.center_type || '';
+            document.getElementById('f_dlc_id').value = a.dlc_id || '';
+            document.getElementById('f_authorization_expires_at').value = a.authorization_expires_at || '';
+            document.getElementById('f_franchise_payment_mode').value = a.franchise_payment_mode || '';
+            document.getElementById('f_franchise_fees').value = (a.franchise_fees !== null && a.franchise_fees !== undefined && a.franchise_fees !== '') ? a.franchise_fees : '';
+            document.getElementById('f_franchise_paid_date').value = a.franchise_paid_date || '';
+            document.getElementById('f_district').value = a.district || '';
+            document.getElementById('f_taluka').value = a.taluka || '';
+            document.getElementById('f_city').value = a.city || '';
+            document.getElementById('f_pin_code').value = a.pin_code || '';
+            document.getElementById('f_state').value = a.state || 'Maharashtra';
+            document.getElementById('f_address').value = a.address || '';
+            document.getElementById('f_contact_person').value = a.contact_person || '';
+            document.getElementById('f_dob').value = a.dob || '';
+            document.getElementById('f_mobile').value = a.mobile || '';
+            document.getElementById('f_alternate_mobile').value = a.alternate_mobile || '';
+            document.getElementById('f_email').value = a.email || '';
+            document.getElementById('f_date_created').value = a.date_created || '';
+            document.getElementById('f_status').value = a.status || 'Active';
+            document.getElementById('atcSaveBtnText').textContent = 'Update ATC Center';
+            document.getElementById('loginAccountSection').style.display = '';
+            const uEl = document.getElementById('f_login_username');
+            const pEl = document.getElementById('f_login_password');
+            const code = a.atc_code || a.login_username || '';
+            uEl.value = code;
+            uEl.readOnly = true;
+            uEl.style.background = '#f8fafc';
+            uEl.style.cursor = 'not-allowed';
+            pEl.value = a.login_password || '';
+            pEl.placeholder = 'Current password (editable to reset)';
+            pEl.readOnly = false;
+            pEl.style.background = '#fff';
+            pEl.style.cursor = 'text';
+            document.getElementById('loginPasswordReq').style.display = 'none';
+            document.getElementById('loginPasswordHint').style.display = '';
+            document.getElementById('loginPasswordHint').innerHTML = 'Admin can view / reset password here. Leave as-is to keep.';
+            document.getElementById('loginAccountHint').innerHTML = '🔐 Username is fixed to <strong>ATC Code</strong>. Password is visible below — change it here if you need to reset.';
+            document.getElementById('loginAccountHint').style.background = 'linear-gradient(135deg,#f0fdf4,#dcfce7)';
+            document.getElementById('loginAccountHint').style.borderColor = '#86efac';
+            document.getElementById('loginAccountHint').style.color = '#15803d';
+            const badge = document.getElementById('trainingBadge');
+            const tU = document.getElementById('f_training_username');
+            const tP = document.getElementById('f_training_password');
+            document.getElementById('f_same_training_creds').checked = false;
+            tU.readOnly = false; tU.style.opacity = '1';
+            tP.readOnly = false; tP.style.opacity = '1';
+            if (a.training_user) {
+                badge.textContent = '✓ Active';
+                badge.style.display = 'inline';
+                badge.style.background = '#d1fae5'; badge.style.color = '#065f46'; badge.style.border = '1px solid #a7f3d0';
+                tU.value = a.training_user.username;
+                tP.value = a.training_user.password || '';
+                tP.placeholder = 'Leave blank to keep current';
+                document.getElementById('f_create_training').checked = true;
+                document.getElementById('trainingFieldsATC').style.display = 'block';
+            } else {
+                badge.textContent = 'Not Created';
+                badge.style.display = 'inline';
+                badge.style.background = '#fef3c7'; badge.style.color = '#92400e'; badge.style.border = '1px solid #fde68a';
+                tU.value = ''; tP.value = ''; tP.placeholder = 'e.g., Train@123';
+                document.getElementById('f_create_training').checked = false;
+                document.getElementById('trainingFieldsATC').style.display = 'none';
+            }
+            document.getElementById('atcFormModal').classList.add('active');
+        }
+
+        function editATC(id) {
+            const cached = ATC_EDIT_CACHE[String(id)] || ATC_EDIT_CACHE[id];
+            if (cached) {
+                fillATCEditForm(cached);
+                return;
+            }
+            // Fallback if not on current page
+            (async () => {
+                try {
+                    const fd = new FormData();
+                    fd.append('action', 'get'); fd.append('atc_id', id);
+                    const res = await fetch('', { method: 'POST', body: new URLSearchParams(fd) });
+                    const data = await res.json();
+                    if (!data.success) { showToast('Error loading data', 'error'); return; }
+                    fillATCEditForm(data.data);
+                } catch (e) { showToast('Error loading ATC data', 'error'); }
+            })();
         }
 
         /* ── Form Submit ── */
