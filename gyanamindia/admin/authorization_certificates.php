@@ -258,6 +258,22 @@ function acCenterTypeLabel(?string $centerType): string {
 .btn-renew:hover { background:var(--amber-lt);border-color:#fbbf24 }
 .btn-renew svg { width:13px;height:13px }
 
+.wa-circle {
+    width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;flex-shrink:0;
+    display:inline-flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#25d366,#128c7e);color:#fff;
+    box-shadow:0 3px 10px rgba(37,211,102,.35);transition:all .18s;
+}
+.wa-circle:hover { transform:translateY(-1px) scale(1.06);box-shadow:0 5px 14px rgba(37,211,102,.45) }
+.wa-circle:disabled,.wa-circle.is-disabled {
+    opacity:.4;cursor:not-allowed;transform:none;box-shadow:none;pointer-events:none;
+}
+.wa-circle svg { width:18px;height:18px }
+.wa-circle.sm { width:30px;height:30px }
+.wa-circle.sm svg { width:15px;height:15px }
+.ac-contact-row { display:flex;align-items:center;gap:.45rem;min-width:0 }
+.ac-contact-row .ac-detail-val { flex:1;min-width:0 }
+
 .empty-state { text-align:center;padding:3.5rem 1rem;color:var(--text-secondary);grid-column:1/-1;background:#fff;border:1.5px dashed #e2e8f0;border-radius:16px }
 .empty-state svg { display:block;margin:0 auto .85rem;width:44px;height:44px;opacity:.28 }
 .empty-state p { font-size:.88rem;font-weight:600;margin:0 }
@@ -401,6 +417,24 @@ function acCenterTypeLabel(?string $centerType): string {
                 ]);
                 $locLabel = $locParts ? implode(', ', $locParts) : '—';
                 $certVars = atcAuthCertificateVariants($atc['center_type'] ?? '');
+                $atcMobile = preg_replace('/\D+/', '', (string)($atc['mobile'] ?? ''));
+                $atcCodeDisp = $atc['atc_code'] ?: date('Y') . str_pad($atc['id'], 5, '0', STR_PAD_LEFT);
+                $waCerts = [];
+                foreach ($certVars as $cv) {
+                    if (atcAuthCertificateTemplatePath($cv['variant']) === null) continue;
+                    $waCerts[] = [
+                        'variant' => $cv['variant'],
+                        'label'   => $cv['variant'] === 'it' ? 'GIIT' : 'Abacus',
+                        'url'     => 'generate_auth_certificate.php?atc_id=' . (int)$atc['id'] . '&variant=' . urlencode($cv['variant']),
+                    ];
+                }
+                $waPayload = htmlspecialchars(json_encode([
+                    'mobile'  => $atcMobile,
+                    'contact' => $atc['contact_person'] ?? '',
+                    'name'    => $atc['name'],
+                    'code'    => $atcCodeDisp,
+                    'certs'   => $waCerts,
+                ], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
             ?>
             <div class="ac-card">
                 <div class="ac-card-accent <?= $expStatus ?>"></div>
@@ -410,8 +444,13 @@ function acCenterTypeLabel(?string $centerType): string {
                         <div style="flex:1;min-width:0">
                             <div class="ac-card-name"><?= htmlspecialchars($atc['name']) ?></div>
                             <div class="ac-card-meta"><?= htmlspecialchars($locLabel) ?></div>
-                            <span class="ac-code-badge"><?= htmlspecialchars($atc['atc_code'] ?: date('Y') . str_pad($atc['id'], 5, '0', STR_PAD_LEFT)) ?></span>
+                            <span class="ac-code-badge"><?= htmlspecialchars($atcCodeDisp) ?></span>
                         </div>
+                        <button type="button" class="wa-circle<?= ($atcMobile && strlen($atcMobile) >= 10 && $waCerts) ? '' : ' is-disabled' ?>"
+                                title="<?= ($atcMobile && strlen($atcMobile) >= 10) ? 'Send certificate on WhatsApp' : 'No mobile number' ?>"
+                                <?= ($atcMobile && strlen($atcMobile) >= 10 && $waCerts) ? 'onclick="shareAuthCertWhatsApp(this)" data-wa="' . $waPayload . '"' : 'disabled' ?>>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                        </button>
                     </div>
 
                     <div class="ac-card-details">
@@ -427,7 +466,9 @@ function acCenterTypeLabel(?string $centerType): string {
                         </div>
                         <div class="ac-detail">
                             <span class="ac-detail-lbl">Contact</span>
-                            <span class="ac-detail-val"><?= htmlspecialchars($atc['contact_person'] ?? '—') ?></span>
+                            <div class="ac-contact-row">
+                                <span class="ac-detail-val"><?= htmlspecialchars($atc['contact_person'] ?? '—') ?></span>
+                            </div>
                         </div>
                         <div class="ac-detail">
                             <span class="ac-detail-lbl">Authorization</span>
@@ -501,10 +542,29 @@ function acCenterTypeLabel(?string $centerType): string {
                         elseif  ($daysLeft2 < 0)       { $es2 = 'expired';  $el2 = 'Expired ' . abs($daysLeft2) . 'd ago'; }
                         elseif  ($daysLeft2 <= 30)     { $es2 = 'expiring'; $el2 = 'Expires in ' . $daysLeft2 . 'd'; }
                         else                           { $es2 = 'valid';    $el2 = 'Valid till ' . date('M Y', $expTs2); }
+                        $atcMobile2 = preg_replace('/\D+/', '', (string)($atc['mobile'] ?? ''));
+                        $atcCode2 = $atc['atc_code'] ?: date('Y') . str_pad($atc['id'], 5, '0', STR_PAD_LEFT);
+                        $certVars2 = atcAuthCertificateVariants($atc['center_type'] ?? '');
+                        $waCerts2 = [];
+                        foreach ($certVars2 as $cv2pre) {
+                            if (atcAuthCertificateTemplatePath($cv2pre['variant']) === null) continue;
+                            $waCerts2[] = [
+                                'variant' => $cv2pre['variant'],
+                                'label'   => $cv2pre['variant'] === 'it' ? 'GIIT' : 'Abacus',
+                                'url'     => 'generate_auth_certificate.php?atc_id=' . (int)$atc['id'] . '&variant=' . urlencode($cv2pre['variant']),
+                            ];
+                        }
+                        $waPayload2 = htmlspecialchars(json_encode([
+                            'mobile'  => $atcMobile2,
+                            'contact' => $atc['contact_person'] ?? '',
+                            'name'    => $atc['name'],
+                            'code'    => $atcCode2,
+                            'certs'   => $waCerts2,
+                        ], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
                     ?>
                     <tr>
                         <td style="color:var(--text-secondary);font-size:.8rem"><?= $i+1 ?></td>
-                        <td><span class="ac-code-badge"><?= htmlspecialchars($atc['atc_code'] ?: date('Y') . str_pad($atc['id'], 5, '0', STR_PAD_LEFT)) ?></span></td>
+                        <td><span class="ac-code-badge"><?= htmlspecialchars($atcCode2) ?></span></td>
                         <td>
                             <div style="font-weight:700;font-size:.875rem"><?= htmlspecialchars($atc['name']) ?></div>
                             <div style="font-size:.73rem;color:var(--text-secondary)"><?= htmlspecialchars($atc['contact_person'] ?? '') ?></div>
@@ -521,9 +581,13 @@ function acCenterTypeLabel(?string $centerType): string {
                             </span>
                         </td>
                         <td style="text-align:center;white-space:nowrap">
-                            <div style="display:flex;gap:.35rem;justify-content:center;flex-wrap:wrap">
+                            <div style="display:flex;gap:.35rem;justify-content:center;flex-wrap:wrap;align-items:center">
+                                <button type="button" class="wa-circle sm<?= ($atcMobile2 && strlen($atcMobile2) >= 10 && $waCerts2) ? '' : ' is-disabled' ?>"
+                                        title="<?= ($atcMobile2 && strlen($atcMobile2) >= 10) ? 'Send on WhatsApp' : 'No mobile number' ?>"
+                                        <?= ($atcMobile2 && strlen($atcMobile2) >= 10 && $waCerts2) ? 'onclick="shareAuthCertWhatsApp(this)" data-wa="' . $waPayload2 . '"' : 'disabled' ?>>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                </button>
                                 <?php
-                                $certVars2 = atcAuthCertificateVariants($atc['center_type'] ?? '');
                                 foreach ($certVars2 as $cv2):
                                     $vk = $cv2['variant'];
                                     $tplOk2 = atcAuthCertificateTemplatePath($vk) !== null;
@@ -601,6 +665,77 @@ function acToast(msg, type='success') {
     t.textContent = msg;
     document.getElementById('acToastWrap').appendChild(t);
     setTimeout(() => t.remove(), 3500);
+}
+
+async function shareAuthCertWhatsApp(btn) {
+    let data;
+    try { data = JSON.parse(btn.getAttribute('data-wa') || '{}'); }
+    catch (e) { acToast('Invalid WhatsApp data.', 'error'); return; }
+
+    const digits = String(data.mobile || '').replace(/\D/g, '');
+    if (digits.length < 10) { acToast('No mobile number for this ATC.', 'error'); return; }
+    if (!data.certs || !data.certs.length) { acToast('No certificate template available.', 'error'); return; }
+
+    const phone = '91' + digits.slice(-10);
+    const contact = (data.contact || 'Sir/Madam').trim();
+    const name = data.name || 'your center';
+    const code = data.code || '';
+    btn.disabled = true;
+    btn.style.opacity = '.6';
+
+    const files = [];
+    try {
+        for (const c of data.certs) {
+            try {
+                const res = await fetch(c.url, { credentials: 'same-origin' });
+                if (!res.ok) continue;
+                const blob = await res.blob();
+                const safeName = String(name).replace(/[^\w\-]+/g, '_').slice(0, 40);
+                const fname = `${c.label || c.variant}_Auth_Certificate_${safeName}.pdf`;
+                files.push(new File([blob], fname, { type: 'application/pdf' }));
+            } catch (e) { /* skip failed variant */ }
+        }
+
+        const msg = `Dear ${contact},
+
+Your *Authorization Certificate* for *${name}*${code ? ' (' + code + ')' : ''} is ready.
+
+Please find the certificate PDF attached.
+
+Best Regards,
+*Team Gyanam India*`;
+
+        try {
+            if (files.length && navigator.canShare && navigator.canShare({ files })) {
+                await navigator.share({ files, title: 'Authorization Certificate', text: msg });
+                acToast('Shared via WhatsApp');
+                return;
+            }
+        } catch (e) {
+            if (e && e.name === 'AbortError') return;
+        }
+
+        // Desktop / fallback: download PDFs so admin can attach in WhatsApp chat
+        files.forEach((file) => {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(file);
+            a.download = file.name;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        });
+
+        window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(msg), '_blank');
+        if (files.length) {
+            acToast('PDF downloaded — attach it in the WhatsApp chat');
+        } else {
+            acToast('Opened WhatsApp (PDF download failed — use Download button)', 'error');
+        }
+    } finally {
+        btn.disabled = false;
+        btn.style.opacity = '';
+    }
 }
 </script>
 </body>
