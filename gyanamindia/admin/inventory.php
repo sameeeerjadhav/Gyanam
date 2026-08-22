@@ -149,8 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 // ── Fetch data ────────────────────────────────────────────────────────────
-$catFilter = trim($_GET['category'] ?? 'all');
-$searchQ   = trim($_GET['q'] ?? '');
+$catFilter = trim($_GET['category'] ?? 'all'); // used only as initial UI hint
 
 // Categories master list
 $categories = [];
@@ -161,22 +160,9 @@ if (empty($categories)) {
     $categories = ['Books', 'T-Shirts', 'Certificates', 'Stationery', 'Other'];
 }
 
-$sql = "SELECT * FROM inventory_items WHERE status = 'Active'";
-$params = [];
-if ($catFilter !== 'all' && $catFilter !== '') {
-    $sql .= " AND category = ?";
-    $params[] = $catFilter;
-}
-if ($searchQ !== '') {
-    $sql .= " AND (item_name LIKE ? OR description LIKE ?)";
-    $params[] = '%' . $searchQ . '%';
-    $params[] = '%' . $searchQ . '%';
-}
-$sql .= " ORDER BY category, item_name";
-$stmt = $pdo->prepare($sql); $stmt->execute($params);
-$items = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-$allItems = $pdo->query("SELECT * FROM inventory_items WHERE status = 'Active' ORDER BY item_name")->fetchAll(PDO::FETCH_ASSOC);
+// Load all active items once — live search + pagination run in the browser (no server hits)
+$items = $pdo->query("SELECT * FROM inventory_items WHERE status = 'Active' ORDER BY category, item_name")->fetchAll(PDO::FETCH_ASSOC);
+$allItems = $items;
 
 // KPIs
 $totalItems = count($allItems);
@@ -208,12 +194,6 @@ try {
 $recentTxns = $pdo->query("SELECT t.*, i.item_name, i.category, u.name as user_name FROM inventory_transactions t JOIN inventory_items i ON t.item_id = i.id LEFT JOIN users u ON t.created_by = u.id ORDER BY t.created_at DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
 
 function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-function invCatQuery(string $cat, string $q = ''): string {
-    $params = [];
-    if ($cat !== 'all' && $cat !== '') $params['category'] = $cat;
-    if ($q !== '') $params['q'] = $q;
-    return $params ? ('?' . http_build_query($params)) : '?category=all';
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -257,14 +237,23 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
 .cat-sum-metric strong.out{color:#e11d48}
 .cat-sum-metric strong.ok{color:#059669}
 
-.inv-search{height:38px;padding:0 .9rem;border:1.5px solid var(--border);border-radius:10px;font:800 .82rem var(--font);outline:none;min-width:200px;flex:1;max-width:280px}
+.inv-search{height:38px;padding:0 .9rem;border:1.5px solid var(--border);border-radius:10px;font:600 .82rem var(--font);outline:none;min-width:220px;flex:1;max-width:300px}
 .inv-search:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(67,97,238,.12)}
-.inv-search-form{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap;flex:1}
+.inv-search-wrap{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap}
+.inv-live-hint{font-size:.7rem;font-weight:600;color:var(--text-3);white-space:nowrap}
+.inv-client-pager{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:.85rem 1.15rem;border-top:1.5px solid var(--border);background:#fafbfc}
+.inv-client-pager .pager-info{font-size:.8rem;color:#6b7280;font-weight:600}
+.inv-client-pager .pager-info strong{color:#1f2937;font-weight:800}
+.inv-client-pager .pager-controls{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;margin-left:auto}
+.inv-client-pager .pager-btn{display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;padding:0 .7rem;border-radius:9px;border:1.5px solid #e5e7eb;background:#fff;color:#374151;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit}
+.inv-client-pager .pager-btn:hover:not(:disabled):not(.active){border-color:#a5b4fc;background:#eef2ff;color:#3730a3}
+.inv-client-pager .pager-btn.active{background:linear-gradient(135deg,#4361ee,#3730a3);border-color:#3730a3;color:#fff;cursor:default}
+.inv-client-pager .pager-btn:disabled{opacity:.42;cursor:not-allowed}
 
 /* Toolbar */
 .inv-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem}
 .inv-toolbar-left{display:flex;gap:.5rem;flex-wrap:wrap}
-.inv-cat-btn{padding:.5rem 1rem;border-radius:999px;border:1.5px solid var(--border);background:var(--surface);font:700 .8rem var(--font);color:var(--text-2);cursor:pointer;transition:all var(--t);text-decoration:none}
+.inv-cat-btn{padding:.5rem 1rem;border-radius:999px;border:1.5px solid var(--border);background:var(--surface);font:700 .8rem var(--font);color:var(--text-2);cursor:pointer;transition:all var(--t);text-decoration:none;display:inline-flex;align-items:center}
 .inv-cat-btn:hover,.inv-cat-btn.active{background:var(--brand-light);border-color:#a5b4fc;color:#1e3a8a}
 .inv-toolbar-right{display:flex;gap:.5rem}
 
@@ -378,7 +367,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
                 <?php foreach ($categorySummary as $cs):
                     $alertClass = ((int)$cs['out_count'] > 0) ? 'out' : (((int)$cs['low_count'] > 0) ? 'low' : 'ok');
                 ?>
-                <a href="<?= e(invCatQuery($cs['category'], $searchQ)) ?>" class="cat-sum-card" style="text-decoration:none;color:inherit;display:block;transition:border-color .15s,transform .15s" onmouseover="this.style.borderColor='#a5b4fc';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='';this.style.transform=''">
+                <button type="button" class="cat-sum-card" data-filter-cat="<?= e($cs['category']) ?>" onclick="setInvCategory(this.dataset.filterCat)" style="text-align:left;width:100%;cursor:pointer;font:inherit;color:inherit;display:block;transition:border-color .15s,transform .15s" onmouseover="this.style.borderColor='#a5b4fc';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='';this.style.transform=''">
                     <div class="cat-sum-name"><?= e($cs['category']) ?></div>
                     <div class="cat-sum-grid">
                         <div class="cat-sum-metric"><span>Items</span><strong><?= (int)$cs['item_count'] ?></strong></div>
@@ -386,7 +375,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
                         <div class="cat-sum-metric"><span>Min Levels (sum)</span><strong><?= number_format((int)$cs['total_min_level']) ?></strong></div>
                         <div class="cat-sum-metric"><span>Alerts</span><strong class="<?= $alertClass ?>"><?= (int)$cs['low_count'] ?> low · <?= (int)$cs['out_count'] ?> out</strong></div>
                     </div>
-                </a>
+                </button>
                 <?php endforeach; ?>
             </div>
         </div>
@@ -395,10 +384,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
 
     <!-- Toolbar -->
     <div class="inv-toolbar">
-        <div class="inv-toolbar-left" style="flex-wrap:wrap;flex:1;gap:.45rem">
-            <a href="<?= e(invCatQuery('all', $searchQ)) ?>" class="inv-cat-btn <?= $catFilter==='all'?'active':'' ?>">All</a>
+        <div class="inv-toolbar-left" style="flex-wrap:wrap;flex:1;gap:.45rem" id="invCatTabs">
+            <button type="button" class="inv-cat-btn active" data-cat="all" onclick="setInvCategory('all')">All</button>
             <?php foreach ($categories as $catName): ?>
-            <a href="<?= e(invCatQuery($catName, $searchQ)) ?>" class="inv-cat-btn <?= $catFilter===$catName?'active':'' ?>"><?= e($catName) ?></a>
+            <button type="button" class="inv-cat-btn" data-cat="<?= e($catName) ?>" onclick="setInvCategory(this.dataset.cat)"><?= e($catName) ?></button>
             <?php endforeach; ?>
             <button type="button" class="btn-inv primary" onclick="openModal('addCategoryModal')" title="Create category" style="height:36px;padding:.45rem .95rem;font-size:.8rem">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -406,16 +395,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
             </button>
         </div>
         <div class="inv-toolbar-right">
-            <form class="inv-search-form" method="GET" action="">
-                <?php if ($catFilter !== 'all' && $catFilter !== ''): ?>
-                <input type="hidden" name="category" value="<?= e($catFilter) ?>">
-                <?php endif; ?>
-                <input class="inv-search" type="search" name="q" value="<?= e($searchQ) ?>" placeholder="Search item by name…" aria-label="Search items">
-                <button type="submit" class="btn-inv outline" style="height:38px">Search</button>
-                <?php if ($searchQ !== ''): ?>
-                <a class="btn-inv outline" style="height:38px;display:inline-flex;align-items:center" href="<?= e(invCatQuery($catFilter === 'all' ? 'all' : $catFilter)) ?>">Clear</a>
-                <?php endif; ?>
-            </form>
+            <div class="inv-search-wrap">
+                <input class="inv-search" type="search" id="invLiveSearch" placeholder="Live search by name…" aria-label="Search items" autocomplete="off">
+                <span class="inv-live-hint">Instant · no reload</span>
+            </div>
             <button class="btn-inv green" onclick="openModal('stockInModal')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Stock In
@@ -430,25 +413,24 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
     <!-- Inventory Table -->
     <div class="inv-panel">
         <div class="inv-panel-head">
-            <div class="inv-panel-title">📦 Inventory Items<?= $searchQ !== '' ? ' — search: “' . e($searchQ) . '”' : '' ?></div>
-            <span style="font-size:.75rem;font-weight:700;color:var(--text-3)"><?= count($items) ?> items</span>
+            <div class="inv-panel-title">📦 Inventory Items</div>
+            <span style="font-size:.75rem;font-weight:700;color:var(--text-3)" id="invItemCountLabel"><?= count($items) ?> items</span>
         </div>
         <div style="overflow-x:auto">
-        <table class="inv-tbl">
+        <table class="inv-tbl" id="invItemsTable">
             <thead><tr><th>#</th><th>Item Name</th><th>Category</th><th>Cost (₹)</th><th>Current Stock</th><th>Total Cost (₹)</th><th>Min Level</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody>
+            <tbody id="invItemsBody">
             <?php if (empty($items)): ?>
-            <tr><td colspan="9" style="text-align:center;padding:2.5rem;color:var(--text-3)">
-                <?= $searchQ !== '' ? 'No items match “' . e($searchQ) . '”.' : 'No inventory items found. Click <strong>Add Item</strong> to get started.' ?>
-            </td></tr>
+            <tr id="invEmptyRow"><td colspan="9" style="text-align:center;padding:2.5rem;color:var(--text-3)">No inventory items found. Click <strong>Add Item</strong> to get started.</td></tr>
             <?php else: ?>
-            <?php $n=0; foreach ($items as $item): $n++;
+            <?php foreach ($items as $item):
                 $stockClass = $item['current_stock'] <= 0 ? 'out' : ($item['current_stock'] <= $item['min_stock_level'] ? 'low' : 'ok');
                 $stockLabel = $stockClass === 'out' ? 'Out of Stock' : ($stockClass === 'low' ? 'Low Stock' : 'In Stock');
                 $catClass = strtolower(str_replace(' ','-',$item['category']));
+                $searchBlob = strtolower(trim(($item['item_name'] ?? '') . ' ' . ($item['description'] ?? '') . ' ' . ($item['category'] ?? '')));
             ?>
-            <tr>
-                <td style="color:var(--text-3);font-size:.78rem"><?= $n ?></td>
+            <tr class="inv-item-row" data-cat="<?= e($item['category']) ?>" data-search="<?= e($searchBlob) ?>" style="display:none">
+                <td class="inv-row-num" style="color:var(--text-3);font-size:.78rem"></td>
                 <td><div style="font-weight:700"><?= e($item['item_name']) ?></div><?php if($item['description']): ?><div style="font-size:.75rem;color:var(--text-3);margin-top:.1rem"><?= e(substr($item['description'],0,60)) ?></div><?php endif; ?></td>
                 <td><span class="cat-pill <?= $catClass ?>"><?= e($item['category']) ?></span></td>
                 <td style="font-family:var(--mono);font-weight:700;color:#059669"><?= $item['cost'] ? '₹'.number_format($item['cost'],2) : '<span style="color:var(--text-3)">—</span>' ?></td>
@@ -474,10 +456,18 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
                     </div>
                 </td>
             </tr>
-            <?php endforeach; endif; ?>
+            <?php endforeach; ?>
+            <tr id="invNoMatchRow" style="display:none"><td colspan="9" style="text-align:center;padding:2.5rem;color:var(--text-3)">No items match your search.</td></tr>
+            <?php endif; ?>
             </tbody>
         </table>
         </div>
+        <?php if (!empty($items)): ?>
+        <div class="inv-client-pager" id="invClientPager">
+            <div class="pager-info" id="invPagerInfo">Showing <strong>0</strong> of <strong>0</strong> items</div>
+            <div class="pager-controls" id="invPagerControls"></div>
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- Recent Transactions -->
@@ -807,6 +797,140 @@ function deleteItem(id,name){
         if(r.success){toast('Item deleted');setTimeout(()=>location.reload(),800);}else toast(r.message,'error');
     });
 }
+
+/* ── Live search + client pagination (no server requests) ── */
+(function(){
+    const PAGE_SIZE = 25;
+    const rows = Array.from(document.querySelectorAll('#invItemsBody tr.inv-item-row'));
+    if(!rows.length) return;
+
+    let invCat = <?= json_encode($catFilter !== '' ? $catFilter : 'all') ?>;
+    let invQuery = '';
+    let invPage = 1;
+    let searchTimer = null;
+
+    const searchEl = document.getElementById('invLiveSearch');
+    const countLabel = document.getElementById('invItemCountLabel');
+    const noMatch = document.getElementById('invNoMatchRow');
+    const pagerInfo = document.getElementById('invPagerInfo');
+    const pagerControls = document.getElementById('invPagerControls');
+
+    function matchingRows(){
+        const q = invQuery.trim().toLowerCase();
+        return rows.filter(row => {
+            const catOk = invCat === 'all' || row.dataset.cat === invCat;
+            const searchOk = !q || (row.dataset.search || '').includes(q);
+            return catOk && searchOk;
+        });
+    }
+
+    function syncCatTabs(){
+        document.querySelectorAll('#invCatTabs .inv-cat-btn[data-cat]').forEach(btn=>{
+            btn.classList.toggle('active', btn.dataset.cat === invCat);
+        });
+    }
+
+    function renderPager(total, page, pages){
+        if(!pagerControls || !pagerInfo) return;
+        const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+        const to = Math.min(page * PAGE_SIZE, total);
+        pagerInfo.innerHTML = total
+            ? 'Showing <strong>'+from+'–'+to+'</strong> of <strong>'+total+'</strong> items'
+            : 'Showing <strong>0</strong> of <strong>0</strong> items';
+
+        pagerControls.innerHTML = '';
+        if(pages <= 1) return;
+
+        const mkBtn = (label, targetPage, opts={})=>{
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'pager-btn'+(opts.active?' active':'');
+            b.textContent = label;
+            b.disabled = !!opts.disabled;
+            if(!opts.disabled && !opts.active){
+                b.addEventListener('click', ()=>{ invPage = targetPage; renderInvList(); });
+            }
+            return b;
+        };
+
+        pagerControls.appendChild(mkBtn('‹', page-1, {disabled: page<=1}));
+        const windowSize = 5;
+        let start = Math.max(1, page - Math.floor(windowSize/2));
+        let end = Math.min(pages, start + windowSize - 1);
+        start = Math.max(1, end - windowSize + 1);
+        if(start > 1){
+            pagerControls.appendChild(mkBtn('1', 1));
+            if(start > 2){
+                const dots=document.createElement('span');
+                dots.textContent='…';
+                dots.style.cssText='padding:0 .2rem;color:#9ca3af;font-weight:700';
+                pagerControls.appendChild(dots);
+            }
+        }
+        for(let p=start;p<=end;p++){
+            pagerControls.appendChild(mkBtn(String(p), p, {active: p===page}));
+        }
+        if(end < pages){
+            if(end < pages-1){
+                const dots=document.createElement('span');
+                dots.textContent='…';
+                dots.style.cssText='padding:0 .2rem;color:#9ca3af;font-weight:700';
+                pagerControls.appendChild(dots);
+            }
+            pagerControls.appendChild(mkBtn(String(pages), pages));
+        }
+        pagerControls.appendChild(mkBtn('›', page+1, {disabled: page>=pages}));
+    }
+
+    function renderInvList(){
+        const matched = matchingRows();
+        const total = matched.length;
+        const pages = Math.max(1, Math.ceil(total / PAGE_SIZE) || 1);
+        if(invPage > pages) invPage = pages;
+
+        rows.forEach(r => { r.style.display = 'none'; });
+        if(noMatch) noMatch.style.display = total === 0 ? '' : 'none';
+
+        const start = (invPage - 1) * PAGE_SIZE;
+        const pageRows = matched.slice(start, start + PAGE_SIZE);
+        pageRows.forEach((row, i) => {
+            row.style.display = '';
+            const num = row.querySelector('.inv-row-num');
+            if(num) num.textContent = String(start + i + 1);
+        });
+
+        if(countLabel){
+            const suffix = invQuery || invCat !== 'all' ? ' matching' : '';
+            countLabel.textContent = total + ' item' + (total===1?'':'s') + suffix;
+        }
+        syncCatTabs();
+        renderPager(total, invPage, pages);
+    }
+
+    window.setInvCategory = function(cat){
+        invCat = cat || 'all';
+        invPage = 1;
+        renderInvList();
+    };
+
+    if(searchEl){
+        searchEl.addEventListener('input', ()=>{
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(()=>{
+                invQuery = searchEl.value || '';
+                invPage = 1;
+                renderInvList();
+            }, 120);
+        });
+    }
+
+    // Honour ?category= on first load without another request
+    if(invCat !== 'all'){
+        const catExists = Array.from(document.querySelectorAll('#invCatTabs .inv-cat-btn[data-cat]')).some(b => b.dataset.cat === invCat);
+        if(!catExists) invCat = 'all';
+    }
+    renderInvList();
+})();
 
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.inv-modal-overlay.open').forEach(m=>m.classList.remove('open'));document.body.style.overflow='';}});
 </script>
