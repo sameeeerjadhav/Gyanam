@@ -14,8 +14,8 @@ $userName = sanitize(getUserName());
 $atcId = $_SESSION['atc_id'] ?? null;
 $pageMode = $_GET['mode'] ?? '';
 
-// Auto-migration: ensure ho_share_snapshot column exists
-try { $pdo->exec("ALTER TABLE admissions ADD COLUMN IF NOT EXISTS ho_share_snapshot DECIMAL(10,2) DEFAULT NULL"); } catch (Exception $e) {}
+// Auto-migration: ensure ho_share_snapshot column exists (flagged after first run)
+ensureHoShareSnapshotColumn($pdo);
 ensureDualMaterialCourseSchema($pdo);
 
 // getHoShareForCourse() is provided by includes/functions.php

@@ -147,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $receiptNo = $atcPrefix . '-' . str_pad($nextSeq + intval(microtime(true) * 10) % 100, 5, '0', STR_PAD_LEFT);
                     }
                     
-                    $checkColumns = $pdo->query("SHOW COLUMNS FROM fee_payments LIKE 'atc_id'")->rowCount();
+                    $checkColumns = feePaymentsHasAtcId($pdo) ? 1 : 0;
                     
                     if ($checkColumns > 0) {
                         $stmt = $pdo->prepare("
@@ -227,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     exit;
                 }
 
-                $hasAtcColumn = $pdo->query("SHOW COLUMNS FROM fee_payments LIKE 'atc_id'")->rowCount() > 0;
+                $hasAtcColumn = feePaymentsHasAtcId($pdo);
                 if ($hasAtcColumn) {
                     $stmt = $pdo->prepare("
                         SELECT * FROM fee_payments 

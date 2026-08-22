@@ -118,7 +118,15 @@ $distJson  = json_encode(['labels' => $distLabels, 'data' => $distData]);
 <title>Analytics — DLC | Gyanam India</title>
 <link rel="stylesheet" href="../assets/css/global.css">
 <link rel="stylesheet" href="../assets/css/dashboard.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+  s.async=true;
+  s.onload=function(){ if(typeof window.initDlcCharts==='function') window.initDlcCharts(); };
+  document.head.appendChild(s);
+})();
+</script>
 <style>
 .chart-wrap {
     display: grid;
@@ -298,8 +306,8 @@ $distJson  = json_encode(['labels' => $distLabels, 'data' => $distData]);
 
 <script src="../assets/js/dashboard.js"></script>
 <script>
+window.initDlcCharts = function () {
 const pfxColors = ['#4f6ef7','#00c48c','#f59e0b','#7c3aed','#f43f5e'];
-const pfxSoft   = ['rgba(79,110,247,.2)','rgba(0,196,140,.2)','rgba(245,158,11,.2)','rgba(124,58,237,.2)','rgba(244,63,94,.2)'];
 
 // Trend
 const td = <?= $trendJson ?>;
@@ -327,6 +335,8 @@ if (dd && dd.labels && dd.labels.length) {
 } else {
     document.getElementById('distChart').parentElement.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.85rem">No active student data</div>';
 }
+};
+if (window.Chart) window.initDlcCharts();
 </script>
 </body>
 </html>

@@ -68,6 +68,7 @@ $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 $greeting = getGreeting();
 $atcId = $_SESSION['atc_id'] ?? null;
+try { ensurePerformanceIndexes($pdo); } catch (Exception $e) {}
 
 /* ── EXISTING Stats ────────────────────────────────── */
 $totalInquiries = $totalTelephonic = $totalAdmissions = $convertedInquiries = 0;
@@ -297,8 +298,7 @@ try {
 
 $activeBanners = [];
 try {
-    $stmt = $pdo->query("SELECT * FROM announcements WHERE status = 'Active' AND target_audience IN ('All', 'ATC') ORDER BY created_at DESC");
-    $activeBanners = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $activeBanners = getActiveAnnouncements($pdo, 'ATC', 8);
 } catch (Exception $e) {
 }
 
@@ -391,10 +391,12 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
     <link rel="stylesheet" href="../assets/css/notifications.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
-        rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="preload" as="style"
+        href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
+        onload="this.onload=null;this.rel='stylesheet'">
+    <noscript>
+        <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    </noscript>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
     <style>
@@ -2387,12 +2389,24 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
 
     <script src="../assets/js/dashboard.js"></script>
     <script>
+        function loadChartJs(cb) {
+            if (window.Chart) { cb(); return; }
+            var s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+            s.async = true;
+            s.onload = cb;
+            document.head.appendChild(s);
+        }
+
+        loadChartJs(function () {
         Chart.defaults.font.family = "'Sora', 'Inter', sans-serif";
         Chart.defaults.font.weight = 600;
 
         // ── Enhanced Admissions Chart ──
         (function () {
-            const ctx = document.getElementById('admissionsChart').getContext('2d');
+            var el = document.getElementById('admissionsChart');
+            if (!el) return;
+            const ctx = el.getContext('2d');
             const grad = ctx.createLinearGradient(0, 0, 0, 280);
             grad.addColorStop(0, 'rgba(99, 102, 241, 0.85)');
             grad.addColorStop(1, 'rgba(139, 92, 246, 0.55)');
@@ -2426,7 +2440,9 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
 
         // ── Enhanced Revenue Chart ──
         (function () {
-            const ctx = document.getElementById('revenueChart').getContext('2d');
+            var el = document.getElementById('revenueChart');
+            if (!el) return;
+            const ctx = el.getContext('2d');
             const grad = ctx.createLinearGradient(0, 0, 0, 280);
             grad.addColorStop(0, 'rgba(16, 185, 129, 0.25)');
             grad.addColorStop(1, 'rgba(16, 185, 129, 0.02)');
@@ -2458,6 +2474,7 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
                 }
             });
         })();
+        });
 
         (function () {
             const now = new Date(), y = now.getFullYear(), m = now.getMonth(), t = now.getDate();

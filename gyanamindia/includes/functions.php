@@ -635,3 +635,331 @@ CSS;
     $html .= '</div></div>';
     return $html;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERFORMANCE HELPERS (schema flags, image optimize, indexes)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function schemaFlagPath(string $name): string {
+    return __DIR__ . '/../config/.' . ltrim($name, '.');
+}
+
+function isSchemaFlagSet(string $name): bool {
+    return is_file(schemaFlagPath($name));
+}
+
+function markSchemaFlag(string $name): void {
+    @file_put_contents(schemaFlagPath($name), date('c') . "\n");
+}
+
+/**
+ * Resize/compress an uploaded image in place (or to $destPath).
+ * Max edge 1600px; JPEG quality 75. Returns final path on success.
+ */
+function optimizeUploadedImage(string $srcPath, ?string $destPath = null, int $maxEdge = 1600, int $quality = 75): ?string {
+    $destPath = $destPath ?? $srcPath;
+    if (!is_file($srcPath) || !function_exists('imagecreatefromjpeg')) {
+        return is_file($srcPath) ? $destPath : null;
+    }
+    $info = @getimagesize($srcPath);
+    if (!$info) {
+        return $destPath;
+    }
+    [$w, $h] = $info;
+    $type = $info[2] ?? 0;
+    $src = null;
+    if ($type === IMAGETYPE_JPEG) {
+        $src = @imagecreatefromjpeg($srcPath);
+    } elseif ($type === IMAGETYPE_PNG) {
+        $src = @imagecreatefrompng($srcPath);
+    } elseif ($type === IMAGETYPE_WEBP && function_exists('imagecreatefromwebp')) {
+        $src = @imagecreatefromwebp($srcPath);
+    } elseif ($type === IMAGETYPE_GIF) {
+        $src = @imagecreatefromgif($srcPath);
+    }
+    if (!$src) {
+        return $destPath;
+    }
+
+    $scale = 1.0;
+    if ($w > $maxEdge || $h > $maxEdge) {
+        $scale = min($maxEdge / max(1, $w), $maxEdge / max(1, $h));
+    }
+    $nw = max(1, (int)round($w * $scale));
+    $nh = max(1, (int)round($h * $scale));
+    $dst = imagecreatetruecolor($nw, $nh);
+    if ($type === IMAGETYPE_PNG || $type === IMAGETYPE_GIF) {
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+        imagefilledrectangle($dst, 0, 0, $nw, $nh, $transparent);
+    }
+    imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
+    imagedestroy($src);
+
+    $ext = strtolower(pathinfo($destPath, PATHINFO_EXTENSION));
+    $ok = false;
+    if ($ext === 'png' && $type === IMAGETYPE_PNG) {
+        $ok = imagepng($dst, $destPath, 6);
+    } elseif ($ext === 'webp' && function_exists('imagewebp')) {
+        $ok = imagewebp($dst, $destPath, $quality);
+    } else {
+        // Prefer JPEG for photos / large banners
+        if ($ext !== 'jpg' && $ext !== 'jpeg') {
+            $destPath = preg_replace('/\.[^.]+$/', '.jpg', $destPath) ?: ($destPath . '.jpg');
+        }
+        $ok = imagejpeg($dst, $destPath, $quality);
+    }
+    imagedestroy($dst);
+    return $ok ? $destPath : null;
+}
+
+/** Cached: does fee_payments have atc_id? */
+function feePaymentsHasAtcId(PDO $pdo): bool {
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+    if (isSchemaFlagSet('schema_fee_payments_atc_id')) {
+        $cached = true;
+        return true;
+    }
+    try {
+        $has = $pdo->query("SHOW COLUMNS FROM fee_payments LIKE 'atc_id'")->rowCount() > 0;
+        if ($has) {
+            markSchemaFlag('schema_fee_payments_atc_id');
+        }
+        $cached = $has;
+        return $has;
+    } catch (Exception $e) {
+        $cached = false;
+        return false;
+    }
+}
+
+function ensureHoShareSnapshotColumn(PDO $pdo): void {
+    if (isSchemaFlagSet('schema_ho_share_snapshot')) {
+        return;
+    }
+    try {
+        $pdo->exec("ALTER TABLE admissions ADD COLUMN IF NOT EXISTS ho_share_snapshot DECIMAL(10,2) DEFAULT NULL COMMENT 'HO share rate locked at time of admission'");
+        markSchemaFlag('schema_ho_share_snapshot');
+    } catch (Exception $e) {
+        // Column may already exist without IF NOT EXISTS support
+        try {
+            $cols = $pdo->query("SHOW COLUMNS FROM admissions LIKE 'ho_share_snapshot'")->fetch();
+            if ($cols) {
+                markSchemaFlag('schema_ho_share_snapshot');
+            }
+        } catch (Exception $e2) {}
+    }
+}
+
+/** Active dashboard banners — lean columns, capped. $audience = ATC|DLC */
+function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8): array {
+    $audience = strtoupper($audience) === 'DLC' ? 'DLC' : 'ATC';
+    try {
+        $stmt = $pdo->prepare("
+            SELECT id, title, image_path, orientation, target_audience
+            FROM announcements
+            WHERE status = 'Active' AND target_audience IN ('All', ?)
+            ORDER BY created_at DESC
+            LIMIT ?
+        ");
+        $stmt->bindValue(1, $audience);
+        $stmt->bindValue(2, $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+/**
+ * One-time helpful indexes for hot filters. Safe to call from dashboards.
+ */
+function ensurePerformanceIndexes(PDO $pdo): void {
+    if (isSchemaFlagSet('schema_perf_indexes_v1')) {
+        return;
+    }
+    $indexes = [
+        ['admissions', 'idx_adm_atc_status', 'atc_id, status'],
+        ['admissions', 'idx_adm_status', 'status'],
+        ['notification_reads', 'idx_nr_user_notif', 'user_id, notification_id'],
+        ['notifications', 'idx_notif_target', 'target_type, target_id'],
+        ['share_payments', 'idx_sp_atc_status', 'atc_id, status'],
+        ['fee_payments', 'idx_fp_adm', 'admission_id'],
+        ['announcements', 'idx_ann_status_aud', 'status, target_audience'],
+        ['atc_centers', 'idx_atc_dlc', 'dlc_id'],
+    ];
+    try {
+        foreach ($indexes as [$table, $name, $cols]) {
+            $exists = $pdo->prepare("
+                SELECT 1 FROM information_schema.statistics
+                WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?
+                LIMIT 1
+            ");
+            $exists->execute([$table, $name]);
+            if ($exists->fetchColumn()) {
+                continue;
+            }
+            try {
+                $pdo->exec("CREATE INDEX `{$name}` ON `{$table}` ({$cols})");
+            } catch (Exception $e) {
+                // ignore duplicate / permission
+            }
+        }
+        markSchemaFlag('schema_perf_indexes_v1');
+    } catch (Exception $e) {
+        error_log('[PerfIndexes] ' . $e->getMessage());
+    }
+}
+
+function ensureDuplicateCertTable(PDO $pdo): void {
+    if (isSchemaFlagSet('schema_duplicate_cert_v1')) {
+        return;
+    }
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `duplicate_cert_requests` (
+            `id`           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `atc_id`       INT NOT NULL,
+            `admission_id` INT NOT NULL,
+            `student_name` VARCHAR(200) NOT NULL,
+            `roll_no`      VARCHAR(50) DEFAULT NULL,
+            `course`       VARCHAR(200) DEFAULT NULL,
+            `cert_type`    ENUM('Course Completion Certificate','Exam Certificate') NOT NULL,
+            `reason`       ENUM('Name Correction','Misplaced by Student','Damaged') NOT NULL,
+            `remarks`      TEXT DEFAULT NULL,
+            `status`       ENUM('Pending','Approved','Rejected') NOT NULL DEFAULT 'Pending',
+            `admin_note`   TEXT DEFAULT NULL,
+            `requested_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `reviewed_at`  DATETIME DEFAULT NULL,
+            `reviewed_by`  INT DEFAULT NULL,
+            INDEX `idx_atc` (`atc_id`),
+            INDEX `idx_admission` (`admission_id`),
+            INDEX `idx_status` (`status`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        markSchemaFlag('schema_duplicate_cert_v1');
+    } catch (Exception $e) {
+        error_log('[DupCertSchema] ' . $e->getMessage());
+    }
+}
+
+function ensureDispatchTables(PDO $pdo): void {
+    if (isSchemaFlagSet('schema_dispatch_tables_v1')) {
+        return;
+    }
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS material_dispatches (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                dispatch_id VARCHAR(50) NOT NULL,
+                atc_id INT NOT NULL,
+                postal_service VARCHAR(100),
+                tracking_id VARCHAR(100),
+                dispatch_date DATE,
+                notes TEXT,
+                status ENUM('Pending','Dispatched','Delivered') DEFAULT 'Dispatched',
+                created_by INT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS material_dispatch_students (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                dispatch_id INT NOT NULL,
+                admission_id INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS dispatch_items (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                dispatch_id INT NOT NULL,
+                admission_id INT NOT NULL,
+                item_type VARCHAR(50) NOT NULL,
+                item_detail VARCHAR(100),
+                inventory_item_id INT DEFAULT NULL,
+                quantity INT DEFAULT 1,
+                status ENUM('Dispatched','Pending') DEFAULT 'Pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS dispatch_complaints (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                dispatch_id INT NOT NULL,
+                atc_id INT NOT NULL,
+                complaint_type ENUM('Wrong Materials','Damaged','Missing Items','Wrong Quantity','Other') DEFAULT 'Other',
+                description TEXT,
+                photo VARCHAR(255),
+                status ENUM('Pending','Resolved','Rejected') DEFAULT 'Pending',
+                admin_response TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                resolved_at TIMESTAMP NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+        markSchemaFlag('schema_dispatch_tables_v1');
+    } catch (Exception $e) {
+        error_log('[DispatchSchema] ' . $e->getMessage());
+    }
+}
+
+function ensureInventoryTables(PDO $pdo): void {
+    if (isSchemaFlagSet('schema_inventory_tables_v1')) {
+        return;
+    }
+    try {
+        $pdo->query("SELECT 1 FROM inventory_items LIMIT 1");
+        // Tables exist — still ensure optional columns once
+        try { $pdo->exec("ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS rate_per_item DECIMAL(10,2) DEFAULT NULL AFTER quantity"); } catch (Exception $e) {}
+        try { $pdo->exec("ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS total_amount DECIMAL(12,2) DEFAULT NULL AFTER rate_per_item"); } catch (Exception $e) {}
+        try { $pdo->exec("ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS purchase_date DATE DEFAULT NULL AFTER supplier"); } catch (Exception $e) {}
+        try { $pdo->exec("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS cost DECIMAL(10,2) DEFAULT NULL AFTER unit"); } catch (Exception $e) {}
+        markSchemaFlag('schema_inventory_tables_v1');
+        return;
+    } catch (Exception $e) {
+        // create below
+    }
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS inventory_items (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                item_name VARCHAR(150) NOT NULL,
+                category ENUM('Books','T-Shirts','Certificates','Stationery','Other') DEFAULT 'Books',
+                unit VARCHAR(30) DEFAULT 'pcs',
+                cost DECIMAL(10,2) DEFAULT NULL,
+                current_stock INT DEFAULT 0,
+                min_stock_level INT DEFAULT 10,
+                description TEXT,
+                status ENUM('Active','Inactive') DEFAULT 'Active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS inventory_transactions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                item_id INT NOT NULL,
+                type ENUM('Stock In','Stock Out','Adjustment','Dispatch','Return') NOT NULL,
+                quantity INT NOT NULL,
+                rate_per_item DECIMAL(10,2) DEFAULT NULL,
+                total_amount DECIMAL(12,2) DEFAULT NULL,
+                running_balance INT DEFAULT 0,
+                reference_no VARCHAR(100),
+                supplier VARCHAR(200),
+                dispatch_id INT DEFAULT NULL,
+                atc_id INT DEFAULT NULL,
+                notes TEXT,
+                created_by INT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+        markSchemaFlag('schema_inventory_tables_v1');
+    } catch (Exception $e) {
+        error_log('[InventorySchema] ' . $e->getMessage());
+    }
+}
+

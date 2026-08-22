@@ -14,28 +14,8 @@ requireLogin(['ATC CENTER']);
 $pdo   = getDBConnection();
 $atcId = $_SESSION['atc_id'] ?? null;
 
-// ── Create table if not exists ──────────────────────────────────────────────
-try {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `duplicate_cert_requests` (
-        `id`           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        `atc_id`       INT NOT NULL,
-        `admission_id` INT NOT NULL,
-        `student_name` VARCHAR(200) NOT NULL,
-        `roll_no`      VARCHAR(50) DEFAULT NULL,
-        `course`       VARCHAR(200) DEFAULT NULL,
-        `cert_type`    ENUM('Course Completion Certificate','Exam Certificate') NOT NULL,
-        `reason`       ENUM('Name Correction','Misplaced by Student','Damaged') NOT NULL,
-        `remarks`      TEXT DEFAULT NULL,
-        `status`       ENUM('Pending','Approved','Rejected') NOT NULL DEFAULT 'Pending',
-        `admin_note`   TEXT DEFAULT NULL,
-        `requested_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        `reviewed_at`  DATETIME DEFAULT NULL,
-        `reviewed_by`  INT DEFAULT NULL,
-        INDEX `idx_atc` (`atc_id`),
-        INDEX `idx_admission` (`admission_id`),
-        INDEX `idx_status` (`status`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-} catch (Exception $e) {}
+// ── Create table if not exists (once) ───────────────────────────────────────
+ensureDuplicateCertTable($pdo);
 
 // ── AJAX Handler ─────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {

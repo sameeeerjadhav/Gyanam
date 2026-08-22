@@ -27,13 +27,7 @@ $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 $atcId = $_SESSION['atc_id'] ?? null;
 ensureDualMaterialCourseSchema($pdo);
-
-// ── Auto-migration: snapshot ho_share at admission time ───────────────────────
-// This ensures existing students keep the rate active when they joined,
-// even if HO later updates the course share amount.
-try {
-    $pdo->exec("ALTER TABLE admissions ADD COLUMN IF NOT EXISTS ho_share_snapshot DECIMAL(10,2) DEFAULT NULL COMMENT 'HO share rate locked at time of admission'");
-} catch (Exception $e) { /* column may already exist */ }
+ensureHoShareSnapshotColumn($pdo);
 
 // getHoShareForCourse() is defined in includes/functions.php (material-aware)
 

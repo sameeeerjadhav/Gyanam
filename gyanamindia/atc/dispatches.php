@@ -16,23 +16,8 @@ $atcId    = $_SESSION['atc_id'] ?? null;
 
 if (!$atcId) die('ATC ID not found. Please log in again.');
 
-// ── Auto-create complaint table ───────────────────────────────────────────
-try { $pdo->query("SELECT 1 FROM dispatch_complaints LIMIT 1"); } catch (Exception $e) {
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS dispatch_complaints (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            dispatch_id INT NOT NULL,
-            atc_id INT NOT NULL,
-            complaint_type ENUM('Wrong Materials','Damaged','Missing Items','Wrong Quantity','Other') DEFAULT 'Other',
-            description TEXT,
-            photo VARCHAR(255),
-            status ENUM('Pending','Resolved','Rejected') DEFAULT 'Pending',
-            admin_response TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            resolved_at TIMESTAMP NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-}
+// ── Auto-create complaint table (once) ────────────────────────────────────
+ensureDispatchTables($pdo);
 
 // ── AJAX handlers ─────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {

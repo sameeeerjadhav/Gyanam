@@ -16,7 +16,7 @@ $receiptNo = trim($_GET['receipt_no'] ?? '');
 if (!$paymentId && !$receiptNo) die('<p style="font-family:sans-serif;padding:2rem">No payment specified.</p>');
 
 // Check if atc_id column exists in fee_payments
-$hasAtcId = $pdo->query("SHOW COLUMNS FROM fee_payments LIKE 'atc_id'")->rowCount() > 0;
+$hasAtcId = feePaymentsHasAtcId($pdo);
 
 // Fetch the specific payment record
 if ($paymentId) {

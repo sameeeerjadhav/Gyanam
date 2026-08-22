@@ -13,50 +13,8 @@ requireLogin(['Admin']);
 $pdo      = getDBConnection();
 $userName = sanitize(getUserName());
 
-// ── Auto-create / migrate tables ─────────────────────────────────────────────
-try { $pdo->query("SELECT 1 FROM material_dispatches LIMIT 1"); } catch (Exception $e) {
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS material_dispatches (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            dispatch_id VARCHAR(50) NOT NULL,
-            atc_id INT NOT NULL,
-            postal_service VARCHAR(100),
-            tracking_id VARCHAR(100),
-            dispatch_date DATE,
-            notes TEXT,
-            status ENUM('Pending','Dispatched','Delivered') DEFAULT 'Dispatched',
-            created_by INT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-}
-try { $pdo->query("SELECT 1 FROM material_dispatch_students LIMIT 1"); } catch (Exception $e) {
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS material_dispatch_students (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            dispatch_id INT NOT NULL,
-            admission_id INT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-}
-// New per-item tracking table
-try { $pdo->query("SELECT 1 FROM dispatch_items LIMIT 1"); } catch (Exception $e) {
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS dispatch_items (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            dispatch_id INT NOT NULL,
-            admission_id INT NOT NULL,
-            item_type VARCHAR(50) NOT NULL,
-            item_detail VARCHAR(100),
-            inventory_item_id INT DEFAULT NULL,
-            quantity INT DEFAULT 1,
-            status ENUM('Dispatched','Pending') DEFAULT 'Pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-}
+// ── Auto-create / migrate tables (once, then flagged) ────────────────────────
+ensureDispatchTables($pdo);
 
 // ── AJAX handlers ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
