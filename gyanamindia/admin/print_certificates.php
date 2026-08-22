@@ -14,6 +14,10 @@ if (file_exists(__DIR__ . '/../includes/exam_integration.php')) {
 
 requireLogin(['Admin']);
 
+$certPageTitle    = $certPageTitle    ?? 'Print Certificates';
+$certPageSubtitle = $certPageSubtitle ?? 'Generate & print exam certificates for passed students';
+$certPageSelf     = $certPageSelf     ?? 'print_certificates.php';
+
 $pdo      = getDBConnection();
 $userName = sanitize(getUserName());
 
@@ -111,7 +115,7 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Print Certificates — Admin | Gyanam India Educational Services</title>
+<title><?= htmlspecialchars($certPageTitle) ?> — Admin | Gyanam India Educational Services</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/global.css">
@@ -206,8 +210,8 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
             <div class="header-greeting">
-                <h2>Print Certificates</h2>
-                <p>Generate &amp; print exam certificates for passed students</p>
+                <h2><?= htmlspecialchars($certPageTitle) ?></h2>
+                <p><?= htmlspecialchars($certPageSubtitle) ?></p>
             </div>
         </div>
         <div class="header-right">
@@ -282,7 +286,7 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
             </div>
             <button type="submit" class="btn-apply">🔍 Apply</button>
             <?php if ($filterDlc || $filterAtc || $filterCourse || $filterSearch): ?>
-            <a href="print_certificates.php" class="btn-clr">✕ Clear</a>
+            <a href="<?= htmlspecialchars($certPageSelf) ?>" class="btn-clr">✕ Clear</a>
             <?php endif; ?>
         </form>
 
