@@ -282,23 +282,20 @@ $courseFilter = trim($_GET['course'] ?? 'all');
 $statusFilter = trim($_GET['status'] ?? 'all');
 
 // ── Build set of student IDs whose share has been paid ──────────────────────
-$paidStudentIds = [];
+$paidStudentIds = getHoSharePaidAdmissionIds($pdo, (int)$atcId);
+
+$hasHoSharePaidCol = false;
 try {
-    $sp = $pdo->prepare("SELECT student_ids FROM share_payments WHERE atc_id = ? AND status = 'Completed'");
-    $sp->execute([$atcId]);
-    foreach ($sp->fetchAll(PDO::FETCH_COLUMN) as $json) {
-        $ids = json_decode($json, true);
-        if (is_array($ids)) {
-            foreach ($ids as $id) {
-                $paidStudentIds[intval($id)] = true;
-            }
-        }
-    }
-} catch (Exception $e) { /* share_payments table may not exist yet */ }
+    $pdo->query('SELECT ho_share_paid FROM admissions LIMIT 1');
+    $hasHoSharePaidCol = true;
+} catch (Exception $e) {}
+
+$hoShareSelect = $hasHoSharePaidCol ? 'COALESCE(a.ho_share_paid, 0) AS ho_share_paid' : '0 AS ho_share_paid';
 
 $sql = "SELECT a.id, a.roll_no, a.registration_id,
                a.first_name, a.middle_name, a.last_name,
                a.course, a.photo, a.mobile,
+               {$hoShareSelect},
                es.exam_date, es.exam_time, es.exam_slot, es.exam_hall, es.exam_name, es.exam_portal_id, es.exam_status,
                COALESCE(es.allowed_attempts, 1) AS allowed_attempts
         FROM admissions a
@@ -316,14 +313,26 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// ── Only show students whose share is paid ──────────────────────────────────
+$activeStudentCount = count($allStudents);
+
+// Only show students whose HO share is paid (via share_payments or ho_share_paid flag)
 foreach ($allStudents as &$s) {
-    $s['share_paid'] = isset($paidStudentIds[intval($s['id'])]);
+    $s['share_paid'] = isset($paidStudentIds[intval($s['id'])]) || !empty($s['ho_share_paid']);
 }
 unset($s);
-$allStudents = array_values(array_filter($allStudents, fn($s) => $s['share_paid']));
+
+$eligibleStudents = array_values(array_filter($allStudents, fn($s) => $s['share_paid']));
+$sharePaidEligibleCount = count($eligibleStudents);
+
+// KPIs — use the same eligible pool as the table (share-paid students only)
+$kpiTotal = $sharePaidEligibleCount;
+$kpiScheduled = count(array_filter($eligibleStudents, fn($s) => !empty($s['exam_date'])));
+$kpiUnscheduled = $kpiTotal - $kpiScheduled;
+$kpiPassed = count(array_filter($eligibleStudents, fn($s) => ($s['exam_status'] ?? '') === 'Passed'));
+$kpiFailed = count(array_filter($eligibleStudents, fn($s) => ($s['exam_status'] ?? '') === 'Failed'));
 
 // Apply status filter in PHP (since LEFT JOIN makes null = unscheduled)
+$allStudents = $eligibleStudents;
 if ($statusFilter === 'scheduled') {
     $allStudents = array_values(array_filter($allStudents, fn($s) => !empty($s['exam_date'])));
 } elseif ($statusFilter === 'unscheduled') {
@@ -343,28 +352,7 @@ try {
 } catch (Exception $e) {
 }
 
-// KPIs (from full set before status filter)
-$kpiAll = $pdo->prepare("SELECT COUNT(*) FROM admissions WHERE atc_id = ? AND status = 'Active'");
-$kpiAll->execute([$atcId]);
-$kpiTotal = $kpiAll->fetchColumn();
-
-$kpiSch = $pdo->prepare("SELECT COUNT(*) FROM exam_schedules WHERE atc_id = ? AND exam_date IS NOT NULL");
-$kpiSch->execute([$atcId]);
-$kpiScheduled = $kpiSch->fetchColumn();
-
-$kpiPassed = 0;
-$kpiFailed = 0;
-try {
-    $kpiP = $pdo->prepare("SELECT COUNT(*) FROM exam_schedules WHERE atc_id = ? AND exam_status = 'Passed'");
-    $kpiP->execute([$atcId]);
-    $kpiPassed = $kpiP->fetchColumn();
-    $kpiF = $pdo->prepare("SELECT COUNT(*) FROM exam_schedules WHERE atc_id = ? AND exam_status = 'Failed'");
-    $kpiF->execute([$atcId]);
-    $kpiFailed = $kpiF->fetchColumn();
-} catch (Exception $e) {
-}
-
-$kpiUnscheduled = $kpiTotal - $kpiScheduled;
+// KPI variables set above from share-paid eligible students.
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -943,6 +931,22 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
             font-weight: 500
         }
 
+        .es-empty-hint {
+            margin: .65rem auto 0;
+            font-size: .82rem;
+            color: #94a3b8;
+            line-height: 1.55;
+            max-width: 420px
+        }
+
+        .es-empty-hint a {
+            color: var(--es-brand);
+            font-weight: 700;
+            text-decoration: none
+        }
+
+        .es-empty-hint a:hover { text-decoration: underline }
+
         /* Modal */
         .es-overlay {
             position: fixed;
@@ -1309,6 +1313,14 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
                                                 </svg>
                                                 <p>No students
                                                     found<?= $courseFilter !== 'all' ? ' for this course' : '' ?>.</p>
+                                                <?php if ($activeStudentCount > 0 && $sharePaidEligibleCount === 0): ?>
+                                                    <p class="es-empty-hint">
+                                                        You have <?= $activeStudentCount ?> active student<?= $activeStudentCount === 1 ? '' : 's' ?>,
+                                                        but none have HO share marked as paid yet.
+                                                        Complete share payment in <a href="pay_share.php">Pay Share</a>
+                                                        to schedule exams.
+                                                    </p>
+                                                <?php endif; ?>
                                             </div>
                                         </td>
                                     </tr>
