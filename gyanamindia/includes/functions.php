@@ -729,6 +729,60 @@ function atcAuthCertificateTemplatePath(string $variant): ?string {
     return is_file($it) ? $it : null;
 }
 
+/**
+ * Brand logo variant for printed forms (admission form, etc.).
+ *
+ * - Abacus / Vedic only → abacus (Gyanam Abacus)
+ * - IT only → it (GIIT)
+ * - Both → pick by course_type / course name (Abacus|Vedic → abacus, else IT)
+ *
+ * @return 'it'|'abacus'
+ */
+function admissionFormBrandVariant(?string $centerType, ?string $courseName = null, ?string $courseType = null): string {
+    $variants = atcAuthCertificateVariants($centerType);
+    $codes = array_column($variants, 'variant');
+    $hasIt = in_array('it', $codes, true);
+    $hasAbacus = in_array('abacus', $codes, true);
+
+    if ($hasIt && $hasAbacus) {
+        $type = strtolower(trim((string)$courseType));
+        if ($type === '' && $courseName !== null && $courseName !== '') {
+            $type = strtolower($courseName);
+        }
+        if (str_contains($type, 'abacus') || str_contains($type, 'vedic')) {
+            return 'abacus';
+        }
+        return 'it';
+    }
+
+    if ($hasAbacus && !$hasIt) {
+        return 'abacus';
+    }
+
+    return 'it';
+}
+
+/**
+ * Web-relative path (from atc/ pages) to GIIT or Gyanam Abacus logo.
+ * Prefers brand-specific assets; falls back to assets/logo.png.
+ */
+function admissionFormBrandLogoUrl(string $variant, string $fromDir = 'atc'): string {
+    $prefix = $fromDir === 'atc' ? '../assets/' : ($fromDir === 'admin' ? '../assets/' : 'assets/');
+    $baseFs = __DIR__ . '/../assets/';
+
+    $candidates = $variant === 'abacus'
+        ? ['gyanam_abacus_logo.png', 'abacus_logo.png', 'logo.png']
+        : ['giit_logo.png', 'logo.png'];
+
+    foreach ($candidates as $file) {
+        if (is_file($baseFs . $file)) {
+            return $prefix . $file;
+        }
+    }
+
+    return $prefix . 'logo.png';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PERFORMANCE HELPERS (schema flags, image optimize, indexes)
 // ─────────────────────────────────────────────────────────────────────────────

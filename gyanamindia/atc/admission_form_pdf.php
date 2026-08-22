@@ -104,18 +104,26 @@ while (count($payRows) < 10) {
     $payRows[] = ['no' => str_pad(count($payRows) + 1, 2, '0', STR_PAD_LEFT), 'amount'=>'', 'receipt'=>'', 'date'=>'', 'balance'=>''];
 }
 
-// Logo (ATC or fallback)
-$logoUrl = '../assets/logo.png';
-if (!empty($admission['atc_logo'])) {
-    $rawLogo = (string)$admission['atc_logo'];
-    if (preg_match('#^https?://#i', $rawLogo)) {
-        $logoUrl = $rawLogo;
-    } else {
-        $rel = ltrim($rawLogo, '/\\');
-        $abs = realpath(__DIR__ . '/../' . $rel);
-        if ($abs && is_file($abs)) $logoUrl = '../' . str_replace('\\', '/', $rel);
+// Brand logo: GIIT or Gyanam Abacus (by center type; if both, by course)
+$courseType = null;
+$courseName = trim((string)($admission['course'] ?? ''));
+if ($courseName !== '') {
+    try {
+        $ctStmt = $pdo->prepare("SELECT course_type FROM courses WHERE course_name = ? LIMIT 1");
+        $ctStmt->execute([$courseName]);
+        $courseType = $ctStmt->fetchColumn() ?: null;
+        if ($courseType === null || $courseType === false) {
+            $ctStmt = $pdo->prepare("SELECT course_type FROM courses WHERE ? LIKE CONCAT('%', course_name, '%') OR course_name LIKE CONCAT('%', ?, '%') LIMIT 1");
+            $ctStmt->execute([$courseName, $courseName]);
+            $courseType = $ctStmt->fetchColumn() ?: null;
+        }
+    } catch (Exception $e) {
+        $courseType = null;
     }
 }
+$brandVariant = admissionFormBrandVariant($admission['center_type'] ?? null, $courseName, is_string($courseType) ? $courseType : null);
+$logoUrl = admissionFormBrandLogoUrl($brandVariant, 'atc');
+$logoAlt = $brandVariant === 'abacus' ? 'Gyanam Abacus' : 'GIIT';
 
 // Student photo
 $photoHtml = '<div style="width:100px;height:120px;border:2px solid #e91e63;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:11px;">No Photo</div>';
@@ -177,7 +185,8 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
     padding: 15px;
   }
 
-  h1, h2 { text-align: center; margin: 5px; color: #e91e63; }
+  h1 { text-align: center; margin: 4px 0; color: #e91e63; font-size: 22px; font-weight: 800; letter-spacing: .02em; line-height: 1.2; }
+  h2 { text-align: center; margin: 4px 0; color: #e91e63; font-size: 16px; font-weight: 800; }
 
   table { width: 100%; border-collapse: collapse; margin-top: 8px; }
   td, th { border: 1px solid #e91e63; padding: 6px; font-size: 13px; vertical-align: middle; }
@@ -226,11 +235,11 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
     tr[style*="height:35px"], tr[style*="height: 35px"] { height: 30px !important; }
     tr[style*="height:30px"], tr[style*="height: 30px"] { height: 26px !important; }
 
-    h1 { font-size: 14px; margin: 3px; }
-    h2 { font-size: 12px; margin: 3px; }
+    h1 { font-size: 18px; margin: 2px 0; }
+    h2 { font-size: 13px; margin: 2px 0; }
 
     .photo-cell img { width: 75px !important; height: 90px !important; }
-    .logo-cell img  { width: 85px !important; height: 56px !important; }
+    .logo-cell img  { width: 105px !important; height: auto !important; max-height: 70px !important; }
     .val-cell { font-size: 11.5px; }
     .section { font-size: 11px; }
     .cb { width: 12px; height: 12px; font-size: 10px; line-height: 12px; }
@@ -259,12 +268,11 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
   <table class="no-border">
     <tr>
       <td class="logo-cell">
-        <img src="<?= e($logoUrl) ?>" alt="Logo" style="width:110px;height:75px;object-fit:contain;">
+        <img src="<?= e($logoUrl) ?>" alt="<?= e($logoAlt) ?>" style="width:120px;height:auto;max-height:78px;object-fit:contain;">
       </td>
       <td class="center">
         <h1>GYANAM INDIA EDUCATIONAL SERVICES</h1>
         <h2>ADMISSION FORM</h2>
-        <div style="font-size:12px;color:#555;margin-top:3px;"><?= e($admission['atc_name'] ?? '') ?></div>
       </td>
       <td class="photo-cell"><?= $photoHtml ?></td>
     </tr>
@@ -466,7 +474,7 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
   <!-- Header -->
   <table class="no-border" style="margin-bottom:6px;">
     <tr>
-      <td style="border:none;"><img src="<?= e($logoUrl) ?>" style="width:70px;height:50px;object-fit:contain;border:1px solid #e91e63;"></td>
+      <td style="border:none;"><img src="<?= e($logoUrl) ?>" alt="<?= e($logoAlt) ?>" style="width:90px;height:auto;max-height:58px;object-fit:contain;"></td>
       <td style="border:none;text-align:center;">
         <h2 style="font-size:16px;">IMPORTANT INSTRUCTIONS FOR STUDENTS</h2>
         <div style="font-size:12px;color:#555;"><?= e($studentName) ?> &nbsp;|&nbsp; <?= e($admission['roll_no'] ?? '') ?> &nbsp;|&nbsp; <?= e($admission['course'] ?? '') ?></div>
