@@ -12,7 +12,14 @@ requireLogin(['Admin']);
 require_once __DIR__ . '/../assets/fpdi/fpdi_autoload.php';
 use setasign\Fpdi\Fpdi;
 
-$templatePath = __DIR__ . '/../assets/templates/giit_auth_certificate.pdf';
+$variantReq = strtolower(trim((string)($_GET['variant'] ?? 'it')));
+$templatePath = __DIR__ . '/../assets/templates/' . ($variantReq === 'abacus'
+    ? 'gyanam_abacus_auth_certificate.pdf'
+    : 'giit_auth_certificate.pdf');
+if (!is_file($templatePath)) {
+    http_response_code(404);
+    die('Template not found: ' . basename($templatePath));
+}
 
 $pdf = new Fpdi();
 $pageCount = $pdf->setSourceFile($templatePath);
@@ -43,14 +50,23 @@ for ($y = 100; $y <= $H; $y += 5) {
 $pdf->SetFont('Helvetica', 'B', 14);
 $pdf->SetTextColor(200, 0, 0);
 
-$sampleLines = [
-    [130, 'ATC Name: M/S. Sample GIIT Academy'],
-    [148, 'Centre registration code Gyanam ATC-20260001'],
-    [157, 'Has been recognized as our Authorized Training Centre for'],
-    [164, 'Conducting our IT and Abacus Courses'],
-    [172, 'at Jalgaon, Dist. Jalgaon.'],
-    [180, 'for the period 01/05/2026 to 30/04/2027'],
-];
+$sampleLines = $variantReq === 'abacus'
+    ? [
+        [148, 'ATC Name: M/S. Global Abacus Academy'],
+        [162, 'Centre registration code Gyanam ATC-202500015'],
+        [171, 'Has been recognized as our Authorized Training Centre for'],
+        [180, 'Conducting our Gyanam Abacus Academy'],
+        [189, 'at Ravi Nagar, Nagpur'],
+        [198, 'For the period from 01/03/2026 to 28/02/2027'],
+    ]
+    : [
+        [130, 'ATC Name: M/S. Sample GIIT Academy'],
+        [148, 'Centre registration code GIIT ATC-20260001'],
+        [157, 'Has been recognized as our Authorized Training Centre for'],
+        [164, 'Conducting our IT Courses'],
+        [172, 'at Jalgaon, Dist. Jalgaon.'],
+        [180, 'for the period 01/05/2026 to 30/04/2027'],
+    ];
 
 foreach ($sampleLines as [$y, $text]) {
     $pdf->SetFont('Helvetica', 'B', $y === 130 ? 14 : 9);

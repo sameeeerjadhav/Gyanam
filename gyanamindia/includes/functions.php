@@ -667,24 +667,11 @@ function atcAuthCertificateVariants(?string $centerType): array {
     $variants = [];
 
     if ($hasAbacus || $hasVedic) {
-        $parts = [];
-        if ($hasAbacus) {
-            $parts[] = 'Abacus';
-        }
-        if ($hasVedic) {
-            $parts[] = 'Vedic Maths';
-        }
-        if (!$parts) {
-            $parts[] = 'Abacus';
-        }
-        $course = count($parts) === 1
-            ? $parts[0] . ' Courses'
-            : implode(' and ', $parts) . ' Courses';
         $variants[] = [
             'variant'     => 'abacus',
             'label'       => 'Abacus / Vedic Maths Authorization',
             'brand'       => 'Gyanam Abacus',
-            'course_line' => 'Conducting our ' . $course,
+            'course_line' => 'Conducting our Gyanam Abacus Academy',
             'code_prefix' => 'Gyanam ATC-',
         ];
     }
