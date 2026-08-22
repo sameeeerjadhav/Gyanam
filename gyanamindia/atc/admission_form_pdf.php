@@ -185,8 +185,8 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
     padding: 15px;
   }
 
-  h1 { text-align: center; margin: 4px 0; color: #e91e63; font-size: 22px; font-weight: 800; letter-spacing: .02em; line-height: 1.2; }
-  h2 { text-align: center; margin: 4px 0; color: #e91e63; font-size: 16px; font-weight: 800; }
+  h1 { text-align: center; margin: 4px 0; color: #e91e63; font-size: 26px; font-weight: 800; letter-spacing: .03em; line-height: 1.15; }
+  h2 { text-align: center; margin: 4px 0; color: #e91e63; font-size: 17px; font-weight: 800; }
 
   table { width: 100%; border-collapse: collapse; margin-top: 8px; }
   td, th { border: 1px solid #e91e63; padding: 6px; font-size: 13px; vertical-align: middle; }
@@ -208,6 +208,8 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
   .val-cell { font-weight: 600; color: #1f2937; text-transform: capitalize; }
   .sign-table .label { width: auto; }
   .sign-table .sign-blank { height: 58px; vertical-align: middle; }
+  .addr-meta { table-layout: fixed; width: 100%; margin-top: 0; }
+  .addr-meta .label { width: auto; white-space: nowrap; }
 
   @media print {
     @page { size: A4 portrait; margin: 6mm; }
@@ -237,8 +239,8 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
     tr[style*="height:35px"], tr[style*="height: 35px"] { height: 30px !important; }
     tr[style*="height:30px"], tr[style*="height: 30px"] { height: 26px !important; }
 
-    h1 { font-size: 18px; margin: 2px 0; }
-    h2 { font-size: 13px; margin: 2px 0; }
+    h1 { font-size: 24px !important; margin: 3px 0 !important; letter-spacing: .03em; }
+    h2 { font-size: 14px !important; margin: 2px 0 !important; }
 
     .photo-cell img { width: 75px !important; height: 90px !important; }
     .logo-cell img  { width: 105px !important; height: auto !important; max-height: 70px !important; }
@@ -331,6 +333,16 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
       <td class="label">Nearest Landmark</td>
       <td colspan="5" class="val-cell"><?= e($admission['landmark'] ?? '') ?></td>
     </tr>
+  </table>
+  <table class="addr-meta">
+    <colgroup>
+      <col style="width:14%">
+      <col style="width:20%">
+      <col style="width:8%">
+      <col style="width:18%">
+      <col style="width:8%">
+      <col style="width:18%">
+    </colgroup>
     <tr>
       <td class="label">City/Town</td>
       <td class="val-cell"><?= e($city) ?></td>
@@ -351,6 +363,16 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
       <td class="label">Nearest Landmark</td>
       <td colspan="5" class="val-cell"><?= e($admission['permanent_landmark'] ?? '') ?></td>
     </tr>
+  </table>
+  <table class="addr-meta">
+    <colgroup>
+      <col style="width:14%">
+      <col style="width:20%">
+      <col style="width:8%">
+      <col style="width:18%">
+      <col style="width:8%">
+      <col style="width:18%">
+    </colgroup>
     <tr>
       <td class="label">City/Town</td>
       <td class="val-cell"><?= e($admission['permanent_city'] ?? $city) ?></td>
