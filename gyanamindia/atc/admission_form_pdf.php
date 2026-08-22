@@ -122,8 +122,18 @@ if ($courseName !== '') {
     }
 }
 $brandVariant = admissionFormBrandVariant($admission['center_type'] ?? null, $courseName, is_string($courseType) ? $courseType : null);
-$logoUrl = admissionFormBrandLogoDataUri($brandVariant);
 $logoAlt = $brandVariant === 'abacus' ? 'Gyanam Abacus' : 'GIIT';
+// Always embed from disk (avoids stale browser/CDN cache of old giit_logo.png)
+$logoFile = $brandVariant === 'abacus'
+    ? (__DIR__ . '/../assets/gyanam_abacus_logo.png')
+    : (__DIR__ . '/../assets/giit_brand_logo.png');
+if (!is_file($logoFile)) {
+    $logoFile = admissionFormBrandLogoPath($brandVariant);
+}
+$logoBin = @file_get_contents($logoFile);
+$logoUrl = ($logoBin !== false)
+    ? ('data:image/png;base64,' . base64_encode($logoBin))
+    : ('../assets/' . basename($logoFile) . '?v=' . time());
 
 // Student photo
 $photoHtml = '<div style="width:100px;height:120px;border:2px solid #e91e63;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:11px;">No Photo</div>';
@@ -196,7 +206,8 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
   .section { background: #e91e63; color: white; font-weight: bold; text-align: center; }
 
   .photo-cell { width: 110px; text-align: center; vertical-align: top; }
-  .logo-cell  { width: 130px; text-align: center; vertical-align: middle; }
+  .logo-cell  { width: 150px; text-align: center; vertical-align: middle; }
+  .logo-cell img { width: 130px; height: auto; max-height: 130px; object-fit: contain; }
 
   .checkbox-label { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; font-size: 13px; }
   .cb {
@@ -243,7 +254,7 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
     h2 { font-size: 14px !important; margin: 2px 0 !important; }
 
     .photo-cell img { width: 75px !important; height: 90px !important; }
-    .logo-cell img  { width: 88px !important; height: auto !important; max-height: 88px !important; }
+    .logo-cell img  { width: 110px !important; height: auto !important; max-height: 110px !important; }
     .val-cell { font-size: 11.5px; }
     .section { font-size: 11px; }
     .cb { width: 12px; height: 12px; font-size: 10px; line-height: 12px; }
@@ -273,7 +284,7 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
   <table class="no-border">
     <tr>
       <td class="logo-cell">
-        <img src="<?= e($logoUrl) ?>" alt="<?= e($logoAlt) ?>" style="width:95px;height:auto;max-height:95px;object-fit:contain;">
+        <img src="<?= e($logoUrl) ?>" alt="<?= e($logoAlt) ?>">
       </td>
       <td class="center">
         <h1>GYANAM INDIA EDUCATIONAL SERVICES</h1>
@@ -336,12 +347,12 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
   </table>
   <table class="addr-meta">
     <colgroup>
-      <col style="width:14%">
-      <col style="width:20%">
-      <col style="width:8%">
-      <col style="width:18%">
-      <col style="width:8%">
-      <col style="width:18%">
+      <col style="width:12%">
+      <col style="width:22%">
+      <col style="width:7%">
+      <col style="width:22%">
+      <col style="width:7%">
+      <col style="width:30%">
     </colgroup>
     <tr>
       <td class="label">City/Town</td>
@@ -366,12 +377,12 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
   </table>
   <table class="addr-meta">
     <colgroup>
-      <col style="width:14%">
-      <col style="width:20%">
-      <col style="width:8%">
-      <col style="width:18%">
-      <col style="width:8%">
-      <col style="width:18%">
+      <col style="width:12%">
+      <col style="width:22%">
+      <col style="width:7%">
+      <col style="width:22%">
+      <col style="width:7%">
+      <col style="width:30%">
     </colgroup>
     <tr>
       <td class="label">City/Town</td>
