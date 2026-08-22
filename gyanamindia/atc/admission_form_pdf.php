@@ -206,6 +206,8 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
     font-weight: bold; color: #e91e63;
   }
   .val-cell { font-weight: 600; color: #1f2937; text-transform: capitalize; }
+  .sign-table .label { width: auto; }
+  .sign-table .sign-blank { height: 58px; vertical-align: middle; }
 
   @media print {
     @page { size: A4 portrait; margin: 6mm; }
@@ -243,6 +245,7 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
     .val-cell { font-size: 11.5px; }
     .section { font-size: 11px; }
     .cb { width: 12px; height: 12px; font-size: 10px; line-height: 12px; }
+    .sign-table .sign-blank { height: 52px !important; }
   }
 </style>
 </head>
@@ -450,19 +453,25 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
     </tr>
   </table>
 
-  <!-- Signatures -->
-  <table style="margin-top:12px;">
+  <!-- Signatures: equal blank space left (Place/Seal) and right (signatures) -->
+  <table class="sign-table" style="margin-top:12px;table-layout:fixed;">
+    <colgroup>
+      <col style="width:18%">
+      <col style="width:32%">
+      <col style="width:18%">
+      <col style="width:32%">
+    </colgroup>
     <tr>
       <td class="label">Place</td>
-      <td class="val-cell"><?= e($city) ?></td>
+      <td class="val-cell sign-blank"><?= e($city) ?></td>
       <td class="label" style="text-align:center;">Student Signature</td>
-      <td style="height:40px;"></td>
+      <td class="sign-blank"></td>
     </tr>
     <tr>
       <td class="label">ATC Seal &amp; Stamp</td>
-      <td style="height:50px;"></td>
+      <td class="sign-blank"></td>
       <td class="label" style="text-align:center;">Authorised Signatory</td>
-      <td style="height:50px;"></td>
+      <td class="sign-blank"></td>
     </tr>
   </table>
 
@@ -551,12 +560,18 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
   </table>
 
   <!-- Bottom signature -->
-  <table style="margin-top:14px;">
+  <table class="sign-table" style="margin-top:14px;table-layout:fixed;">
+    <colgroup>
+      <col style="width:18%">
+      <col style="width:32%">
+      <col style="width:18%">
+      <col style="width:32%">
+    </colgroup>
     <tr>
       <td class="label">Student Signature</td>
-      <td style="height:45px;"></td>
+      <td class="sign-blank"></td>
       <td class="label">ATC Seal &amp; Authorised Sign</td>
-      <td style="height:45px;"></td>
+      <td class="sign-blank"></td>
     </tr>
   </table>
 
