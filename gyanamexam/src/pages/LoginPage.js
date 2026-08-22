@@ -1,6 +1,6 @@
 /**
- * LoginPage - Premium redesign for the Gyanam Exam Portal
- * Split-panel layout: branded left panel + glassmorphic login form right panel
+ * LoginPage - Gyanam Exam Portal student login
+ * Split-panel layout with natural logo display (no card wrapper)
  */
 
 import AuthenticationModule from '../services/AuthenticationModule.js';
@@ -23,7 +23,7 @@ class LoginPage {
     const style = document.createElement('style');
     style.id = 'gep-login-styles';
     style.textContent = `
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
       .gep-root * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -36,12 +36,12 @@ class LoginPage {
 
       /* ── Left panel ── */
       .gep-left {
-        flex: 1.1;
+        flex: 1;
         display: flex;
         flex-direction: column;
-        justify-content: space-between;
-        padding: 3rem;
-        background: linear-gradient(145deg, #1e1b4b 0%, #312e81 40%, #1d4ed8 100%);
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 2.5rem;
         position: relative;
         overflow: hidden;
       }
@@ -49,130 +49,217 @@ class LoginPage {
       .gep-left::before {
         content: '';
         position: absolute;
-        width: 500px; height: 500px;
-        background: radial-gradient(circle, rgba(139,92,246,0.35) 0%, transparent 70%);
-        top: -120px; left: -120px;
-        border-radius: 50%;
-        animation: gepFloat 8s ease-in-out infinite;
+        inset: 0;
+        background:
+          radial-gradient(ellipse 600px 500px at 20% 30%, rgba(99, 102, 241, 0.28), transparent),
+          radial-gradient(ellipse 500px 600px at 80% 70%, rgba(16, 185, 129, 0.14), transparent),
+          radial-gradient(ellipse 400px 400px at 50% 50%, rgba(59, 130, 246, 0.1), transparent),
+          linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+        z-index: 0;
       }
 
-      .gep-left::after {
-        content: '';
+      .gep-orb {
         position: absolute;
-        width: 350px; height: 350px;
-        background: radial-gradient(circle, rgba(16,185,129,0.2) 0%, transparent 70%);
-        bottom: -80px; right: -80px;
         border-radius: 50%;
-        animation: gepFloat 10s ease-in-out infinite reverse;
+        filter: blur(80px);
+        opacity: 0.4;
+        pointer-events: none;
+        z-index: 0;
+        animation: gepOrbFloat 20s ease-in-out infinite;
       }
 
-      @keyframes gepFloat {
-        0%, 100% { transform: translateY(0) scale(1); }
-        50%       { transform: translateY(-30px) scale(1.05); }
+      .gep-orb-1 {
+        width: 300px; height: 300px;
+        background: linear-gradient(135deg, #6366f1, #3b82f6);
+        top: -5%; left: -8%;
       }
 
-      .gep-brand { position: relative; z-index: 1; }
+      .gep-orb-2 {
+        width: 250px; height: 250px;
+        background: linear-gradient(135deg, #10b981, #06b6d4);
+        bottom: -10%; right: -5%;
+        animation-delay: -7s;
+      }
 
+      .gep-orb-3 {
+        width: 180px; height: 180px;
+        background: linear-gradient(135deg, #8b5cf6, #ec4899);
+        top: 60%; left: 60%;
+        animation-delay: -14s;
+        opacity: 0.25;
+      }
+
+      @keyframes gepOrbFloat {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        25%      { transform: translate(40px, -30px) scale(1.1); }
+        50%      { transform: translate(-20px, 40px) scale(0.9); }
+        75%      { transform: translate(30px, 20px) scale(1.05); }
+      }
+
+      .gep-grid-bg {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+        background-size: 50px 50px;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      .gep-left-content {
+        position: relative;
+        z-index: 1;
+        max-width: 420px;
+        text-align: center;
+      }
+
+      /* Logo — natural display, no card */
       .gep-brand-logo {
-        width: 56px; height: 56px;
-        background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
-        border: 1.5px solid rgba(255,255,255,0.2);
-        border-radius: 16px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 1.75rem;
-        backdrop-filter: blur(8px);
-        margin-bottom: 1.25rem;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        margin-bottom: 1.75rem;
+        animation: gepLogoEnter 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        opacity: 0;
+        transform: scale(0.85) translateY(16px);
+      }
+
+      .gep-brand-logo img {
+        width: 180px;
+        height: auto;
+        display: block;
+        margin: 0 auto;
+        object-fit: contain;
+        filter: drop-shadow(0 8px 32px rgba(99, 102, 241, 0.3));
+        transition: transform 0.4s ease, filter 0.4s ease;
+      }
+
+      .gep-brand-logo:hover img {
+        transform: scale(1.04);
+        filter: drop-shadow(0 12px 40px rgba(99, 102, 241, 0.45));
+      }
+
+      @keyframes gepLogoEnter {
+        to { opacity: 1; transform: scale(1) translateY(0); }
       }
 
       .gep-brand-name {
-        font-size: 1.5rem;
-        font-weight: 800;
-        color: #fff;
+        font-size: 2rem;
+        font-weight: 900;
         letter-spacing: -0.02em;
-        line-height: 1;
+        background: linear-gradient(135deg, #fff 0%, #e0e7ff 40%, #a5b4fc 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        line-height: 1.2;
+        margin-bottom: 0.4rem;
+        animation: gepFadeUp 0.8s ease 0.2s both;
       }
 
       .gep-brand-tagline {
         font-size: 0.8rem;
-        color: rgba(255,255,255,0.55);
-        font-weight: 500;
-        margin-top: 0.35rem;
-        letter-spacing: 0.04em;
+        color: rgba(255,255,255,0.5);
+        font-weight: 600;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
+        animation: gepFadeUp 0.8s ease 0.3s both;
       }
 
-      .gep-hero { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 2rem 0; }
+      .gep-hero {
+        margin-top: 2.5rem;
+        animation: gepFadeUp 0.8s ease 0.4s both;
+      }
 
       .gep-hero-title {
-        font-size: 2.75rem;
+        font-size: 2.25rem;
         font-weight: 900;
         color: #fff;
-        line-height: 1.1;
+        line-height: 1.15;
         letter-spacing: -0.03em;
-        margin-bottom: 1rem;
+        margin-bottom: 0.85rem;
       }
 
-      .gep-hero-title span { color: #a5f3fc; }
+      .gep-hero-title span {
+        background: linear-gradient(135deg, #67e8f9, #a5f3fc);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
 
       .gep-hero-desc {
-        font-size: 1rem;
-        color: rgba(255,255,255,0.65);
+        font-size: 0.95rem;
+        color: rgba(255,255,255,0.6);
         line-height: 1.65;
-        max-width: 380px;
         font-weight: 400;
       }
 
       .gep-features {
-        margin-top: 2.5rem;
+        margin-top: 2rem;
         display: flex;
         flex-direction: column;
         gap: 0.85rem;
+        text-align: left;
+        animation: gepFadeUp 0.8s ease 0.5s both;
+      }
+
+      @keyframes gepFadeUp {
+        from { opacity: 0; transform: translateY(18px); }
+        to   { opacity: 1; transform: translateY(0); }
       }
 
       .gep-feature {
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        animation: gepFadeInLeft 0.6s ease both;
-      }
-
-      .gep-feature:nth-child(1) { animation-delay: 0.1s; }
-      .gep-feature:nth-child(2) { animation-delay: 0.2s; }
-      .gep-feature:nth-child(3) { animation-delay: 0.3s; }
-
-      @keyframes gepFadeInLeft {
-        from { opacity: 0; transform: translateX(-16px); }
-        to   { opacity: 1; transform: translateX(0); }
       }
 
       .gep-feature-icon {
         width: 36px; height: 36px;
-        background: rgba(255,255,255,0.1);
-        border: 1px solid rgba(255,255,255,0.15);
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.1);
         border-radius: 10px;
         display: flex; align-items: center; justify-content: center;
-        font-size: 1rem;
         flex-shrink: 0;
       }
 
-      .gep-feature-text { font-size: 0.875rem; color: rgba(255,255,255,0.75); font-weight: 500; }
+      .gep-feature-icon svg {
+        width: 18px; height: 18px;
+        stroke: #818cf8;
+      }
+
+      .gep-feature-text {
+        font-size: 0.85rem;
+        color: rgba(255,255,255,0.65);
+        font-weight: 500;
+      }
 
       .gep-footer-left {
-        position: relative; z-index: 1;
-        font-size: 0.75rem;
-        color: rgba(255,255,255,0.3);
+        position: absolute;
+        bottom: 1.5rem;
+        left: 0; right: 0;
+        text-align: center;
+        z-index: 1;
+        font-size: 0.72rem;
+        color: rgba(255,255,255,0.28);
         font-weight: 500;
       }
 
       /* ── Right panel ── */
       .gep-right {
-        flex: 0 0 480px;
+        width: 520px;
+        min-width: 420px;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 2rem;
-        background: #f8fafc;
+        padding: 2.5rem;
+        background: #fff;
+        position: relative;
+      }
+
+      .gep-right::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 10%; bottom: 10%;
+        width: 1px;
+        background: linear-gradient(to bottom, transparent, #e2e8f0, transparent);
       }
 
       .gep-card {
@@ -182,8 +269,22 @@ class LoginPage {
       }
 
       @keyframes gepSlideUp {
-        from { opacity: 0; transform: translateY(24px); }
+        from { opacity: 0; transform: translateY(20px); }
         to   { opacity: 1; transform: translateY(0); }
+      }
+
+      /* Mobile logo — shown when left panel is hidden */
+      .gep-mobile-logo {
+        display: none;
+        text-align: center;
+        margin-bottom: 1.75rem;
+      }
+
+      .gep-mobile-logo img {
+        width: 140px;
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 6px 24px rgba(99, 102, 241, 0.25));
       }
 
       .gep-card-header { margin-bottom: 2rem; }
@@ -204,7 +305,6 @@ class LoginPage {
         line-height: 1.5;
       }
 
-      /* Error banner */
       .gep-error {
         display: none;
         align-items: flex-start;
@@ -226,17 +326,16 @@ class LoginPage {
       .gep-error-icon { font-size: 0.9rem; margin-top: 0.05rem; flex-shrink: 0; }
       .gep-error-text { color: #b91c1c; font-size: 0.845rem; font-weight: 500; line-height: 1.5; }
 
-      /* Form fields */
       .gep-field { margin-bottom: 1.25rem; }
 
       .gep-label {
         display: block;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         font-weight: 700;
-        color: #374151;
-        margin-bottom: 0.5rem;
+        color: #475569;
+        margin-bottom: 0.45rem;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.06em;
       }
 
       .gep-input-wrap { position: relative; }
@@ -252,26 +351,24 @@ class LoginPage {
 
       .gep-input {
         width: 100%;
-        padding: 0.8rem 1rem 0.8rem 2.75rem;
-        background: #fff;
+        padding: 0.85rem 1rem 0.85rem 2.75rem;
+        background: #f8fafc;
         border: 1.5px solid #e2e8f0;
         border-radius: 12px;
         color: #0f172a;
         font-size: 0.9375rem;
         font-family: 'Inter', sans-serif;
         outline: none;
-        transition: border-color 0.2s, box-shadow 0.2s;
+        transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
       }
 
       .gep-input:focus {
-        border-color: #4f46e5;
-        box-shadow: 0 0 0 4px rgba(79,70,229,0.1);
+        background: #fff;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
       }
 
-      .gep-input:focus + .gep-input-icon,
-      .gep-input-wrap:focus-within .gep-input-icon {
-        color: #4f46e5;
-      }
+      .gep-input-wrap:focus-within .gep-input-icon { color: #6366f1; }
 
       .gep-pw-toggle {
         position: absolute;
@@ -284,7 +381,7 @@ class LoginPage {
         transition: color 0.2s;
       }
 
-      .gep-pw-toggle:hover { color: #4f46e5; }
+      .gep-pw-toggle:hover { color: #6366f1; }
 
       .gep-field-err {
         display: none;
@@ -294,11 +391,10 @@ class LoginPage {
         margin-top: 0.4rem;
       }
 
-      /* Submit button */
       .gep-btn {
         width: 100%;
         padding: 0.9rem;
-        background: linear-gradient(135deg, #4f46e5, #3730a3);
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
         color: #fff;
         border: none;
         border-radius: 12px;
@@ -308,17 +404,16 @@ class LoginPage {
         cursor: pointer;
         display: flex; align-items: center; justify-content: center; gap: 0.5rem;
         transition: all 0.2s;
-        box-shadow: 0 4px 14px rgba(79,70,229,0.35);
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
         margin-top: 0.5rem;
       }
 
       .gep-btn:hover:not(:disabled) {
         transform: translateY(-1px);
-        box-shadow: 0 8px 22px rgba(79,70,229,0.4);
+        box-shadow: 0 8px 22px rgba(99, 102, 241, 0.4);
       }
 
       .gep-btn:active:not(:disabled) { transform: translateY(0); }
-
       .gep-btn:disabled { opacity: 0.65; cursor: not-allowed; }
 
       .gep-spinner {
@@ -335,7 +430,7 @@ class LoginPage {
         display: flex; align-items: center; gap: 0.75rem;
         margin: 1.5rem 0;
         color: #cbd5e1;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.08em;
@@ -353,13 +448,13 @@ class LoginPage {
       }
 
       .gep-admin-link a {
-        color: #4f46e5;
+        color: #6366f1;
         font-weight: 700;
         text-decoration: none;
         transition: color 0.2s;
       }
 
-      .gep-admin-link a:hover { color: #3730a3; text-decoration: underline; }
+      .gep-admin-link a:hover { color: #4f46e5; text-decoration: underline; }
 
       .gep-card-footer {
         margin-top: 2rem;
@@ -373,73 +468,118 @@ class LoginPage {
       }
 
       /* Responsive */
-      @media (max-width: 900px) {
+      @media (max-width: 960px) {
         .gep-left { display: none; }
-        .gep-right { flex: 1; background: linear-gradient(145deg, #1e1b4b, #312e81); }
-        .gep-card { background: rgba(255,255,255,0.97); border-radius: 20px; padding: 2rem; box-shadow: 0 24px 64px rgba(0,0,0,0.25); }
-        .gep-card-title { color: #0f172a; }
+        .gep-right {
+          flex: 1;
+          width: auto;
+          min-width: 0;
+          background: linear-gradient(160deg, #0f172a 0%, #1e293b 40%, #0f172a 100%);
+        }
+        .gep-right::before { display: none; }
+        .gep-card {
+          background: rgba(255,255,255,0.98);
+          border-radius: 20px;
+          padding: 2rem 1.75rem;
+          box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+        }
+        .gep-mobile-logo { display: block; }
+      }
+
+      @media (max-width: 480px) {
+        .gep-right { padding: 1.25rem; }
+        .gep-card { padding: 1.5rem 1.25rem; }
+        .gep-mobile-logo img { width: 120px; }
+        .gep-card-title { font-size: 1.5rem; }
       }
     `;
     document.head.appendChild(style);
   }
 
   _getLoginHTML() {
+    const year = new Date().getFullYear();
+
     return `
     <div class="gep-root">
 
-      <!-- ═══ Left Branding Panel ═══ -->
+      <!-- Left: Brand showcase -->
       <div class="gep-left">
+        <div class="gep-orb gep-orb-1"></div>
+        <div class="gep-orb gep-orb-2"></div>
+        <div class="gep-orb gep-orb-3"></div>
+        <div class="gep-grid-bg"></div>
 
-        <div class="gep-brand">
-          <div class="gep-brand-logo"><img src="assets/logo.png" alt="Gyanam" style="width:40px;height:40px;border-radius:8px;object-fit:contain;"></div>
+        <div class="gep-left-content">
+          <div class="gep-brand-logo">
+            <img src="assets/logo.png" alt="Gyanam India">
+          </div>
+
           <div class="gep-brand-name">Gyanam India</div>
           <div class="gep-brand-tagline">Authorised Training Centre Network</div>
+
+          <div class="gep-hero">
+            <div class="gep-hero-title">
+              Your exam,<br><span>your future.</span>
+            </div>
+            <p class="gep-hero-desc">
+              Secure, timed, and proctored online examinations delivered
+              directly to you. Log in with your Registration ID to begin.
+            </p>
+
+            <div class="gep-features">
+              <div class="gep-feature">
+                <div class="gep-feature-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </div>
+                <span class="gep-feature-text">Secure &amp; encrypted exam sessions</span>
+              </div>
+              <div class="gep-feature">
+                <div class="gep-feature-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                </div>
+                <span class="gep-feature-text">Real-time timer with auto-submit</span>
+              </div>
+              <div class="gep-feature">
+                <div class="gep-feature-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                  </svg>
+                </div>
+                <span class="gep-feature-text">Instant results &amp; score breakdown</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="gep-hero">
-          <div class="gep-hero-title">
-            Your exam,<br><span>your future.</span>
-          </div>
-          <p class="gep-hero-desc">
-            Secure, timed, and proctored online examinations delivered
-            directly to you. Log in with your Registration ID to begin.
-          </p>
-
-          <div class="gep-features">
-            <div class="gep-feature">
-              <div class="gep-feature-icon">🔒</div>
-              <span class="gep-feature-text">Secure & encrypted exam sessions</span>
-            </div>
-            <div class="gep-feature">
-              <div class="gep-feature-icon">⏱</div>
-              <span class="gep-feature-text">Real-time timer with auto-submit</span>
-            </div>
-            <div class="gep-feature">
-              <div class="gep-feature-icon">📊</div>
-              <span class="gep-feature-text">Instant results & score breakdown</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="gep-footer-left">© 2025 Gyanam India. All rights reserved.</div>
+        <div class="gep-footer-left">&copy; ${year} Gyanam India. All rights reserved.</div>
       </div>
 
-      <!-- ═══ Right Login Panel ═══ -->
+      <!-- Right: Login form -->
       <div class="gep-right">
         <div class="gep-card">
+
+          <div class="gep-mobile-logo">
+            <img src="assets/logo.png" alt="Gyanam India">
+          </div>
 
           <div class="gep-card-header">
             <div class="gep-card-title">Welcome back</div>
             <p class="gep-card-sub">Enter your Registration ID &amp; password to access your exam</p>
           </div>
 
-          <!-- Error Banner -->
           <div id="gep-error" class="gep-error">
-            <span class="gep-error-icon">⚠</span>
+            <span class="gep-error-icon">&#9888;</span>
             <p id="gep-error-text" class="gep-error-text"></p>
           </div>
 
-          <!-- Form -->
           <form id="gep-login-form" novalidate>
 
             <div class="gep-field">
@@ -479,7 +619,7 @@ class LoginPage {
                   <rect x="3" y="11" width="18" height="11" rx="2"/>
                   <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                 </svg>
-                <button type="button" id="gep-pw-toggle" class="gep-pw-toggle" title="Toggle password visibility">
+                <button type="button" id="gep-pw-toggle" class="gep-pw-toggle" title="Toggle password visibility" aria-label="Toggle password visibility">
                   <svg id="gep-eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                     <circle cx="12" cy="12" r="3"/>
@@ -518,7 +658,6 @@ class LoginPage {
     const form = document.getElementById('gep-login-form');
     if (form) form.addEventListener('submit', this._handleSubmit.bind(this));
 
-    // Password visibility toggle
     const toggle = document.getElementById('gep-pw-toggle');
     const pwInput = document.getElementById('gep-password');
     const eyeIcon = document.getElementById('gep-eye-icon');
@@ -535,7 +674,6 @@ class LoginPage {
       });
     }
 
-    // Clear field errors on input
     document.getElementById('gep-identifier')?.addEventListener('input', () => this._clearFieldErr('identifier'));
     document.getElementById('gep-password')?.addEventListener('input', () => this._clearFieldErr('password'));
   }
@@ -574,9 +712,8 @@ class LoginPage {
     if (el && txt) {
       txt.textContent = message;
       el.style.display = 'flex';
-      // Re-trigger shake animation
       el.style.animation = 'none';
-      el.offsetHeight; // force reflow
+      el.offsetHeight;
       el.style.animation = '';
     }
   }
@@ -617,4 +754,3 @@ class LoginPage {
 
 export default LoginPage;
 export { LoginPage };
-
