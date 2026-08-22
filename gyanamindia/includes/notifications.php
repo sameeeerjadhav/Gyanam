@@ -5,20 +5,32 @@
 
 /**
  * Get unread notification count for the current user.
+ * Cached in session for 45s to avoid hitting DB on every page.
  */
 function getUnreadNotificationCount(PDO $pdo, int $userId, string $role, ?int $dlcId = null, ?int $atcId = null): int {
+    $cacheKey = 'notif_unread_' . $userId;
+    $cacheAt  = 'notif_unread_at_' . $userId;
+    if (isset($_SESSION[$cacheKey], $_SESSION[$cacheAt]) && (time() - (int)$_SESSION[$cacheAt]) < 45) {
+        return (int)$_SESSION[$cacheKey];
+    }
+
+    // LEFT JOIN is cheaper than NOT IN (subquery)
     $sql = "SELECT COUNT(*) FROM notifications n
-            WHERE n.id NOT IN (SELECT notification_id FROM notification_reads WHERE user_id = ?)
+            LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
+            WHERE nr.id IS NULL
             AND (
-                n.target_type COLLATE utf8mb4_unicode_ci = 'All'
-                OR (n.target_type COLLATE utf8mb4_unicode_ci = 'DLC' AND ? COLLATE utf8mb4_unicode_ci = 'DLC Office')
-                OR (n.target_type COLLATE utf8mb4_unicode_ci = 'ATC' AND ? COLLATE utf8mb4_unicode_ci = 'ATC CENTER')
-                OR (n.target_type COLLATE utf8mb4_unicode_ci = 'Specific' AND n.target_id = ?)
+                n.target_type = 'All'
+                OR (n.target_type = 'DLC' AND ? = 'DLC Office')
+                OR (n.target_type = 'ATC' AND ? = 'ATC CENTER')
+                OR (n.target_type = 'Specific' AND n.target_id = ?)
             )
             AND n.sender_id != ?";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$userId, $role, $role, $userId, $userId]);
-    return (int)$stmt->fetchColumn();
+    $count = (int)$stmt->fetchColumn();
+    $_SESSION[$cacheKey] = $count;
+    $_SESSION[$cacheAt]  = time();
+    return $count;
 }
 
 /**
@@ -31,10 +43,10 @@ function getNotificationsForUser(PDO $pdo, int $userId, string $role, ?int $dlcI
             JOIN users u ON n.sender_id = u.id
             LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
             WHERE (
-                n.target_type COLLATE utf8mb4_unicode_ci = 'All'
-                OR (n.target_type COLLATE utf8mb4_unicode_ci = 'DLC' AND ? COLLATE utf8mb4_unicode_ci = 'DLC Office')
-                OR (n.target_type COLLATE utf8mb4_unicode_ci = 'ATC' AND ? COLLATE utf8mb4_unicode_ci = 'ATC CENTER')
-                OR (n.target_type COLLATE utf8mb4_unicode_ci = 'Specific' AND n.target_id = ?)
+                n.target_type = 'All'
+                OR (n.target_type = 'DLC' AND ? = 'DLC Office')
+                OR (n.target_type = 'ATC' AND ? = 'ATC CENTER')
+                OR (n.target_type = 'Specific' AND n.target_id = ?)
             )
             AND n.sender_id != ?
             ORDER BY n.created_at DESC
@@ -50,6 +62,7 @@ function getNotificationsForUser(PDO $pdo, int $userId, string $role, ?int $dlcI
 function markNotificationRead(PDO $pdo, int $notificationId, int $userId): void {
     $stmt = $pdo->prepare("INSERT IGNORE INTO notification_reads (notification_id, user_id) VALUES (?, ?)");
     $stmt->execute([$notificationId, $userId]);
+    unset($_SESSION['notif_unread_' . $userId], $_SESSION['notif_unread_at_' . $userId]);
 }
 
 /**
@@ -58,16 +71,18 @@ function markNotificationRead(PDO $pdo, int $notificationId, int $userId): void 
 function markAllNotificationsRead(PDO $pdo, int $userId, string $role): void {
     $sql = "INSERT IGNORE INTO notification_reads (notification_id, user_id)
             SELECT n.id, ? FROM notifications n
-            WHERE n.id NOT IN (SELECT notification_id FROM notification_reads WHERE user_id = ?)
+            LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
+            WHERE nr.id IS NULL
             AND (
-                n.target_type COLLATE utf8mb4_unicode_ci = 'All'
-                OR (n.target_type COLLATE utf8mb4_unicode_ci = 'DLC' AND ? COLLATE utf8mb4_unicode_ci = 'DLC Office')
-                OR (n.target_type COLLATE utf8mb4_unicode_ci = 'ATC' AND ? COLLATE utf8mb4_unicode_ci = 'ATC CENTER')
-                OR (n.target_type COLLATE utf8mb4_unicode_ci = 'Specific' AND n.target_id = ?)
+                n.target_type = 'All'
+                OR (n.target_type = 'DLC' AND ? = 'DLC Office')
+                OR (n.target_type = 'ATC' AND ? = 'ATC CENTER')
+                OR (n.target_type = 'Specific' AND n.target_id = ?)
             )
             AND n.sender_id != ?";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$userId, $userId, $role, $role, $userId, $userId]);
+    unset($_SESSION['notif_unread_' . $userId], $_SESSION['notif_unread_at_' . $userId]);
 }
 
 /**

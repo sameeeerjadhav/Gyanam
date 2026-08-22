@@ -629,29 +629,21 @@ try {
 }
 $totalSharePending = max(0, $totalShareExpected - (float) $overallStats['total_share_received']);
 
-// ── Backfill atc_code for existing rows that don't have one ──
+// Schema ensure for atc_centers columns — once per process via file flag (not every page load)
 try {
-    $colChkPage = $pdo->query("SHOW COLUMNS FROM atc_centers LIKE 'atc_code'")->fetch();
-    if (!$colChkPage) {
-        $pdo->exec("ALTER TABLE atc_centers ADD COLUMN atc_code VARCHAR(20) DEFAULT NULL AFTER id");
+    $atcSchemaFlag = __DIR__ . '/../config/.schema_atc_centers_ok';
+    if (!is_file($atcSchemaFlag)) {
+        $colChkPage = $pdo->query("SHOW COLUMNS FROM atc_centers LIKE 'atc_code'")->fetch();
+        if (!$colChkPage) {
+            $pdo->exec("ALTER TABLE atc_centers ADD COLUMN atc_code VARCHAR(20) DEFAULT NULL AFTER id");
+        }
+        $pdo->exec("UPDATE atc_centers SET atc_code = CONCAT(YEAR(IFNULL(created_at, NOW())), LPAD(id, 5, '0')) WHERE atc_code IS NULL OR atc_code = '' OR atc_code LIKE 'GATC%'");
+        try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_fees DECIMAL(12,2) DEFAULT NULL"); } catch (Exception $e) {}
+        try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_username VARCHAR(100) DEFAULT NULL"); } catch (Exception $e) {}
+        try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_password VARCHAR(100) DEFAULT NULL"); } catch (Exception $e) {}
+        @file_put_contents($atcSchemaFlag, date('c') . "\n");
     }
-    // Backfill: set missing codes to YYYY + 5-digit-padded id
-    $pdo->exec("UPDATE atc_centers SET atc_code = CONCAT(YEAR(IFNULL(created_at, NOW())), LPAD(id, 5, '0')) WHERE atc_code IS NULL OR atc_code = '' OR atc_code LIKE 'GATC%'");
-} catch (Exception $e) { /* non-fatal */
-}
-// ── Ensure new columns exist ──
-try {
-    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_fees DECIMAL(12,2) DEFAULT NULL");
-} catch (Exception $e) {
-}
-try {
-    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_username VARCHAR(100) DEFAULT NULL");
-} catch (Exception $e) {
-}
-try {
-    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_password VARCHAR(100) DEFAULT NULL");
-} catch (Exception $e) {
-}
+} catch (Exception $e) { /* non-fatal */ }
 ?>
 <!DOCTYPE html>
 <html lang="en">

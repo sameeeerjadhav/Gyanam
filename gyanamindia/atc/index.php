@@ -308,65 +308,45 @@ $pendingReportStudents = [];
 $reportedCount = 0;
 $pendingReportCount = 0;
 try {
-    // Build set of paid student IDs from share_payments
-    $paidIds = [];
-    $sp = $pdo->prepare("SELECT student_ids FROM share_payments WHERE atc_id = ? AND status = 'Completed'");
-    $sp->execute([$atcId]);
-    foreach ($sp->fetchAll(PDO::FETCH_COLUMN) as $json) {
-        $ids = json_decode($json, true);
-        if (is_array($ids))
-            foreach ($ids as $id)
-                $paidIds[intval($id)] = true;
-    }
+    $paidIds = getHoSharePaidAdmissionIds($pdo, (int)$atcId);
 
-    // Also check ho_share_paid column if it exists
-    $allStudents = $pdo->prepare("
+    // Preview lists for modal (cap at 200) — counts use separate queries
+    $allRows = $pdo->prepare("
         SELECT id, CONCAT(first_name,' ',COALESCE(middle_name,''),' ',last_name) AS name,
-               course, roll_no, photo, COALESCE(ho_share_paid,0) AS ho_share_paid
+               course, roll_no, photo
         FROM admissions WHERE atc_id = ? AND status = 'Active'
         ORDER BY first_name ASC
+        LIMIT 200
     ");
-    $allStudents->execute([$atcId]);
-    foreach ($allStudents->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        $isReported = isset($paidIds[$row['id']]) || $row['ho_share_paid'];
-        if ($isReported) {
+    $allRows->execute([$atcId]);
+    foreach ($allRows->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (isset($paidIds[(int)$row['id']])) {
             $reportedStudents[] = $row;
         } else {
             $pendingReportStudents[] = $row;
         }
     }
-    $reportedCount = count($reportedStudents);
-    $pendingReportCount = count($pendingReportStudents);
-} catch (Exception $e) {
-    // Try without ho_share_paid column
-    try {
-        $paidIds = [];
-        $sp = $pdo->prepare("SELECT student_ids FROM share_payments WHERE atc_id = ? AND status = 'Completed'");
-        $sp->execute([$atcId]);
-        foreach ($sp->fetchAll(PDO::FETCH_COLUMN) as $json) {
-            $ids = json_decode($json, true);
-            if (is_array($ids))
-                foreach ($ids as $id)
-                    $paidIds[intval($id)] = true;
-        }
-        $allStudents = $pdo->prepare("
-            SELECT id, CONCAT(first_name,' ',COALESCE(middle_name,''),' ',last_name) AS name,
-                   course, roll_no, photo
-            FROM admissions WHERE atc_id = ? AND status = 'Active'
-            ORDER BY first_name ASC
-        ");
-        $allStudents->execute([$atcId]);
-        foreach ($allStudents->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            if (isset($paidIds[$row['id']])) {
-                $reportedStudents[] = $row;
-            } else {
-                $pendingReportStudents[] = $row;
-            }
-        }
-        $reportedCount = count($reportedStudents);
-        $pendingReportCount = count($pendingReportStudents);
-    } catch (Exception $e2) {
+
+    $cntStmt = $pdo->prepare("SELECT COUNT(*) FROM admissions WHERE atc_id = ? AND status = 'Active'");
+    $cntStmt->execute([$atcId]);
+    $totalActive = (int)$cntStmt->fetchColumn();
+
+    if (!empty($paidIds)) {
+        $idList = array_keys($paidIds);
+        $placeholders = implode(',', array_fill(0, count($idList), '?'));
+        $params = array_merge([(int)$atcId], $idList);
+        $rStmt = $pdo->prepare("SELECT COUNT(*) FROM admissions WHERE atc_id = ? AND status = 'Active' AND id IN ($placeholders)");
+        $rStmt->execute($params);
+        $reportedCount = (int)$rStmt->fetchColumn();
+    } else {
+        $reportedCount = 0;
     }
+    $pendingReportCount = max(0, $totalActive - $reportedCount);
+} catch (Exception $e) {
+    $reportedStudents = [];
+    $pendingReportStudents = [];
+    $reportedCount = 0;
+    $pendingReportCount = 0;
 }
 
 /* ── Dashboard Widget Data ────────────────────────────────── */

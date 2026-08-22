@@ -4,23 +4,25 @@
  */
 $currentPage = basename($_SERVER['PHP_SELF']);
 
-// Load this ATC's code for display
-$_sidebarAtcCode = '';
+// Load this ATC's code for display (session-cached — no SHOW COLUMNS on every page)
+$_sidebarAtcCode = (string)($_SESSION['atc_code'] ?? '');
 try {
     $_sidebarAtcId = $_SESSION['atc_id'] ?? null;
-    if ($_sidebarAtcId) {
+    if ($_sidebarAtcId && $_sidebarAtcCode === '') {
         $_pdo = isset($pdo) ? $pdo : getDBConnection();
-        $_colChk = $_pdo->query("SHOW COLUMNS FROM atc_centers LIKE 'atc_code'")->fetch();
-        if ($_colChk) {
-            $_sidebarAtcCode = $_pdo->prepare("SELECT atc_code FROM atc_centers WHERE id = ?");
-            $_sidebarAtcCode->execute([$_sidebarAtcId]);
-            $_sidebarAtcCode = (string)($_sidebarAtcCode->fetchColumn() ?: '');
+        $_st = $_pdo->prepare("SELECT atc_code FROM atc_centers WHERE id = ? LIMIT 1");
+        $_st->execute([$_sidebarAtcId]);
+        $_sidebarAtcCode = (string)($_st->fetchColumn() ?: '');
+        if ($_sidebarAtcCode === '') {
+            $_sidebarAtcCode = date('Y') . str_pad((string)$_sidebarAtcId, 5, '0', STR_PAD_LEFT);
         }
-        if (!$_sidebarAtcCode) {
-            $_sidebarAtcCode = date('Y') . str_pad($_sidebarAtcId, 5, '0', STR_PAD_LEFT); // fallback
-        }
+        $_SESSION['atc_code'] = $_sidebarAtcCode;
     }
-} catch (Exception $_e) {}
+} catch (Exception $_e) {
+    if (!empty($_sidebarAtcId) && $_sidebarAtcCode === '') {
+        $_sidebarAtcCode = date('Y') . str_pad((string)$_sidebarAtcId, 5, '0', STR_PAD_LEFT);
+    }
+}
 ?>
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
