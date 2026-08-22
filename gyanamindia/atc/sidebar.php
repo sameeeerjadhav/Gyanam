@@ -1,39 +1,93 @@
 <?php
 /**
  * ATC Center Sidebar Partial
+ * Brand = this ATC's logo + center name (not Gyanam HO branding)
  */
 $currentPage = basename($_SERVER['PHP_SELF']);
 
-// Load this ATC's code for display (session-cached — no SHOW COLUMNS on every page)
+$_sidebarAtcId   = $_SESSION['atc_id'] ?? null;
 $_sidebarAtcCode = (string)($_SESSION['atc_code'] ?? '');
+$_sidebarAtcName = (string)($_SESSION['atc_sidebar_name'] ?? '');
+$_sidebarAtcLogo = (string)($_SESSION['atc_sidebar_logo'] ?? '');
+$_sidebarBrandAt = (int)($_SESSION['atc_sidebar_brand_at'] ?? 0);
+$_needBrandRefresh = ($_sidebarAtcName === '' || $_sidebarBrandAt < (time() - 300));
+
 try {
-    $_sidebarAtcId = $_SESSION['atc_id'] ?? null;
-    if ($_sidebarAtcId && $_sidebarAtcCode === '') {
+    if ($_sidebarAtcId && ($_needBrandRefresh || $_sidebarAtcCode === '')) {
         $_pdo = isset($pdo) ? $pdo : getDBConnection();
-        $_st = $_pdo->prepare("SELECT atc_code FROM atc_centers WHERE id = ? LIMIT 1");
+        $_st = $_pdo->prepare("SELECT name, atc_code, logo FROM atc_centers WHERE id = ? LIMIT 1");
         $_st->execute([$_sidebarAtcId]);
-        $_sidebarAtcCode = (string)($_st->fetchColumn() ?: '');
+        $_row = $_st->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $_sidebarAtcName = trim((string)($_row['name'] ?? ''));
+        if ($_sidebarAtcName === '') {
+            $_sidebarAtcName = (string)($_SESSION['user_name'] ?? 'ATC Center');
+        }
+
+        $_sidebarAtcCode = trim((string)($_row['atc_code'] ?? ''));
         if ($_sidebarAtcCode === '') {
             $_sidebarAtcCode = date('Y') . str_pad((string)$_sidebarAtcId, 5, '0', STR_PAD_LEFT);
         }
+
+        $_sidebarAtcLogo = trim((string)($_row['logo'] ?? ''));
+
+        $_SESSION['atc_sidebar_name'] = $_sidebarAtcName;
+        $_SESSION['atc_sidebar_logo'] = $_sidebarAtcLogo;
         $_SESSION['atc_code'] = $_sidebarAtcCode;
+        $_SESSION['atc_sidebar_brand_at'] = time();
     }
 } catch (Exception $_e) {
-    if (!empty($_sidebarAtcId) && $_sidebarAtcCode === '') {
+    if ($_sidebarAtcName === '') {
+        $_sidebarAtcName = (string)($_SESSION['user_name'] ?? 'ATC Center');
+    }
+    if ($_sidebarAtcId && $_sidebarAtcCode === '') {
         $_sidebarAtcCode = date('Y') . str_pad((string)$_sidebarAtcId, 5, '0', STR_PAD_LEFT);
     }
 }
+
+// Resolve logo web path (relative to /atc/*.php)
+$_sidebarLogoUrl = '';
+if ($_sidebarAtcLogo !== '') {
+    if (preg_match('#^https?://#i', $_sidebarAtcLogo) || str_starts_with($_sidebarAtcLogo, '/')) {
+        $_sidebarLogoUrl = $_sidebarAtcLogo;
+    } else {
+        $_sidebarLogoUrl = '../' . ltrim(str_replace('\\', '/', $_sidebarAtcLogo), '/');
+    }
+    // Cache-bust when session brand was refreshed
+    $_sidebarLogoUrl .= (str_contains($_sidebarLogoUrl, '?') ? '&' : '?') . 'v=' . $_sidebarBrandAt;
+}
+
+$_sidebarInitials = '';
+foreach (preg_split('/\s+/', $_sidebarAtcName) ?: [] as $_w) {
+    if ($_w === '') {
+        continue;
+    }
+    $_sidebarInitials .= strtoupper(substr($_w, 0, 1));
+    if (strlen($_sidebarInitials) >= 2) {
+        break;
+    }
+}
+if ($_sidebarInitials === '') {
+    $_sidebarInitials = 'ATC';
+}
 ?>
 <aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand">
-        <div class="brand-logo">
-            <img src="../assets/logo.png" alt="Gyanam India">
+    <div class="sidebar-brand atc-sidebar-brand">
+        <div class="brand-logo atc-brand-logo<?= $_sidebarLogoUrl === '' ? ' is-fallback' : '' ?>">
+            <?php if ($_sidebarLogoUrl !== ''): ?>
+                <img src="<?= htmlspecialchars($_sidebarLogoUrl) ?>"
+                     alt="<?= htmlspecialchars($_sidebarAtcName) ?>"
+                     onerror="this.style.display='none';this.parentElement.classList.add('is-fallback');this.parentElement.querySelector('.atc-logo-fallback').hidden=false;">
+                <span class="atc-logo-fallback" hidden><?= htmlspecialchars($_sidebarInitials) ?></span>
+            <?php else: ?>
+                <span class="atc-logo-fallback"><?= htmlspecialchars($_sidebarInitials) ?></span>
+            <?php endif; ?>
         </div>
         <div class="brand-info">
-            <h2>Gyanam India</h2>
-            <span>ATC Login Panel
+            <h2 title="<?= htmlspecialchars($_sidebarAtcName) ?>"><?= htmlspecialchars($_sidebarAtcName) ?></h2>
+            <span>ATC Center
                 <?php if ($_sidebarAtcCode): ?>
-                <span style="display:inline-block;margin-left:.4rem;background:linear-gradient(135deg,#4361ee,#7c3aed);color:#fff;font-size:.68rem;font-weight:800;padding:.1rem .5rem;border-radius:99px;letter-spacing:.03em;vertical-align:middle;"><?= htmlspecialchars($_sidebarAtcCode) ?></span>
+                <span class="atc-code-pill"><?= htmlspecialchars($_sidebarAtcCode) ?></span>
                 <?php endif; ?>
             </span>
         </div>
@@ -154,6 +208,63 @@ try {
     </div>
 </aside>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
+<style>
+.atc-sidebar-brand .atc-brand-logo {
+    width: 42px;
+    height: 42px;
+    max-width: 42px;
+    border-radius: 10px;
+    background: #fff;
+    border: 1px solid rgba(15, 23, 42, .08);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.atc-sidebar-brand .atc-brand-logo img {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    object-fit: contain;
+    padding: 3px;
+}
+.atc-sidebar-brand .atc-logo-fallback {
+    display: none;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .02em;
+    color: #fff;
+    background: linear-gradient(135deg, #4361ee, #7c3aed);
+}
+.atc-sidebar-brand .atc-brand-logo.is-fallback .atc-logo-fallback {
+    display: flex;
+}
+.atc-sidebar-brand .brand-info h2 {
+    font-size: .95rem;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.atc-code-pill {
+    display: inline-block;
+    margin-left: .35rem;
+    background: linear-gradient(135deg, #4361ee, #7c3aed);
+    color: #fff;
+    font-size: .68rem;
+    font-weight: 800;
+    padding: .1rem .45rem;
+    border-radius: 99px;
+    letter-spacing: .03em;
+    vertical-align: middle;
+}
+.sidebar.collapsed .atc-sidebar-brand .brand-info { display: none; }
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var activeLink = document.querySelector('.sidebar-nav .nav-link.active');
