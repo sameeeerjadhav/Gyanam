@@ -207,6 +207,11 @@ try {
         $stmt = $pdo->prepare('UPDATE atc_centers SET logo = ? WHERE id = ?');
         $stmt->execute([$relativePath, $atcId]);
 
+        // Refresh ATC sidebar branding on next page load
+        unset($_SESSION['atc_sidebar_logo'], $_SESSION['atc_sidebar_name'], $_SESSION['atc_sidebar_brand_at']);
+        $_SESSION['atc_sidebar_logo'] = $relativePath;
+        $_SESSION['atc_sidebar_brand_at'] = 0;
+
         $_SESSION['profile_success'] = 'Center logo uploaded successfully.';
         redirect($redirectUrl);
     }
