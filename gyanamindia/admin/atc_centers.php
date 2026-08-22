@@ -29,6 +29,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 } catch (Exception $e) {
                 }
                 try {
+                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_payment_mode VARCHAR(20) DEFAULT NULL");
+                } catch (Exception $e) {
+                }
+                try {
+                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_paid_date DATE DEFAULT NULL");
+                } catch (Exception $e) {
+                }
+                try {
                     $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_username VARCHAR(100) DEFAULT NULL");
                 } catch (Exception $e) {
                 }
@@ -43,14 +51,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 $rawFees = $_POST['franchise_fees'] ?? '';
                 $franchiseFees = ($rawFees !== '' && $rawFees !== null) ? floatval($rawFees) : null;
+                $allowedPayModes = ['Cash', 'UPI', 'Cheque'];
+                $franchisePayMode = trim((string)($_POST['franchise_payment_mode'] ?? ''));
+                $franchisePayMode = in_array($franchisePayMode, $allowedPayModes, true) ? $franchisePayMode : null;
+                $franchisePaidDate = !empty($_POST['franchise_paid_date']) ? $_POST['franchise_paid_date'] : null;
                 $tempPassword = 'password'; // temporary — ATC must change after first login
                 $atcCode = null;
 
                 $stmt = $pdo->prepare("
                     INSERT INTO atc_centers (name, district, state, taluka, city, pin_code, center_type, dlc_id,
                         contact_person, email, mobile, alternate_mobile, address, dob,
-                        date_created, authorization_expires_at, franchise_fees, login_username, login_password, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+                        date_created, authorization_expires_at, franchise_fees, franchise_payment_mode, franchise_paid_date,
+                        login_username, login_password, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
                 ");
                 $stmt->execute([
                     $_POST['name'],
@@ -70,6 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     !empty($_POST['date_created']) ? $_POST['date_created'] : date('Y-m-d'),
                     !empty($_POST['authorization_expires_at']) ? $_POST['authorization_expires_at'] : null,
                     $franchiseFees,
+                    $franchisePayMode,
+                    $franchisePaidDate,
                     $_POST['status']
                 ]);
                 $newId = $pdo->lastInsertId();
@@ -149,6 +164,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 } catch (Exception $e) {
                 }
                 try {
+                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_payment_mode VARCHAR(20) DEFAULT NULL");
+                } catch (Exception $e) {
+                }
+                try {
+                    $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_paid_date DATE DEFAULT NULL");
+                } catch (Exception $e) {
+                }
+                try {
                     $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_username VARCHAR(100) DEFAULT NULL");
                 } catch (Exception $e) {
                 }
@@ -162,6 +185,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 $rawFees = $_POST['franchise_fees'] ?? '';
                 $franchiseFees = ($rawFees !== '' && $rawFees !== null) ? floatval($rawFees) : null;
+                $allowedPayModes = ['Cash', 'UPI', 'Cheque'];
+                $franchisePayMode = trim((string)($_POST['franchise_payment_mode'] ?? ''));
+                $franchisePayMode = in_array($franchisePayMode, $allowedPayModes, true) ? $franchisePayMode : null;
+                $franchisePaidDate = !empty($_POST['franchise_paid_date']) ? $_POST['franchise_paid_date'] : null;
                 $editId = intval($_POST['id']);
 
                 // Credentials: username is always the ATC code; password optional on edit
@@ -202,6 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     SET name=?, district=?, state=?, taluka=?, city=?, pin_code=?, center_type=?, dlc_id=?,
                         contact_person=?, email=?, mobile=?, alternate_mobile=?, address=?,
                         dob=?, date_created=?, authorization_expires_at=?, franchise_fees=?,
+                        franchise_payment_mode=?, franchise_paid_date=?,
                         login_username=?,
                         login_password=?,
                         status=?
@@ -225,6 +253,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     !empty($_POST['date_created']) ? $_POST['date_created'] : null,
                     !empty($_POST['authorization_expires_at']) ? $_POST['authorization_expires_at'] : null,
                     $franchiseFees,
+                    $franchisePayMode,
+                    $franchisePaidDate,
                     $newLoginUser,
                     $newLoginPass !== '' ? $newLoginPass : null,
                     $_POST['status'],
@@ -639,9 +669,21 @@ try {
         }
         $pdo->exec("UPDATE atc_centers SET atc_code = CONCAT(YEAR(IFNULL(created_at, NOW())), LPAD(id, 5, '0')) WHERE atc_code IS NULL OR atc_code = '' OR atc_code LIKE 'GATC%'");
         try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_fees DECIMAL(12,2) DEFAULT NULL"); } catch (Exception $e) {}
+        try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_payment_mode VARCHAR(20) DEFAULT NULL"); } catch (Exception $e) {}
+        try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_paid_date DATE DEFAULT NULL"); } catch (Exception $e) {}
         try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_username VARCHAR(100) DEFAULT NULL"); } catch (Exception $e) {}
         try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS login_password VARCHAR(100) DEFAULT NULL"); } catch (Exception $e) {}
         @file_put_contents($atcSchemaFlag, date('c') . "\n");
+    }
+} catch (Exception $e) { /* non-fatal */ }
+
+// Ensure franchise payment columns even if older schema flag already exists
+try {
+    $atcFeePayFlag = __DIR__ . '/../config/.schema_atc_franchise_pay_ok';
+    if (!is_file($atcFeePayFlag)) {
+        try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_payment_mode VARCHAR(20) DEFAULT NULL"); } catch (Exception $e) {}
+        try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_paid_date DATE DEFAULT NULL"); } catch (Exception $e) {}
+        @file_put_contents($atcFeePayFlag, date('c') . "\n");
     }
 } catch (Exception $e) { /* non-fatal */ }
 ?>
@@ -2640,9 +2682,23 @@ try {
                                 <input type="date" id="f_authorization_expires_at" name="authorization_expires_at">
                             </div>
                             <div class="atc-form-field">
-                                <label for="f_franchise_fees">Franchise Fees (&#8377;)</label>
+                                <label for="f_franchise_payment_mode">Payment Mode</label>
+                                <select id="f_franchise_payment_mode" name="franchise_payment_mode">
+                                    <option value="">-- Select Mode --</option>
+                                    <option value="Cash">Cash</option>
+                                    <option value="UPI">UPI</option>
+                                    <option value="Cheque">Cheque</option>
+                                </select>
+                            </div>
+                            <div class="atc-form-field">
+                                <label for="f_franchise_fees">Franchise Fees / Amount Paid (&#8377;)</label>
                                 <input type="number" id="f_franchise_fees" name="franchise_fees" min="0" step="0.01"
                                     placeholder="e.g. 25000">
+                            </div>
+                            <div class="atc-form-field">
+                                <label for="f_franchise_paid_date">Amount Paid Date</label>
+                                <input type="date" id="f_franchise_paid_date" name="franchise_paid_date"
+                                    max="<?= date('Y-m-d') ?>">
                             </div>
                         </div>
                     </div>
@@ -3012,7 +3068,9 @@ try {
                 document.getElementById('f_center_type').value = a.center_type || '';
                 document.getElementById('f_dlc_id').value = a.dlc_id || '';
                 document.getElementById('f_authorization_expires_at').value = a.authorization_expires_at || '';
+                document.getElementById('f_franchise_payment_mode').value = a.franchise_payment_mode || '';
                 document.getElementById('f_franchise_fees').value = (a.franchise_fees !== null && a.franchise_fees !== undefined) ? a.franchise_fees : '';
+                document.getElementById('f_franchise_paid_date').value = a.franchise_paid_date || '';
                 document.getElementById('f_district').value = a.district || '';
                 document.getElementById('f_taluka').value = a.taluka || '';
                 document.getElementById('f_city').value = a.city || '';
@@ -3234,6 +3292,24 @@ try {
                 <div class="detail-item full-width">
                     <div class="detail-label">Address</div>
                     <div class="detail-value">${atc.address}</div>
+                </div>
+                ` : ''}
+                ${atc.franchise_payment_mode ? `
+                <div class="detail-item">
+                    <div class="detail-label">Payment Mode</div>
+                    <div class="detail-value">${atc.franchise_payment_mode}</div>
+                </div>
+                ` : ''}
+                ${(atc.franchise_fees !== null && atc.franchise_fees !== undefined && atc.franchise_fees !== '') ? `
+                <div class="detail-item">
+                    <div class="detail-label">Franchise Fees / Amount Paid</div>
+                    <div class="detail-value">₹${Number(atc.franchise_fees).toLocaleString('en-IN')}</div>
+                </div>
+                ` : ''}
+                ${atc.franchise_paid_date ? `
+                <div class="detail-item">
+                    <div class="detail-label">Amount Paid Date</div>
+                    <div class="detail-value">${atc.franchise_paid_date}</div>
                 </div>
                 ` : ''}
             </div>
