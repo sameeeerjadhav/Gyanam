@@ -1167,14 +1167,14 @@ try {
         }
 
         .center-avatar {
-            width: 38px;
-            height: 38px;
-            border-radius: var(--r-md);
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
             flex-shrink: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: .875rem;
+            font-size: 1.05rem;
             font-weight: 800;
             color: white;
             background: linear-gradient(135deg, var(--brand), var(--violet));
@@ -1182,11 +1182,20 @@ try {
             overflow: hidden;
         }
 
+        .center-avatar.has-logo {
+            background: #fff;
+            border: 1.5px solid #e5e7eb;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+            padding: 4px;
+        }
+
         .center-avatar img {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
+            object-position: center;
             display: block;
+            background: #fff;
         }
 
         .center-name {
@@ -2404,15 +2413,24 @@ try {
                                         <td>
                                             <div class="center-cell">
                                                 <?php
-                                                $atcLogoPath = !empty($atc['logo']) ? '../' . ltrim($atc['logo'], '/') : '';
-                                                $atcLogoExists = $atcLogoPath && file_exists(__DIR__ . '/../' . ltrim($atc['logo'], '/'));
+                                                $rawLogo = trim((string)($atc['logo'] ?? ''));
+                                                $atcLogoRel = $rawLogo !== '' ? ltrim(str_replace('\\', '/', $rawLogo), '/') : '';
+                                                // Normalize common stored paths
+                                                if ($atcLogoRel !== '' && str_starts_with($atcLogoRel, 'gyanamindia/')) {
+                                                    $atcLogoRel = substr($atcLogoRel, strlen('gyanamindia/'));
+                                                }
+                                                $atcLogoFs = $atcLogoRel !== '' ? (__DIR__ . '/../' . $atcLogoRel) : '';
+                                                $atcLogoExists = $atcLogoFs !== '' && is_file($atcLogoFs);
+                                                $atcLogoUrl = $atcLogoExists ? ('../' . $atcLogoRel . '?v=' . filemtime($atcLogoFs)) : '';
                                                 ?>
-                                                <div class="center-avatar">
+                                                <div class="center-avatar<?= $atcLogoExists ? ' has-logo' : '' ?>">
                                                     <?php if ($atcLogoExists): ?>
-                                                        <img src="<?= htmlspecialchars($atcLogoPath) ?>"
-                                                            alt="<?= htmlspecialchars($atc['name']) ?> logo">
+                                                        <img src="<?= htmlspecialchars($atcLogoUrl) ?>"
+                                                            alt="<?= htmlspecialchars($atc['name']) ?> logo"
+                                                            loading="lazy"
+                                                            onerror="this.remove();this.parentElement.classList.remove('has-logo');this.parentElement.textContent='<?= htmlspecialchars($initial, ENT_QUOTES) ?>';">
                                                     <?php else: ?>
-                                                        <?= $initial ?>
+                                                        <?= htmlspecialchars($initial) ?>
                                                     <?php endif; ?>
                                                 </div>
                                                 <div>
