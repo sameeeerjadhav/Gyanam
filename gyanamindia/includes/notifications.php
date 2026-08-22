@@ -4,6 +4,23 @@
  */
 
 /**
+ * Build SQL visibility clause for notifications.
+ * Role matching is done in PHP to avoid MySQL collation mismatches on bound params.
+ *
+ * @return string WHERE fragment (includes one ? for Specific target_id)
+ */
+function buildNotificationVisibilityWhere(string $role): string {
+    $parts = ["n.target_type = 'All'"];
+    if ($role === 'DLC Office') {
+        $parts[] = "n.target_type = 'DLC'";
+    } elseif ($role === 'ATC CENTER') {
+        $parts[] = "n.target_type = 'ATC'";
+    }
+    $parts[] = "(n.target_type = 'Specific' AND n.target_id = ?)";
+    return '(' . implode(' OR ', $parts) . ')';
+}
+
+/**
  * Get unread notification count for the current user.
  * Cached in session for 45s to avoid hitting DB on every page.
  */
@@ -15,18 +32,14 @@ function getUnreadNotificationCount(PDO $pdo, int $userId, string $role, ?int $d
     }
 
     // LEFT JOIN is cheaper than NOT IN (subquery)
+    $visibility = buildNotificationVisibilityWhere($role);
     $sql = "SELECT COUNT(*) FROM notifications n
             LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
             WHERE nr.id IS NULL
-            AND (
-                n.target_type = 'All'
-                OR (n.target_type = 'DLC' AND ? = 'DLC Office')
-                OR (n.target_type = 'ATC' AND ? = 'ATC CENTER')
-                OR (n.target_type = 'Specific' AND n.target_id = ?)
-            )
+            AND {$visibility}
             AND n.sender_id != ?";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$userId, $role, $role, $userId, $userId]);
+    $stmt->execute([$userId, $userId, $userId]);
     $count = (int)$stmt->fetchColumn();
     $_SESSION[$cacheKey] = $count;
     $_SESSION[$cacheAt]  = time();
@@ -37,22 +50,18 @@ function getUnreadNotificationCount(PDO $pdo, int $userId, string $role, ?int $d
  * Get notifications for the current user.
  */
 function getNotificationsForUser(PDO $pdo, int $userId, string $role, ?int $dlcId = null, ?int $atcId = null, int $limit = 50): array {
+    $visibility = buildNotificationVisibilityWhere($role);
     $sql = "SELECT n.*, u.name AS sender_name, u.role AS sender_role,
                    (CASE WHEN nr.id IS NOT NULL THEN 1 ELSE 0 END) AS is_read
             FROM notifications n
             JOIN users u ON n.sender_id = u.id
             LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
-            WHERE (
-                n.target_type = 'All'
-                OR (n.target_type = 'DLC' AND ? = 'DLC Office')
-                OR (n.target_type = 'ATC' AND ? = 'ATC CENTER')
-                OR (n.target_type = 'Specific' AND n.target_id = ?)
-            )
+            WHERE {$visibility}
             AND n.sender_id != ?
             ORDER BY n.created_at DESC
             LIMIT ?";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$userId, $role, $role, $userId, $userId, $limit]);
+    $stmt->execute([$userId, $userId, $userId, $limit]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
@@ -69,19 +78,15 @@ function markNotificationRead(PDO $pdo, int $notificationId, int $userId): void 
  * Mark all notifications as read for a user.
  */
 function markAllNotificationsRead(PDO $pdo, int $userId, string $role): void {
+    $visibility = buildNotificationVisibilityWhere($role);
     $sql = "INSERT IGNORE INTO notification_reads (notification_id, user_id)
             SELECT n.id, ? FROM notifications n
             LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
             WHERE nr.id IS NULL
-            AND (
-                n.target_type = 'All'
-                OR (n.target_type = 'DLC' AND ? = 'DLC Office')
-                OR (n.target_type = 'ATC' AND ? = 'ATC CENTER')
-                OR (n.target_type = 'Specific' AND n.target_id = ?)
-            )
+            AND {$visibility}
             AND n.sender_id != ?";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$userId, $userId, $role, $role, $userId, $userId]);
+    $stmt->execute([$userId, $userId, $userId, $userId]);
     unset($_SESSION['notif_unread_' . $userId], $_SESSION['notif_unread_at_' . $userId]);
 }
 
