@@ -85,11 +85,12 @@ if ($_sidebarInitials === '') {
         </div>
         <div class="brand-info">
             <h2 title="<?= htmlspecialchars($_sidebarAtcName) ?>"><?= htmlspecialchars($_sidebarAtcName) ?></h2>
-            <span>ATC Center
+            <div class="atc-brand-meta">
+                <span class="atc-brand-role">ATC Center</span>
                 <?php if ($_sidebarAtcCode): ?>
                 <span class="atc-code-pill"><?= htmlspecialchars($_sidebarAtcCode) ?></span>
                 <?php endif; ?>
-            </span>
+            </div>
         </div>
     </div>
 
@@ -209,35 +210,64 @@ if ($_sidebarInitials === '') {
 </aside>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <style>
-.atc-sidebar-brand .atc-brand-logo {
-    width: auto;
-    height: auto;
-    max-width: 96px;
-    max-height: 48px;
-    border: none;
-    border-radius: 0;
+/* ATC brand — zoom-safe, no card chrome around logo */
+.sidebar-brand.atc-sidebar-brand {
+    padding: 1.15rem 1rem 1.1rem;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: nowrap;
     background: transparent;
-    box-shadow: none;
+    min-height: 4.25rem;
+    box-sizing: border-box;
+    overflow: visible;
+}
+.atc-sidebar-brand .brand-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+}
+.atc-sidebar-brand .atc-brand-logo {
+    width: auto !important;
+    height: auto !important;
+    max-width: 88px;
+    max-height: 52px;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none;
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    overflow: visible;
+    overflow: visible !important;
+    flex-shrink: 0;
+    transform: none !important;
 }
 .atc-sidebar-brand .atc-brand-logo img {
-    width: auto;
-    height: auto;
-    max-width: 96px;
-    max-height: 48px;
+    width: auto !important;
+    height: auto !important;
+    max-width: 88px;
+    max-height: 52px;
     object-fit: contain;
-    padding: 0;
+    padding: 0 !important;
+    margin: 0;
     display: block;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+.atc-sidebar-brand:hover .atc-brand-logo {
+    transform: none !important;
 }
 .atc-sidebar-brand .atc-brand-logo.is-fallback {
-    width: 42px;
-    height: 42px;
+    width: 42px !important;
+    height: 42px !important;
     max-width: 42px;
-    border-radius: 10px;
-    overflow: hidden;
+    border-radius: 10px !important;
+    overflow: hidden !important;
 }
 .atc-sidebar-brand .atc-logo-fallback {
     display: none;
@@ -249,6 +279,7 @@ if ($_sidebarInitials === '') {
     font-weight: 800;
     letter-spacing: .02em;
     color: #fff;
+    -webkit-text-fill-color: #fff;
     background: linear-gradient(135deg, #4361ee, #7c3aed);
     border-radius: 10px;
 }
@@ -256,29 +287,71 @@ if ($_sidebarInitials === '') {
     display: flex;
 }
 .atc-sidebar-brand .brand-info h2 {
-    font-size: .95rem;
-    max-width: 150px;
-    white-space: nowrap;
+    font-size: clamp(0.82rem, 1.6vw, 0.98rem);
+    max-width: none;
+    width: 100%;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
 }
-/* Beat .sidebar-brand .brand-info span muted color */
+.atc-brand-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.4rem;
+}
+.sidebar-brand.atc-sidebar-brand .brand-info .atc-brand-role {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
 .sidebar-brand.atc-sidebar-brand .brand-info .atc-code-pill {
-    display: inline-block;
-    margin-left: .35rem;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0;
     background: linear-gradient(135deg, #4361ee, #7c3aed);
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
-    font-size: .68rem;
+    font-size: 0.65rem;
     font-weight: 800;
-    padding: .15rem .5rem;
+    padding: 0.18rem 0.5rem;
     border-radius: 99px;
-    letter-spacing: .03em;
-    vertical-align: middle;
+    letter-spacing: 0.02em;
     text-transform: none;
-    line-height: 1.2;
+    line-height: 1.15;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
-.sidebar.collapsed .atc-sidebar-brand .brand-info { display: none; }
+.sidebar.collapsed .atc-sidebar-brand {
+    justify-content: center;
+    padding: 1rem 0.5rem;
+}
+.sidebar.collapsed .atc-sidebar-brand .brand-info {
+    display: none;
+}
+.sidebar.collapsed .atc-sidebar-brand .atc-brand-logo img {
+    max-width: 40px;
+    max-height: 40px;
+}
+
+/* Zoom / narrow sidebar: keep brand readable */
+@media (max-width: 1100px) {
+    .sidebar-brand.atc-sidebar-brand {
+        padding: 1rem 0.85rem;
+    }
+    .atc-sidebar-brand .atc-brand-logo img {
+        max-width: 72px;
+        max-height: 44px;
+    }
+}
 </style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {

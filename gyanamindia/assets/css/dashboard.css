@@ -36,6 +36,8 @@
     align-items: center;
     gap: 0.85rem;
     background: linear-gradient(180deg, rgba(99, 102, 241, 0.02), transparent);
+    flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 .sidebar-brand .brand-logo {
