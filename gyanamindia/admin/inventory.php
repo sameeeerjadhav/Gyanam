@@ -43,7 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $name = trim($_POST['item_name'] ?? '');
                 $cat  = $_POST['category'] ?? 'Books';
                 $unit = trim($_POST['unit'] ?? 'pcs');
-                $cost = floatval($_POST['cost'] ?? 0) ?: null;
                 $min  = max(0, intval($_POST['min_stock_level'] ?? 10));
                 $desc = trim($_POST['description'] ?? '');
                 if (!$name) { echo json_encode(['success'=>false,'message'=>'Item name is required']); exit; }
@@ -51,8 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $dup = $pdo->prepare("SELECT id FROM inventory_items WHERE item_name = ?");
                 $dup->execute([$name]);
                 if ($dup->fetch()) { echo json_encode(['success'=>false,'message'=>'Item with this name already exists']); exit; }
-                $stmt = $pdo->prepare("INSERT INTO inventory_items (item_name,category,unit,cost,min_stock_level,description) VALUES (?,?,?,?,?,?)");
-                $stmt->execute([$name, $cat, $unit, $cost, $min, $desc]);
+                $stmt = $pdo->prepare("INSERT INTO inventory_items (item_name,category,unit,cost,min_stock_level,description) VALUES (?,?,?,NULL,?,?)");
+                $stmt->execute([$name, $cat, $unit, $min, $desc]);
                 echo json_encode(['success'=>true,'message'=>'Item added successfully','id'=>$pdo->lastInsertId()]);
                 exit;
 
@@ -61,37 +60,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $name = trim($_POST['item_name'] ?? '');
                 $cat  = $_POST['category'] ?? 'Books';
                 $unit = trim($_POST['unit'] ?? 'pcs');
-                $cost = floatval($_POST['cost'] ?? 0) ?: null;
                 $min  = max(0, intval($_POST['min_stock_level'] ?? 10));
                 $desc = trim($_POST['description'] ?? '');
                 $status = $_POST['status'] ?? 'Active';
                 if (!$name || !$id) { echo json_encode(['success'=>false,'message'=>'Invalid data']); exit; }
-                $stmt = $pdo->prepare("UPDATE inventory_items SET item_name=?,category=?,unit=?,cost=?,min_stock_level=?,description=?,status=? WHERE id=?");
-                $stmt->execute([$name, $cat, $unit, $cost, $min, $desc, $status, $id]);
+                $stmt = $pdo->prepare("UPDATE inventory_items SET item_name=?,category=?,unit=?,min_stock_level=?,description=?,status=? WHERE id=?");
+                $stmt->execute([$name, $cat, $unit, $min, $desc, $status, $id]);
                 echo json_encode(['success'=>true,'message'=>'Item updated']);
                 exit;
 
             case 'stock_in':
                 $itemId       = intval($_POST['item_id']);
                 $qty          = intval($_POST['quantity']);
+                $rate         = floatval($_POST['cost'] ?? 0);
                 $ref          = trim($_POST['reference_no'] ?? '');
                 $supplier     = trim($_POST['supplier'] ?? '');
                 $notes        = trim($_POST['notes'] ?? '');
                 $purchaseDate = trim($_POST['purchase_date'] ?? '') ?: null;
                 if (!$itemId || $qty <= 0) { echo json_encode(['success'=>false,'message'=>'Invalid item or quantity']); exit; }
-                // Read cost from item record
-                $itemRow = $pdo->prepare("SELECT current_stock, cost FROM inventory_items WHERE id = ?");
+                if ($rate <= 0) { echo json_encode(['success'=>false,'message'=>'Cost per item is required for stock in']); exit; }
+                $itemRow = $pdo->prepare("SELECT current_stock FROM inventory_items WHERE id = ?");
                 $itemRow->execute([$itemId]);
                 $itemData = $itemRow->fetch(PDO::FETCH_ASSOC);
-                $rate  = floatval($itemData['cost'] ?? 0);
-                $total = $rate > 0 ? round($rate * $qty, 2) : null;
+                if (!$itemData) { echo json_encode(['success'=>false,'message'=>'Item not found']); exit; }
+                $total = round($rate * $qty, 2);
                 $pdo->beginTransaction();
-                $pdo->prepare("UPDATE inventory_items SET current_stock = current_stock + ? WHERE id = ?")->execute([$qty, $itemId]);
+                // Update stock + last known unit cost from this stock-in
+                $pdo->prepare("UPDATE inventory_items SET current_stock = current_stock + ?, cost = ? WHERE id = ?")
+                    ->execute([$qty, $rate, $itemId]);
                 $newBal = intval($itemData['current_stock']) + $qty;
                 $pdo->prepare("INSERT INTO inventory_transactions (item_id,type,quantity,rate_per_item,total_amount,running_balance,reference_no,supplier,purchase_date,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
-                    ->execute([$itemId, 'Stock In', $qty, $rate ?: null, $total, $newBal, $ref ?: null, $supplier ?: null, $purchaseDate, $notes ?: null, $_SESSION['user_id'] ?? null]);
+                    ->execute([$itemId, 'Stock In', $qty, $rate, $total, $newBal, $ref ?: null, $supplier ?: null, $purchaseDate, $notes ?: null, $_SESSION['user_id'] ?? null]);
                 $pdo->commit();
-                $totalStr = $total ? ' | Total: ₹' . number_format($total, 2) : '';
+                $totalStr = ' | Total: ₹' . number_format($total, 2);
                 echo json_encode(['success'=>true,'message'=>"$qty units added. New balance: $newBal$totalStr",'new_stock'=>$newBal]);
                 exit;
 
@@ -340,6 +341,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
                 <td><span class="stock-badge <?= $stockClass ?>"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span> <?= $stockLabel ?></span></td>
                 <td>
                     <div style="display:flex;gap:.3rem">
+                        <button class="inv-act" onclick='openEditItem(<?= json_encode([
+                            "id" => (int)$item["id"],
+                            "item_name" => $item["item_name"],
+                            "category" => $item["category"],
+                            "unit" => $item["unit"],
+                            "min_stock_level" => (int)$item["min_stock_level"],
+                            "description" => $item["description"] ?? "",
+                            "status" => $item["status"] ?? "Active",
+                        ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>)' title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                         <button class="inv-act" onclick="openStockInFor(<?= $item['id'] ?>,'<?= e($item['item_name']) ?>')" title="Stock In"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
                         <button class="inv-act" onclick="openAdjustment(<?= $item['id'] ?>,'<?= e($item['item_name']) ?>',<?= $item['current_stock'] ?>)" title="Adjust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
                         <button class="inv-act" onclick="viewHistory(<?= $item['id'] ?>,'<?= e($item['item_name']) ?>')" title="History"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
@@ -396,15 +406,37 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
             <div class="inv-field"><label>Category *</label><select id="ai_cat"><option>Books</option><option>T-Shirts</option><option>Stationery</option><option>Other</option></select></div>
             <div class="inv-field"><label>Unit</label><input type="text" id="ai_unit" value="pcs" placeholder="pcs, sets, boxes"></div>
         </div>
-        <div class="inv-field-row">
-            <div class="inv-field"><label>Cost per Item (₹)</label><input type="number" id="ai_cost" min="0" step="0.01" placeholder="e.g. 120.00"></div>
-            <div class="inv-field"><label>Min Stock Level (alert threshold)</label><input type="number" id="ai_min" value="10" min="0"></div>
-        </div>
+        <div class="inv-field"><label>Min Stock Level (alert threshold) *</label><input type="number" id="ai_min" value="10" min="0"></div>
         <div class="inv-field"><label>Description</label><textarea id="ai_desc" rows="2" placeholder="Optional description..."></textarea></div>
+        <p style="margin:0;font-size:.75rem;color:var(--text-3);font-weight:500">Cost per item is entered later when you do <strong>Stock In</strong>.</p>
     </div>
     <div class="inv-modal-footer">
         <button class="btn-inv outline" onclick="closeModal('addItemModal')">Cancel</button>
         <button class="btn-inv primary" onclick="addItem()">Add Item</button>
+    </div>
+</div></div>
+
+<!-- Edit Item Modal -->
+<div class="inv-modal-overlay" id="editItemModal">
+<div class="inv-modal">
+    <div class="inv-modal-header"><h3>✏️ Edit Item</h3><button class="inv-modal-close" onclick="closeModal('editItemModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="inv-modal-body">
+        <input type="hidden" id="ei_id">
+        <div class="inv-field"><label>Item Name *</label><input type="text" id="ei_name"></div>
+        <div class="inv-field-row">
+            <div class="inv-field"><label>Category *</label><select id="ei_cat"><option>Books</option><option>T-Shirts</option><option>Stationery</option><option>Other</option></select></div>
+            <div class="inv-field"><label>Unit</label><input type="text" id="ei_unit" placeholder="pcs, sets, boxes"></div>
+        </div>
+        <div class="inv-field-row">
+            <div class="inv-field"><label>Min Stock Level (alert threshold) *</label><input type="number" id="ei_min" min="0"></div>
+            <div class="inv-field"><label>Status</label><select id="ei_status"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+        </div>
+        <div class="inv-field"><label>Description</label><textarea id="ei_desc" rows="2" placeholder="Optional description..."></textarea></div>
+        <p style="margin:0;font-size:.75rem;color:var(--text-3);font-weight:500">Unit cost is updated when you receive stock via <strong>Stock In</strong>.</p>
+    </div>
+    <div class="inv-modal-footer">
+        <button class="btn-inv outline" onclick="closeModal('editItemModal')">Cancel</button>
+        <button class="btn-inv primary" onclick="saveEditItem()">Save Changes</button>
     </div>
 </div></div>
 
@@ -418,14 +450,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
                 <option value="" data-cost="0">— Select Item —</option>
                 <?php foreach ($allItems as $i): ?>
                 <option value="<?= $i['id'] ?>" data-cost="<?= floatval($i['cost'] ?? 0) ?>">
-                    <?= e($i['item_name']) ?> (<?= e($i['category']) ?>) — Stock: <?= $i['current_stock'] ?><?= $i['cost'] ? ' — Cost: ₹'.number_format($i['cost'],2) : '' ?>
+                    <?= e($i['item_name']) ?> (<?= e($i['category']) ?>) — Stock: <?= $i['current_stock'] ?><?= $i['cost'] ? ' — Last cost: ₹'.number_format($i['cost'],2) : '' ?>
                 </option>
                 <?php endforeach; ?>
             </select>
         </div>
         <div class="inv-field-row">
             <div class="inv-field"><label>Quantity *</label><input type="number" id="si_qty" min="1" placeholder="e.g. 50" oninput="calcStockTotal()"></div>
-            <div class="inv-field"><label>Item Cost (₹)</label><input type="text" id="si_rate_display" readonly placeholder="Auto from item" style="background:#f3f4f6;font-family:var(--mono);font-weight:700;color:#059669;cursor:not-allowed;"></div>
+            <div class="inv-field"><label>Cost per Item (₹) *</label><input type="number" id="si_cost" min="0" step="0.01" placeholder="e.g. 120.00" oninput="calcStockTotal()"></div>
         </div>
         <div class="inv-field">
             <label>Total Amount (₹) <span style="font-size:.72rem;color:var(--text-3);font-weight:500">(Cost × Qty)</span></label>
@@ -492,7 +524,36 @@ function post(data){
 function addItem(){
     const name=document.getElementById('ai_name').value.trim();
     if(!name){toast('Item name is required','error');return;}
-    post({action:'add_item',item_name:name,category:document.getElementById('ai_cat').value,unit:document.getElementById('ai_unit').value.trim()||'pcs',cost:document.getElementById('ai_cost').value||0,min_stock_level:document.getElementById('ai_min').value,description:document.getElementById('ai_desc').value}).then(r=>{
+    post({action:'add_item',item_name:name,category:document.getElementById('ai_cat').value,unit:document.getElementById('ai_unit').value.trim()||'pcs',min_stock_level:document.getElementById('ai_min').value,description:document.getElementById('ai_desc').value}).then(r=>{
+        if(r.success){toast(r.message);setTimeout(()=>location.reload(),1000);}else toast(r.message,'error');
+    });
+}
+
+function openEditItem(item){
+    document.getElementById('ei_id').value=item.id;
+    document.getElementById('ei_name').value=item.item_name||'';
+    document.getElementById('ei_cat').value=item.category||'Books';
+    document.getElementById('ei_unit').value=item.unit||'pcs';
+    document.getElementById('ei_min').value=item.min_stock_level??10;
+    document.getElementById('ei_status').value=item.status||'Active';
+    document.getElementById('ei_desc').value=item.description||'';
+    openModal('editItemModal');
+}
+
+function saveEditItem(){
+    const id=document.getElementById('ei_id').value;
+    const name=document.getElementById('ei_name').value.trim();
+    if(!name){toast('Item name is required','error');return;}
+    post({
+        action:'edit_item',
+        id,
+        item_name:name,
+        category:document.getElementById('ei_cat').value,
+        unit:document.getElementById('ei_unit').value.trim()||'pcs',
+        min_stock_level:document.getElementById('ei_min').value,
+        status:document.getElementById('ei_status').value,
+        description:document.getElementById('ei_desc').value
+    }).then(r=>{
         if(r.success){toast(r.message);setTimeout(()=>location.reload(),1000);}else toast(r.message,'error');
     });
 }
@@ -500,10 +561,12 @@ function addItem(){
 function stockIn(){
     const itemId=document.getElementById('si_item').value;
     const qty=parseInt(document.getElementById('si_qty').value)||0;
+    const cost=parseFloat(document.getElementById('si_cost').value)||0;
     const purchaseDate=document.getElementById('si_purchase_date').value;
     if(!itemId){toast('Please select an item','error');return;}
     if(qty<=0){toast('Quantity must be greater than 0','error');return;}
-    post({action:'stock_in',item_id:itemId,quantity:qty,
+    if(cost<=0){toast('Cost per item is required','error');return;}
+    post({action:'stock_in',item_id:itemId,quantity:qty,cost:cost,
           supplier:document.getElementById('si_supplier').value,
           reference_no:document.getElementById('si_ref').value,
           purchase_date:purchaseDate,
@@ -516,15 +579,14 @@ function onStockItemChange(){
     document.getElementById('si_qty').value='';
     document.getElementById('si_total').value='';
     const sel=document.getElementById('si_item');
-    const cost=parseFloat(sel.options[sel.selectedIndex]?.dataset?.cost||0);
-    document.getElementById('si_rate_display').value=cost>0?'₹ '+cost.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+    const lastCost=parseFloat(sel.options[sel.selectedIndex]?.dataset?.cost||0);
+    document.getElementById('si_cost').value=lastCost>0?lastCost:'';
     calcStockTotal();
 }
 
 function calcStockTotal(){
     const qty=parseFloat(document.getElementById('si_qty').value)||0;
-    const sel=document.getElementById('si_item');
-    const cost=parseFloat(sel.options[sel.selectedIndex]?.dataset?.cost||0);
+    const cost=parseFloat(document.getElementById('si_cost').value)||0;
     const totalEl=document.getElementById('si_total');
     if(qty>0&&cost>0){
         const total=(qty*cost).toFixed(2);
