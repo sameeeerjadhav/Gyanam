@@ -192,6 +192,10 @@ function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
     display:flex;align-items:center;justify-content:center;
     font-size:1.5rem;font-weight:800;color:#fff;
     box-shadow:0 4px 16px rgba(67,97,238,.25);
+    overflow:hidden;
+}
+.cf-avatar img {
+    width:100%;height:100%;object-fit:cover;display:block;
 }
 .cf-student-name { font-size:1.15rem;font-weight:800;color:#1e3a8a; }
 .cf-student-meta { font-size:.82rem;color:#3730a3;font-weight:600;margin-top:.15rem; }
@@ -362,7 +366,13 @@ function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
         <!-- Student Banner -->
         <div class="cf-banner">
-            <div class="cf-avatar"><?= strtoupper(mb_substr($stu['first_name'], 0, 1)) ?></div>
+            <?php if (!empty($stu['photo'])): ?>
+                <div class="cf-avatar">
+                    <img src="../<?= e($stu['photo']) ?>" alt="<?= e($fullName) ?>" onerror="this.remove();this.parentElement.textContent='<?= e(strtoupper(mb_substr($stu['first_name'] ?? '?', 0, 1))) ?>'">
+                </div>
+            <?php else: ?>
+                <div class="cf-avatar"><?= strtoupper(mb_substr($stu['first_name'] ?? '?', 0, 1)) ?></div>
+            <?php endif; ?>
             <div>
                 <div class="cf-student-name"><?= e($fullName) ?></div>
                 <div class="cf-student-meta">Roll No: <?= e($stu['roll_no']) ?> · <?= e($stu['course']) ?> · <?= e($stu['mobile'] ?? '') ?></div>
