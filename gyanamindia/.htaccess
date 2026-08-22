@@ -12,13 +12,21 @@ Options -Indexes
 # Set default charset
 AddDefaultCharset UTF-8
 
-# PHP settings for Hostinger
+# Allow large training video uploads (up to ~1GB)
+# Note: Hostinger PHP-FPM also reads .user.ini — keep both in sync.
 <IfModule mod_php.c>
-    php_value upload_max_filesize 64M
-    php_value post_max_size 64M
-    php_value max_execution_time 300
-    php_value max_input_time 300
-    php_value memory_limit 256M
+    php_value upload_max_filesize 1024M
+    php_value post_max_size 1100M
+    php_value max_execution_time 3600
+    php_value max_input_time 3600
+    php_value memory_limit 512M
+</IfModule>
+<IfModule lsapi_module>
+    php_value upload_max_filesize 1024M
+    php_value post_max_size 1100M
+    php_value max_execution_time 3600
+    php_value max_input_time 3600
+    php_value memory_limit 512M
 </IfModule>
 
 # Protect config directory
@@ -50,6 +58,7 @@ AddDefaultCharset UTF-8
 </IfModule>
 
 # Gzip / deflate compression (faster page weight)
+# Do NOT deflate large video/mp4 responses
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml
     AddOutputFilterByType DEFLATE application/javascript application/x-javascript application/json

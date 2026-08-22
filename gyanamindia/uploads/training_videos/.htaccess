@@ -1,0 +1,5 @@
+# Allow video downloads/streaming; block script execution
+Options -Indexes
+<FilesMatch "\.(php|phtml|php3|php4|php5|phar|cgi|pl|py)$">
+    Require all denied
+</FilesMatch>

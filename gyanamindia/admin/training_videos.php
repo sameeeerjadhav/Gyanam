@@ -8,9 +8,52 @@ $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 $msg = '';
 
+$maxVideoBytes = 1024 * 1024 * 1024; // 1 GB
+$uploadDir = __DIR__ . '/../uploads/training_videos/';
+if (!is_dir($uploadDir)) {
+    @mkdir($uploadDir, 0755, true);
+}
+
+/**
+ * Human-readable PHP upload error.
+ */
+function trainingUploadErrorMessage(int $code, int $maxBytes): string {
+    $maxMb = (int)round($maxBytes / 1048576);
+    return match ($code) {
+        UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE =>
+            "File exceeds server upload limit. Need upload_max_filesize/post_max_size ≥ {$maxMb}MB. Check Hostinger PHP settings / .user.ini.",
+        UPLOAD_ERR_PARTIAL => 'Upload was interrupted. Please try again on a stable connection.',
+        UPLOAD_ERR_NO_FILE => 'No file was received.',
+        UPLOAD_ERR_NO_TMP_DIR => 'Server temp folder missing. Contact hosting support.',
+        UPLOAD_ERR_CANT_WRITE => 'Server disk write failed — check Hostinger storage space.',
+        UPLOAD_ERR_EXTENSION => 'Upload blocked by a server extension.',
+        default => "Upload failed (error code {$code}).",
+    };
+}
+
+// Oversized POST: PHP empties $_POST/$_FILES when post_max_size is exceeded
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && empty($_POST)
+    && empty($_FILES)
+    && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0
+) {
+    $clMb = round(((int)$_SERVER['CONTENT_LENGTH']) / 1048576, 1);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => false,
+        'message' => "Upload rejected: request was {$clMb}MB but server post_max_size is too small. Deploy .user.ini (1024M) and wait a few minutes, or use a YouTube link.",
+    ]);
+    exit;
+}
+
 // AJAX upload handler
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
     header('Content-Type: application/json');
+    // Long-running move for large files (upload_max_filesize itself cannot be raised here)
+    @set_time_limit(3600);
+    @ini_set('max_execution_time', '3600');
+
     $action = $_POST['action'] ?? '';
     try {
         if ($action === 'add_video') {
@@ -19,18 +62,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
             $url   = trim($_POST['video_url'] ?? '');
             $desc  = trim($_POST['description'] ?? '');
             $path  = null;
-            if ($type === 'upload' && isset($_FILES['video_file']) && $_FILES['video_file']['error'] === 0) {
+
+            if ($type === 'upload') {
+                if (!isset($_FILES['video_file'])) {
+                    echo json_encode(['success' => false, 'message' => 'No video file received. If the bar hit 100%, the server upload limit is still too low — confirm .user.ini is live.']);
+                    exit;
+                }
+                $ferr = (int)$_FILES['video_file']['error'];
+                if ($ferr !== UPLOAD_ERR_OK) {
+                    echo json_encode(['success' => false, 'message' => trainingUploadErrorMessage($ferr, $maxVideoBytes)]);
+                    exit;
+                }
+                $size = (int)$_FILES['video_file']['size'];
+                if ($size <= 0) {
+                    echo json_encode(['success' => false, 'message' => 'Empty file.']);
+                    exit;
+                }
+                if ($size > $maxVideoBytes) {
+                    echo json_encode(['success' => false, 'message' => 'File exceeds 1 GB limit. Compress the video or use YouTube.']);
+                    exit;
+                }
                 $ext = strtolower(pathinfo($_FILES['video_file']['name'], PATHINFO_EXTENSION));
-                if (in_array($ext, ['mp4','webm','mov'])) {
-                    $fname = 'vid_' . time() . '_' . mt_rand(1000,9999) . '.' . $ext;
-                    $dest  = __DIR__ . '/../uploads/training_videos/' . $fname;
-                    move_uploaded_file($_FILES['video_file']['tmp_name'], $dest);
-                    $path = 'uploads/training_videos/' . $fname;
-                } else { echo json_encode(['success'=>false,'message'=>'Invalid file type']); exit; }
+                if (!in_array($ext, ['mp4', 'webm', 'mov'], true)) {
+                    echo json_encode(['success' => false, 'message' => 'Invalid file type. Use MP4, WebM, or MOV.']);
+                    exit;
+                }
+                $fname = 'vid_' . time() . '_' . mt_rand(1000, 9999) . '.' . $ext;
+                $dest  = $uploadDir . $fname;
+                if (!move_uploaded_file($_FILES['video_file']['tmp_name'], $dest)) {
+                    echo json_encode(['success' => false, 'message' => 'Could not save file. Check uploads/training_videos permissions and disk space.']);
+                    exit;
+                }
+                $path = 'uploads/training_videos/' . $fname;
             }
-            if (!$title) { echo json_encode(['success'=>false,'message'=>'Title required']); exit; }
+
+            if (!$title) {
+                echo json_encode(['success' => false, 'message' => 'Title required']);
+                exit;
+            }
+            if ($type === 'upload' && !$path) {
+                echo json_encode(['success' => false, 'message' => 'Upload failed — no file saved.']);
+                exit;
+            }
+            if (in_array($type, ['youtube', 'link'], true) && $url === '') {
+                echo json_encode(['success' => false, 'message' => 'Video URL is required for this type.']);
+                exit;
+            }
+
             $pdo->prepare("INSERT INTO training_videos (title,description,video_type,video_url,video_path,uploaded_by) VALUES (?,?,?,?,?,?)")
-                ->execute([$title,$desc,$type,$url?:null,$path,getUserId()]);
+                ->execute([$title, $desc, $type, $url ?: null, $path, getUserId()]);
             $vid = $pdo->lastInsertId();
             // Auto-assign if ATCs selected
             $atcs = $_POST['assign_atcs'] ?? [];
@@ -42,28 +122,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
                     $stmt->execute([$vid, $a === 'all' ? null : (int)$a, $start, $end, getUserId()]);
                 }
             }
-            echo json_encode(['success'=>true,'message'=>'Video added & assigned!']); exit;
+            echo json_encode(['success' => true, 'message' => 'Video added & assigned!']);
+            exit;
         }
         if ($action === 'delete_video') {
-            $pdo->prepare("DELETE FROM training_videos WHERE id=?")->execute([(int)$_POST['video_id']]);
-            echo json_encode(['success'=>true,'message'=>'Deleted']); exit;
+            $vidId = (int)$_POST['video_id'];
+            $row = $pdo->prepare("SELECT video_path FROM training_videos WHERE id=?");
+            $row->execute([$vidId]);
+            $vp = $row->fetchColumn();
+            if ($vp) {
+                $abs = __DIR__ . '/../' . ltrim(str_replace(['..', '\\'], '', (string)$vp), '/');
+                if (is_file($abs)) {
+                    @unlink($abs);
+                }
+            }
+            $pdo->prepare("DELETE FROM training_videos WHERE id=?")->execute([$vidId]);
+            echo json_encode(['success' => true, 'message' => 'Deleted']);
+            exit;
         }
         if ($action === 'assign') {
-            $vid=$_POST['video_id']; $atcId=$_POST['atc_id']==='all'?null:(int)$_POST['atc_id'];
+            $vid = $_POST['video_id'];
+            $atcId = $_POST['atc_id'] === 'all' ? null : (int)$_POST['atc_id'];
             $pdo->prepare("INSERT INTO video_assignments (video_id,atc_id,access_start,access_end,assigned_by) VALUES (?,?,?,?,?)")
-                ->execute([$vid,$atcId,$_POST['access_start'],$_POST['access_end'],getUserId()]);
-            echo json_encode(['success'=>true,'message'=>'Assigned!']); exit;
+                ->execute([$vid, $atcId, $_POST['access_start'], $_POST['access_end'], getUserId()]);
+            echo json_encode(['success' => true, 'message' => 'Assigned!']);
+            exit;
         }
         if ($action === 'delete_assignment') {
             $pdo->prepare("DELETE FROM video_assignments WHERE id=?")->execute([(int)$_POST['assignment_id']]);
-            echo json_encode(['success'=>true,'message'=>'Removed']); exit;
+            echo json_encode(['success' => true, 'message' => 'Removed']);
+            exit;
         }
         if ($action === 'extend') {
-            $pdo->prepare("UPDATE video_assignments SET access_end=? WHERE id=?")->execute([$_POST['new_end'],(int)$_POST['assignment_id']]);
-            echo json_encode(['success'=>true,'message'=>'Extended!']); exit;
+            $pdo->prepare("UPDATE video_assignments SET access_end=? WHERE id=?")->execute([$_POST['new_end'], (int)$_POST['assignment_id']]);
+            echo json_encode(['success' => true, 'message' => 'Extended!']);
+            exit;
         }
-    } catch(Exception $e) { echo json_encode(['success'=>false,'message'=>$e->getMessage()]); exit; }
-    echo json_encode(['success'=>false,'message'=>'Unknown action']); exit;
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        exit;
+    }
+    echo json_encode(['success' => false, 'message' => 'Unknown action']);
+    exit;
 }
 
 $videos = $pdo->query("SELECT v.*, (SELECT COUNT(*) FROM video_assignments WHERE video_id=v.id) AS assign_count FROM training_videos v ORDER BY v.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
@@ -71,6 +171,24 @@ $assignments = $pdo->query("SELECT va.*, tv.title AS video_title, atc.name AS at
 $atcList = $pdo->query("SELECT id,name FROM atc_centers WHERE status='Active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 $totalV = count($videos); $totalA = count($assignments);
 $activeA = count(array_filter($assignments, fn($a) => $a['access_start'] <= date('Y-m-d') && $a['access_end'] >= date('Y-m-d')));
+
+function phpIniSizeToBytes(string $val): int {
+    $val = trim($val);
+    if ($val === '') return 0;
+    $unit = strtolower(substr($val, -1));
+    $num = (float)$val;
+    return (int) match ($unit) {
+        'g' => $num * 1073741824,
+        'm' => $num * 1048576,
+        'k' => $num * 1024,
+        default => (int)$num,
+    };
+}
+$phpUploadBytes = phpIniSizeToBytes((string)ini_get('upload_max_filesize'));
+$phpPostBytes   = phpIniSizeToBytes((string)ini_get('post_max_size'));
+$phpUploadMb    = (int)floor($phpUploadBytes / 1048576);
+$phpPostMb      = (int)floor($phpPostBytes / 1048576);
+$serverAllows1gb = ($phpUploadBytes >= $maxVideoBytes && $phpPostBytes >= $maxVideoBytes);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -242,6 +360,18 @@ $activeA = count(array_filter($assignments, fn($a) => $a['access_start'] <= date
     </div>
 </div>
 
+<?php if (!$serverAllows1gb): ?>
+<div style="margin:0 0 1rem;padding:.85rem 1.1rem;border-radius:12px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:.85rem;font-weight:600;line-height:1.45">
+    Server PHP upload limit is currently <strong><?= (int)$phpUploadMb ?>MB</strong> (post <?= (int)$phpPostMb ?>MB).
+    After deploying <code>.user.ini</code>, wait 2–5 minutes then refresh this page — it should show ~1024MB.
+    Until then, large uploads will hit 100% and fail. Prefer <strong>YouTube</strong> for big videos to save Hostinger disk space.
+</div>
+<?php else: ?>
+<div style="margin:0 0 1rem;padding:.85rem 1.1rem;border-radius:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;font-size:.85rem;font-weight:600;line-height:1.45">
+    Upload limit OK (<?= (int)$phpUploadMb ?>MB). Tip: use <strong>YouTube / External Link</strong> for large training videos — each 1GB file uses Hostinger disk and bandwidth when trainees watch.
+</div>
+<?php endif; ?>
+
 <!-- KPIs -->
 <div class="kpi-row">
     <div class="kpi c-brand">
@@ -279,7 +409,11 @@ $activeA = count(array_filter($assignments, fn($a) => $a['access_start'] <= date
         </div>
     </div>
     <div id="fUrl"><label>Video URL</label><input type="url" name="video_url" id="vUrl" placeholder="https://youtube.com/watch?v=..."></div>
-    <div id="fUpload" style="display:none"><label>Video File (MP4/WebM, max 500MB)</label><input type="file" name="video_file" id="vFile" accept=".mp4,.webm,.mov"></div>
+    <div id="fUpload" style="display:none">
+        <label>Video File (MP4/WebM/MOV, max 1 GB)</label>
+        <input type="file" name="video_file" id="vFile" accept=".mp4,.webm,.mov,video/mp4,video/webm,video/quicktime">
+        <p style="margin:.4rem 0 0;font-size:.75rem;color:var(--text-4);font-weight:500">Large files take time. Prefer YouTube to save server storage (50GB plan).</p>
+    </div>
     <div class="upload-progress" id="uploadProgress">
         <div class="prog-outer"><div class="prog-inner" id="progBar"></div></div>
         <div class="prog-meta"><span class="prog-status" id="progStatus">Uploading...</span><span class="prog-text" id="progText">0%</span></div>
@@ -400,6 +534,18 @@ function toggleChip(el){
 document.getElementById('addVideoForm').addEventListener('submit', function(e){
     e.preventDefault();
     const btn=document.getElementById('addBtn');
+    const isUpload=document.getElementById('vType').value==='upload';
+    const MAX_BYTES=1024*1024*1024;
+    if(isUpload){
+        const f=document.getElementById('vFile').files[0];
+        if(!f){toast('Please choose a video file',false);return}
+        if(f.size>MAX_BYTES){toast('File exceeds 1 GB. Compress it or use a YouTube link.',false);return}
+        const serverMb=<?= (int)$phpUploadMb ?>;
+        if(serverMb>0 && f.size>serverMb*1048576){
+            toast('File is '+ (f.size/1048576).toFixed(0) +'MB but server limit is '+serverMb+'MB. Wait for .user.ini to apply, or use YouTube.',false);
+            return;
+        }
+    }
     const fd=new FormData(this);
     fd.append('ajax','1'); fd.append('action','add_video');
     document.querySelectorAll('.atc-chip.selected').forEach(c=>fd.append('assign_atcs[]',c.dataset.id));
@@ -409,10 +555,10 @@ document.getElementById('addVideoForm').addEventListener('submit', function(e){
     const progBar=document.getElementById('progBar');
     const progText=document.getElementById('progText');
     const progStatus=document.getElementById('progStatus');
-    const isUpload=document.getElementById('vType').value==='upload';
 
     if(isUpload){progWrap.style.display='block';progBar.style.width='0';progText.textContent='0%';progStatus.textContent='Uploading...'}
     btn.disabled=true; btn.textContent='⏳ Uploading...';
+    xhr.timeout=3600000; // 60 minutes for large files
 
     xhr.upload.addEventListener('progress',function(e){
         if(e.lengthComputable){
@@ -427,10 +573,15 @@ document.getElementById('addVideoForm').addEventListener('submit', function(e){
     });
     xhr.onload=function(){
         btn.disabled=false;btn.textContent='🎬 Add & Assign Video';progWrap.style.display='none';
+        if(xhr.status===413){toast('Server rejected file (413). Increase upload limits in Hostinger.',false);return}
         try{const r=JSON.parse(xhr.responseText);toast(r.message,r.success);if(r.success)setTimeout(()=>location.reload(),800)}
-        catch(e){toast('Upload failed',false)}
+        catch(err){
+            const snippet=(xhr.responseText||'').replace(/<[^>]+>/g,' ').trim().slice(0,160);
+            toast(snippet||'Upload failed after transfer — usually PHP post_max_size is too small.',false);
+        }
     };
     xhr.onerror=function(){btn.disabled=false;btn.textContent='🎬 Add & Assign Video';progWrap.style.display='none';toast('Network error',false)};
+    xhr.ontimeout=function(){btn.disabled=false;btn.textContent='🎬 Add & Assign Video';progWrap.style.display='none';toast('Upload timed out. Try again or use YouTube.',false)};
     xhr.open('POST','');xhr.send(fd);
 });
 

@@ -27,6 +27,8 @@ gyanamexam/gyanam-backend/vendor/
 # Uploads & user media
 gyanamindia/uploads/**
 !gyanamindia/uploads/.gitkeep
+!gyanamindia/uploads/training_videos/
+!gyanamindia/uploads/training_videos/.htaccess
 **/storage/app/public/**
 !**/storage/app/public/.gitignore
 
