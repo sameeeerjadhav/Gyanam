@@ -381,7 +381,7 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
     <?php endif; ?>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E">
     <style>
         :root {
             --es-brand: #4f46e5;
@@ -549,6 +549,9 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
         }
 
         .es-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
             padding: .5rem 1.1rem;
             font-size: .8rem;
             font-weight: 600;
@@ -560,6 +563,69 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
             font-family: 'Inter', inherit;
             transition: all .2s;
             text-decoration: none
+        }
+
+        .es-tab-icon {
+            width: 14px;
+            height: 14px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            flex-shrink: 0
+        }
+
+        .es-inline-icon {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            flex-shrink: 0
+        }
+
+        .es-exam-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .2rem .6rem;
+            border-radius: 6px;
+            font-size: .72rem;
+            font-weight: 700;
+            background: #eef2ff;
+            color: #4338ca;
+            border: 1px solid #c7d2fe
+        }
+
+        .es-exam-tag svg {
+            width: 12px;
+            height: 12px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            flex-shrink: 0
+        }
+
+        .es-notice {
+            display: flex;
+            align-items: flex-start;
+            gap: .6rem;
+            background: var(--es-amber-lt);
+            border: 1px solid #fde68a;
+            border-radius: 8px;
+            padding: .65rem 1rem;
+            font-size: .8rem;
+            color: #92400e;
+            font-weight: 600;
+            margin-bottom: 1.25rem
+        }
+
+        .es-notice .es-inline-icon {
+            margin-top: .1rem;
+            color: #d97706
         }
 
         .es-tab:hover {
@@ -1138,17 +1204,21 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
                         class="es-tab <?= $statusFilter === 'all' ? 'active' : '' ?>">All<span
                             class="tab-count"><?= $kpiTotal ?></span></a>
                     <a href="?course=<?= urlencode($courseFilter) ?>&status=scheduled"
-                        class="es-tab <?= $statusFilter === 'scheduled' ? 'active' : '' ?>">📅 Scheduled<span
-                            class="tab-count"><?= $kpiScheduled ?></span></a>
+                        class="es-tab <?= $statusFilter === 'scheduled' ? 'active' : '' ?>">
+                        <svg class="es-tab-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        Scheduled<span class="tab-count"><?= $kpiScheduled ?></span></a>
                     <a href="?course=<?= urlencode($courseFilter) ?>&status=unscheduled"
-                        class="es-tab <?= $statusFilter === 'unscheduled' ? 'active' : '' ?>">⏳ Unscheduled<span
-                            class="tab-count"><?= $kpiUnscheduled ?></span></a>
+                        class="es-tab <?= $statusFilter === 'unscheduled' ? 'active' : '' ?>">
+                        <svg class="es-tab-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                        Unscheduled<span class="tab-count"><?= $kpiUnscheduled ?></span></a>
                     <a href="?course=<?= urlencode($courseFilter) ?>&status=passed"
-                        class="es-tab <?= $statusFilter === 'passed' ? 'active' : '' ?>">✅ Passed<span
-                            class="tab-count"><?= $kpiPassed ?></span></a>
+                        class="es-tab <?= $statusFilter === 'passed' ? 'active' : '' ?>">
+                        <svg class="es-tab-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                        Passed<span class="tab-count"><?= $kpiPassed ?></span></a>
                     <a href="?course=<?= urlencode($courseFilter) ?>&status=failed"
-                        class="es-tab <?= $statusFilter === 'failed' ? 'active' : '' ?>">❌ Failed<span
-                            class="tab-count"><?= $kpiFailed ?></span></a>
+                        class="es-tab <?= $statusFilter === 'failed' ? 'active' : '' ?>">
+                        <svg class="es-tab-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        Failed<span class="tab-count"><?= $kpiFailed ?></span></a>
                 </div>
 
                 <!-- Toolbar -->
@@ -1191,9 +1261,9 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
                     <div class="es-bulk-group">
                         <label>Slot:</label>
                         <select class="es-bulk-input" id="bulkSlotSelect" style="width:130px">
-                            <option value="Morning">🌅 Morning</option>
-                            <option value="Afternoon">☀️ Afternoon</option>
-                            <option value="Evening">🌙 Evening</option>
+                            <option value="Morning">Morning</option>
+                            <option value="Afternoon">Afternoon</option>
+                            <option value="Evening">Evening</option>
                         </select>
                         <button class="es-bulk-btn es-bulk-btn-slot" onclick="bulkAssignSlot()">Assign Slot</button>
                     </div>
@@ -1291,8 +1361,9 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
                                             </td>
                                             <td style="font-size:.78rem;max-width:160px">
                                                 <?php if (!empty($stu['exam_name'])): ?>
-                                                    <span style="display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .6rem;border-radius:6px;font-size:.72rem;font-weight:700;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe">
-                                                        📝 <?= htmlspecialchars($stu['exam_name']) ?>
+                                                    <span class="es-exam-tag">
+                                                        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                                                        <?= htmlspecialchars($stu['exam_name']) ?>
                                                     </span>
                                                 <?php else: ?>
                                                     <span style="color:#94a3b8">—</span>
@@ -1430,9 +1501,9 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
                     <div>
                         <label class="es-form-label">Slot</label>
                         <select class="es-form-select" id="schedSlot">
-                            <option value="Morning">🌅 Morning</option>
-                            <option value="Afternoon">☀️ Afternoon</option>
-                            <option value="Evening">🌙 Evening</option>
+                            <option value="Morning">Morning</option>
+                            <option value="Afternoon">Afternoon</option>
+                            <option value="Evening">Evening</option>
                         </select>
                     </div>
                     <div>
@@ -1487,9 +1558,9 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
                 </button>
             </div>
             <div class="es-modal-body">
-                <div
-                    style="background:var(--es-amber-lt);border:1px solid #fde68a;border-radius:8px;padding:.65rem 1rem;font-size:.8rem;color:#92400e;font-weight:600;margin-bottom:1.25rem">
-                    ⚡ This will set the same exam, date, time, slot & hall for all selected students.
+                <div class="es-notice">
+                    <svg class="es-inline-icon" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    <span>This will set the same exam, date, time, slot &amp; hall for all selected students.</span>
                 </div>
                 <?php if (!empty($portalExams)): ?>
                 <div class="es-form-row full">
@@ -1520,9 +1591,9 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
                     <div>
                         <label class="es-form-label">Slot</label>
                         <select class="es-form-select" id="bulkSlot">
-                            <option value="Morning">🌅 Morning</option>
-                            <option value="Afternoon">☀️ Afternoon</option>
-                            <option value="Evening">🌙 Evening</option>
+                            <option value="Morning">Morning</option>
+                            <option value="Afternoon">Afternoon</option>
+                            <option value="Evening">Evening</option>
                         </select>
                     </div>
                     <div>
@@ -1666,7 +1737,7 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
                 const res = await fetch('', { method: 'POST', body: fd });
                 const data = await res.json();
                 if (data.success) {
-                    esToast('✅ ' + data.message);
+                    esToast(data.message);
                     closeScheduleModal();
                     setTimeout(() => location.reload(), 1000);
                 } else {
@@ -1730,7 +1801,7 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
                 const res = await fetch('', { method: 'POST', body: fd });
                 const data = await res.json();
                 if (data.success) {
-                    esToast('✅ ' + data.message);
+                    esToast(data.message);
                     closeBulkModal();
                     setTimeout(() => location.reload(), 1000);
                 } else {
@@ -1753,7 +1824,7 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
             try {
                 const res = await fetch('', { method: 'POST', body: fd });
                 const data = await res.json();
-                esToast(data.success ? '✅ ' + data.message : data.message, data.success ? 'success' : 'error');
+                esToast(data.success ? data.message : data.message, data.success ? 'success' : 'error');
                 if (data.success) setTimeout(() => location.reload(), 1000);
             } catch (e) { esToast('Network error.', 'error'); }
         }
@@ -1773,7 +1844,7 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
             try {
                 const res = await fetch('', { method: 'POST', body: fd });
                 const data = await res.json();
-                esToast(data.success ? '✅ ' + data.message : data.message, data.success ? 'success' : 'error');
+                esToast(data.success ? data.message : data.message, data.success ? 'success' : 'error');
                 if (data.success) setTimeout(() => location.reload(), 1000);
             } catch (e) { esToast('Network error.', 'error'); }
         }
@@ -1787,7 +1858,7 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
             try {
                 const res = await fetch('', { method: 'POST', body: fd });
                 const data = await res.json();
-                esToast(data.success ? '✅ Removed.' : data.message, data.success ? 'success' : 'error');
+                esToast(data.success ? 'Removed.' : data.message, data.success ? 'success' : 'error');
                 if (data.success) setTimeout(() => location.reload(), 800);
             } catch (e) { esToast('Network error.', 'error'); }
         }
@@ -1796,8 +1867,11 @@ $kpiUnscheduled = $kpiTotal - $kpiScheduled;
         function esToast(msg, type = 'success') {
             const t = document.createElement('div');
             const bg = type === 'success' ? 'linear-gradient(135deg,#059669,#047857)' : 'linear-gradient(135deg,#dc2626,#b91c1c)';
-            t.style.cssText = `background:${bg};color:#fff;padding:.85rem 1.35rem;border-radius:12px;font-size:.84rem;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.18);animation:esSlideUp .3s cubic-bezier(.4,0,.2,1);max-width:400px;font-family:'Inter',sans-serif;letter-spacing:-.01em`;
-            t.textContent = msg;
+            const icon = type === 'success'
+                ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg>'
+                : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+            t.style.cssText = `display:flex;align-items:center;gap:.55rem;background:${bg};color:#fff;padding:.85rem 1.35rem;border-radius:12px;font-size:.84rem;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.18);animation:esSlideUp .3s cubic-bezier(.4,0,.2,1);max-width:400px;font-family:'Inter',sans-serif;letter-spacing:-.01em`;
+            t.innerHTML = icon + '<span>' + msg + '</span>';
             document.getElementById('esToastWrap').appendChild(t);
             setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 3000);
             setTimeout(() => t.remove(), 3400);
