@@ -1,6 +1,6 @@
 /**
  * LoginPage - Gyanam Exam Portal student login
- * Split-panel layout with natural logo display (no card wrapper)
+ * Split-panel layout with branded left panel + login form right panel
  */
 
 import AuthenticationModule from '../services/AuthenticationModule.js';
@@ -114,31 +114,23 @@ class LoginPage {
         text-align: center;
       }
 
-      /* Logo — natural display, no card */
       .gep-brand-logo {
-        margin-bottom: 1.75rem;
-        animation: gepLogoEnter 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-        opacity: 0;
-        transform: scale(0.85) translateY(16px);
+        width: 56px; height: 56px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
+        border: 1.5px solid rgba(255,255,255,0.2);
+        border-radius: 16px;
+        display: flex; align-items: center; justify-content: center;
+        backdrop-filter: blur(8px);
+        margin: 0 auto 1.25rem;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
       }
 
       .gep-brand-logo img {
-        width: 180px;
-        height: auto;
-        display: block;
-        margin: 0 auto;
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
         object-fit: contain;
-        filter: drop-shadow(0 8px 32px rgba(99, 102, 241, 0.3));
-        transition: transform 0.4s ease, filter 0.4s ease;
-      }
-
-      .gep-brand-logo:hover img {
-        transform: scale(1.04);
-        filter: drop-shadow(0 12px 40px rgba(99, 102, 241, 0.45));
-      }
-
-      @keyframes gepLogoEnter {
-        to { opacity: 1; transform: scale(1) translateY(0); }
+        display: block;
       }
 
       .gep-brand-name {
@@ -280,11 +272,8 @@ class LoginPage {
         margin-bottom: 1.75rem;
       }
 
-      .gep-mobile-logo img {
-        width: 140px;
-        height: auto;
-        object-fit: contain;
-        filter: drop-shadow(0 6px 24px rgba(99, 102, 241, 0.25));
+      .gep-mobile-logo .gep-brand-logo {
+        margin-bottom: 0;
       }
 
       .gep-card-header { margin-bottom: 2rem; }
@@ -489,7 +478,6 @@ class LoginPage {
       @media (max-width: 480px) {
         .gep-right { padding: 1.25rem; }
         .gep-card { padding: 1.5rem 1.25rem; }
-        .gep-mobile-logo img { width: 120px; }
         .gep-card-title { font-size: 1.5rem; }
       }
     `;
@@ -567,7 +555,9 @@ class LoginPage {
         <div class="gep-card">
 
           <div class="gep-mobile-logo">
-            <img src="assets/logo.png" alt="Gyanam India">
+            <div class="gep-brand-logo">
+              <img src="assets/logo.png" alt="Gyanam India">
+            </div>
           </div>
 
           <div class="gep-card-header">
