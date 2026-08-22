@@ -210,29 +210,39 @@ if ($_sidebarInitials === '') {
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <style>
 .atc-sidebar-brand .atc-brand-logo {
+    width: auto;
+    height: auto;
+    max-width: 96px;
+    max-height: 48px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    overflow: visible;
+}
+.atc-sidebar-brand .atc-brand-logo img {
+    width: auto;
+    height: auto;
+    max-width: 96px;
+    max-height: 48px;
+    object-fit: contain;
+    padding: 0;
+    display: block;
+}
+.atc-sidebar-brand .atc-brand-logo.is-fallback {
     width: 42px;
     height: 42px;
     max-width: 42px;
     border-radius: 10px;
-    background: #fff;
-    border: 1px solid rgba(15, 23, 42, .08);
-    box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     overflow: hidden;
-}
-.atc-sidebar-brand .atc-brand-logo img {
-    width: 100%;
-    height: 100%;
-    max-width: none;
-    object-fit: contain;
-    padding: 3px;
 }
 .atc-sidebar-brand .atc-logo-fallback {
     display: none;
-    width: 100%;
-    height: 100%;
+    width: 42px;
+    height: 42px;
     align-items: center;
     justify-content: center;
     font-size: .72rem;
@@ -240,6 +250,7 @@ if ($_sidebarInitials === '') {
     letter-spacing: .02em;
     color: #fff;
     background: linear-gradient(135deg, #4361ee, #7c3aed);
+    border-radius: 10px;
 }
 .atc-sidebar-brand .atc-brand-logo.is-fallback .atc-logo-fallback {
     display: flex;
@@ -251,17 +262,21 @@ if ($_sidebarInitials === '') {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.atc-code-pill {
+/* Beat .sidebar-brand .brand-info span muted color */
+.sidebar-brand.atc-sidebar-brand .brand-info .atc-code-pill {
     display: inline-block;
     margin-left: .35rem;
     background: linear-gradient(135deg, #4361ee, #7c3aed);
-    color: #fff;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
     font-size: .68rem;
     font-weight: 800;
-    padding: .1rem .45rem;
+    padding: .15rem .5rem;
     border-radius: 99px;
     letter-spacing: .03em;
     vertical-align: middle;
+    text-transform: none;
+    line-height: 1.2;
 }
 .sidebar.collapsed .atc-sidebar-brand .brand-info { display: none; }
 </style>
