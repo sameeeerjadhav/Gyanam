@@ -169,8 +169,13 @@ class ApiClient {
 
   // ─── Results ────────────────────────────────
   static getResults(params = {}) {
-    let query = '';
-    if (params.since) query = `?since=${params.since}`;
+    const qs = new URLSearchParams();
+    if (params.since) qs.set('since', params.since);
+    if (params.page) qs.set('page', params.page);
+    if (params.per_page) qs.set('per_page', params.per_page);
+    if (params.q) qs.set('q', params.q);
+    if (params.student_identifier) qs.set('student_identifier', params.student_identifier);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
     return this.request('/results' + query);
   }
   static async exportResults() {
@@ -189,6 +194,8 @@ class ApiClient {
   // ─── Student Exam flow ─────────────────────
   static getExamQuestions(id) { return this.get(`/student/exam/${id}/questions`); }
   static pulseHeartbeat(id) { return this.post(`/student/exam/${id}/heartbeat`); }
+  static saveExamAnswers(id, payload) { return this.post(`/student/exam/${id}/answers`, payload); }
+  static logProctoringEvent(id, payload) { return this.post(`/student/exam/${id}/proctoring-events`, payload); }
   static submitExam(id, payload) { return this.post(`/student/exam/${id}/submit`, payload); }
   static getSubmissionResult(subId) { return this.get(`/student/result/${subId}`); }
   // Student's own history (uses student-scoped route, not admin route)

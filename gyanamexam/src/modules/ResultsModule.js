@@ -2,15 +2,32 @@
  * ResultsModule.js — Renders the Results & Analytics page with Chart.js charts.
  * Includes flagged questions review panel for admin/ATC.
  */
+async function fetchAllResults(ApiClient) {
+  const all = [];
+  let page = 1;
+  let lastPage = 1;
+  do {
+    const data = await ApiClient.getResults({ page, per_page: 100 });
+    const batch = data?.submissions || [];
+    all.push(...batch);
+    lastPage = data?.pagination?.last_page || 1;
+    page += 1;
+  } while (page <= lastPage && page <= 50);
+  return all;
+}
+
 export async function renderResults(ApiClient, { currentUser }) {
-  const [{ submissions: allSubmissions }, flags] = await Promise.all([
-    ApiClient.getResults(),
+  const [allSubmissions, flags] = await Promise.all([
+    fetchAllResults(ApiClient),
     ApiClient.getFlags('pending').catch(() => []),
   ]);
 
   const centres = [...new Set(allSubmissions.map(s => s.student?.centre_name || s.centre_name).filter(Boolean))].sort();
   const el = document.getElementById('page-content');
   let currentCentre = '';
+  let searchQ = '';
+  let tablePage = 1;
+  const PAGE_SIZE = 25;
 
   function calculateStats(subs) {
     const total = subs.length;
@@ -21,11 +38,24 @@ export async function renderResults(ApiClient, { currentUser }) {
   }
 
   function renderView() {
-    const filtered = currentCentre
+    let filtered = currentCentre
       ? allSubmissions.filter(s => (s.student?.centre_name || s.centre_name) === currentCentre)
       : allSubmissions;
 
+    if (searchQ) {
+      const q = searchQ.toLowerCase();
+      filtered = filtered.filter(s => {
+        const name = (s.student?.name || s.student_name || '').toLowerCase();
+        const exam = (s.exam?.title || s.exam_title || '').toLowerCase();
+        const centre = (s.student?.centre_name || s.centre_name || '').toLowerCase();
+        return name.includes(q) || exam.includes(q) || centre.includes(q);
+      });
+    }
+
     const stats = calculateStats(filtered);
+    const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if (tablePage > pages) tablePage = pages;
+    const slice = filtered.slice((tablePage - 1) * PAGE_SIZE, tablePage * PAGE_SIZE);
 
     const flagsHTML = flags.length > 0 ? `
     <div class="card" style="margin-top:1.5rem">
@@ -58,7 +88,8 @@ export async function renderResults(ApiClient, { currentUser }) {
     el.innerHTML = `
   <div class="page-header">
     <div><h2>Results &amp; Analytics</h2><p>Performance data refined by filters</p></div>
-    <div style="display:flex;gap:0.5rem">
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+      <input id="results-search" type="search" class="form-input" placeholder="Search name, exam, centre…" value="${searchQ.replace(/"/g, '&quot;')}" style="width:220px;height:38px;padding:0 .75rem;border:1px solid var(--border,#e5e7eb);border-radius:8px">
       ${!currentUser.centre_id ? `
       <select id="results-centre-filter" class="form-select" style="width:200px">
         <option value="">All Centres</option>
@@ -92,12 +123,14 @@ export async function renderResults(ApiClient, { currentUser }) {
   </div>
 
   <div class="card">
-    <div class="card-header"><h3>Filtered Submissions (${filtered.length})</h3></div>
+    <div class="card-header"><h3>Filtered Submissions (${filtered.length})</h3>
+      <span style="font-size:0.75rem;color:var(--text-muted)">Page ${tablePage} / ${pages}</span>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Student</th><th>Exam</th><th>Score</th><th>Result</th><th>Attempted</th></tr></thead>
         <tbody>
-          ${filtered.map(s => `<tr>
+          ${slice.length === 0 ? '<tr><td colspan="5" style="text-align:center;padding:1.5rem;color:var(--text-muted)">No matching submissions.</td></tr>' : slice.map(s => `<tr>
             <td style="font-weight:600">${s.student?.name || s.student_name || s.student_id}</td>
             <td style="color:var(--text-muted)">${s.exam?.title || s.exam_title || s.exam_id}</td>
             <td><strong>${s.score}%</strong></td>
@@ -107,15 +140,31 @@ export async function renderResults(ApiClient, { currentUser }) {
         </tbody>
       </table>
     </div>
+    <div style="display:flex;gap:0.5rem;justify-content:flex-end;padding:0.75rem 1rem;border-top:1px solid var(--border,#e5e7eb)">
+      <button class="btn btn-outline btn-sm" id="results-prev" ${tablePage <= 1 ? 'disabled' : ''}>Prev</button>
+      <button class="btn btn-outline btn-sm" id="results-next" ${tablePage >= pages ? 'disabled' : ''}>Next</button>
+    </div>
   </div>
 
   ${flagsHTML}`;
 
     renderAnalyticsCharts(filtered);
 
+    const searchEl = document.getElementById('results-search');
+    if (searchEl) {
+      let t;
+      searchEl.addEventListener('input', (e) => {
+        clearTimeout(t);
+        t = setTimeout(() => { searchQ = e.target.value.trim(); tablePage = 1; renderView(); }, 150);
+      });
+    }
+
+    document.getElementById('results-prev')?.addEventListener('click', () => { tablePage = Math.max(1, tablePage - 1); renderView(); });
+    document.getElementById('results-next')?.addEventListener('click', () => { tablePage = Math.min(pages, tablePage + 1); renderView(); });
+
     if (!currentUser.centre_id) {
       const filterEl = document.getElementById('results-centre-filter');
-      if (filterEl) filterEl.addEventListener('change', e => { currentCentre = e.target.value; renderView(); });
+      if (filterEl) filterEl.addEventListener('change', e => { currentCentre = e.target.value; tablePage = 1; renderView(); });
     }
 
     window.resolveFlag = async (id, status) => {

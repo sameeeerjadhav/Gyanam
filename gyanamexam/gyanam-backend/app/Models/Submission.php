@@ -10,7 +10,7 @@ class Submission extends Model
     use HasFactory;
 
     protected $fillable = [
-        'submission_id', 'student_id', 'exam_config_id', 'exam_title',
+        'submission_id', 'client_submission_id', 'student_id', 'exam_config_id', 'exam_title',
         'student_name', 'centre_name', 'score', 'correct_answers',
         'total_questions', 'result', 'duration_taken', 'submitted_at',
     ];

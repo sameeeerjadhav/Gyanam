@@ -42,7 +42,13 @@ function initializeApp() {
   router.initialize();
 
   if (authModule.isAuthenticated()) {
-    router.navigate('/student');
+    const path = window.location.pathname || '';
+    const search = window.location.search || '';
+    if (path.includes('/exam') || search.includes('id=')) {
+      router.handleRoute('/exam');
+    } else {
+      router.navigate('/student');
+    }
   } else {
     router.navigate('/login');
   }
@@ -85,7 +91,7 @@ function setupRoutes(appContainer) {
 
     try {
       const data = await ApiClient.getExamQuestions(examId);
-      const { exam, questions } = data;
+      const { exam, questions, draft } = data;
 
       if (!questions || questions.length === 0) {
         appContainer.innerHTML = _errorHTML('No questions found.', 'This exam has no questions assigned yet.');
@@ -94,7 +100,7 @@ function setupRoutes(appContainer) {
 
       // Always create a fresh ExamPage for a clean session
       examPage = new ExamPage();
-      await examPage.render(appContainer, exam, questions, examId, router);
+      await examPage.render(appContainer, exam, questions, examId, router, draft);
 
     } catch (error) {
       console.error('Failed to load exam:', error);

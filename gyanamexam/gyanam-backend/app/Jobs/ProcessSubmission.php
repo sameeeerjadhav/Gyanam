@@ -32,30 +32,34 @@ class ProcessSubmission implements ShouldQueue
         $student = Student::findOrFail($this->studentId);
         $exam    = ExamConfig::with('questionBank.questions')->findOrFail($this->examConfigId);
 
-        // Retrieve the cached question set (same shuffle the student saw)
-        $cacheKey      = "exam_qs:{$this->examConfigId}:{$this->studentId}";
-        $cachedQuestions = Cache::get($cacheKey, []);
+        // Prefer live-session question set; never grade against the full bank
+        $session = \App\Models\LiveExamSession::where('student_id', $this->studentId)
+            ->where('exam_config_id', $this->examConfigId)
+            ->first();
 
-        // Build a lookup of questionId => correctAnswer
-        $correctMap = [];
-        foreach ($cachedQuestions as $q) {
-            $correctMap[$q['id']] = $q['correct_answer'];
+        $questionIds = $session?->question_ids ?: [];
+        if (empty($questionIds)) {
+            $attempt = (int) ($session?->attempt_number ?: 1);
+            $cached = Cache::get("exam_qs:{$this->examConfigId}:{$this->studentId}:{$attempt}")
+                ?: Cache::get("exam_qs:{$this->examConfigId}:{$this->studentId}", []);
+            $questionIds = array_map(fn ($q) => $q['id'], $cached);
+        }
+        if (empty($questionIds)) {
+            $questionIds = array_keys($this->answers);
         }
 
-        // If cache expired, fall back to DB (less secure but graceful)
-        if (empty($correctMap)) {
-            $exam->questionBank->questions->each(function ($q) use (&$correctMap) {
-                $correctMap[$q->id] = $q->correct_answer;
-            });
-        }
-
-        $total   = count($correctMap);
+        $correctMap = Question::whereIn('id', $questionIds)->pluck('correct_answer', 'id')->all();
+        $total = count($questionIds);
         $correct = 0;
         $answerRows = [];
 
-        foreach ($this->answers as $qId => $selected) {
-            $isCorrect = isset($correctMap[$qId]) && $correctMap[$qId] === $selected;
-            if ($isCorrect) $correct++;
+        foreach ($questionIds as $qId) {
+            $selected = $this->answers[$qId] ?? null;
+            $isCorrect = isset($correctMap[$qId]) && $selected !== null
+                && (string) $correctMap[$qId] === (string) $selected;
+            if ($isCorrect) {
+                $correct++;
+            }
             $answerRows[] = [
                 'question_id'     => $qId,
                 'selected_answer' => $selected,

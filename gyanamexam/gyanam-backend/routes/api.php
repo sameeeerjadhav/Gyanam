@@ -22,7 +22,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/student/login',[AuthController::class, 'studentLogin']);
 
     // ─── Portal Routes (admin / atc / dlc) ───────────────────────────────────
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'portal'])->group(function () {
 
         Route::post('/auth/logout', [AuthController::class, 'logout']);
 
@@ -83,12 +83,14 @@ Route::prefix('v1')->group(function () {
     });
 
     // ─── Student Portal Routes ────────────────────────────────────────────────
-    Route::middleware('auth:sanctum')->prefix('student')->group(function () {
+    Route::middleware(['auth:sanctum', 'student'])->prefix('student')->group(function () {
         Route::post('/logout',                          [AuthController::class, 'logout']);
         Route::get ('/exams',                           [StudentExamController::class, 'myExams']);
         Route::get ('/history',                         [StudentExamController::class, 'myHistory']);
         Route::get ('/exam/{examId}/questions',         [StudentExamController::class, 'getQuestions']);
         Route::post('/exam/{examId}/heartbeat',         [StudentExamController::class, 'heartbeat']);
+        Route::post('/exam/{examId}/answers',           [StudentExamController::class, 'saveAnswers']);
+        Route::post('/exam/{examId}/proctoring-events', [StudentExamController::class, 'logProctoringEvent']);
         Route::post('/exam/{examId}/submit',            [StudentExamController::class, 'submit']);
         Route::get ('/result/{submissionId}',           [StudentExamController::class, 'submissionResult']);
         Route::post('/flags',                           [QuestionFlagController::class, 'store']);

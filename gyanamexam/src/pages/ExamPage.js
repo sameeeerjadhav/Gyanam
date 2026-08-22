@@ -30,35 +30,161 @@ class ExamPage {
     this.proctoring = new ProctoringService();
   }
 
-  async render(container, examConfig, questions, examId, router) {
+  async render(container, examConfig, questions, examId, router, draft = null) {
     this.currentIndex = 0;
     this.answers = {};
     this.markedForReview = new Set();
     this.isSubmitting = false;
+    this._clientSubmissionId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `sub-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    this._autosaveTimer = null;
+    this._dirty = false;
 
     if (this.timer) this.timer.stop();
     if (this._timerInterval) clearInterval(this._timerInterval);
+    if (this._heartbeatInterval) clearInterval(this._heartbeatInterval);
 
     this.examConfig = examConfig;
     this.questions = questions;
     this.examId = examId;
     this.router = router;
+    this._attemptNumber = examConfig.attempt_number || draft?.attempt_number || 1;
+
+    this._restoreAnswers(draft);
 
     container.innerHTML = this._getExamHTML();
     this._updateHeader();
     this._attachEventListeners();
     this._renderCurrentQuestion();
     this._renderQuestionPalette();
+    this._updateProgress();
     this._startTimerDisplay();
     this._startHeartbeat();
+    this._startAutosaveLoop();
 
-    this.timer.start(examConfig.duration, () => this._submitExam(true), (remaining) => {
-      this._remaining = remaining;
-    });
+    const durationSeconds = Math.max(
+      0,
+      Number.isFinite(examConfig.remaining_seconds)
+        ? Math.floor(examConfig.remaining_seconds)
+        : Math.floor((examConfig.duration || 60) * 60)
+    );
 
-    // Initialize proctoring if enabled
+    if (examConfig.must_submit || examConfig.expired || durationSeconds <= 0) {
+      // Time already up — submit current answers (late accept on server)
+      setTimeout(() => this._submitExam(true), 400);
+    } else {
+      this.timer.start(durationSeconds / 60, () => this._submitExam(true), (remaining) => {
+        this._remaining = remaining;
+      });
+    }
+
     if (examConfig.proctored && examConfig.proctoring_settings) {
       await this._initializeProctoring(examConfig.proctoring_settings);
+    }
+  }
+
+  _localDraftKey(attemptNumber = null) {
+    const attempt = attemptNumber ?? this._attemptNumber ?? 1;
+    return `gyanam_exam_draft_${this.examId}_a${attempt}`;
+  }
+
+  _restoreAnswers(draft) {
+    this._attemptNumber = draft?.attempt_number || this.examConfig?.attempt_number || 1;
+
+    // Drop legacy key without attempt suffix
+    try { localStorage.removeItem(`gyanam_exam_draft_${this.examId}`); } catch (_) {}
+
+    let local = null;
+    try {
+      local = JSON.parse(localStorage.getItem(this._localDraftKey()) || 'null');
+    } catch (_) { local = null; }
+
+    // Discard local draft from a different attempt
+    if (local && local.attemptNumber != null && Number(local.attemptNumber) !== Number(this._attemptNumber)) {
+      this._clearLocalDraft();
+      local = null;
+    }
+
+    const serverAnswers = draft?.answers || {};
+    const localAnswers = local?.answers || {};
+    const serverUpdated = draft?.updated_at ? Date.parse(draft.updated_at) : 0;
+    const localUpdated = local?.updatedAt || 0;
+    const hasServer = Object.keys(serverAnswers).length > 0;
+    const hasLocal = Object.keys(localAnswers).length > 0;
+
+    let useLocal = false;
+    if (hasLocal && hasServer) {
+      useLocal = localUpdated >= serverUpdated;
+    } else if (hasLocal && !hasServer) {
+      useLocal = true;
+    }
+
+    const merged = useLocal ? { ...serverAnswers, ...localAnswers } : { ...localAnswers, ...serverAnswers };
+
+    Object.keys(merged).forEach((qid) => {
+      if (merged[qid] != null && merged[qid] !== '') this.answers[qid] = merged[qid];
+    });
+
+    const marks = (useLocal ? local?.markedForReview : null) || draft?.marked_for_review || [];
+    if (Array.isArray(marks)) {
+      marks.forEach((idx) => {
+        const n = Number(idx);
+        if (!Number.isNaN(n)) this.markedForReview.add(n);
+      });
+    }
+  }
+
+  _persistLocalDraft() {
+    try {
+      localStorage.setItem(this._localDraftKey(), JSON.stringify({
+        answers: this.answers,
+        markedForReview: [...this.markedForReview],
+        updatedAt: Date.now(),
+        attemptNumber: this._attemptNumber || 1,
+      }));
+    } catch (_) { /* quota */ }
+  }
+
+  _clearLocalDraft() {
+    try { localStorage.removeItem(this._localDraftKey()); } catch (_) {}
+  }
+
+  _scheduleAutosave() {
+    this._dirty = true;
+    this._persistLocalDraft();
+    if (this._autosaveTimer) clearTimeout(this._autosaveTimer);
+    this._autosaveTimer = setTimeout(() => this._flushAutosave(), 1500);
+  }
+
+  _startAutosaveLoop() {
+    if (this._autosaveInterval) clearInterval(this._autosaveInterval);
+    this._autosaveInterval = setInterval(() => {
+      if (this._dirty && !this.isSubmitting) this._flushAutosave();
+    }, 20000);
+  }
+
+  async _flushAutosave() {
+    if (this.isSubmitting || !this.examId) return;
+    this._dirty = false;
+    this._persistLocalDraft();
+    try {
+      await ApiClient.saveExamAnswers(this.examId, {
+        answers: this.answers,
+        marked_for_review: [...this.markedForReview],
+      });
+      const el = document.getElementById('autosave-status');
+      if (el) {
+        el.textContent = 'Saved';
+        el.style.color = '#16a34a';
+        setTimeout(() => { if (el) el.textContent = ''; }, 2000);
+      }
+    } catch (_) {
+      const el = document.getElementById('autosave-status');
+      if (el) {
+        el.textContent = 'Offline — saved locally';
+        el.style.color = '#d97706';
+      }
     }
   }
 
@@ -101,6 +227,7 @@ class ExamPage {
                 <span id="exam-type" style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em"></span>
                 <span style="width:3px;height:3px;border-radius:50%;background:#cbd5e1"></span>
                 <span style="font-size:0.72rem;color:#64748b;font-weight:500"><span id="total-questions">—</span> Questions</span>
+                <span id="autosave-status" style="font-size:0.7rem;font-weight:600;color:#94a3b8;margin-left:0.25rem"></span>
               </div>
             </div>
 
@@ -235,9 +362,18 @@ class ExamPage {
       // onViolation callback
       (type, message, tabCount, tabLimit) => {
         this._showProctoringWarning(type, message, tabCount, tabLimit);
+        ApiClient.logProctoringEvent(this.examId, {
+          event_type: type,
+          message,
+          meta: { tabCount, tabLimit },
+        }).catch(() => {});
       },
       // onAutoSubmit callback (tab switch limit exceeded)
       () => {
+        ApiClient.logProctoringEvent(this.examId, {
+          event_type: 'auto_submit',
+          message: 'Tab switch limit exceeded',
+        }).catch(() => {});
         this._submitExam(true);
       }
     );
@@ -245,7 +381,7 @@ class ExamPage {
     // Show proctoring status indicator
     this._renderProctoringIndicator();
 
-    // Attach camera preview if available
+    // Attach camera preview if available — preview only; nothing is uploaded/recorded
     if (settings.camera && this.proctoring.getCameraStream()) {
       this._renderCameraPreview();
     }
@@ -346,9 +482,9 @@ class ExamPage {
       border:2px solid #e2e8f0;position:relative;
     `;
     container.innerHTML = `
-      <div style="position:absolute;top:0.4rem;left:0.4rem;background:rgba(220,38,38,0.9);color:white;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.65rem;font-weight:700;display:flex;align-items:center;gap:0.3rem;z-index:2">
-        <span style="width:6px;height:6px;background:white;border-radius:50%;animation:timer-pulse 1s infinite"></span>
-        REC
+      <div style="position:absolute;top:0.4rem;left:0.4rem;background:rgba(15,23,42,0.85);color:white;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.65rem;font-weight:700;display:flex;align-items:center;gap:0.3rem;z-index:2">
+        <span style="width:6px;height:6px;background:#22c55e;border-radius:50%"></span>
+        LIVE PREVIEW
       </div>
     `;
 
@@ -401,6 +537,7 @@ class ExamPage {
     }
     this._renderQuestionPalette();
     this._updateStats();
+    this._scheduleAutosave();
   }
 
   _renderCurrentQuestion() {
@@ -430,6 +567,7 @@ class ExamPage {
         this._renderQuestionPalette();
         this._updateProgress();
         this._updateStats();
+        this._scheduleAutosave();
       }
     );
   }
@@ -528,16 +666,19 @@ class ExamPage {
           this.timer.addTime(added * 60);
           // Notify student
           const banner = document.createElement('div');
-          banner.textContent = `⏱ +${added} min added by admin`;
+          banner.textContent = `+${added} min added by admin`;
           banner.style.cssText = 'position:fixed;top:80px;right:1rem;background:#22c55e;color:#fff;padding:0.6rem 1.2rem;border-radius:10px;font-weight:700;font-size:0.9rem;z-index:9999;box-shadow:0 4px 16px rgba(34,197,94,0.3);animation:exam-fadeIn 0.3s ease';
           document.body.appendChild(banner);
           setTimeout(() => banner.remove(), 4000);
+        }
+        if (Number.isFinite(resp?.remaining_seconds) && Math.abs(this.timer.getRemainingTime() - resp.remaining_seconds) > 5) {
+          this.timer.remainingSeconds = Math.max(0, Math.floor(resp.remaining_seconds));
         }
       } catch (e) { /* silent */ }
     };
 
     sendBeat();
-    this._heartbeatInterval = setInterval(sendBeat, 30000);
+    this._heartbeatInterval = setInterval(sendBeat, 45000);
   }
 
   async _submitExam(autoSubmit = false) {
@@ -567,6 +708,8 @@ class ExamPage {
     this.timer.stop();
     if (this._timerInterval) clearInterval(this._timerInterval);
     if (this._heartbeatInterval) clearInterval(this._heartbeatInterval);
+    if (this._autosaveTimer) clearTimeout(this._autosaveTimer);
+    if (this._autosaveInterval) clearInterval(this._autosaveInterval);
     if (this.proctoring) this.proctoring.destroy();
 
     const submitBtn = document.getElementById('submit-exam-button');
@@ -582,9 +725,23 @@ class ExamPage {
     }));
 
     try {
-      const response = await ApiClient.submitExam(this.examId, { answers });
+      // Persist draft once more (bypass isSubmitting guard)
+      this._persistLocalDraft();
+      try {
+        await ApiClient.saveExamAnswers(this.examId, {
+          answers: this.answers,
+          marked_for_review: [...this.markedForReview],
+        });
+      } catch (_) { /* local copy still held */ }
+
+      const response = await ApiClient.submitExam(this.examId, {
+        answers,
+        client_submission_id: this._clientSubmissionId,
+      });
       const submissionId = response.submission_id;
       if (!submissionId) throw new Error('Server did not return a submission ID.');
+
+      this._clearLocalDraft();
 
       if (this.router) {
         this.router.navigate(`/student/result/${submissionId}`);
@@ -600,7 +757,7 @@ class ExamPage {
         submitBtn.style.background = '#dc2626';
       }
       await modalService.alert(
-        `Submission failed: ${error.message}<br><br>Please check your internet connection and try again.`,
+        `Submission failed: ${error.message}<br><br>Your answers are saved locally. Please check your internet connection and try again.`,
         { title: 'Submission Error', type: 'danger' }
       );
     }
@@ -610,6 +767,8 @@ class ExamPage {
     this.timer.stop();
     if (this._timerInterval) clearInterval(this._timerInterval);
     if (this._heartbeatInterval) clearInterval(this._heartbeatInterval);
+    if (this._autosaveTimer) clearTimeout(this._autosaveTimer);
+    if (this._autosaveInterval) clearInterval(this._autosaveInterval);
     if (this.proctoring) this.proctoring.destroy();
     this.isSubmitting = false;
     this.questions = [];
