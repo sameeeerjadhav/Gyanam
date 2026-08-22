@@ -69,7 +69,7 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234361ee' stroke-width='2'%3E%3Cline x1='18' y1='20' x2='18' y2='10'/%3E%3Cline x1='12' y1='20' x2='12' y2='4'/%3E%3Cline x1='6' y1='20' x2='6' y2='14'/%3E%3C/svg%3E">
     <style>
     :root { --font: 'Sora', sans-serif; --mono: 'JetBrains Mono', monospace; }
 
@@ -110,31 +110,57 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
     /* Filter Bar */
     .er-filter-bar {
         display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
-        margin-bottom: 1.5rem; padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem; padding: .85rem 1rem;
         background: #fff; border: 1.5px solid #e5e7eb; border-radius: 14px;
     }
-    .er-filter-bar label { font-size: .75rem; font-weight: 700; color: #374151; white-space: nowrap; }
-    .er-filter-bar input[type="text"] {
-        padding: .5rem .75rem; border: 1.5px solid #e5e7eb; border-radius: 10px;
-        font-size: .82rem; font-family: var(--font); font-weight: 500; color: #1f2937;
-        background: #fff; min-width: 200px; transition: border .2s;
+    .er-search-wrap {
+        position: relative; flex: 1; min-width: 220px;
     }
-    .er-filter-bar input:focus { outline: none; border-color: #4361ee; box-shadow: 0 0 0 3px rgba(67,97,238,.1); }
-    .er-filter-spacer { flex: 1; }
+    .er-search-wrap svg {
+        position: absolute; left: .85rem; top: 50%; transform: translateY(-50%);
+        width: 16px; height: 16px; stroke: #9ca3af; pointer-events: none;
+    }
+    .er-filter-bar input[type="text"] {
+        width: 100%; padding: .55rem .75rem .55rem 2.35rem; border: 1.5px solid #e5e7eb; border-radius: 10px;
+        font-size: .82rem; font-family: var(--font); font-weight: 500; color: #1f2937;
+        background: #f9fafb; transition: border .2s, box-shadow .2s, background .2s;
+    }
+    .er-filter-bar input:focus { outline: none; border-color: #4361ee; background: #fff; box-shadow: 0 0 0 3px rgba(67,97,238,.1); }
+    .er-search-wrap:focus-within svg { stroke: #4361ee; }
 
     /* Status tabs */
-    .er-tabs { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-    .er-tab {
-        padding: .55rem 1.1rem; border-radius: 10px; border: 1.5px solid #e5e7eb;
-        background: #fff; color: #374151; font-size: .82rem; font-weight: 700;
-        cursor: pointer; font-family: var(--font); transition: all .15s;
-        display: flex; align-items: center; gap: .4rem;
+    .er-tabs {
+        display: flex; gap: .4rem; margin-bottom: 1.25rem; flex-wrap: wrap;
+        padding: 4px; background: #f3f4f6; border-radius: 12px; width: fit-content;
     }
-    .er-tab:hover { border-color: #a5b4fc; background: #eef2ff; }
-    .er-tab.active { background: linear-gradient(135deg,#4361ee,#3730a3); border-color: #3730a3; color: #fff; box-shadow: 0 2px 8px rgba(67,97,238,.2); }
-    .er-tab-count { padding: .15rem .5rem; border-radius: 999px; font-size: .7rem; font-weight: 800; }
-    .er-tab.active .er-tab-count { background: rgba(255,255,255,.2); }
-    .er-tab:not(.active) .er-tab-count { background: #e5e7eb; color: #6b7280; }
+    .er-tab {
+        padding: .5rem 1rem; border-radius: 9px; border: none;
+        background: transparent; color: #6b7280; font-size: .8rem; font-weight: 700;
+        cursor: pointer; font-family: var(--font); transition: all .2s;
+        display: inline-flex; align-items: center; gap: .4rem;
+    }
+    .er-tab:hover { background: #fff; color: #374151; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    .er-tab.active {
+        background: #fff; color: #4361ee;
+        box-shadow: 0 1px 3px rgba(0,0,0,.08); font-weight: 800;
+    }
+    .er-tab-icon {
+        width: 14px; height: 14px; stroke: currentColor; fill: none;
+        stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0;
+    }
+    .er-tab-count {
+        padding: .1rem .45rem; border-radius: 999px; font-size: .65rem; font-weight: 800;
+        background: #e5e7eb; color: #6b7280;
+    }
+    .er-tab.active .er-tab-count { background: #eef2ff; color: #4361ee; }
+
+    .er-alert {
+        display: flex; align-items: flex-start; gap: .6rem;
+        background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+        padding: .9rem 1rem; border-radius: 12px; margin-bottom: 1.5rem;
+        font-weight: 600; font-size: .85rem; line-height: 1.5;
+    }
+    .er-alert svg { width: 18px; height: 18px; stroke: currentColor; fill: none; flex-shrink: 0; margin-top: .1rem; }
 
     /* Student Result Cards */
     .er-cards-grid {
@@ -168,7 +194,31 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
     .er-card-badge.fail { background: #fee2e2; color: #991b1b; }
 
     .er-card-body { padding: .85rem 1.1rem; }
-    .er-card-exam { font-size: .82rem; font-weight: 600; color: #374151; margin-bottom: .6rem; }
+    .er-card-exam {
+        display: flex; align-items: center; gap: .4rem;
+        font-size: .82rem; font-weight: 600; color: #374151; margin-bottom: .6rem;
+    }
+    .er-card-exam svg {
+        width: 14px; height: 14px; stroke: #6366f1; fill: none; stroke-width: 2; flex-shrink: 0;
+    }
+
+    .er-result-pill {
+        display: inline-flex; align-items: center; gap: .25rem;
+        padding: .2rem .55rem; border-radius: 999px;
+        font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em;
+    }
+    .er-result-pill.pass { background: #d1fae5; color: #065f46; }
+    .er-result-pill.fail { background: #fee2e2; color: #991b1b; }
+    .er-result-pill svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+
+    .er-card-btn {
+        flex: 1; padding: .45rem .6rem; border-radius: 8px; border: 1.5px solid #e5e7eb;
+        background: #fff; color: #374151; font-size: .75rem; font-weight: 700;
+        cursor: pointer; font-family: var(--font); transition: all .15s;
+        text-align: center; display: inline-flex; align-items: center; justify-content: center; gap: .35rem;
+        text-decoration: none;
+    }
+    .er-card-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
 
     .er-card-stats {
         display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem;
@@ -182,15 +232,6 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
     .er-card-footer {
         padding: .5rem 1.1rem .85rem; display: flex; gap: .5rem;
     }
-    .er-card-btn {
-        flex: 1; padding: .45rem; border-radius: 8px; border: 1.5px solid #e5e7eb;
-        background: #fff; color: #374151; font-size: .75rem; font-weight: 700;
-        cursor: pointer; font-family: var(--font); transition: all .15s;
-        text-align: center;
-    }
-    .er-card-btn:hover { border-color: #4361ee; color: #4361ee; background: #eef2ff; }
-    .er-card-btn.cert { border-color: #a7f3d0; color: #065f46; background: #ecfdf5; }
-    .er-card-btn.cert:hover { background: #d1fae5; border-color: #059669; }
 
     /* Score circle */
     .er-score-circle {
@@ -222,15 +263,25 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
         max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;
         box-shadow: 0 24px 80px rgba(0,0,0,.2);
     }
+    .er-card-btn:hover { border-color: #4361ee; color: #4361ee; background: #eef2ff; }
+    .er-card-btn.cert { border-color: #a7f3d0; color: #065f46; background: #ecfdf5; }
+    .er-card-btn.cert:hover { background: #d1fae5; border-color: #059669; }
+
     .er-modal-header {
         background: linear-gradient(135deg, #4361ee, #3730a3); padding: 1.1rem 1.5rem;
-        display: flex; align-items: center; justify-content: space-between;
+        display: flex; align-items: center; justify-content: space-between; gap: .75rem;
     }
+    .er-modal-title-wrap { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+    .er-modal-title-wrap svg { width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 2; flex-shrink: 0; }
     .er-modal-header h3 { color: #fff; font-size: .95rem; font-weight: 800; margin: 0; }
     .er-modal-close {
         background: rgba(255,255,255,.15); border: none; border-radius: 8px;
-        color: #fff; padding: .3rem .6rem; cursor: pointer; font-size: .9rem; font-weight: 700;
+        color: #fff; width: 32px; height: 32px; cursor: pointer;
+        display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+        transition: background .15s;
     }
+    .er-modal-close:hover { background: rgba(255,255,255,.25); }
+    .er-modal-close svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.5; }
     .er-modal-body { padding: 1.5rem; overflow-y: auto; flex: 1; }
     .er-detail-grid {
         display: grid; grid-template-columns: 1fr 1fr; gap: .6rem 1.2rem;
@@ -243,8 +294,8 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
         .er-page { padding: 1.25rem; }
         .er-kpi-grid { grid-template-columns: 1fr 1fr; }
         .er-cards-grid { grid-template-columns: 1fr; }
-        .er-filter-bar { flex-direction: column; align-items: stretch; }
-        .er-filter-bar input[type="text"] { min-width: 0; }
+        .er-tabs { width: 100%; }
+        .er-search-wrap { min-width: 0; width: 100%; }
         .er-detail-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 480px) {
@@ -288,8 +339,9 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
             <?php else: ?>
 
             <?php if ($fetchError): ?>
-            <div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:1rem;border-radius:10px;margin-bottom:1.5rem;font-weight:600;font-size:.85rem;">
-                ⚠️ <?= htmlspecialchars($fetchError) ?>
+            <div class="er-alert">
+                <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span><?= htmlspecialchars($fetchError) ?></span>
             </div>
             <?php endif; ?>
 
@@ -348,17 +400,21 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
                     All <span class="er-tab-count"><?= $stats['total'] ?></span>
                 </button>
                 <button class="er-tab" onclick="filterCards('pass', this)">
-                    ✅ Passed <span class="er-tab-count"><?= $stats['passed'] ?></span>
+                    <svg class="er-tab-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                    Passed <span class="er-tab-count"><?= $stats['passed'] ?></span>
                 </button>
                 <button class="er-tab" onclick="filterCards('fail', this)">
-                    ❌ Failed <span class="er-tab-count"><?= $stats['failed'] ?></span>
+                    <svg class="er-tab-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    Failed <span class="er-tab-count"><?= $stats['failed'] ?></span>
                 </button>
             </div>
 
             <!-- Filter -->
             <div class="er-filter-bar">
-                <label>🔍</label>
-                <input type="text" id="erSearch" placeholder="Search by student name, exam title..." oninput="applyFilters()">
+                <div class="er-search-wrap">
+                    <input type="text" id="erSearch" placeholder="Search by student name, exam title..." oninput="applyFilters()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                </div>
             </div>
 
             <!-- Result Cards -->
@@ -400,7 +456,10 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
                         <div class="er-score-circle <?= $scoreClass ?>"><?= $score ?>%</div>
                     </div>
                     <div class="er-card-body">
-                        <div class="er-card-exam">📝 <?= htmlspecialchars($examTitle) ?></div>
+                        <div class="er-card-exam">
+                            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            <?= htmlspecialchars($examTitle) ?>
+                        </div>
                         <div class="er-card-stats">
                             <div class="er-card-stat">
                                 <div class="er-card-stat-value"><?= $correct ?>/<?= $totalQ ?></div>
@@ -411,19 +470,30 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
                                 <div class="er-card-stat-label">Duration</div>
                             </div>
                             <div class="er-card-stat">
-                                <div class="er-card-stat-value"><span class="er-card-badge <?= $result ?>"><?= $result === 'pass' ? '✅ PASS' : '❌ FAIL' ?></span></div>
+                                <div class="er-card-stat-value">
+                                    <span class="er-result-pill <?= $result ?>">
+                                        <?php if ($result === 'pass'): ?>
+                                            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Pass
+                                        <?php else: ?>
+                                            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Fail
+                                        <?php endif; ?>
+                                    </span>
+                                </div>
                                 <div class="er-card-stat-label">Result</div>
                             </div>
                         </div>
                     </div>
                     <div class="er-card-footer">
-                        <button class="er-card-btn" onclick="showDetail(<?= $i ?>)">📋 View Details</button>
+                        <button class="er-card-btn" onclick="showDetail(<?= $i ?>)">
+                            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            View Details
+                        </button>
                         <?php if ($result === 'pass'): ?>
                         <a class="er-card-btn cert"
                            href="../admin/generate_course_certificate.php?reg_id=<?= urlencode($studentId) ?>&score=<?= intval($score) ?>&exam_date=<?= urlencode(date('Y-m-d', strtotime($sub['submitted_at'] ?? 'now'))) ?>&preview=1"
-                           target="_blank"
-                           style="text-decoration:none;display:block;text-align:center;">
-                            🏆 Certificate
+                           target="_blank">
+                            <svg viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
+                            Certificate
                         </a>
                         <?php endif; ?>
                     </div>
@@ -441,8 +511,13 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
 <div class="er-modal-overlay" id="detailModal">
     <div class="er-modal">
         <div class="er-modal-header">
-            <h3>📊 Exam Result Details</h3>
-            <button class="er-modal-close" onclick="closeDetail()">✕</button>
+            <div class="er-modal-title-wrap">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <h3>Exam Result Details</h3>
+            </div>
+            <button class="er-modal-close" onclick="closeDetail()" aria-label="Close">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
         </div>
         <div class="er-modal-body" id="detailContent"></div>
     </div>
