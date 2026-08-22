@@ -400,7 +400,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text)}
             <?php foreach ($categories as $catName): ?>
             <a href="<?= e(invCatQuery($catName, $searchQ)) ?>" class="inv-cat-btn <?= $catFilter===$catName?'active':'' ?>"><?= e($catName) ?></a>
             <?php endforeach; ?>
-            <button type="button" class="inv-cat-btn" onclick="openModal('addCategoryModal')" title="Create category" style="border-style:dashed">+ Category</button>
+            <button type="button" class="btn-inv primary" onclick="openModal('addCategoryModal')" title="Create category" style="height:36px;padding:.45rem .95rem;font-size:.8rem">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Category
+            </button>
         </div>
         <div class="inv-toolbar-right">
             <form class="inv-search-form" method="GET" action="">
