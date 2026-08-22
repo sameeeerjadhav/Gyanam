@@ -86,7 +86,7 @@ if ($_sidebarInitials === '') {
         <div class="brand-info">
             <h2 title="<?= htmlspecialchars($_sidebarAtcName) ?>"><?= htmlspecialchars($_sidebarAtcName) ?></h2>
             <div class="atc-brand-meta">
-                <span class="atc-brand-role">ATC Center</span>
+                <span class="atc-brand-role">ATC</span>
                 <?php if ($_sidebarAtcCode): ?>
                 <span class="atc-code-pill"><?= htmlspecialchars($_sidebarAtcCode) ?></span>
                 <?php endif; ?>
