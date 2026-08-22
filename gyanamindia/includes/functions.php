@@ -637,6 +637,99 @@ CSS;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AUTH CERTIFICATES (Abacus/Vedic vs IT by ATC center_type)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Which authorization certificate variants an ATC should receive.
+ *
+ * Rules:
+ *  - Abacus and/or Vedic Maths only → Abacus (Gyanam) cert
+ *  - IT only → IT (GIIT) cert
+ *  - Any mix that includes IT + (Abacus|Vedic) → both certs
+ *
+ * @return list<array{variant:string,label:string,brand:string,course_line:string,code_prefix:string}>
+ */
+function atcAuthCertificateVariants(?string $centerType): array {
+    $t = strtolower(trim((string)$centerType));
+    $t = str_replace(['_', '/'], ['+', '+'], $t);
+    $t = preg_replace('/\s+/', ' ', $t) ?? $t;
+
+    $hasAbacus = str_contains($t, 'abacus');
+    $hasVedic  = str_contains($t, 'vedic');
+    $hasIt     = (bool)preg_match('/(?<![a-z])it(?![a-z])/', $t);
+
+    // Normalize common labels
+    if ($t === 'it' || $t === 'i.t' || $t === 'i.t.') {
+        $hasIt = true;
+    }
+
+    $variants = [];
+
+    if ($hasAbacus || $hasVedic) {
+        $parts = [];
+        if ($hasAbacus) {
+            $parts[] = 'Abacus';
+        }
+        if ($hasVedic) {
+            $parts[] = 'Vedic Maths';
+        }
+        if (!$parts) {
+            $parts[] = 'Abacus';
+        }
+        $course = count($parts) === 1
+            ? $parts[0] . ' Courses'
+            : implode(' and ', $parts) . ' Courses';
+        $variants[] = [
+            'variant'     => 'abacus',
+            'label'       => 'Abacus / Vedic Maths Authorization',
+            'brand'       => 'Gyanam Abacus',
+            'course_line' => 'Conducting our ' . $course,
+            'code_prefix' => 'Gyanam ATC-',
+        ];
+    }
+
+    if ($hasIt) {
+        $variants[] = [
+            'variant'     => 'it',
+            'label'       => 'IT Authorization',
+            'brand'       => 'GIIT',
+            'course_line' => 'Conducting our IT Courses',
+            'code_prefix' => 'GIIT ATC-',
+        ];
+    }
+
+    // Unknown type → default IT (legacy behaviour)
+    if (!$variants) {
+        $variants[] = [
+            'variant'     => 'it',
+            'label'       => 'IT Authorization',
+            'brand'       => 'GIIT',
+            'course_line' => 'Conducting our IT Courses',
+            'code_prefix' => 'GIIT ATC-',
+        ];
+    }
+
+    return $variants;
+}
+
+/** Absolute path to PDF template for a cert variant, or null if missing. */
+function atcAuthCertificateTemplatePath(string $variant): ?string {
+    $base = __DIR__ . '/../assets/templates/';
+    if ($variant === 'abacus') {
+        foreach (['gyanam_abacus_auth_certificate.pdf', 'abacus_auth_certificate.pdf'] as $f) {
+            if (is_file($base . $f)) {
+                return $base . $f;
+            }
+        }
+        return null;
+    }
+    // IT / GIIT
+    $it = $base . 'giit_auth_certificate.pdf';
+    return is_file($it) ? $it : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PERFORMANCE HELPERS (schema flags, image optimize, indexes)
 // ─────────────────────────────────────────────────────────────────────────────
 
