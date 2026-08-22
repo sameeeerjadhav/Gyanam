@@ -122,7 +122,7 @@ if ($courseName !== '') {
     }
 }
 $brandVariant = admissionFormBrandVariant($admission['center_type'] ?? null, $courseName, is_string($courseType) ? $courseType : null);
-$logoUrl = admissionFormBrandLogoUrl($brandVariant, 'atc');
+$logoUrl = admissionFormBrandLogoDataUri($brandVariant);
 $logoAlt = $brandVariant === 'abacus' ? 'Gyanam Abacus' : 'GIIT';
 
 // Student photo
@@ -243,7 +243,7 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
     h2 { font-size: 14px !important; margin: 2px 0 !important; }
 
     .photo-cell img { width: 75px !important; height: 90px !important; }
-    .logo-cell img  { width: 105px !important; height: auto !important; max-height: 70px !important; }
+    .logo-cell img  { width: 88px !important; height: auto !important; max-height: 88px !important; }
     .val-cell { font-size: 11.5px; }
     .section { font-size: 11px; }
     .cb { width: 12px; height: 12px; font-size: 10px; line-height: 12px; }
@@ -273,7 +273,7 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
   <table class="no-border">
     <tr>
       <td class="logo-cell">
-        <img src="<?= e($logoUrl) ?>" alt="<?= e($logoAlt) ?>" style="width:120px;height:auto;max-height:78px;object-fit:contain;">
+        <img src="<?= e($logoUrl) ?>" alt="<?= e($logoAlt) ?>" style="width:95px;height:auto;max-height:95px;object-fit:contain;">
       </td>
       <td class="center">
         <h1>GYANAM INDIA EDUCATIONAL SERVICES</h1>

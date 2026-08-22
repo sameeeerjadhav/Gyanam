@@ -732,9 +732,8 @@ function atcAuthCertificateTemplatePath(string $variant): ?string {
 /**
  * Brand logo variant for printed forms (admission form, etc.).
  *
- * - Abacus / Vedic only → abacus (Gyanam Abacus)
- * - IT only → it (GIIT)
- * - Both → pick by course_type / course name (Abacus|Vedic → abacus, else IT)
+ * - Prefer course_type / course name when it clearly signals Abacus/Vedic vs IT
+ * - Otherwise: Abacus/Vedic-only → abacus; IT-only → it; both → course then IT default
  *
  * @return 'it'|'abacus'
  */
@@ -744,14 +743,34 @@ function admissionFormBrandVariant(?string $centerType, ?string $courseName = nu
     $hasIt = in_array('it', $codes, true);
     $hasAbacus = in_array('abacus', $codes, true);
 
+    $hint = strtolower(trim((string)$courseType));
+    if ($hint === '' && $courseName !== null && $courseName !== '') {
+        $hint = strtolower($courseName);
+    }
+
+    $courseIsAbacus = $hint !== '' && (str_contains($hint, 'abacus') || str_contains($hint, 'vedic'));
+    $courseIsIt = $hint !== '' && (
+        $hint === 'it'
+        || (bool)preg_match('/(?<![a-z])it(?![a-z])/', $hint)
+        || (bool)preg_match('/\b(ccc|cccp|dca|ms\-?cit|tally|programming|computer|software|hardware|typing|excel|wordpress|python|java|c\+\+|html|css)\b/i', $hint)
+    );
+
+    // Dual center (or unknown): follow the course when we can tell
     if ($hasIt && $hasAbacus) {
-        $type = strtolower(trim((string)$courseType));
-        if ($type === '' && $courseName !== null && $courseName !== '') {
-            $type = strtolower($courseName);
-        }
-        if (str_contains($type, 'abacus') || str_contains($type, 'vedic')) {
+        if ($courseIsAbacus) {
             return 'abacus';
         }
+        if ($courseIsIt) {
+            return 'it';
+        }
+        return 'it';
+    }
+
+    // Single-type centers still respect an obvious opposite course signal when both brands exist in variants list
+    if ($courseIsAbacus && $hasAbacus) {
+        return 'abacus';
+    }
+    if ($courseIsIt && $hasIt) {
         return 'it';
     }
 
@@ -763,24 +782,54 @@ function admissionFormBrandVariant(?string $centerType, ?string $courseName = nu
 }
 
 /**
- * Web-relative path (from atc/ pages) to GIIT or Gyanam Abacus logo.
- * Prefers brand-specific assets; falls back to assets/logo.png.
+ * Absolute filesystem path to GIIT or Gyanam Abacus logo (for embedding / print).
  */
-function admissionFormBrandLogoUrl(string $variant, string $fromDir = 'atc'): string {
-    $prefix = $fromDir === 'atc' ? '../assets/' : ($fromDir === 'admin' ? '../assets/' : 'assets/');
+function admissionFormBrandLogoPath(string $variant): string {
     $baseFs = __DIR__ . '/../assets/';
-
     $candidates = $variant === 'abacus'
         ? ['gyanam_abacus_logo.png', 'abacus_logo.png', 'logo.png']
         : ['giit_logo.png', 'logo.png'];
 
     foreach ($candidates as $file) {
-        if (is_file($baseFs . $file)) {
-            return $prefix . $file;
+        $path = $baseFs . $file;
+        if (is_file($path)) {
+            return $path;
         }
     }
 
-    return $prefix . 'logo.png';
+    return $baseFs . 'logo.png';
+}
+
+/**
+ * Web-relative path (from atc/ pages) to GIIT or Gyanam Abacus logo.
+ * Prefers brand-specific assets; falls back to assets/logo.png.
+ * Adds filemtime cache-buster so logo updates show immediately.
+ */
+function admissionFormBrandLogoUrl(string $variant, string $fromDir = 'atc'): string {
+    $prefix = $fromDir === 'atc' ? '../assets/' : ($fromDir === 'admin' ? '../assets/' : 'assets/');
+    $path = admissionFormBrandLogoPath($variant);
+    $file = basename($path);
+    $ver = @filemtime($path) ?: time();
+    return $prefix . $file . '?v=' . $ver;
+}
+
+/**
+ * data: URI for brand logo — reliable in print/PDF (no relative-path fetch).
+ */
+function admissionFormBrandLogoDataUri(string $variant): string {
+    $path = admissionFormBrandLogoPath($variant);
+    $raw = @file_get_contents($path);
+    if ($raw === false) {
+        return admissionFormBrandLogoUrl($variant);
+    }
+    $mime = 'image/png';
+    if (function_exists('mime_content_type')) {
+        $detected = @mime_content_type($path);
+        if (is_string($detected) && $detected !== '') {
+            $mime = $detected;
+        }
+    }
+    return 'data:' . $mime . ';base64,' . base64_encode($raw);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
