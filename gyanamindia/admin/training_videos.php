@@ -530,59 +530,96 @@ function toggleChip(el){
     }
 }
 
-// Add video with XHR progress
+// Add video — large file uploads run in a background popup so navigating away is safe
 document.getElementById('addVideoForm').addEventListener('submit', function(e){
     e.preventDefault();
     const btn=document.getElementById('addBtn');
     const isUpload=document.getElementById('vType').value==='upload';
     const MAX_BYTES=1024*1024*1024;
+    let file=null;
     if(isUpload){
-        const f=document.getElementById('vFile').files[0];
-        if(!f){toast('Please choose a video file',false);return}
-        if(f.size>MAX_BYTES){toast('File exceeds 1 GB. Compress it or use a YouTube link.',false);return}
+        file=document.getElementById('vFile').files[0];
+        if(!file){toast('Please choose a video file',false);return}
+        if(file.size>MAX_BYTES){toast('File exceeds 1 GB. Compress it or use a YouTube link.',false);return}
         const serverMb=<?= (int)$phpUploadMb ?>;
-        if(serverMb>0 && f.size>serverMb*1048576){
-            toast('File is '+ (f.size/1048576).toFixed(0) +'MB but server limit is '+serverMb+'MB. Wait for .user.ini to apply, or use YouTube.',false);
+        if(serverMb>0 && file.size>serverMb*1048576){
+            toast('File is '+ (file.size/1048576).toFixed(0) +'MB but server limit is '+serverMb+'MB. Wait for .user.ini to apply, or use YouTube.',false);
             return;
         }
     }
-    const fd=new FormData(this);
-    fd.append('ajax','1'); fd.append('action','add_video');
-    document.querySelectorAll('.atc-chip.selected').forEach(c=>fd.append('assign_atcs[]',c.dataset.id));
 
-    const xhr=new XMLHttpRequest();
-    const progWrap=document.getElementById('uploadProgress');
-    const progBar=document.getElementById('progBar');
-    const progText=document.getElementById('progText');
-    const progStatus=document.getElementById('progStatus');
+    const assign_atcs=[];
+    document.querySelectorAll('.atc-chip.selected').forEach(c=>assign_atcs.push(c.dataset.id));
+    const payload={
+        title: document.getElementById('vTitle').value.trim(),
+        video_type: document.getElementById('vType').value,
+        video_url: (document.getElementById('vUrl')?.value || '').trim(),
+        description: (this.querySelector('[name="description"]')?.value || '').trim(),
+        access_start: this.querySelector('[name="access_start"]')?.value || '',
+        access_end: this.querySelector('[name="access_end"]')?.value || '',
+        assign_atcs,
+        file: file || null
+    };
+    if(!payload.title){toast('Title required',false);return}
+    if(!isUpload && !payload.video_url){toast('Video URL is required',false);return}
 
-    if(isUpload){progWrap.style.display='block';progBar.style.width='0';progText.textContent='0%';progStatus.textContent='Uploading...'}
-    btn.disabled=true; btn.textContent='⏳ Uploading...';
-    xhr.timeout=3600000; // 60 minutes for large files
+    // Non-file adds stay on-page (fast). File uploads go to background window.
+    if(!isUpload){
+        const fd=new FormData(this);
+        fd.append('ajax','1'); fd.append('action','add_video');
+        assign_atcs.forEach(id=>fd.append('assign_atcs[]',id));
+        btn.disabled=true; btn.textContent='⏳ Saving...';
+        fetch('',{method:'POST',body:fd}).then(r=>r.json()).then(r=>{
+            btn.disabled=false; btn.textContent='🎬 Add & Assign Video';
+            toast(r.message,r.success); if(r.success) setTimeout(()=>location.reload(),800);
+        }).catch(()=>{btn.disabled=false;btn.textContent='🎬 Add & Assign Video';toast('Failed',false)});
+        return;
+    }
 
-    xhr.upload.addEventListener('progress',function(e){
-        if(e.lengthComputable){
-            const pct=Math.round(e.loaded/e.total*100);
-            progBar.style.width=pct+'%';
-            progText.textContent=pct+'%';
-            const mb=(e.loaded/1048576).toFixed(1);
-            const totalMb=(e.total/1048576).toFixed(1);
-            progStatus.textContent=pct>=100?'Processing on server...':mb+'MB / '+totalMb+'MB';
-            if(pct>=100)btn.textContent='⚙️ Processing...';
+    const bg=window.open('training_upload_bg.php','gyanamTrainingUpload','width=460,height=420,menubar=no,toolbar=no,location=no,status=no');
+    if(!bg){
+        toast('Please allow popups for this site so the upload can continue in the background.',false);
+        return;
+    }
+
+    let handedOff=false;
+    const sendStart=()=>{
+        if(handedOff || bg.closed) return;
+        try{ bg.postMessage({type:'gyanam_start_training_upload', payload}, window.location.origin); }
+        catch(err){ try{ bg.postMessage({type:'gyanam_start_training_upload', payload}, '*'); }catch(e2){} }
+    };
+    const onMsg=(ev)=>{
+        if(!ev.data) return;
+        if(ev.data.type==='gyanam_upload_bg_ready') sendStart();
+        if(ev.data.type==='gyanam_upload_started'){
+            handedOff=true;
+            window.removeEventListener('message', onMsg);
+            clearInterval(retry);
         }
-    });
-    xhr.onload=function(){
-        btn.disabled=false;btn.textContent='🎬 Add & Assign Video';progWrap.style.display='none';
-        if(xhr.status===413){toast('Server rejected file (413). Increase upload limits in Hostinger.',false);return}
-        try{const r=JSON.parse(xhr.responseText);toast(r.message,r.success);if(r.success)setTimeout(()=>location.reload(),800)}
-        catch(err){
-            const snippet=(xhr.responseText||'').replace(/<[^>]+>/g,' ').trim().slice(0,160);
-            toast(snippet||'Upload failed after transfer — usually PHP post_max_size is too small.',false);
+        if(ev.data.type==='gyanam_upload_done' && ev.data.success){
+            if(location.pathname.includes('training_videos')) setTimeout(()=>location.reload(), 600);
         }
     };
-    xhr.onerror=function(){btn.disabled=false;btn.textContent='🎬 Add & Assign Video';progWrap.style.display='none';toast('Network error',false)};
-    xhr.ontimeout=function(){btn.disabled=false;btn.textContent='🎬 Add & Assign Video';progWrap.style.display='none';toast('Upload timed out. Try again or use YouTube.',false)};
-    xhr.open('POST','');xhr.send(fd);
+    window.addEventListener('message', onMsg);
+    const retry=setInterval(()=>{
+        if(handedOff){ clearInterval(retry); return; }
+        if(bg.closed){ clearInterval(retry); window.removeEventListener('message', onMsg); toast('Upload window was closed before start',false); return; }
+        sendStart();
+    }, 400);
+    // Safety stop retrying after 30s if never started
+    setTimeout(()=>{ clearInterval(retry); if(!handedOff) toast('Could not start background upload. Allow popups and try again.',false); }, 30000);
+
+    toast('Upload started in a background window. You can switch modules — keep that window open.', true);
+    btn.disabled=false;
+    btn.textContent='🎬 Add & Assign Video';
+    try{ document.getElementById('vFile').value=''; }catch(e){}
+    const progWrap=document.getElementById('uploadProgress');
+    if(progWrap){
+        progWrap.style.display='block';
+        document.getElementById('progBar').style.width='100%';
+        document.getElementById('progText').textContent='BG';
+        document.getElementById('progStatus').textContent='Running in background window — safe to leave this page';
+    }
 });
 
 // Quick assign form
