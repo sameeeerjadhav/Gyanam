@@ -347,11 +347,17 @@ try {
                         </div>
                     </div>
                 </div>
-                <div class="ac-card-footer">
-                    <a class="btn-print-cert" href="generate_auth_certificate.php?atc_id=<?= $atc['id'] ?>&preview=1" target="_blank">
+                <div class="ac-card-footer" style="flex-wrap:wrap;gap:.45rem">
+                    <?php
+                    $certVars = atcAuthCertificateVariants($atc['center_type'] ?? '');
+                    foreach ($certVars as $cv):
+                        $vLabel = $cv['variant'] === 'it' ? 'IT Cert' : 'Abacus Cert';
+                    ?>
+                    <a class="btn-print-cert" href="generate_auth_certificate.php?atc_id=<?= (int)$atc['id'] ?>&variant=<?= urlencode($cv['variant']) ?>&preview=1" target="_blank">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                        Print Certificate
+                        <?= htmlspecialchars($vLabel) ?>
                     </a>
+                    <?php endforeach; ?>
                     <?php if ($daysLeft !== null && $daysLeft <= 30): ?>
                     <button class="btn-renew" onclick="renewATC(<?= $atc['id'] ?>, '<?= htmlspecialchars(addslashes($atc['name'])) ?>')" title="Renew Authorization">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>

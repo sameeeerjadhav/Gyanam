@@ -2501,16 +2501,18 @@ try {
                                                         <circle cx="12" cy="12" r="3" />
                                                     </svg>
                                                 </button>
-                                                <!-- Auth Certificate -->
-                                                <a class="btn-act" style="color:#16a34a;text-decoration:none"
-                                                    href="generate_auth_certificate.php?atc_id=<?= $atc['id'] ?>"
+                                                <!-- Auth Certificate(s) by center type -->
+                                                <?php foreach (atcAuthCertificateVariants($atc['center_type'] ?? '') as $cv): ?>
+                                                <a class="btn-act" style="color:<?= $cv['variant'] === 'it' ? '#2563eb' : '#7c3aed' ?>;text-decoration:none"
+                                                    href="generate_auth_certificate.php?atc_id=<?= (int)$atc['id'] ?>&variant=<?= urlencode($cv['variant']) ?>"
                                                     target="_blank"
-                                                    title="Download Authorization Certificate (PDF)">
+                                                    title="Download <?= htmlspecialchars($cv['label']) ?>">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                                                         <line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/>
                                                     </svg>
                                                 </a>
+                                                <?php endforeach; ?>
                                                 <?php if (!empty($atc['mobile']) && !empty($atc['login_username'])): ?>
 
                                                     <button class="btn-act notify-wa"
