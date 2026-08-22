@@ -637,42 +637,6 @@ try {
         @file_put_contents($atcFeePayFlag, date('c') . "\n");
     }
 } catch (Exception $e) { /* non-fatal */ }
-
-// Edit modal cache — open instantly without waiting for AJAX
-$atcEditCache = [];
-foreach ($atcCenters as $row) {
-    $tid = (int)$row['id'];
-    $atcEditCache[$tid] = [
-        'id' => $tid,
-        'name' => $row['name'] ?? '',
-        'center_type' => $row['center_type'] ?? '',
-        'dlc_id' => $row['dlc_id'] ?? '',
-        'authorization_expires_at' => $row['authorization_expires_at'] ?? '',
-        'franchise_payment_mode' => $row['franchise_payment_mode'] ?? '',
-        'franchise_fees' => $row['franchise_fees'] ?? null,
-        'franchise_paid_date' => $row['franchise_paid_date'] ?? '',
-        'district' => $row['district'] ?? '',
-        'taluka' => $row['taluka'] ?? '',
-        'city' => $row['city'] ?? '',
-        'pin_code' => $row['pin_code'] ?? '',
-        'state' => $row['state'] ?? 'Maharashtra',
-        'address' => $row['address'] ?? '',
-        'contact_person' => $row['contact_person'] ?? '',
-        'dob' => $row['dob'] ?? '',
-        'mobile' => $row['mobile'] ?? '',
-        'alternate_mobile' => $row['alternate_mobile'] ?? '',
-        'email' => $row['email'] ?? '',
-        'date_created' => $row['date_created'] ?? '',
-        'status' => $row['status'] ?? 'Active',
-        'atc_code' => $row['atc_code'] ?? '',
-        'login_username' => $row['login_username'] ?? '',
-        'login_password' => $row['login_password'] ?? '',
-        'training_user' => isset($trainingLookup[$tid]) ? [
-            'username' => $trainingLookup[$tid]['username'] ?? '',
-            'password' => $trainingLookup[$tid]['password'] ?? '',
-        ] : null,
-    ];
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1368,6 +1332,9 @@ foreach ($atcCenters as $row) {
             background: var(--surface-2);
             cursor: pointer;
             transition: all var(--t);
+            text-decoration: none;
+            color: inherit;
+            box-sizing: border-box;
         }
 
         .btn-act svg {
@@ -1811,11 +1778,13 @@ foreach ($atcCenters as $row) {
             white-space: nowrap;
             box-shadow: 0 4px 14px var(--brand-glow);
             transition: all .2s ease;
+            text-decoration: none;
         }
 
         .btn-add-atc:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px var(--brand-glow);
+            color: white;
         }
 
         .btn-add-atc svg {
@@ -1823,7 +1792,7 @@ foreach ($atcCenters as $row) {
             height: 16px;
         }
 
-        /* ATC Add/Edit Modal */
+        /* ATC Add/Edit Modal (legacy styles retained; form moved to atc_form.php) */
         .atc-modal-overlay {
             position: fixed;
             inset: 0;
@@ -2232,14 +2201,14 @@ foreach ($atcCenters as $row) {
                             <div class="page-header-subtitle">Manage and monitor Authorized Training Centers</div>
                         </div>
                     </div>
-                    <button class="btn-add-atc" onclick="openAddModal()">
+                    <a class="btn-add-atc" href="atc_form.php">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="12" y1="5" x2="12" y2="19" />
                             <line x1="5" y1="12" x2="19" y2="12" />
                         </svg>
                         Add ATC Center
-                    </button>
+                    </a>
                 </div>
 
                 <!-- Overall Statistics Cards -->
@@ -2566,14 +2535,14 @@ foreach ($atcCenters as $row) {
                                                         </svg>
                                                     </button>
                                                 <?php endif; ?>
-                                                <button class="btn-act" onclick="editATC(<?= $atc['id'] ?>)" title="Edit ATC">
+                                                <a class="btn-act" href="atc_form.php?id=<?= (int)$atc['id'] ?>" title="Edit ATC">
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                                         stroke-linejoin="round">
                                                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                                                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                                                     </svg>
-                                                </button>
+                                                </a>
                                                 <button class="btn-act danger"
                                                     onclick="deleteATC(<?= $atc['id'] ?>, '<?= htmlspecialchars($atc['name'], ENT_QUOTES) ?>')"
                                                     title="Delete ATC">
@@ -2597,289 +2566,6 @@ foreach ($atcCenters as $row) {
             </div>
         </main>
     </div>
-    <!-- Add/Edit ATC Modal -->
-    <div class="atc-modal-overlay" id="atcFormModal">
-        <div class="atc-modal-card">
-            <div class="atc-modal-header">
-                <h3>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
-                        <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
-                    </svg>
-                    <span id="atcFormTitle">Add New ATC Center</span>
-                </h3>
-                <button type="button" class="atc-modal-close" onclick="closeATCModal()">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                </button>
-            </div>
-            <form id="atcForm" novalidate>
-                <input type="hidden" id="atcFormAction" name="action" value="add">
-                <input type="hidden" id="atcFormId" name="id">
-                <div class="atc-modal-body">
-
-                    <!-- Basic Info -->
-                    <div class="atc-form-section">
-                        <div class="atc-form-section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
-                                <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
-                            </svg>
-                            Center Information
-                        </div>
-                        <div class="atc-form-grid">
-                            <div class="atc-form-field full">
-                                <label for="f_name">Center Name <span class="req">*</span></label>
-                                <input type="text" id="f_name" name="name" required maxlength="150"
-                                    placeholder="e.g., Pune Authorized Training Center">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_center_type">Center Type <span class="req">*</span></label>
-                                <select id="f_center_type" name="center_type" required>
-                                    <option value="">-- Select Type --</option>
-                                    <option value="Abacus">Abacus</option>
-                                    <option value="Vedic Maths">Vedic Maths</option>
-                                    <option value="IT">IT</option>
-                                    <option value="Abacus + IT">Abacus + IT</option>
-                                    <option value="Abacus + Vedic Maths">Abacus + Vedic Maths</option>
-                                    <option value="Vedic Maths + IT">Vedic Maths + IT</option>
-                                    <option value="Abacus + Vedic Maths + IT">Abacus + Vedic Maths + IT</option>
-                                </select>
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_dlc_id">Assign to DLC Login <span class="req">*</span></label>
-                                <select id="f_dlc_id" name="dlc_id" required>
-                                    <option value="">-- Select DLC --</option>
-                                    <?php foreach ($dlcOffices as $dlc): ?>
-                                        <option value="<?= $dlc['id'] ?>"><?= htmlspecialchars($dlc['name']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_date_created">Date Created</label>
-                                <input type="date" id="f_date_created" name="date_created" max="<?= date('Y-m-d') ?>">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_authorization_expires_at">Authorization Expiry Date</label>
-                                <input type="date" id="f_authorization_expires_at" name="authorization_expires_at">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_franchise_payment_mode">Payment Mode</label>
-                                <select id="f_franchise_payment_mode" name="franchise_payment_mode">
-                                    <option value="">-- Select Mode --</option>
-                                    <option value="Cash">Cash</option>
-                                    <option value="UPI">UPI</option>
-                                    <option value="Cheque">Cheque</option>
-                                </select>
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_franchise_fees">Franchise Fees / Amount Paid (&#8377;)</label>
-                                <input type="number" id="f_franchise_fees" name="franchise_fees" min="0" step="0.01"
-                                    placeholder="e.g. 25000">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_franchise_paid_date">Amount Paid Date</label>
-                                <input type="date" id="f_franchise_paid_date" name="franchise_paid_date"
-                                    max="<?= date('Y-m-d') ?>">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Location -->
-                    <div class="atc-form-section">
-                        <div class="atc-form-section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                                <circle cx="12" cy="10" r="3" />
-                            </svg>
-                            Location Details
-                        </div>
-                        <div class="atc-form-grid">
-                            <div class="atc-form-field full">
-                                <label for="f_address">Full Address <span class="req">*</span></label>
-                                <textarea id="f_address" name="address" rows="2" required
-                                    placeholder="Complete address with landmark, street, area"></textarea>
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_district">District <span class="req">*</span></label>
-                                <input type="text" id="f_district" name="district" required maxlength="100"
-                                    placeholder="e.g., Pune">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_taluka">Taluka <span class="req">*</span></label>
-                                <input type="text" id="f_taluka" name="taluka" required maxlength="100"
-                                    placeholder="e.g., Haveli">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_city">City</label>
-                                <input type="text" id="f_city" name="city" maxlength="100"
-                                    placeholder="e.g., Pune City">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_state">State</label>
-                                <select id="f_state" name="state">
-                                    <option value="Maharashtra">Maharashtra</option>
-                                    <option value="Gujarat">Gujarat</option>
-                                    <option value="Karnataka">Karnataka</option>
-                                    <option value="Delhi">Delhi</option>
-                                    <option value="Rajasthan">Rajasthan</option>
-                                    <option value="Uttar Pradesh">Uttar Pradesh</option>
-                                    <option value="Madhya Pradesh">Madhya Pradesh</option>
-                                    <option value="Tamil Nadu">Tamil Nadu</option>
-                                    <option value="West Bengal">West Bengal</option>
-                                    <option value="Telangana">Telangana</option>
-                                    <option value="Andhra Pradesh">Andhra Pradesh</option>
-                                    <option value="Kerala">Kerala</option>
-                                    <option value="Punjab">Punjab</option>
-                                    <option value="Haryana">Haryana</option>
-                                    <option value="Bihar">Bihar</option>
-                                    <option value="Odisha">Odisha</option>
-                                    <option value="Jharkhand">Jharkhand</option>
-                                    <option value="Chhattisgarh">Chhattisgarh</option>
-                                    <option value="Assam">Assam</option>
-                                    <option value="Other">Other</option>
-                                </select>
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_pin_code">PIN Code <span class="req">*</span></label>
-                                <input type="text" id="f_pin_code" name="pin_code" required maxlength="10"
-                                    pattern="[0-9]{6}" placeholder="6-digit PIN">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Contact -->
-                    <div class="atc-form-section">
-                        <div class="atc-form-section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path
-                                    d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                            </svg>
-                            Contact Information
-                        </div>
-                        <div class="atc-form-grid">
-                            <div class="atc-form-field">
-                                <label for="f_contact_person">Contact Person</label>
-                                <input type="text" id="f_contact_person" name="contact_person" maxlength="100"
-                                    placeholder="Full name">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_mobile">Mobile Number</label>
-                                <input type="tel" id="f_mobile" name="mobile" maxlength="10" pattern="[0-9]{10}"
-                                    placeholder="9876543210">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_alternate_mobile">Alternate Mobile <span style="font-size:.72rem;color:var(--text-3);font-weight:500">(optional)</span></label>
-                                <input type="tel" id="f_alternate_mobile" name="alternate_mobile" maxlength="15"
-                                    placeholder="e.g., 9876543211">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_email">Email Address</label>
-                                <input type="email" id="f_email" name="email" maxlength="100"
-                                    placeholder="center@example.com">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_dob">Contact Person Birthday</label>
-                                <input type="date" id="f_dob" name="dob">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_status">Status</label>
-                                <select id="f_status" name="status">
-                                    <option value="Active">Active</option>
-                                    <option value="Inactive">Inactive</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Login Account -->
-                    <div class="atc-form-section" id="loginAccountSection">
-                        <div class="atc-form-section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                            </svg>
-                            Login Account Credentials
-                        </div>
-                        <div id="loginAccountHint"
-                            style="padding:.75rem 1rem;background:linear-gradient(135deg,#eff6ff,#ede9fe);border:1px solid #c7d2fe;border-radius:12px;margin-bottom:1rem;font-size:.8rem;color:#4338ca;font-weight:500;">
-                            Username is always the <strong>ATC Code</strong>. Temporary password is set to
-                            <strong>password</strong> — ATC should change it after first login. You can share via WhatsApp.
-                        </div>
-                        <div class="atc-form-grid">
-                            <div class="atc-form-field">
-                                <label for="f_login_username">Username (ATC Code)</label>
-                                <input type="text" id="f_login_username" name="login_username" maxlength="100"
-                                    placeholder="Auto = ATC Code after save" autocomplete="off" readonly
-                                    style="background:#f8fafc;cursor:not-allowed;">
-                            </div>
-                            <div class="atc-form-field">
-                                <label for="f_login_password">Password <span class="req" id="loginPasswordReq" style="display:none">*</span></label>
-                                <input type="text" id="f_login_password" name="login_password" maxlength="100"
-                                    value="password" autocomplete="off" readonly
-                                    style="background:#f8fafc;cursor:not-allowed;">
-                                <div class="field-hint" id="loginPasswordHint" style="font-size:.72rem;color:#64748b;margin-top:.3rem;">
-                                    Temporary password: <strong>password</strong>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Training Login -->
-                    <div class="atc-form-section" id="trainingLoginSection">
-                        <div class="atc-form-section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                            Training Video Login
-                            <span id="trainingBadge" style="display:none;font-size:.65rem;font-weight:800;padding:.15rem .5rem;border-radius:99px;margin-left:.5rem;"></span>
-                        </div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
-                            <div style="font-size:.78rem;color:#6d28d9;font-weight:500;">🎬 Create a separate login to access training videos for this ATC</div>
-                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.78rem;font-weight:700;color:#6d28d9;margin:0;white-space:nowrap;">
-                                <input type="checkbox" id="f_create_training" name="create_training" value="1" style="width:auto;accent-color:#7c3aed;" onchange="toggleTrainingFields()">
-                                Enable
-                            </label>
-                        </div>
-                        <div id="trainingFieldsATC" style="display:none;">
-                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.78rem;font-weight:600;color:#6d28d9;margin:0 0 .75rem;">
-                                <input type="checkbox" id="f_same_training_creds" name="same_training_creds" value="1" style="width:auto;accent-color:#7c3aed;" onchange="handleTrainingSameCreds()">
-                                <span>Use same credentials as ATC login</span>
-                            </label>
-                            <div class="atc-form-grid">
-                                <div class="atc-form-field">
-                                    <label for="f_training_username">Training Username</label>
-                                    <input type="text" id="f_training_username" name="training_username" placeholder="e.g., training_pune" autocomplete="off">
-                                </div>
-                                <div class="atc-form-field">
-                                    <label for="f_training_password">Training Password</label>
-                                    <input type="text" id="f_training_password" name="training_password" placeholder="e.g., Train@123" autocomplete="off">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-                <div class="atc-modal-footer">
-                    <button type="button" class="btn-modal-cancel" onclick="closeATCModal()">Cancel</button>
-                    <button type="submit" class="btn-modal-save" id="atcSaveBtn">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" style="width:16px;height:16px;">
-                            <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        <span id="atcSaveBtnText">Save ATC Center</span>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- Delete Confirm -->
     <div class="confirm-overlay" id="deleteConfirmOverlay">
         <div class="confirm-card">
@@ -2952,8 +2638,6 @@ foreach ($atcCenters as $row) {
 
     <script src="../assets/js/dashboard.js"></script>
     <script>
-        const ATC_EDIT_CACHE = <?= json_encode($atcEditCache, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
-
         /* ── Toast ── */
         function showToast(msg, type = 'success') {
             const existing = document.querySelector('.atc-toast-container') || (() => {
@@ -2968,192 +2652,6 @@ foreach ($atcCenters as $row) {
             existing.appendChild(t);
             setTimeout(() => t.remove(), 3500);
         }
-
-        /* ── Add Modal ── */
-        function openAddModal() {
-            document.getElementById('atcFormTitle').textContent = 'Add New ATC Center';
-            document.getElementById('atcFormAction').value = 'add';
-            document.getElementById('atcFormId').value = '';
-            document.getElementById('atcForm').reset();
-            document.getElementById('atcSaveBtnText').textContent = 'Save ATC Center';
-            // Auto-fill today as date_created and expiry as today+1 year
-            const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
-            const expiry = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
-            document.getElementById('f_date_created').value = todayStr;
-            document.getElementById('f_authorization_expires_at').value = expiry.toISOString().split('T')[0];
-            // Login: username = ATC code (auto), temp password = password
-            document.getElementById('loginAccountSection').style.display = '';
-            const uEl = document.getElementById('f_login_username');
-            const pEl = document.getElementById('f_login_password');
-            uEl.value = '';
-            uEl.placeholder = 'Auto = ATC Code after save';
-            uEl.readOnly = true;
-            uEl.style.background = '#f8fafc';
-            uEl.style.cursor = 'not-allowed';
-            pEl.value = 'password';
-            pEl.placeholder = 'password';
-            pEl.readOnly = true;
-            pEl.style.background = '#f8fafc';
-            pEl.style.cursor = 'not-allowed';
-            document.getElementById('loginPasswordReq').style.display = 'none';
-            document.getElementById('loginPasswordHint').style.display = '';
-            document.getElementById('loginPasswordHint').innerHTML = 'Temporary password: <strong>password</strong>';
-            document.getElementById('loginAccountHint').innerHTML = 'Username is always the <strong>ATC Code</strong>. Temporary password is set to <strong>password</strong> — ATC should change it after first login. You can share via WhatsApp.';
-            document.getElementById('loginAccountHint').style.background = 'linear-gradient(135deg,#eff6ff,#ede9fe)';
-            document.getElementById('loginAccountHint').style.borderColor = '#c7d2fe';
-            document.getElementById('loginAccountHint').style.color = '#4338ca';
-            // Reset training fields
-            document.getElementById('f_create_training').checked = false;
-            document.getElementById('trainingFieldsATC').style.display = 'none';
-            document.getElementById('f_same_training_creds').checked = false;
-            document.getElementById('f_training_username').value = '';
-            document.getElementById('f_training_password').value = '';
-            document.getElementById('f_training_password').placeholder = 'e.g., Train@123';
-            document.getElementById('trainingBadge').style.display = 'none';
-            document.getElementById('atcFormModal').classList.add('active');
-        }
-
-        function closeATCModal() {
-            document.getElementById('atcFormModal').classList.remove('active');
-            document.getElementById('atcForm').reset();
-        }
-
-        /* ── Training Login Helpers ── */
-        function toggleTrainingFields() {
-            document.getElementById('trainingFieldsATC').style.display = document.getElementById('f_create_training').checked ? 'block' : 'none';
-        }
-        function handleTrainingSameCreds() {
-            const same = document.getElementById('f_same_training_creds').checked;
-            const tU = document.getElementById('f_training_username');
-            const tP = document.getElementById('f_training_password');
-            const isAdd = document.getElementById('atcFormAction').value === 'add';
-            if (same) {
-                const u = document.getElementById('f_login_username').value;
-                const p = document.getElementById('f_login_password').value || 'password';
-                tU.value = isAdd && !u ? '(same as ATC Code)' : u;
-                tP.value = p;
-                tU.readOnly = true; tP.readOnly = true;
-                tU.style.opacity = '.6'; tP.style.opacity = '.6';
-            } else {
-                tU.readOnly = false; tP.readOnly = false;
-                tU.style.opacity = '1'; tP.style.opacity = '1';
-            }
-        }
-
-        /* ── Edit ATC (instant from page cache) ── */
-        function fillATCEditForm(a) {
-            document.getElementById('atcFormTitle').textContent = 'Edit ATC Center';
-            document.getElementById('atcFormAction').value = 'edit';
-            document.getElementById('atcFormId').value = a.id;
-            document.getElementById('f_name').value = a.name || '';
-            document.getElementById('f_center_type').value = a.center_type || '';
-            document.getElementById('f_dlc_id').value = a.dlc_id || '';
-            document.getElementById('f_authorization_expires_at').value = a.authorization_expires_at || '';
-            document.getElementById('f_franchise_payment_mode').value = a.franchise_payment_mode || '';
-            document.getElementById('f_franchise_fees').value = (a.franchise_fees !== null && a.franchise_fees !== undefined && a.franchise_fees !== '') ? a.franchise_fees : '';
-            document.getElementById('f_franchise_paid_date').value = a.franchise_paid_date || '';
-            document.getElementById('f_district').value = a.district || '';
-            document.getElementById('f_taluka').value = a.taluka || '';
-            document.getElementById('f_city').value = a.city || '';
-            document.getElementById('f_pin_code').value = a.pin_code || '';
-            document.getElementById('f_state').value = a.state || 'Maharashtra';
-            document.getElementById('f_address').value = a.address || '';
-            document.getElementById('f_contact_person').value = a.contact_person || '';
-            document.getElementById('f_dob').value = a.dob || '';
-            document.getElementById('f_mobile').value = a.mobile || '';
-            document.getElementById('f_alternate_mobile').value = a.alternate_mobile || '';
-            document.getElementById('f_email').value = a.email || '';
-            document.getElementById('f_date_created').value = a.date_created || '';
-            document.getElementById('f_status').value = a.status || 'Active';
-            document.getElementById('atcSaveBtnText').textContent = 'Update ATC Center';
-            document.getElementById('loginAccountSection').style.display = '';
-            const uEl = document.getElementById('f_login_username');
-            const pEl = document.getElementById('f_login_password');
-            const code = a.atc_code || a.login_username || '';
-            uEl.value = code;
-            uEl.readOnly = true;
-            uEl.style.background = '#f8fafc';
-            uEl.style.cursor = 'not-allowed';
-            pEl.value = a.login_password || '';
-            pEl.placeholder = 'Current password (editable to reset)';
-            pEl.readOnly = false;
-            pEl.style.background = '#fff';
-            pEl.style.cursor = 'text';
-            document.getElementById('loginPasswordReq').style.display = 'none';
-            document.getElementById('loginPasswordHint').style.display = '';
-            document.getElementById('loginPasswordHint').innerHTML = 'Admin can view / reset password here. Leave as-is to keep.';
-            document.getElementById('loginAccountHint').innerHTML = '🔐 Username is fixed to <strong>ATC Code</strong>. Password is visible below — change it here if you need to reset.';
-            document.getElementById('loginAccountHint').style.background = 'linear-gradient(135deg,#f0fdf4,#dcfce7)';
-            document.getElementById('loginAccountHint').style.borderColor = '#86efac';
-            document.getElementById('loginAccountHint').style.color = '#15803d';
-            const badge = document.getElementById('trainingBadge');
-            const tU = document.getElementById('f_training_username');
-            const tP = document.getElementById('f_training_password');
-            document.getElementById('f_same_training_creds').checked = false;
-            tU.readOnly = false; tU.style.opacity = '1';
-            tP.readOnly = false; tP.style.opacity = '1';
-            if (a.training_user) {
-                badge.textContent = '✓ Active';
-                badge.style.display = 'inline';
-                badge.style.background = '#d1fae5'; badge.style.color = '#065f46'; badge.style.border = '1px solid #a7f3d0';
-                tU.value = a.training_user.username;
-                tP.value = a.training_user.password || '';
-                tP.placeholder = 'Leave blank to keep current';
-                document.getElementById('f_create_training').checked = true;
-                document.getElementById('trainingFieldsATC').style.display = 'block';
-            } else {
-                badge.textContent = 'Not Created';
-                badge.style.display = 'inline';
-                badge.style.background = '#fef3c7'; badge.style.color = '#92400e'; badge.style.border = '1px solid #fde68a';
-                tU.value = ''; tP.value = ''; tP.placeholder = 'e.g., Train@123';
-                document.getElementById('f_create_training').checked = false;
-                document.getElementById('trainingFieldsATC').style.display = 'none';
-            }
-            document.getElementById('atcFormModal').classList.add('active');
-        }
-
-        function editATC(id) {
-            const cached = ATC_EDIT_CACHE[String(id)] || ATC_EDIT_CACHE[id];
-            if (cached) {
-                fillATCEditForm(cached);
-                return;
-            }
-            // Fallback if not on current page
-            (async () => {
-                try {
-                    const fd = new FormData();
-                    fd.append('action', 'get'); fd.append('atc_id', id);
-                    const res = await fetch('', { method: 'POST', body: new URLSearchParams(fd) });
-                    const data = await res.json();
-                    if (!data.success) { showToast('Error loading data', 'error'); return; }
-                    fillATCEditForm(data.data);
-                } catch (e) { showToast('Error loading ATC data', 'error'); }
-            })();
-        }
-
-        /* ── Form Submit ── */
-        document.getElementById('atcForm').addEventListener('submit', async function (e) {
-            e.preventDefault();
-            const btn = document.getElementById('atcSaveBtn');
-            const origText = document.getElementById('atcSaveBtnText').textContent;
-            btn.disabled = true;
-            document.getElementById('atcSaveBtnText').textContent = 'Saving...';
-            try {
-                const fd = new FormData(this);
-                const res = await fetch('', { method: 'POST', body: new URLSearchParams(fd) });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(data.message, 'success');
-                    closeATCModal();
-                    setTimeout(() => location.reload(), 800);
-                } else {
-                    showToast(data.message || 'Error saving ATC', 'error');
-                }
-            } catch (e) { showToast('Server error', 'error'); }
-            btn.disabled = false;
-            document.getElementById('atcSaveBtnText').textContent = origText;
-        });
 
         /* ── Delete ── */
         let _pendingDeleteId = null;
@@ -3185,9 +2683,8 @@ foreach ($atcCenters as $row) {
 
         /* ── Close modals on overlay click / Escape ── */
         document.addEventListener('DOMContentLoaded', function () {
-            document.getElementById('atcFormModal').addEventListener('click', function (e) { if (e.target === this) closeATCModal(); });
             document.getElementById('deleteConfirmOverlay').addEventListener('click', function (e) { if (e.target === this) closeDeleteConfirm(); });
-            document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeATCModal(); closeDeleteConfirm(); closeDetailsModal(); } });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeDeleteConfirm(); closeDetailsModal(); } });
         });
 
 

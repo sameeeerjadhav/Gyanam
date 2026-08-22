@@ -37,7 +37,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><path d="M9 8h1"/><path d="M9 12h1"/><path d="M14 8h1"/><path d="M14 12h1"/></svg>
                 <span>DLC Logins</span>
             </a>
-            <a href="atc_centers.php" class="nav-link <?= $currentPage === 'atc_centers.php' ? 'active' : '' ?>" data-tooltip="ATC Logins">
+            <a href="atc_centers.php" class="nav-link <?= in_array($currentPage, ['atc_centers.php', 'atc_form.php'], true) ? 'active' : '' ?>" data-tooltip="ATC Logins">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
                 <span>ATC Logins</span>
             </a>
