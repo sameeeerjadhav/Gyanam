@@ -84,19 +84,19 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
 <?php endif; ?>
 <style>
 :root { --font: 'Sora', system-ui, sans-serif; }
-.page-wrap { max-width: 980px; margin: 0 auto; }
+.page-wrap { max-width: none; width: 100%; margin: 0; }
 .form-card {
     background:#fff; border:1.5px solid var(--border-color,#e5e7eb); border-radius:16px;
-    overflow:hidden; box-shadow:0 4px 20px rgba(15,23,42,.04);
+    overflow:hidden; box-shadow:0 4px 20px rgba(15,23,42,.04); width:100%;
 }
 .form-card-head {
-    padding:1.1rem 1.35rem; border-bottom:1px solid #eef2f7;
+    padding:1.1rem 1.5rem; border-bottom:1px solid #eef2f7;
     display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;
     background:linear-gradient(135deg,#fff 0%,#f8fafc 100%);
 }
 .form-card-head h3 { margin:0; font-size:1.05rem; font-weight:800; color:var(--text-primary,#111) }
 .form-card-head p { margin:.2rem 0 0; font-size:.8rem; color:var(--text-secondary,#6b7280); font-weight:500 }
-.form-body { padding:1.25rem 1.35rem 1.5rem }
+.form-body { padding:1.35rem 1.5rem 1.6rem }
 .atc-form-section { margin-bottom:1.5rem }
 .atc-form-section-title {
     display:flex; align-items:center; gap:.5rem; font-size:.78rem; font-weight:800;
@@ -104,7 +104,7 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
 }
 .atc-form-section-title svg { width:16px; height:16px }
 .atc-form-grid {
-    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.85rem 1rem;
+    display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.85rem 1.1rem;
 }
 .atc-form-grid .full { grid-column:1 / -1 }
 .atc-form-field { display:flex; flex-direction:column; gap:.28rem }
@@ -115,6 +115,7 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
 .atc-form-field textarea {
     height:42px; padding:0 .85rem; border:1.5px solid #e5e7eb; border-radius:10px;
     font-family:inherit; font-size:.875rem; outline:none; background:#fff; transition:border-color .15s;
+    width:100%; box-sizing:border-box;
 }
 .atc-form-field textarea { height:auto; padding:.7rem .85rem; resize:vertical }
 .atc-form-field input:focus,
@@ -122,7 +123,7 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
 .atc-form-field textarea:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.12) }
 .form-actions {
     display:flex; gap:.75rem; justify-content:flex-end; flex-wrap:wrap;
-    padding:1rem 1.35rem; border-top:1px solid #eef2f7; background:#fafbfc;
+    padding:1rem 1.5rem; border-top:1px solid #eef2f7; background:#fafbfc;
 }
 .btn-cancel {
     height:42px; padding:0 1.15rem; border-radius:10px; border:1.5px solid #e5e7eb;
@@ -150,6 +151,9 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
 .back-link {
     display:inline-flex; align-items:center; gap:.35rem; font-size:.82rem; font-weight:700;
     color:#4361ee; text-decoration:none; margin-bottom:.85rem;
+}
+@media (max-width:1100px) {
+    .atc-form-grid { grid-template-columns:repeat(2,minmax(0,1fr)) }
 }
 @media (max-width:720px) {
     .atc-form-grid { grid-template-columns:1fr }
