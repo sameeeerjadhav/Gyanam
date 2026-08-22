@@ -60,12 +60,12 @@ $sampleLines = $variantReq === 'abacus'
         [206, 'For the period from 01/03/2026 to 28/02/2027'],
     ]
     : [
-        [130, 'ATC Name: M/S. Sample GIIT Academy'],
-        [148, 'Centre registration code GIIT ATC-20260001'],
-        [157, 'Has been recognized as our Authorized Training Centre for'],
-        [164, 'Conducting our IT Courses'],
-        [172, 'at Jalgaon, Dist. Jalgaon.'],
-        [180, 'for the period 01/05/2026 to 30/04/2027'],
+        [132, 'ATC Name: M/S. Sample GIIT Academy'],
+        [150, 'Centre registration code GIIT ATC-20260001'],
+        [162, 'Has been recognized as our Authorized Training Centre for'],
+        [174, 'Conducting our IT Courses'],
+        [186, 'at Jalgaon, Dist. Jalgaon.'],
+        [198, 'for the period 01/05/2026 to 30/04/2027'],
     ];
 
 foreach ($sampleLines as [$y, $text]) {
