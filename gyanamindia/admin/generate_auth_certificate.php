@@ -156,12 +156,12 @@ try {
             $put($period, 194, 15, 'B', '30,30,30');
         }
     } else {
-        $put($atcName, 140, 18, 'BI', '0,0,128');
-        $put('Centre registration code ' . $atcCode, 155, 11, 'B', '30,30,30');
-        $put('Has been recognized as our Authorized Training Centre for', 164, 11, 'B', '30,30,30');
-        $put($conductingLine, 172, 11, 'B', '30,30,30');
-        $put($location, 180, 11, 'B', '30,30,30');
-        $put($period, 188, 11, 'B', '30,30,30');
+        $put($atcName, 132, 26, 'BI', '0,0,128');
+        $put('Centre registration code ' . $atcCode, 150, 15, 'B', '30,30,30');
+        $put('Has been recognized as our Authorized Training Centre for', 162, 15, 'B', '30,30,30');
+        $put($conductingLine, 174, 15, 'B', '30,30,30');
+        $put($location, 186, 15, 'B', '30,30,30');
+        $put($period, 198, 15, 'B', '30,30,30');
     }
 
     $inline   = isset($_GET['preview']);
