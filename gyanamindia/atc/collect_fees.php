@@ -187,10 +187,10 @@ function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
     pointer-events:none;
 }
 .cf-avatar {
-    width:60px;height:60px;border-radius:50%;flex-shrink:0;
+    width:52px;height:64px;border-radius:6px;flex-shrink:0;
     background:linear-gradient(135deg,#4361ee,#3730a3);
     display:flex;align-items:center;justify-content:center;
-    font-size:1.5rem;font-weight:800;color:#fff;
+    font-size:1.35rem;font-weight:800;color:#fff;
     box-shadow:0 4px 16px rgba(67,97,238,.25);
     overflow:hidden;
 }
