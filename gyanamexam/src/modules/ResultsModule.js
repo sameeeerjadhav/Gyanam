@@ -6,18 +6,20 @@ async function fetchAllResults(ApiClient) {
   const all = [];
   let page = 1;
   let lastPage = 1;
+  let serverStats = null;
   do {
     const data = await ApiClient.getResults({ page, per_page: 100 });
     const batch = data?.submissions || [];
     all.push(...batch);
+    if (data?.stats) serverStats = data.stats;
     lastPage = data?.pagination?.last_page || 1;
     page += 1;
-  } while (page <= lastPage && page <= 50);
-  return all;
+  } while (page <= lastPage && page <= 200); // up to ~20k rows
+  return { submissions: all, serverStats };
 }
 
 export async function renderResults(ApiClient, { currentUser }) {
-  const [allSubmissions, flags] = await Promise.all([
+  const [{ submissions: allSubmissions, serverStats }, flags] = await Promise.all([
     fetchAllResults(ApiClient),
     ApiClient.getFlags('pending').catch(() => []),
   ]);
@@ -30,6 +32,15 @@ export async function renderResults(ApiClient, { currentUser }) {
   const PAGE_SIZE = 25;
 
   function calculateStats(subs) {
+    // Prefer server aggregates when showing unfiltered set
+    if (!currentCentre && !searchQ && serverStats) {
+      return {
+        total: serverStats.total ?? subs.length,
+        passed: serverStats.passed ?? 0,
+        failed: serverStats.failed ?? 0,
+        avg: serverStats.avg ?? 0,
+      };
+    }
     const total = subs.length;
     const passed = subs.filter(s => s.result === 'pass').length;
     const failed = total - passed;

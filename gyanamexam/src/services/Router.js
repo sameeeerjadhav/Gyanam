@@ -20,7 +20,8 @@ export class Router {
     const path = window.location.pathname;
     if (path.includes('/admin.html')) return path.split('/admin.html')[0];
     if (path.includes('/index.html')) return path.split('/index.html')[0];
-    // fallback to root or current dir
+    const gyanam = path.match(/^(.*\/gyanamexam)(?:\/|$)/);
+    if (gyanam) return gyanam[1];
     return '';
   }
 
@@ -44,9 +45,13 @@ export class Router {
 
   navigate(path, state = null) {
     if (typeof path !== 'string' || !path.startsWith('/')) throw new Error('Navigation path must start with "/"');
-    const fullPath = this.basePath + path;
-    if (fullPath === this.currentPath) return;
-    window.history.pushState(state, '', fullPath);
+    const qIndex = path.indexOf('?');
+    const pathname = qIndex >= 0 ? path.slice(0, qIndex) : path;
+    const search = qIndex >= 0 ? path.slice(qIndex) : '';
+    const fullPath = this.basePath + pathname;
+    const fullUrl = fullPath + search;
+    if (fullUrl === window.location.pathname + window.location.search && !state) return;
+    window.history.pushState(state, '', fullUrl);
     this.currentPath = fullPath;
     this.handleRoute(fullPath, state);
   }

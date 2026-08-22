@@ -29,6 +29,12 @@ class ApiClient {
   static removeToken() {
     localStorage.removeItem(this._tokenKey());
     localStorage.removeItem(this._userKey());
+    // Keep auth session in sync (prevents zombie rehydrate with dead token)
+    if (this._scope === 'student') {
+      localStorage.removeItem('gyanam_student_session');
+    } else {
+      localStorage.removeItem('gyanam_admin_session');
+    }
   }
 
   static async getDashboardStats() {
@@ -56,9 +62,12 @@ class ApiClient {
       const response = await fetch(`${BASE_URL}${endpoint}`, config);
 
       if (response.status === 401) {
+        const onExam = (window.location.pathname || '').includes('/exam')
+          || (window.location.search || '').includes('id=');
         this.removeToken();
-        // Dispatch a SPA-friendly auth event instead of a hard reload
-        window.dispatchEvent(new CustomEvent('gyanam:unauthorized'));
+        window.dispatchEvent(new CustomEvent('gyanam:unauthorized', {
+          detail: { soft: onExam, endpoint },
+        }));
         const err = new Error('Unauthorized');
         err.status = 401;
         throw err;

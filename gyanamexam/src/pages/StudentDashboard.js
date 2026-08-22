@@ -301,11 +301,11 @@ export class StudentDashboard {
 
   handleStartExam(examId) {
     if (this.router) {
-      window.history.pushState(null, '', `/exam?id=${examId}`);
-      this.router.handleRoute(`/exam`);
+      this.router.navigate(`/exam?id=${encodeURIComponent(examId)}`);
       return;
     }
-    window.location.href = `/index.html#/exam?id=${examId}`;
+    const base = (window.location.pathname.includes('/gyanamexam') ? '/gyanamexam' : '');
+    window.location.href = `${base}/index.html?id=${encodeURIComponent(examId)}#/exam`;
   }
 
   renderError(error) {

@@ -154,46 +154,44 @@ class ProctoringService {
   // ─── Tab Switch Detection ───────────────────────────────────────────────────
 
   _setupTabSwitchDetection() {
+    let lastCountAt = 0;
+    const countSwitch = (messagePrefix) => {
+      if (!this.active) return;
+      const now = Date.now();
+      if (now - lastCountAt < 1000) return; // debounce visibility+blur double fire
+      lastCountAt = now;
+
+      this.tabSwitchCount++;
+      const limit = this.settings.tab_switch_limit;
+      const remaining = limit - this.tabSwitchCount;
+
+      if (this.tabSwitchCount >= limit) {
+        this._triggerViolation(
+          'tab_switch_exceeded',
+          `${messagePrefix} ${this.tabSwitchCount} times. Maximum allowed: ${limit}. Your exam will be auto-submitted.`
+        );
+        setTimeout(() => {
+          if (this._onAutoSubmit) this._onAutoSubmit();
+        }, 1500);
+      } else {
+        this._triggerViolation(
+          'tab_switch',
+          `Warning ${this.tabSwitchCount}/${limit}: ${messagePrefix}! ${remaining} warning(s) remaining before auto-submit.`
+        );
+      }
+    };
+
     const handler = () => {
       if (!this.active) return;
-      if (document.hidden) {
-        this.tabSwitchCount++;
-        const limit = this.settings.tab_switch_limit;
-        const remaining = limit - this.tabSwitchCount;
-
-        if (this.tabSwitchCount >= limit) {
-          this._triggerViolation(
-            'tab_switch_exceeded',
-            `You have switched tabs ${this.tabSwitchCount} times. Maximum allowed: ${limit}. Your exam will be auto-submitted.`
-          );
-          // Auto-submit after a brief delay so the warning shows
-          setTimeout(() => {
-            if (this._onAutoSubmit) this._onAutoSubmit();
-          }, 1500);
-        } else {
-          this._triggerViolation(
-            'tab_switch',
-            `Warning ${this.tabSwitchCount}/${limit}: Tab switch detected! ${remaining} warning(s) remaining before auto-submit.`
-          );
-        }
-      }
+      if (document.hidden) countSwitch('Tab switch detected');
     };
     document.addEventListener('visibilitychange', handler);
     this._listeners.push(['visibilitychange', handler]);
 
-    // Also detect window blur (covers alt-tab scenarios)
     const blurHandler = () => {
       if (!this.active) return;
-      // Only count if not already counted by visibilitychange
-      if (!document.hidden) {
-        // Small delay to avoid double-counting with visibilitychange
-        setTimeout(() => {
-          if (!document.hidden && this.active) {
-            // Window lost focus but tab is still visible (e.g., alt-tab on some OS)
-            // We don't double-count here, visibilitychange handles the main case
-          }
-        }, 100);
-      }
+      if (document.hidden) return;
+      countSwitch('Window focus lost');
     };
     window.addEventListener('blur', blurHandler);
     this._listeners.push(['blur', blurHandler, window]);
