@@ -150,6 +150,52 @@ class ExamPage {
     try { localStorage.removeItem(this._localDraftKey()); } catch (_) {}
   }
 
+  /**
+   * Soft re-auth during exam — answers stay in memory / localStorage.
+   */
+  showSessionExpiredOverlay(authModule) {
+    if (document.getElementById('exam-reauth-overlay')) return;
+    this._persistLocalDraft();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'exam-reauth-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.72);z-index:100000;display:flex;align-items:center;justify-content:center;padding:1rem';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:16px;padding:1.5rem;max-width:400px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)">
+        <h3 style="margin:0 0 .5rem;font-size:1.1rem;font-weight:800;color:#0f172a">Session expired</h3>
+        <p style="margin:0 0 1rem;font-size:.85rem;color:#64748b;line-height:1.45">Your login expired, but your answers are still on this device. Sign in again to continue — the exam will not restart.</p>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#475569;margin-bottom:.25rem">Student ID</label>
+        <input id="reauth-id" type="text" style="width:100%;height:40px;border:1.5px solid #e2e8f0;border-radius:10px;padding:0 .75rem;margin-bottom:.75rem;font:inherit" value="${(ApiClient.getUser()?.identifier || '').replace(/"/g, '')}">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#475569;margin-bottom:.25rem">Password</label>
+        <input id="reauth-pass" type="password" style="width:100%;height:40px;border:1.5px solid #e2e8f0;border-radius:10px;padding:0 .75rem;margin-bottom:1rem;font:inherit">
+        <p id="reauth-err" style="display:none;color:#dc2626;font-size:.8rem;font-weight:600;margin:0 0 .75rem"></p>
+        <button id="reauth-btn" style="width:100%;height:42px;border:none;border-radius:10px;background:linear-gradient(135deg,#1d4ed8,#3b82f6);color:#fff;font-weight:800;cursor:pointer;font:inherit">Continue exam</button>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const doLogin = async () => {
+      const id = document.getElementById('reauth-id')?.value?.trim();
+      const pass = document.getElementById('reauth-pass')?.value || '';
+      const errEl = document.getElementById('reauth-err');
+      const btn = document.getElementById('reauth-btn');
+      if (!id) { if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Enter Student ID'; } return; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
+      try {
+        await authModule.authenticate({ identifier: id, password: pass });
+        overlay.remove();
+        this._dirty = true;
+        this._flushAutosave();
+      } catch (e) {
+        if (errEl) { errEl.style.display = 'block'; errEl.textContent = e.message || 'Login failed'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Continue exam'; }
+      }
+    };
+    document.getElementById('reauth-btn')?.addEventListener('click', doLogin);
+    document.getElementById('reauth-pass')?.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') doLogin();
+    });
+  }
+
   _scheduleAutosave() {
     this._dirty = true;
     this._persistLocalDraft();
@@ -166,20 +212,23 @@ class ExamPage {
 
   async _flushAutosave() {
     if (this.isSubmitting || !this.examId) return;
-    this._dirty = false;
     this._persistLocalDraft();
     try {
       await ApiClient.saveExamAnswers(this.examId, {
         answers: this.answers,
         marked_for_review: [...this.markedForReview],
       });
+      this._dirty = false;
       const el = document.getElementById('autosave-status');
       if (el) {
         el.textContent = 'Saved';
         el.style.color = '#16a34a';
         setTimeout(() => { if (el) el.textContent = ''; }, 2000);
       }
-    } catch (_) {
+    } catch (err) {
+      // Keep dirty so the loop retries; do not clear on failure
+      this._dirty = true;
+      if (err?.status === 401) return;
       const el = document.getElementById('autosave-status');
       if (el) {
         el.textContent = 'Offline — saved locally';
@@ -460,11 +509,12 @@ class ExamPage {
     `;
     badge.innerHTML = `
       <span style="width:8px;height:8px;background:#dc2626;border-radius:50%;animation:timer-pulse 1.5s infinite"></span>
-      PROCTORED
+      LOCAL PROCTORING
       <span id="tab-switch-counter" style="background:#dc2626;color:white;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.7rem;margin-left:0.25rem">
         0/${this.proctoring.settings.tab_switch_limit || 3}
       </span>
     `;
+    badge.title = 'Browser-side checks only — not remote invigilation';
     timerEl.parentNode.insertBefore(badge, timerEl);
   }
 
@@ -484,7 +534,10 @@ class ExamPage {
     container.innerHTML = `
       <div style="position:absolute;top:0.4rem;left:0.4rem;background:rgba(15,23,42,0.85);color:white;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.65rem;font-weight:700;display:flex;align-items:center;gap:0.3rem;z-index:2">
         <span style="width:6px;height:6px;background:#22c55e;border-radius:50%"></span>
-        LIVE PREVIEW
+        LIVE PREVIEW ONLY
+      </div>
+      <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(15,23,42,0.75);color:#e2e8f0;padding:0.25rem 0.4rem;font-size:0.62rem;font-weight:600;z-index:2">
+        Not recorded or uploaded
       </div>
     `;
 

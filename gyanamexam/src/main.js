@@ -33,8 +33,14 @@ function initializeApp() {
   const appContainer = document.getElementById('app');
   if (!appContainer) { console.error('App container not found'); return; }
 
-  // Global 401 handler — redirect to login without a full page reload
-  window.addEventListener('gyanam:unauthorized', () => {
+  // Global 401 handler — soft during exam (keep answers), hard elsewhere
+  window.addEventListener('gyanam:unauthorized', (e) => {
+    const soft = !!(e.detail?.soft && examPage);
+    if (soft && typeof examPage.showSessionExpiredOverlay === 'function') {
+      examPage.showSessionExpiredOverlay(authModule);
+      return;
+    }
+    try { authModule._session = null; } catch (_) {}
     router.navigate('/login');
   });
 
@@ -44,8 +50,10 @@ function initializeApp() {
   if (authModule.isAuthenticated()) {
     const path = window.location.pathname || '';
     const search = window.location.search || '';
-    if (path.includes('/exam') || search.includes('id=')) {
-      router.handleRoute('/exam');
+    if (path.includes('/exam') || (search.includes('id=') && path.includes('exam'))) {
+      router.handleRoute((router.basePath || '') + '/exam');
+    } else if (search.includes('id=') && /exam/i.test(path + search)) {
+      router.handleRoute((router.basePath || '') + '/exam');
     } else {
       router.navigate('/student');
     }

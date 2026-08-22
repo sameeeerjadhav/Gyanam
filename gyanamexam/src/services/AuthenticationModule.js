@@ -69,8 +69,14 @@ export class AuthenticationModule {
     try {
       await ApiClient.logout();
     } catch (_) { }
+    this.clearLocal();
+  }
+
+  /** Clear local auth state without calling API */
+  clearLocal() {
     this._session = null;
     localStorage.removeItem(SESSION_KEY);
+    ApiClient.removeToken();
   }
 
   /** @private */
