@@ -66,7 +66,7 @@ $shareSummary = ['due' => 0, 'paid' => 0, 'pending' => 0, 'student_count' => 0];
 if ($dlcId) {
     try {
         ensureDualMaterialCourseSchema($pdo);
-        $shareSummary = calculateDlcShareSummary($pdo, (int)$dlcId);
+        $shareSummary = calculateDlcShareSummary($pdo, (int)$dlcId, false);
     } catch (Exception $e) {}
 }
 ?>

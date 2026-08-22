@@ -14,7 +14,7 @@ $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 $greeting = getGreeting();
 
-try { checkBirthdayNotifications($pdo); } catch (Exception $e) {}
+// Birthday push notifications: use cron/birthday_notifications.php (not every dashboard load)
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 $totalUsers = $totalDLC = $totalATC = $totalInquiries = $totalAdmissions = 0;
@@ -183,7 +183,7 @@ try {
                IFNULL(mobile,'') AS mobile
         FROM atc_centers
         WHERE dob IS NOT NULL
-          AND DATE_FORMAT(dob, '%m-%d') = DATE_FORMAT(CURDATE(), '%m-%d')
+          AND MONTH(dob) = MONTH(CURDATE()) AND DAY(dob) = DAY(CURDATE())
           AND status = 'Active'
         ORDER BY name ASC
     ");
@@ -196,7 +196,7 @@ try {
                IFNULL(mobile,'') AS mobile
         FROM dlc_offices
         WHERE dob IS NOT NULL
-          AND DATE_FORMAT(dob, '%m-%d') = DATE_FORMAT(CURDATE(), '%m-%d')
+          AND MONTH(dob) = MONTH(CURDATE()) AND DAY(dob) = DAY(CURDATE())
           AND status = 'Active'
         ORDER BY name ASC
     ");
@@ -209,7 +209,7 @@ try {
                IFNULL(mobile,'') AS mobile
         FROM birthdays
         WHERE birth_date IS NOT NULL
-          AND DATE_FORMAT(birth_date, '%m-%d') = DATE_FORMAT(CURDATE(), '%m-%d')
+          AND MONTH(birth_date) = MONTH(CURDATE()) AND DAY(birth_date) = DAY(CURDATE())
           AND status = 'Active'
         ORDER BY name ASC
     ");
@@ -234,7 +234,7 @@ try {
     ")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 
-// ── Report stats (embedded from reports.php, no filter) ──────────────────
+// ── Report stats (embedded from reports.php) — session-cached 90s ────────
 $revenueStats    = ['total_revenue'=>0,'total_collected'=>0,'total_pending'=>0];
 $dlcRevenue      = [];
 $dispatchStats   = ['total_dispatches'=>0,'created'=>0,'sent_to_dlc'=>0,'forwarded_to_atc'=>0,'delivered'=>0,'total_items'=>0];
@@ -242,73 +242,88 @@ $materialBreakdown = [];
 $topATCs         = [];
 $monthlyTrend    = [];
 
-try {
-    $revenueStats = $pdo->query("
-        SELECT COALESCE(SUM(course_fees - discount_amount),0) AS total_revenue,
-               COALESCE(SUM(fees_paid),0)    AS total_collected,
-               COALESCE(SUM(fees_pending),0) AS total_pending
-        FROM admissions WHERE status='Active'
-    ")->fetch(PDO::FETCH_ASSOC) ?: $revenueStats;
-} catch(Exception $e){}
+$_rcKey = 'admin_dash_reports';
+$_rcAt  = 'admin_dash_reports_at';
+if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_rcAt]) < 90) {
+    $cached = $_SESSION[$_rcKey];
+    $revenueStats      = $cached['revenueStats'] ?? $revenueStats;
+    $dlcRevenue        = $cached['dlcRevenue'] ?? [];
+    $dispatchStats     = $cached['dispatchStats'] ?? $dispatchStats;
+    $materialBreakdown = $cached['materialBreakdown'] ?? [];
+    $topATCs           = $cached['topATCs'] ?? [];
+    $monthlyTrend      = $cached['monthlyTrend'] ?? [];
+} else {
+    try {
+        $revenueStats = $pdo->query("
+            SELECT COALESCE(SUM(course_fees - discount_amount),0) AS total_revenue,
+                   COALESCE(SUM(fees_paid),0)    AS total_collected,
+                   COALESCE(SUM(fees_pending),0) AS total_pending
+            FROM admissions WHERE status='Active'
+        ")->fetch(PDO::FETCH_ASSOC) ?: $revenueStats;
+    } catch(Exception $e){}
 
-try {
-    $dlcRevenue = $pdo->query("
-        SELECT dlc.id, dlc.name AS dlc_name, dlc.district,
-               COUNT(DISTINCT atc.id) AS atc_count,
-               COUNT(DISTINCT adm.id) AS total_students,
-               COALESCE(SUM(adm.course_fees-adm.discount_amount),0) AS total_revenue,
-               COALESCE(SUM(adm.fees_paid),0)    AS collected,
-               COALESCE(SUM(adm.fees_pending),0) AS pending
-        FROM dlc_offices dlc
-        LEFT JOIN atc_centers atc ON dlc.id=atc.dlc_id AND atc.status='Active'
-        LEFT JOIN admissions  adm ON atc.id=adm.atc_id AND adm.status='Active'
-        GROUP BY dlc.id ORDER BY collected DESC
-    ")->fetchAll(PDO::FETCH_ASSOC);
-} catch(Exception $e){}
+    try {
+        $dlcRevenue = $pdo->query("
+            SELECT dlc.id, dlc.name AS dlc_name, dlc.district,
+                   COUNT(DISTINCT atc.id) AS atc_count,
+                   COUNT(DISTINCT adm.id) AS total_students,
+                   COALESCE(SUM(adm.course_fees-adm.discount_amount),0) AS total_revenue,
+                   COALESCE(SUM(adm.fees_paid),0)    AS collected,
+                   COALESCE(SUM(adm.fees_pending),0) AS pending
+            FROM dlc_offices dlc
+            LEFT JOIN atc_centers atc ON dlc.id=atc.dlc_id AND atc.status='Active'
+            LEFT JOIN admissions  adm ON atc.id=adm.atc_id AND adm.status='Active'
+            GROUP BY dlc.id ORDER BY collected DESC
+        ")->fetchAll(PDO::FETCH_ASSOC);
+    } catch(Exception $e){}
 
-try {
-    $dispatchStats = $pdo->query("
-        SELECT COUNT(*) AS total_dispatches,
-               SUM(status='Created')          AS created,
-               SUM(status='Sent to DLC')      AS sent_to_dlc,
-               SUM(status='Forwarded to ATC') AS forwarded_to_atc,
-               SUM(status='Delivered')        AS delivered,
-               SUM(quantity)                  AS total_items
-        FROM dispatches
-    ")->fetch(PDO::FETCH_ASSOC) ?: $dispatchStats;
-} catch(Exception $e){}
+    try {
+        $dispatchStats = $pdo->query("
+            SELECT COUNT(*) AS total_dispatches,
+                   SUM(status='Created')          AS created,
+                   SUM(status='Sent to DLC')      AS sent_to_dlc,
+                   SUM(status='Forwarded to ATC') AS forwarded_to_atc,
+                   SUM(status='Delivered')        AS delivered,
+                   SUM(quantity)                  AS total_items
+            FROM dispatches
+        ")->fetch(PDO::FETCH_ASSOC) ?: $dispatchStats;
+    } catch(Exception $e){}
 
-try {
-    $materialBreakdown = $pdo->query("
-        SELECT material_type, COUNT(*) AS dispatch_count, SUM(quantity) AS total_quantity
-        FROM dispatches GROUP BY material_type ORDER BY total_quantity DESC
-    ")->fetchAll(PDO::FETCH_ASSOC);
-} catch(Exception $e){}
+    try {
+        $materialBreakdown = $pdo->query("
+            SELECT material_type, COUNT(*) AS dispatch_count, SUM(quantity) AS total_quantity
+            FROM dispatches GROUP BY material_type ORDER BY total_quantity DESC
+        ")->fetchAll(PDO::FETCH_ASSOC);
+    } catch(Exception $e){}
 
-try {
-    $topATCs = $pdo->query("
-        SELECT atc.name AS atc_name, dlc.name AS dlc_name,
-               COUNT(adm.id) AS student_count,
-               SUM(adm.fees_paid) AS revenue_collected
-        FROM atc_centers atc
-        LEFT JOIN dlc_offices dlc ON atc.dlc_id=dlc.id
-        LEFT JOIN admissions  adm ON atc.id=adm.atc_id AND adm.status='Active'
-        WHERE atc.status='Active'
-        GROUP BY atc.id ORDER BY revenue_collected DESC LIMIT 10
-    ")->fetchAll(PDO::FETCH_ASSOC);
-} catch(Exception $e){}
+    try {
+        $topATCs = $pdo->query("
+            SELECT atc.name AS atc_name, dlc.name AS dlc_name,
+                   COUNT(adm.id) AS student_count,
+                   SUM(adm.fees_paid) AS revenue_collected
+            FROM atc_centers atc
+            LEFT JOIN dlc_offices dlc ON atc.dlc_id=dlc.id
+            LEFT JOIN admissions  adm ON atc.id=adm.atc_id AND adm.status='Active'
+            WHERE atc.status='Active'
+            GROUP BY atc.id ORDER BY revenue_collected DESC LIMIT 10
+        ")->fetchAll(PDO::FETCH_ASSOC);
+    } catch(Exception $e){}
 
-try {
-    $monthlyTrend = $pdo->query("
-        SELECT DATE_FORMAT(admission_date,'%Y-%m') AS month,
-               COUNT(*) AS admissions,
-               SUM(course_fees-discount_amount) AS revenue,
-               SUM(fees_paid) AS collected
-        FROM admissions
-        WHERE admission_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-        GROUP BY DATE_FORMAT(admission_date,'%Y-%m') ORDER BY month ASC
-    ")->fetchAll(PDO::FETCH_ASSOC);
-} catch(Exception $e){}
+    try {
+        $monthlyTrend = $pdo->query("
+            SELECT DATE_FORMAT(admission_date,'%Y-%m') AS month,
+                   COUNT(*) AS admissions,
+                   SUM(course_fees-discount_amount) AS revenue,
+                   SUM(fees_paid) AS collected
+            FROM admissions
+            WHERE admission_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+            GROUP BY DATE_FORMAT(admission_date,'%Y-%m') ORDER BY month ASC
+        ")->fetchAll(PDO::FETCH_ASSOC);
+    } catch(Exception $e){}
+
+    $_SESSION[$_rcKey] = compact('revenueStats', 'dlcRevenue', 'dispatchStats', 'materialBreakdown', 'topATCs', 'monthlyTrend');
+    $_SESSION[$_rcAt]  = time();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

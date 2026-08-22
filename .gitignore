@@ -4,6 +4,7 @@
 !.env.example
 gyanamindia/config/db.php
 gyanamindia/config/razorpay.php
+gyanamindia/config/.schema_*
 **/credentials.json
 **/*secret*
 

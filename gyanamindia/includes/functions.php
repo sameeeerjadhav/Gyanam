@@ -102,7 +102,7 @@ function generateNextRollNoSimple(PDO $pdo, int $atcId): string {
 
 /**
  * Ensure courses + atc_course_fees have dual HO-share / fee columns.
- * Safe to call repeatedly (idempotent). Migrates legacy single columns once.
+ * Uses a file flag after first successful migrate so later requests skip SHOW/UPDATE.
  */
 function ensureDualMaterialCourseSchema(PDO $pdo): void {
     static $done = false;
@@ -111,45 +111,63 @@ function ensureDualMaterialCourseSchema(PDO $pdo): void {
     }
     $done = true;
 
+    $flagFile = __DIR__ . '/../config/.schema_dual_material_ok';
+    if (is_file($flagFile)) {
+        return;
+    }
+
+    $needsMigrate = false;
     try {
         $courseCols = $pdo->query("SHOW COLUMNS FROM courses")->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('ho_share_with_material', $courseCols, true)) {
-            $pdo->exec("ALTER TABLE courses ADD COLUMN ho_share_with_material DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'HO share when student takes course WITH material'");
-        }
-        if (!in_array('ho_share_without_material', $courseCols, true)) {
-            $pdo->exec("ALTER TABLE courses ADD COLUMN ho_share_without_material DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'HO share when student takes course WITHOUT material'");
-        }
-        if (!in_array('dlc_share_with_material', $courseCols, true)) {
-            $pdo->exec("ALTER TABLE courses ADD COLUMN dlc_share_with_material DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'DLC share when student takes course WITH material'");
-        }
-        if (!in_array('dlc_share_without_material', $courseCols, true)) {
-            $pdo->exec("ALTER TABLE courses ADD COLUMN dlc_share_without_material DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'DLC share when student takes course WITHOUT material'");
+        foreach (['ho_share_with_material', 'ho_share_without_material', 'dlc_share_with_material', 'dlc_share_without_material'] as $col) {
+            if (!in_array($col, $courseCols, true)) {
+                $needsMigrate = true;
+                if ($col === 'ho_share_with_material') {
+                    $pdo->exec("ALTER TABLE courses ADD COLUMN ho_share_with_material DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'HO share when student takes course WITH material'");
+                } elseif ($col === 'ho_share_without_material') {
+                    $pdo->exec("ALTER TABLE courses ADD COLUMN ho_share_without_material DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'HO share when student takes course WITHOUT material'");
+                } elseif ($col === 'dlc_share_with_material') {
+                    $pdo->exec("ALTER TABLE courses ADD COLUMN dlc_share_with_material DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'DLC share when student takes course WITH material'");
+                } else {
+                    $pdo->exec("ALTER TABLE courses ADD COLUMN dlc_share_without_material DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'DLC share when student takes course WITHOUT material'");
+                }
+            }
         }
 
-        // One-time migrate from legacy single ho_share + material_type
-        $pdo->exec("
-            UPDATE courses
-            SET
-                ho_share_with_material = CASE
-                    WHEN COALESCE(material_type, '') = 'With Material' THEN COALESCE(ho_share, 0)
-                    ELSE ho_share_with_material
-                END,
-                ho_share_without_material = CASE
-                    WHEN COALESCE(material_type, '') <> 'With Material' THEN COALESCE(ho_share, 0)
-                    ELSE ho_share_without_material
-                END
+        // One-time migrate from legacy single ho_share + material_type (only if still needed)
+        $pendingLegacy = (int)$pdo->query("
+            SELECT COUNT(*) FROM courses
             WHERE COALESCE(ho_share, 0) > 0
               AND COALESCE(ho_share_with_material, 0) = 0
               AND COALESCE(ho_share_without_material, 0) = 0
-        ");
+        ")->fetchColumn();
+        if ($pendingLegacy > 0) {
+            $needsMigrate = true;
+            $pdo->exec("
+                UPDATE courses
+                SET
+                    ho_share_with_material = CASE
+                        WHEN COALESCE(material_type, '') = 'With Material' THEN COALESCE(ho_share, 0)
+                        ELSE ho_share_with_material
+                    END,
+                    ho_share_without_material = CASE
+                        WHEN COALESCE(material_type, '') <> 'With Material' THEN COALESCE(ho_share, 0)
+                        ELSE ho_share_without_material
+                    END
+                WHERE COALESCE(ho_share, 0) > 0
+                  AND COALESCE(ho_share_with_material, 0) = 0
+                  AND COALESCE(ho_share_without_material, 0) = 0
+            ");
+        }
     } catch (Exception $e) {
         error_log('[DualMaterial] courses schema: ' . $e->getMessage());
+        return;
     }
 
-    // Snapshot columns on admissions
     try {
         $admCols = $pdo->query("SHOW COLUMNS FROM admissions")->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('dlc_share_snapshot', $admCols, true)) {
+            $needsMigrate = true;
             $pdo->exec("ALTER TABLE admissions ADD COLUMN dlc_share_snapshot DECIMAL(10,2) DEFAULT NULL COMMENT 'DLC share locked at admission time'");
         }
     } catch (Exception $e) {
@@ -159,32 +177,46 @@ function ensureDualMaterialCourseSchema(PDO $pdo): void {
     try {
         $feeCols = $pdo->query("SHOW COLUMNS FROM atc_course_fees")->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('fee_with_material', $feeCols, true)) {
+            $needsMigrate = true;
             $pdo->exec("ALTER TABLE atc_course_fees ADD COLUMN fee_with_material DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'ATC selling fee WITH material'");
         }
         if (!in_array('fee_without_material', $feeCols, true)) {
+            $needsMigrate = true;
             $pdo->exec("ALTER TABLE atc_course_fees ADD COLUMN fee_without_material DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'ATC selling fee WITHOUT material'");
         }
 
-        // Migrate legacy final_fee into the matching material column via master course type
-        $pdo->exec("
-            UPDATE atc_course_fees acf
-            INNER JOIN courses c ON c.id = acf.course_id
-            SET
-                acf.fee_with_material = CASE
-                    WHEN COALESCE(c.material_type, '') = 'With Material' THEN COALESCE(acf.final_fee, 0)
-                    ELSE acf.fee_with_material
-                END,
-                acf.fee_without_material = CASE
-                    WHEN COALESCE(c.material_type, '') <> 'With Material' THEN COALESCE(acf.final_fee, 0)
-                    ELSE acf.fee_without_material
-                END
-            WHERE COALESCE(acf.final_fee, 0) > 0
-              AND COALESCE(acf.fee_with_material, 0) = 0
-              AND COALESCE(acf.fee_without_material, 0) = 0
-        ");
+        $pendingFees = (int)$pdo->query("
+            SELECT COUNT(*) FROM atc_course_fees
+            WHERE COALESCE(final_fee, 0) > 0
+              AND COALESCE(fee_with_material, 0) = 0
+              AND COALESCE(fee_without_material, 0) = 0
+        ")->fetchColumn();
+        if ($pendingFees > 0) {
+            $needsMigrate = true;
+            $pdo->exec("
+                UPDATE atc_course_fees acf
+                INNER JOIN courses c ON c.id = acf.course_id
+                SET
+                    acf.fee_with_material = CASE
+                        WHEN COALESCE(c.material_type, '') = 'With Material' THEN COALESCE(acf.final_fee, 0)
+                        ELSE acf.fee_with_material
+                    END,
+                    acf.fee_without_material = CASE
+                        WHEN COALESCE(c.material_type, '') <> 'With Material' THEN COALESCE(acf.final_fee, 0)
+                        ELSE acf.fee_without_material
+                    END
+                WHERE COALESCE(acf.final_fee, 0) > 0
+                  AND COALESCE(acf.fee_with_material, 0) = 0
+                  AND COALESCE(acf.fee_without_material, 0) = 0
+            ");
+        }
     } catch (Exception $e) {
         error_log('[DualMaterial] atc_course_fees schema: ' . $e->getMessage());
+        return;
     }
+
+    // Mark done so future requests skip all of the above
+    @file_put_contents($flagFile, date('c') . ($needsMigrate ? " migrated\n" : " ok\n"));
 }
 
 /**
@@ -310,9 +342,10 @@ function getHoSharePaidAdmissionIds(PDO $pdo, ?int $atcId = null): array {
  * Calculate DLC earnings summary for one DLC office.
  * Due = sum of DLC share for HO-share-paid students under this DLC's ATCs.
  *
+ * @param bool $includeStudents When false (dashboards), skip building the full student list.
  * @return array{due:float,paid:float,pending:float,student_count:int,students:list<array>}
  */
-function calculateDlcShareSummary(PDO $pdo, int $dlcId): array {
+function calculateDlcShareSummary(PDO $pdo, int $dlcId, bool $includeStudents = true): array {
     ensureDualMaterialCourseSchema($pdo);
     $summary = ['due' => 0.0, 'paid' => 0.0, 'pending' => 0.0, 'student_count' => 0, 'students' => []];
 
@@ -342,30 +375,47 @@ function calculateDlcShareSummary(PDO $pdo, int $dlcId): array {
         return $summary;
     }
 
-    // Collect ATC ids then paid map (global is fine; keyed by admission id)
     $paidMap = getHoSharePaidAdmissionIds($pdo);
+
+    // Prefetch course DLC shares once (avoids N+1 getDlcShareForCourse)
+    $courseShareCache = [];
+    try {
+        foreach ($pdo->query("SELECT course_name, dlc_share_with_material, dlc_share_without_material FROM courses WHERE status = 'Active'") as $cRow) {
+            $ck = mb_strtolower(trim((string)$cRow['course_name']));
+            $courseShareCache[$ck . '|with material']    = (float)($cRow['dlc_share_with_material'] ?? 0);
+            $courseShareCache[$ck . '|without material'] = (float)($cRow['dlc_share_without_material'] ?? 0);
+        }
+    } catch (Exception $e) {}
 
     foreach ($rows as $row) {
         if (!isset($paidMap[(int)$row['id']])) {
-            continue; // DLC share only after ATC has paid HO share
+            continue;
         }
-        $share = resolveStudentDlcShare($row, $pdo);
+        $share = isset($row['dlc_share_snapshot']) ? (float)$row['dlc_share_snapshot'] : 0.0;
+        if ($share <= 0) {
+            $ck = mb_strtolower(trim((string)($row['course'] ?? '')));
+            $mat = mb_strtolower(trim((string)($row['material_type'] ?? 'Without Material')));
+            $key = $ck . '|' . (($mat === 'with material') ? 'with material' : 'without material');
+            $share = (float)($courseShareCache[$key] ?? 0);
+        }
         if ($share <= 0) {
             continue;
         }
         $summary['due'] += $share;
         $summary['student_count']++;
-        $summary['students'][] = [
-            'id'            => (int)$row['id'],
-            'roll_no'       => $row['roll_no'],
-            'registration_id' => $row['registration_id'] ?? '',
-            'student_name'  => trim(preg_replace('/\s+/', ' ', $row['student_name'] ?? '')),
-            'course'        => $row['course'],
-            'material_type' => $row['material_type'] ?? '',
-            'atc_name'      => $row['atc_name'] ?? '',
-            'dlc_share'     => $share,
-            'admission_date'=> $row['admission_date'] ?? '',
-        ];
+        if ($includeStudents) {
+            $summary['students'][] = [
+                'id'            => (int)$row['id'],
+                'roll_no'       => $row['roll_no'],
+                'registration_id' => $row['registration_id'] ?? '',
+                'student_name'  => trim(preg_replace('/\s+/', ' ', $row['student_name'] ?? '')),
+                'course'        => $row['course'],
+                'material_type' => $row['material_type'] ?? '',
+                'atc_name'      => $row['atc_name'] ?? '',
+                'dlc_share'     => $share,
+                'admission_date'=> $row['admission_date'] ?? '',
+            ];
+        }
     }
 
     $summary['pending'] = max(0, $summary['due'] - $summary['paid']);
