@@ -145,15 +145,15 @@ try {
 
     // Y positions tuned per template (Abacus page is taller with lower body area)
     if ($variant === 'abacus') {
-        $put($atcName, 148, 20, 'BI', '0,0,128');
-        $put('Centre registration code ' . $atcCode, 162, 11, 'B', '30,30,30');
-        $put('Has been recognized as our Authorized Training Centre for', 171, 11, 'B', '30,30,30');
-        $put($conductingLine, 180, 11, 'B', '30,30,30');
+        $put($atcName, 140, 26, 'BI', '0,0,128');
+        $put('Centre registration code ' . $atcCode, 158, 15, 'B', '30,30,30');
+        $put('Has been recognized as our Authorized Training Centre for', 170, 15, 'B', '30,30,30');
+        $put($conductingLine, 182, 15, 'B', '30,30,30');
         if ($location !== '') {
-            $put($location, 189, 11, 'B', '30,30,30');
-            $put($period, 198, 11, 'B', '30,30,30');
+            $put($location, 194, 15, 'B', '30,30,30');
+            $put($period, 206, 15, 'B', '30,30,30');
         } else {
-            $put($period, 189, 11, 'B', '30,30,30');
+            $put($period, 194, 15, 'B', '30,30,30');
         }
     } else {
         $put($atcName, 140, 18, 'BI', '0,0,128');

@@ -52,12 +52,12 @@ $pdf->SetTextColor(200, 0, 0);
 
 $sampleLines = $variantReq === 'abacus'
     ? [
-        [148, 'ATC Name: M/S. Global Abacus Academy'],
-        [162, 'Centre registration code Gyanam ATC-202500015'],
-        [171, 'Has been recognized as our Authorized Training Centre for'],
-        [180, 'Conducting our Gyanam Abacus Academy'],
-        [189, 'at Ravi Nagar, Nagpur'],
-        [198, 'For the period from 01/03/2026 to 28/02/2027'],
+        [140, 'ATC Name: M/S. Global Abacus Academy'],
+        [158, 'Centre registration code Gyanam ATC-202500015'],
+        [170, 'Has been recognized as our Authorized Training Centre for'],
+        [182, 'Conducting our Gyanam Abacus Academy'],
+        [194, 'at Ravi Nagar, Nagpur'],
+        [206, 'For the period from 01/03/2026 to 28/02/2027'],
     ]
     : [
         [130, 'ATC Name: M/S. Sample GIIT Academy'],
