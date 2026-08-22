@@ -496,10 +496,12 @@ function buildCourseMaterialOptions(array $course): array {
 /**
  * Read page/per_page from the query string.
  *
- * @return array{page:int,per_page:int,offset:int}
+ * @param string $pageKey Query key for page number (use different keys when
+ *                        multiple pagers share one page, e.g. atc_page / page).
+ * @return array{page:int,per_page:int,offset:int,page_key:string}
  */
-function paginationParams(int $defaultPerPage = 25, int $maxPerPage = 100): array {
-    $page    = max(1, (int)($_GET['page'] ?? 1));
+function paginationParams(int $defaultPerPage = 25, int $maxPerPage = 100, string $pageKey = 'page'): array {
+    $page    = max(1, (int)($_GET[$pageKey] ?? 1));
     $perPage = (int)($_GET['per_page'] ?? $defaultPerPage);
     if ($perPage < 5) {
         $perPage = $defaultPerPage;
@@ -511,13 +513,14 @@ function paginationParams(int $defaultPerPage = 25, int $maxPerPage = 100): arra
         'page'     => $page,
         'per_page' => $perPage,
         'offset'   => ($page - 1) * $perPage,
+        'page_key' => $pageKey,
     ];
 }
 
 /**
  * Build pagination meta from a total row count.
  *
- * @return array{page:int,per_page:int,offset:int,total:int,total_pages:int,from:int,to:int}
+ * @return array{page:int,per_page:int,offset:int,total:int,total_pages:int,from:int,to:int,page_key:string}
  */
 function paginationMeta(int $total, ?array $params = null): array {
     $params = $params ?? paginationParams();
@@ -535,14 +538,15 @@ function paginationMeta(int $total, ?array $params = null): array {
         'total_pages' => $totalPages,
         'from'        => $from,
         'to'          => $to,
+        'page_key'    => $params['page_key'] ?? 'page',
     ];
 }
 
 /**
- * Build a page URL while preserving current query params (except page).
+ * Build a page URL while preserving current query params.
  */
-function paginationUrl(int $page, array $extra = []): string {
-    $query = array_merge($_GET, $extra, ['page' => $page]);
+function paginationUrl(int $page, array $extra = [], string $pageKey = 'page'): string {
+    $query = array_merge($_GET, $extra, [$pageKey => $page]);
     // Drop empty noise
     foreach ($query as $k => $v) {
         if ($v === '' || $v === null) {
@@ -569,6 +573,7 @@ function renderPagination(array $meta, string $itemLabel = 'records'): string {
     $from       = (int)$meta['from'];
     $to         = (int)$meta['to'];
     $total      = (int)$meta['total'];
+    $pageKey    = (string)($meta['page_key'] ?? 'page');
 
     static $pagerCssPrinted = false;
     $html = '';
@@ -598,7 +603,7 @@ CSS;
     if ($page <= 1) {
         $html .= '<span class="pager-btn disabled" aria-disabled="true">‹ Prev</span>';
     } else {
-        $html .= '<a class="pager-btn" href="' . htmlspecialchars(paginationUrl($page - 1)) . '">‹ Prev</a>';
+        $html .= '<a class="pager-btn" href="' . htmlspecialchars(paginationUrl($page - 1, [], $pageKey)) . '">‹ Prev</a>';
     }
 
     // Page window (max ~7 numbers)
@@ -606,7 +611,7 @@ CSS;
     $start  = max(1, $page - $window);
     $end    = min($totalPages, $page + $window);
     if ($start > 1) {
-        $html .= '<a class="pager-btn" href="' . htmlspecialchars(paginationUrl(1)) . '">1</a>';
+        $html .= '<a class="pager-btn" href="' . htmlspecialchars(paginationUrl(1, [], $pageKey)) . '">1</a>';
         if ($start > 2) {
             $html .= '<span class="pager-ellipsis">…</span>';
         }
@@ -615,21 +620,21 @@ CSS;
         if ($i === $page) {
             $html .= '<span class="pager-btn active" aria-current="page">' . $i . '</span>';
         } else {
-            $html .= '<a class="pager-btn" href="' . htmlspecialchars(paginationUrl($i)) . '">' . $i . '</a>';
+            $html .= '<a class="pager-btn" href="' . htmlspecialchars(paginationUrl($i, [], $pageKey)) . '">' . $i . '</a>';
         }
     }
     if ($end < $totalPages) {
         if ($end < $totalPages - 1) {
             $html .= '<span class="pager-ellipsis">…</span>';
         }
-        $html .= '<a class="pager-btn" href="' . htmlspecialchars(paginationUrl($totalPages)) . '">' . $totalPages . '</a>';
+        $html .= '<a class="pager-btn" href="' . htmlspecialchars(paginationUrl($totalPages, [], $pageKey)) . '">' . $totalPages . '</a>';
     }
 
     // Next
     if ($page >= $totalPages) {
         $html .= '<span class="pager-btn disabled" aria-disabled="true">Next ›</span>';
     } else {
-        $html .= '<a class="pager-btn" href="' . htmlspecialchars(paginationUrl($page + 1)) . '">Next ›</a>';
+        $html .= '<a class="pager-btn" href="' . htmlspecialchars(paginationUrl($page + 1, [], $pageKey)) . '">Next ›</a>';
     }
 
     $html .= '</div></div>';
