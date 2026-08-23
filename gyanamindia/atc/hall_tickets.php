@@ -158,6 +158,7 @@ try {
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
+    <link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>">
 </head>
 <body>
@@ -890,24 +891,15 @@ function getExamScheduleRows(student) {
 
 function printHallTicket() {
     const content = document.getElementById('hallTicketContent').innerHTML;
-    const printWindow = window.open('', '', 'height=800,width=1000');
+    const printWindow = window.open('', '', 'height=1123,width=794');
     printWindow.document.write('<html><head><title>Hall Ticket - Gyanam India</title>');
-    printWindow.document.write('<style>');
-    printWindow.document.write(`
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
-        .ht-print { max-width: 900px; margin: auto; background: #fff; border: 2px solid #000; padding: 15px; }
-        .ht-print-tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
-        .ht-print-tbl td, .ht-print-tbl th { border: 1px solid #000; padding: 8px; vertical-align: top; }
-        .ht-p-center { text-align: center; }
-        .ht-p-bold { font-weight: bold; }
-        @media print { body { padding: 0; background: #fff; } .ht-print { border: 2px solid #000; } }
-    `);
-    printWindow.document.write('</style></head><body>');
+    printWindow.document.write('<link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">');
+    printWindow.document.write('</head><body class="ht-a4-viewport">');
     printWindow.document.write(content);
     printWindow.document.write('</body></html>');
     printWindow.document.close();
-    printWindow.print();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 350);
 }
 </script>
 
@@ -1448,9 +1440,13 @@ body { font-family: var(--font); }
 }
 
 .ht-modal-body {
-    padding: 0;
+    padding: 16px;
     max-height: calc(90vh - 180px);
     overflow-y: auto;
+    background: #d1d5db;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
 }
 
 .ht-modal-footer {

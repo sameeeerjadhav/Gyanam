@@ -64,14 +64,8 @@ if ($embed !== '') {
 <html lang="en"><head>
 <meta charset="UTF-8">
 <title>Hall Ticket Preview</title>
-<style>
-body{font-family:Arial,Helvetica,sans-serif;background:#fff;margin:0;padding:12px;color:#111}
-.ht-print-tbl{width:100%;border-collapse:collapse;font-size:13px}
-.ht-print-tbl th,.ht-print-tbl td{border:1px solid #000;padding:6px 8px;vertical-align:top}
-.ht-p-center{text-align:center}
-.ht-p-bold{font-weight:700}
-</style>
-</head><body>
+<link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">
+</head><body class="ht-a4-viewport">
 <div class="ht-print">
   <table class="ht-print-tbl">
     <tr>

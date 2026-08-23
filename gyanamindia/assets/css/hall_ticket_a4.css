@@ -1,0 +1,85 @@
+/**
+ * Examination hall ticket — A4 portrait (210 × 297 mm)
+ * Used by atc/hall_tickets.php and admin/review_documents.php preview.
+ */
+@page {
+    size: A4 portrait;
+    margin: 10mm;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+body.ht-a4-viewport {
+    background: #d1d5db;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.ht-print {
+    width: 210mm;
+    min-height: 297mm;
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 12mm 14mm;
+    background: #fff;
+    border: 1px solid #000;
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #111;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.ht-print-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.ht-print-tbl th,
+.ht-print-tbl td {
+    border: 1px solid #000;
+    padding: 6px 8px;
+    vertical-align: top;
+}
+
+.ht-p-center { text-align: center; }
+.ht-p-bold { font-weight: 700; }
+
+.ht-print ol {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 11px;
+    line-height: 1.65;
+}
+
+@media print {
+    body.ht-a4-viewport {
+        background: #fff;
+        padding: 0;
+    }
+
+    .ht-print {
+        width: 100%;
+        min-height: auto;
+        max-width: none;
+        border: none;
+        padding: 0;
+        margin: 0;
+        box-shadow: none;
+    }
+}
+
+@media screen {
+    .ht-modal-body .ht-print {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    }
+}
