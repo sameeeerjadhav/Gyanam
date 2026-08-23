@@ -14,6 +14,7 @@ $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 $atcId = $_SESSION['atc_id'] ?? null;
 ensureDualMaterialCourseSchema($pdo);
+ensureSharePaymentSchema($pdo);
 
 // Course-wise share amounts — map both with/without; pay flow prefers admission snapshot
 $courseShareAmounts = [];
@@ -166,7 +167,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
 
             $order = json_decode($resp, true);
-            echo json_encode(['success' => true, 'order_id' => $order['id'], 'amount' => $amountPaise]);
+            $orderId = (string)($order['id'] ?? '');
+            if ($orderId === '') {
+                echo json_encode(['success' => false, 'message' => 'Razorpay returned an empty order id']);
+                exit;
+            }
+
+            // Persist order id so webhook / retries can find this payment
+            $pdo->prepare("UPDATE share_payments SET razorpay_order_id = ? WHERE id = ? AND atc_id = ? AND status = 'Pending'")
+                ->execute([$orderId, $paymentId, $atcId]);
+
+            echo json_encode(['success' => true, 'order_id' => $orderId, 'amount' => $amountPaise]);
             exit;
         }
 
@@ -240,10 +251,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         
         if ($_POST['action'] === 'verify_payment') {
-            $paymentId         = $_POST['payment_id'];
-            $razorpayPaymentId = $_POST['razorpay_payment_id'];
-            $razorpayOrderId   = $_POST['razorpay_order_id'];
-            $razorpaySignature = $_POST['razorpay_signature'];
+            $paymentId         = intval($_POST['payment_id'] ?? 0);
+            $razorpayPaymentId = trim((string)($_POST['razorpay_payment_id'] ?? ''));
+            $razorpayOrderId   = trim((string)($_POST['razorpay_order_id'] ?? ''));
+            $razorpaySignature = trim((string)($_POST['razorpay_signature'] ?? ''));
+
+            if ($paymentId <= 0 || $razorpayPaymentId === '' || $razorpayOrderId === '' || $razorpaySignature === '') {
+                echo json_encode(['success' => false, 'message' => 'Missing payment verification fields.']);
+                exit;
+            }
+
+            // Ownership check
+            $own = $pdo->prepare("SELECT id FROM share_payments WHERE id = ? AND atc_id = ? LIMIT 1");
+            $own->execute([$paymentId, $atcId]);
+            if (!$own->fetch()) {
+                echo json_encode(['success' => false, 'message' => 'Payment not found for this ATC.']);
+                exit;
+            }
 
             // ── HMAC-SHA256 signature verification ───────────────────
             $expectedSignature = hash_hmac(
@@ -252,24 +276,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 RAZORPAY_KEY_SECRET
             );
 
-            if ($expectedSignature !== $razorpaySignature) {
+            if (!hash_equals($expectedSignature, $razorpaySignature)) {
                 echo json_encode(['success' => false, 'message' => 'Payment signature verification failed. Possible fraud attempt.']);
                 exit;
             }
 
-            // Update payment record
-            $stmt = $pdo->prepare("
-                UPDATE share_payments
-                SET status = 'Completed',
-                    razorpay_payment_id = ?,
-                    razorpay_order_id   = ?,
-                    razorpay_signature  = ?,
-                    paid_at = NOW()
-                WHERE id = ? AND atc_id = ?
-            ");
-            $stmt->execute([$razorpayPaymentId, $razorpayOrderId, $razorpaySignature, $paymentId, $atcId]);
+            $result = completeSharePayment($pdo, $paymentId, $razorpayPaymentId, $razorpayOrderId, $razorpaySignature);
+            echo json_encode($result);
+            exit;
+        }
 
-            echo json_encode(['success' => true, 'message' => 'Payment verified and recorded successfully']);
+        if ($_POST['action'] === 'mark_payment_status') {
+            $paymentId = intval($_POST['payment_id'] ?? 0);
+            $status = trim((string)($_POST['status'] ?? ''));
+            $reason = trim((string)($_POST['reason'] ?? ''));
+            if ($paymentId <= 0 || !in_array($status, ['Failed', 'Cancelled'], true)) {
+                echo json_encode(['success' => false, 'message' => 'Invalid status update.']);
+                exit;
+            }
+            $result = markSharePaymentStatus($pdo, $paymentId, $status, (int)$atcId, $reason !== '' ? mb_substr($reason, 0, 250) : null);
+            echo json_encode($result);
             exit;
         }
     } catch (Exception $e) {
@@ -612,12 +638,14 @@ async function initiateRazorpayPayment(paymentData) {
         const orderResp   = await fetch('', { method: 'POST', body: fd });
         const orderResult = await orderResp.json();
         if (!orderResult.success) {
+            await markPaymentStatus(paymentData.payment_id, 'Failed', orderResult.message || 'Order creation failed');
             alert('Could not create payment order: ' + orderResult.message);
             return;
         }
         orderId = orderResult.order_id;
         orderAmountPaise = orderResult.amount;
     } catch (e) {
+        await markPaymentStatus(paymentData.payment_id, 'Failed', 'Network error creating order');
         alert('Network error while creating order. Please try again.');
         return;
     }
@@ -638,13 +666,14 @@ async function initiateRazorpayPayment(paymentData) {
             contact: atcDetails ? (atcDetails.mobile || '') : ''
         },
         notes: {
-            atc_id:        atcDetails ? atcDetails.id : '',
-            payment_id:    paymentData.payment_id,
-            student_count: paymentData.student_details.length
+            atc_id:        atcDetails ? String(atcDetails.id || '') : '',
+            payment_id:    String(paymentData.payment_id),
+            student_count: String(paymentData.student_details.length)
         },
         theme: { color: '#6366f1' },
         modal: {
             ondismiss: function() {
+                markPaymentStatus(paymentData.payment_id, 'Cancelled', 'Checkout dismissed by user');
                 showToast('Payment cancelled. You can try again anytime.', 'warning');
             }
         }
@@ -653,15 +682,29 @@ async function initiateRazorpayPayment(paymentData) {
     try {
         await window.loadRazorpay();
     } catch (e) {
+        await markPaymentStatus(paymentData.payment_id, 'Failed', 'Razorpay script failed to load');
         alert('Could not load payment gateway. Check your internet and try again.');
         return;
     }
 
     const rzp = new Razorpay(options);
     rzp.on('payment.failed', function(resp) {
-        showToast('Payment failed: ' + resp.error.description, 'error');
+        const desc = (resp && resp.error && resp.error.description) ? resp.error.description : 'Payment failed';
+        markPaymentStatus(paymentData.payment_id, 'Failed', desc);
+        showToast('Payment failed: ' + desc, 'error');
     });
     rzp.open();
+}
+
+async function markPaymentStatus(paymentId, status, reason) {
+    try {
+        const fd = new FormData();
+        fd.append('action', 'mark_payment_status');
+        fd.append('payment_id', paymentId);
+        fd.append('status', status);
+        fd.append('reason', reason || '');
+        await fetch('', { method: 'POST', body: fd });
+    } catch (e) { /* ignore */ }
 }
 
 // Verify payment with server
@@ -678,14 +721,14 @@ async function verifyPayment(paymentId, razorpayResponse) {
         const result   = await response.json();
 
         if (result.success) {
-            showToast('✅ Payment Successful! Share payment completed.', 'success');
-            setTimeout(() => location.reload(), 2500);
+            showToast('Payment successful! Share payment completed.', 'success');
+            setTimeout(() => location.reload(), 2000);
         } else {
             showToast('Verification failed: ' + result.message, 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error verifying payment. Please contact support.', 'error');
+        showToast('Error verifying payment. If money was deducted, it will sync via webhook shortly — contact support if status stays Pending.', 'error');
     }
 }
 
