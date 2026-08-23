@@ -894,7 +894,7 @@ function printHallTicket() {
     const printWindow = window.open('', '', 'height=1123,width=794');
     printWindow.document.write('<html><head><title>Hall Ticket - Gyanam India</title>');
     printWindow.document.write('<link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">');
-    printWindow.document.write('</head><body class="ht-a4-viewport">');
+    printWindow.document.write('</head><body class="ht-a4-print">');
     printWindow.document.write(content);
     printWindow.document.write('</body></html>');
     printWindow.document.close();
