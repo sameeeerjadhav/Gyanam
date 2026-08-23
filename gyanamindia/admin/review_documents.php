@@ -116,64 +116,6 @@ body{font-family:Arial,Helvetica,sans-serif;background:#fff;margin:0;padding:12p
         exit;
     }
 
-    if ($embed === 'completion_html' && $student && $atc) {
-        $fullName = trim($student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name']);
-        $regId    = $student['registration_id'] ?: ($student['roll_no'] ?? '');
-        $photo    = !empty($student['photo']) ? '../' . htmlspecialchars($student['photo']) : '';
-        $certNo   = 'CERT-' . ($atc['atc_code'] ?? 'ATC') . '-' . ($student['roll_no'] ?? '') . '-' . date('Y');
-        $today    = date('d F Y');
-        header('Content-Type: text/html; charset=utf-8');
-        ?>
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="UTF-8">
-<title>Completion Certificate Preview</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
-<style>
-body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;margin:0;padding:16px}
-.certificate{max-width:210mm;margin:0 auto;background:#fff;padding:2rem;border:4px solid #4361ee;border-radius:12px;position:relative}
-.cert-head{display:flex;align-items:center;justify-content:space-between;padding-bottom:1.25rem;border-bottom:3px double #4361ee;margin-bottom:1.25rem;gap:1rem}
-.cert-logo img{width:80px;height:80px;object-fit:contain}
-.cert-org{flex:1;text-align:center}
-.cert-org h1{font-size:20px;font-weight:800;color:#4361ee;margin:0 0 4px;text-transform:uppercase}
-.cert-org h2{font-size:13px;color:#7c3aed;font-weight:700;margin:0 0 2px;text-transform:uppercase}
-.cert-org p{font-size:11px;color:#6b7280;margin:0}
-.cert-student-photo{width:100px;height:120px;border:2px solid #4361ee;object-fit:cover;border-radius:4px}
-.cert-body{text-align:center;padding:1rem 0}
-.cert-student-name{font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:700;color:#4361ee;margin:.3rem 0}
-.cert-course-name{font-size:20px;font-weight:800;color:#7c3aed;margin:.25rem 0;text-transform:uppercase}
-.cert-details-bar{display:flex;flex-wrap:wrap;justify-content:center;gap:.5rem 1.25rem;background:#eef1fd;border-radius:8px;padding:.75rem;font-size:11.5px;margin-top:1rem}
-</style>
-</head><body>
-<div class="certificate">
-  <div class="cert-head">
-    <div class="cert-logo"><img src="../assets/logo.png" alt=""></div>
-    <div class="cert-org">
-      <h1>Gyanam India Educational Services</h1>
-      <h2>Certificate of Course Completion</h2>
-      <p>ATC HTML certificate (Completion Certificate page)</p>
-    </div>
-    <?php if ($photo): ?><img src="<?= $photo ?>" class="cert-student-photo" alt=""><?php endif; ?>
-  </div>
-  <div class="cert-body">
-    <p style="font-style:italic;color:#6b7280">This is to certify that</p>
-    <div class="cert-student-name"><?= htmlspecialchars(strtoupper($fullName)) ?></div>
-    <p>has successfully completed the course</p>
-    <div class="cert-course-name"><?= htmlspecialchars($student['course'] ?? '') ?></div>
-  </div>
-  <div class="cert-details-bar">
-    <span><strong>Roll:</strong> <?= htmlspecialchars($student['roll_no'] ?? '') ?></span>
-    <span><strong>Reg:</strong> <?= htmlspecialchars($regId) ?></span>
-    <span><strong>Center:</strong> <?= htmlspecialchars($atc['name'] ?? '') ?></span>
-    <span><strong>Date:</strong> <?= $today ?></span>
-    <span><strong>Cert No:</strong> <?= htmlspecialchars($certNo) ?></span>
-  </div>
-</div>
-</body></html>
-        <?php
-        exit;
-    }
-
     http_response_code(404);
     echo 'Preview not available — select a valid ATC and student.';
     exit;
