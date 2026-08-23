@@ -277,8 +277,8 @@ $docSections = [
 // GIIT course PDF
 $docSections['certificates_pdf']['items'][] = [
     'name'        => 'GIIT Course Completion Certificate',
-    'desc'        => 'Official graded PDF after exam pass. Used by Admin → Course Certificates.',
-    'live'        => 'atc/completion_certificate.php (ATC gate: share + photo + pass)',
+    'desc'        => 'Official student course completion PDF (GIIT template, grade A++–C). Used by Admin and ATC Completion Certificates.',
+    'live'        => 'atc/completion_certificate.php · admin/course_certificates.php',
     'preview_url' => $passRegId ? ('generate_course_certificate.php?reg_id=' . urlencode($passRegId) . '&preview=1') : null,
     'preview_note'=> $passNote ?: null,
     'code'        => 'admin/generate_course_certificate.php',
@@ -305,17 +305,10 @@ $docSections['certificates_html']['items'][] = [
 ];
 $docSections['certificates_html']['items'][] = [
     'name'        => 'Student Certificate (HTML legacy)',
-    'desc'        => 'Generic HTML certificate — superseded by GIIT PDF for course completion.',
+    'desc'        => 'Old generic HTML layout — not used for official course completion (use GIIT PDF above).',
     'live'        => 'admin/print_certificates.php',
     'preview_url' => $selStudentId ? ('student_certificate.php?id=' . $selStudentId) : null,
     'code'        => 'admin/student_certificate.php',
-];
-$docSections['certificates_html']['items'][] = [
-    'name'        => 'ATC Completion Certificate (HTML)',
-    'desc'        => 'In-portal HTML cert on ATC Completion Certificate page (not the GIIT PDF).',
-    'live'        => 'atc/completion_certificate.php',
-    'preview_url' => ($selStudentId && $selAtcId) ? ('review_documents.php?embed=completion_html&student_id=' . $selStudentId . '&atc_id=' . $selAtcId) : null,
-    'code'        => 'atc/completion_certificate.php',
 ];
 
 $docSections['hall_tickets']['items'][] = [
@@ -492,7 +485,7 @@ $pageTitle = 'Review Documents (TEMP)';
             <div class="rv-card" style="padding:1rem 1.15rem">
                 <p style="font-size:.86rem;line-height:1.6;margin:0;color:#374151">
                     <b>Hall ticket?</b> Yes — ATC portal → <b>Hall Tickets</b> (<code>atc/hall_tickets.php</code>). Requires HO share paid + student photo.<br>
-                    <b>GIIT course PDF?</b> Admin → Course Certificates after Exam Portal pass.<br>
+                    <b>GIIT course PDF?</b> Official completion cert — Admin → Course Certificates or ATC → Completion Certificates.<br>
                     <b>Auth PDFs?</b> Admin → Auth Certificates (GIIT IT + Gyanam Abacus by center type).<br>
                     <b>Exam connection?</b>
                     <?php if (function_exists('examIntegrationReady') && examIntegrationReady()): ?>

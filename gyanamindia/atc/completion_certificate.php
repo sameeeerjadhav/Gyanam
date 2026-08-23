@@ -1,14 +1,20 @@
 <?php
 /**
  * Gyanam Portal — ATC: Course Completion Certificates
- * Certificate is only generatable when:
- *   1. Student photo is uploaded (admissions.photo != '')
- *   2. HO share has been paid (share_payments, status=Completed, student in JSON array)
+ * Opens the official GIIT PDF (generate_course_certificate.php).
+ *
+ * Certificate is only available when:
+ *   1. Student photo is uploaded
+ *   2. HO share has been paid
+ *   3. Main exam passed (Exam Portal, or exam_schedules fallback)
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/notifications.php';
+if (file_exists(__DIR__ . '/../includes/exam_integration.php')) {
+    require_once __DIR__ . '/../includes/exam_integration.php';
+}
 
 requireLogin(['ATC CENTER']);
 
@@ -49,9 +55,32 @@ try {
     $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 
+// Exam pass map from Exam Portal (authoritative when connected)
+$examPassIds = [];
+$atcCode = trim((string)($atcDetails['atc_code'] ?? ''));
+if ($atcCode !== '' && function_exists('examIntegrationReady') && examIntegrationReady()) {
+    $res = fetchAllExamResultsComplete();
+    if ($res['success'] && !empty($res['data']['submissions'])) {
+        foreach ($res['data']['submissions'] as $sub) {
+            if (($sub['centre_name'] ?? '') !== $atcCode) {
+                continue;
+            }
+            $rec = examSubmissionPassRecord($sub);
+            if ($rec) {
+                $examPassIds[$rec['identifier']] = true;
+            }
+        }
+    }
+}
+
 // Annotate exam_passed flag
 foreach ($students as &$_s) {
-    $_s['exam_passed'] = ($_s['exam_status'] === 'Passed') ? 1 : 0;
+    $regKey = trim((string)($_s['registration_id'] ?? ''));
+    if ($regKey === '') {
+        $regKey = trim((string)($_s['roll_no'] ?? ''));
+    }
+    $passedPortal = $regKey !== '' && !empty($examPassIds[$regKey]);
+    $_s['exam_passed'] = ($passedPortal || ($_s['exam_status'] ?? '') === 'Passed') ? 1 : 0;
 }
 unset($_s);
 
@@ -159,83 +188,9 @@ $examNotPassed    = $totalStudents - $examPassedCount;
     color:#fff; box-shadow:0 3px 10px var(--brand-glow);
 }
 .btn-generate:hover { transform:translateY(-1px); box-shadow:0 6px 16px var(--brand-glow); }
-.btn-generate:disabled { opacity:.4; cursor:not-allowed; transform:none; box-shadow:none; background:#e2e8f0; color:#94a3b8; }
+.btn-generate:disabled, .btn-generate.disabled { opacity:.4; cursor:not-allowed; transform:none; box-shadow:none; background:#e2e8f0; color:#94a3b8; pointer-events:none; text-decoration:none; }
 .btn-generate svg { width:13px; height:13px; }
-
-/* Modal */
-.cert-overlay { position:fixed; inset:0; background:rgba(8,12,28,.55); backdrop-filter:blur(6px); z-index:1000; display:none; align-items:center; justify-content:center; padding:1.25rem; font-family:var(--font); }
-.cert-overlay.open { display:flex; }
-.cert-modal { background:#fff; border-radius:var(--r-2xl); box-shadow:var(--sh-lg); width:100%; max-width:820px; max-height:92vh; display:flex; flex-direction:column; animation:ccSlideUp .28s cubic-bezier(.34,1.56,.64,1); overflow:hidden; }
-@keyframes ccSlideUp { from{opacity:0;transform:scale(.92) translateY(16px)} to{opacity:1;transform:scale(1) translateY(0)} }
-.cert-modal-head { padding:1rem 1.5rem; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border-color); background:#fafbfc; flex-shrink:0; }
-.cert-modal-head-title { font-size:.95rem; font-weight:800; color:var(--text-primary); }
-.cert-modal-head-sub   { font-size:.75rem; color:var(--text-secondary); margin-top:.1rem; }
-.cert-modal-actions { display:flex; align-items:center; gap:.75rem; }
-.cert-btn-print  { display:inline-flex; align-items:center; gap:.4rem; padding:.55rem 1.1rem; border-radius:var(--r-md); background:linear-gradient(135deg,var(--emerald),var(--emerald-dk)); color:#fff; font-size:.8rem; font-weight:700; font-family:var(--font); border:none; cursor:pointer; box-shadow:0 3px 10px rgba(16,185,129,.25); transition:all .18s; }
-.cert-btn-print:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(16,185,129,.35); }
-.cert-btn-pdf    { display:inline-flex; align-items:center; gap:.4rem; padding:.55rem 1.1rem; border-radius:var(--r-md); background:linear-gradient(135deg,var(--brand),var(--brand-dk)); color:#fff; font-size:.8rem; font-weight:700; font-family:var(--font); border:none; cursor:pointer; box-shadow:0 3px 10px var(--brand-glow); transition:all .18s; }
-.cert-btn-pdf:hover { transform:translateY(-1px); box-shadow:0 6px 16px var(--brand-glow); }
-.cert-btn-close  { width:34px; height:34px; display:flex; align-items:center; justify-content:center; background:transparent; border:1.5px solid var(--border-color); border-radius:var(--r-md); cursor:pointer; transition:all .18s; }
-.cert-btn-close:hover { background:var(--rose-soft); border-color:#fca5a5; }
-.cert-btn-close svg { width:14px; height:14px; stroke:var(--text-secondary); fill:none; }
-.cert-btn-close:hover svg { stroke:var(--rose); }
-.cert-btn-print svg,.cert-btn-pdf svg { width:13px; height:13px; }
-.cert-modal-body { padding:1.5rem; overflow-y:auto; flex:1; }
-
-/* ═══ CERTIFICATE DESIGN ═══ */
-.certificate {
-    border:4px solid var(--brand);
-    border-radius:12px;
-    padding:2rem;
-    font-family:Arial,Helvetica,sans-serif;
-    position:relative;
-    background:#fff;
-    box-shadow:inset 0 0 0 6px #fff, inset 0 0 0 8px var(--brand-soft);
-}
-/* Decorative corner accents */
-.certificate::before,.certificate::after {
-    content:'';
-    position:absolute;
-    width:60px; height:60px;
-    border:3px solid var(--violet);
-    border-radius:4px;
-    opacity:.35;
-}
-.certificate::before { top:12px; left:12px; border-right:none; border-bottom:none; }
-.certificate::after  { bottom:12px; right:12px; border-left:none; border-top:none; }
-
-.cert-head { display:flex; align-items:center; justify-content:space-between; padding-bottom:1.25rem; border-bottom:3px double var(--brand); margin-bottom:1.25rem; gap:1rem; }
-.cert-logo { width:80px; height:80px; flex-shrink:0; }
-.cert-logo img { width:100%; height:100%; object-fit:contain; }
-.cert-org  { flex:1; text-align:center; }
-.cert-org h1 { font-size:20px; font-weight:800; color:var(--brand); letter-spacing:.5px; margin:0 0 4px; text-transform:uppercase; }
-.cert-org h2 { font-size:13px; color:var(--violet); font-weight:700; margin:0 0 2px; text-transform:uppercase; letter-spacing:.3px; }
-.cert-org p  { font-size:11px; color:#6b7280; margin:0; }
-.cert-student-photo { width:100px; height:120px; border:2px solid var(--brand); object-fit:cover; border-radius:4px; flex-shrink:0; }
-.cert-student-photo-placeholder { width:100px; height:120px; border:2px dashed #cbd5e1; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#9ca3af; text-align:center; flex-shrink:0; }
-
-.cert-body { text-align:center; padding:1rem 0 1.25rem; }
-.cert-body .cert-certify-text { font-size:13px; color:#6b7280; margin:0 0 .5rem; font-style:italic; }
-.cert-body .cert-student-name { font-family:'Playfair Display', Georgia, serif; font-size:32px; font-weight:700; color:var(--brand); letter-spacing:.5px; margin:.3rem 0; line-height:1.2; }
-.cert-body .cert-completed-text { font-size:13px; color:#374151; margin:.5rem 0; }
-.cert-body .cert-course-name { font-size:20px; font-weight:800; color:var(--violet); margin:.25rem 0 1rem; text-transform:uppercase; letter-spacing:.3px; }
-
-/* Details bar */
-.cert-details-bar { display:flex; flex-wrap:wrap; justify-content:center; gap:.5rem 1.25rem; background:var(--brand-soft); border-radius:8px; padding:.75rem 1rem; margin-bottom:1.25rem; font-size:11.5px; color:#374151; }
-.cert-details-bar strong { color:var(--brand); }
-
-/* Divider */
-.cert-divider { border:none; border-top:1.5px dashed #e5e7eb; margin:1.25rem 0; }
-
-/* Signatures */
-.cert-sigs { display:flex; justify-content:space-between; gap:1rem; margin-top:.25rem; }
-.cert-sig-box { flex:1; text-align:center; }
-.cert-sig-line { width:130px; height:50px; border-bottom:2px solid #374151; margin:0 auto 6px; }
-.cert-sig-label { font-size:10px; font-weight:700; color:#374151; text-transform:uppercase; letter-spacing:.4px; }
-.cert-sig-title { font-size:9px; color:#9ca3af; margin-top:2px; }
-
-/* Footer note */
-.cert-foot { text-align:center; font-size:9.5px; color:#9ca3af; margin-top:1rem; line-height:1.6; }
+a.btn-generate { text-decoration:none; }
 
 /* Empty state */
 .cc-empty { text-align:center; padding:4rem 2rem; }
@@ -259,7 +214,7 @@ $examNotPassed    = $totalStudents - $examPassedCount;
             </button>
             <div class="header-greeting">
                 <h2>Completion Certificates</h2>
-                <p>Generate course completion certificates for eligible students</p>
+                <p>Print official GIIT course completion PDFs (exam pass + share paid + photo)</p>
             </div>
         </div>
         <div class="header-right">
@@ -278,7 +233,7 @@ $examNotPassed    = $totalStudents - $examPassedCount;
                 </div>
                 <div>
                     <div class="cc-page-title">Course Completion Certificates</div>
-                    <div class="cc-page-sub">Certificates are available only after photo is uploaded &amp; HO share is paid</div>
+                    <div class="cc-page-sub">Official GIIT PDF after exam pass, HO share paid &amp; photo uploaded</div>
                 </div>
             </div>
         </div>
@@ -404,29 +359,31 @@ $examNotPassed    = $totalStudents - $examPassedCount;
                             </span>
                         </td>
                         <td>
-                            <button
-                                class="btn-generate"
-                                <?= $ready ? '' : 'disabled' ?>
-                                <?php if (!$ready):
-                                    if (!$examPassed && !$hasPhoto && !$sharePaid) $reason = 'Pass exam, upload photo & pay share first';
-                                    elseif (!$examPassed) $reason = 'Student must pass exam first';
-                                    elseif (!$hasPhoto && !$sharePaid) $reason = 'Upload photo and pay HO share first';
-                                    elseif (!$hasPhoto) $reason = 'Upload student photo first';
-                                    else $reason = 'Pay HO share first';
-                                ?>title="<?= $reason ?>"<?php endif; ?>
-                                onclick='openCertModal(<?= json_encode([
-                                    'id'              => $s['id'],
-                                    'roll_no'         => $s['roll_no'],
-                                    'registration_id' => $s['registration_id'] ?? $s['roll_no'],
-                                    'full_name'       => $fullName,
-                                    'course'          => $s['course'],
-                                    'photo'           => $photoUrl,
-                                    'mobile'          => $s['mobile'] ?? '',
-                                    'created_at'      => $s['created_at'],
-                                ]) ?>)'>
+                            <?php
+                            $regIdForCert = trim((string)($s['registration_id'] ?? ''));
+                            if ($regIdForCert === '') {
+                                $regIdForCert = trim((string)($s['roll_no'] ?? ''));
+                            }
+                            $certUrl = '../admin/generate_course_certificate.php?reg_id=' . urlencode($regIdForCert) . '&preview=1';
+                            if (!$ready):
+                                if (!$examPassed && !$hasPhoto && !$sharePaid) $reason = 'Pass exam, upload photo & pay share first';
+                                elseif (!$examPassed) $reason = 'Student must pass exam first';
+                                elseif (!$hasPhoto && !$sharePaid) $reason = 'Upload photo and pay HO share first';
+                                elseif (!$hasPhoto) $reason = 'Upload student photo first';
+                                else $reason = 'Pay HO share first';
+                            endif;
+                            ?>
+                            <?php if ($ready): ?>
+                            <a class="btn-generate" href="<?= htmlspecialchars($certUrl) ?>" target="_blank" rel="noopener">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
-                                Generate
-                            </button>
+                                View GIIT PDF
+                            </a>
+                            <?php else: ?>
+                            <span class="btn-generate disabled" title="<?= htmlspecialchars($reason) ?>">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
+                                View GIIT PDF
+                            </span>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -439,43 +396,8 @@ $examNotPassed    = $totalStudents - $examPassedCount;
 </main>
 </div><!-- /dashboard-layout -->
 
-<!-- ══ CERTIFICATE MODAL ══ -->
-<div class="cert-overlay" id="certOverlay" onclick="overlayClickClose(event)">
-    <div class="cert-modal" id="certModal">
-        <div class="cert-modal-head">
-            <div>
-                <div class="cert-modal-head-title">🎓 Course Completion Certificate</div>
-                <div class="cert-modal-head-sub" id="certHeaderSub">Preview — print or download as PDF</div>
-            </div>
-            <div class="cert-modal-actions">
-                <button class="cert-btn-print" onclick="printCert()">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                    Print
-                </button>
-                <button class="cert-btn-pdf" onclick="downloadPdf()">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Download PDF
-                </button>
-                <button class="cert-btn-close" onclick="closeCertModal()">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-            </div>
-        </div>
-        <div class="cert-modal-body" id="certContent"><!-- injected --></div>
-    </div>
-</div>
-
 <script src="../assets/js/dashboard.js"></script>
 <script>
-const ATC_NAME    = <?= json_encode($atcDetails['name'] ?? 'ATC Center') ?>;
-const ATC_CODE    = <?= json_encode($atcDetails['center_code'] ?? ($atcDetails['id'] ?? '')) ?>;
-const ATC_ADDRESS = <?= json_encode($atcDetails['address'] ?? '') ?>;
-const ATC_MOBILE  = <?= json_encode($atcDetails['mobile'] ?? '') ?>;
-const YEAR        = new Date().getFullYear();
-
-let _currentCert = null;
-
-// ── Search ──────────────────────────────────────────────────────────────────
 document.getElementById('ccSearch').addEventListener('input', function() {
     const q    = this.value.toLowerCase();
     const rows = document.querySelectorAll('#ccTable tbody tr');
@@ -487,145 +409,6 @@ document.getElementById('ccSearch').addEventListener('input', function() {
     });
     document.getElementById('visCount').textContent = vis + ' shown';
 });
-
-// ── Open Modal ───────────────────────────────────────────────────────────────
-function openCertModal(student) {
-    _currentCert = student;
-    document.getElementById('certHeaderSub').textContent = student.full_name + ' — ' + student.course;
-
-    const certNo   = `CERT-${ATC_CODE || 'ATC'}-${student.roll_no}-${YEAR}`;
-    const today    = new Date().toLocaleDateString('en-IN', {day:'2-digit', month:'long', year:'numeric'});
-    const photoHtml = student.photo
-        ? `<img src="${student.photo}" class="cert-student-photo" alt="Student Photo">`
-        : `<div class="cert-student-photo-placeholder">No Photo</div>`;
-
-    document.getElementById('certContent').innerHTML = `
-        <div class="certificate" id="theCertificate">
-            <div class="cert-head">
-                <div class="cert-logo"><img src="../assets/logo.png" alt="Gyanam India"></div>
-                <div class="cert-org">
-                    <h1>Gyanam India Educational Services</h1>
-                    <h2>Certificate of Course Completion</h2>
-                    <p>This certificate is issued by the authorized examination body</p>
-                </div>
-                ${photoHtml}
-            </div>
-
-            <div class="cert-body">
-                <p class="cert-certify-text">This is to certify that</p>
-                <div class="cert-student-name">${escHtml(student.full_name.toUpperCase())}</div>
-                <p class="cert-completed-text">has successfully completed the course</p>
-                <div class="cert-course-name">${escHtml(student.course)}</div>
-            </div>
-
-            <div class="cert-details-bar">
-                <span><strong>Roll No:</strong> ${escHtml(student.roll_no)}</span>
-                <span><strong>Reg. ID:</strong> ${escHtml(student.registration_id)}</span>
-                <span><strong>Center:</strong> ${escHtml(ATC_NAME)}</span>
-                <span><strong>Date:</strong> ${today}</span>
-                <span><strong>Cert. No:</strong> ${certNo}</span>
-            </div>
-
-            <hr class="cert-divider">
-
-            <div class="cert-sigs">
-                <div class="cert-sig-box">
-                    <div class="cert-sig-line"></div>
-                    <div class="cert-sig-label">Student</div>
-                    <div class="cert-sig-title">${escHtml(student.full_name)}</div>
-                </div>
-                <div class="cert-sig-box">
-                    <div class="cert-sig-line"></div>
-                    <div class="cert-sig-label">ATC In-Charge</div>
-                    <div class="cert-sig-title">${escHtml(ATC_NAME)}</div>
-                </div>
-                <div class="cert-sig-box">
-                    <div class="cert-sig-line"></div>
-                    <div class="cert-sig-label">Director</div>
-                    <div class="cert-sig-title">Gyanam India Educational Services</div>
-                </div>
-            </div>
-
-            <div class="cert-foot">
-                Computer generated certificate · Does not require physical stamp · Contact: ${ATC_MOBILE || 'N/A'}<br>
-                ${escHtml(ATC_ADDRESS)}
-            </div>
-        </div>`;
-
-    document.getElementById('certOverlay').classList.add('open');
-}
-
-function closeCertModal() {
-    document.getElementById('certOverlay').classList.remove('open');
-    _currentCert = null;
-}
-function overlayClickClose(e) {
-    if (e.target === document.getElementById('certOverlay')) closeCertModal();
-}
-
-// ── Print ────────────────────────────────────────────────────────────────────
-function printCert() {
-    const content = document.getElementById('theCertificate').outerHTML;
-    openCertWindow(content, false);
-}
-
-// ── Download PDF ─────────────────────────────────────────────────────────────
-function downloadPdf() {
-    const content = document.getElementById('theCertificate').outerHTML;
-    openCertWindow(content, true);
-}
-
-function openCertWindow(certHtml, showHint) {
-    const pw = window.open('', '_blank', 'height=900,width=1050');
-    pw.document.write(`<html><head><title>Certificate — Gyanam India</title>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
-    <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;padding:24px}
-    .certificate{max-width:210mm;margin:0 auto;background:#fff;padding:2rem;border:4px solid #4361ee;border-radius:12px;box-shadow:inset 0 0 0 6px #fff,inset 0 0 0 8px #eef1fd;position:relative}
-    .certificate::before,.certificate::after{content:'';position:absolute;width:60px;height:60px;border:3px solid #7c3aed;border-radius:4px;opacity:.35}
-    .certificate::before{top:12px;left:12px;border-right:none;border-bottom:none}
-    .certificate::after{bottom:12px;right:12px;border-left:none;border-top:none}
-    .cert-head{display:flex;align-items:center;justify-content:space-between;padding-bottom:1.25rem;border-bottom:3px double #4361ee;margin-bottom:1.25rem;gap:1rem}
-    .cert-logo img{width:80px;height:80px;object-fit:contain}
-    .cert-org{flex:1;text-align:center}
-    .cert-org h1{font-size:20px;font-weight:800;color:#4361ee;letter-spacing:.5px;margin:0 0 4px;text-transform:uppercase}
-    .cert-org h2{font-size:13px;color:#7c3aed;font-weight:700;margin:0 0 2px;text-transform:uppercase;letter-spacing:.3px}
-    .cert-org p{font-size:11px;color:#6b7280;margin:0}
-    .cert-student-photo{width:100px;height:120px;border:2px solid #4361ee;object-fit:cover;border-radius:4px;flex-shrink:0}
-    .cert-student-photo-placeholder{width:100px;height:120px;border:2px dashed #cbd5e1;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#9ca3af;text-align:center;flex-shrink:0}
-    .cert-body{text-align:center;padding:1rem 0 1.25rem}
-    .cert-certify-text{font-size:13px;color:#6b7280;margin:0 0 .5rem;font-style:italic}
-    .cert-student-name{font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:700;color:#4361ee;letter-spacing:.5px;margin:.3rem 0;line-height:1.2}
-    .cert-completed-text{font-size:13px;color:#374151;margin:.5rem 0}
-    .cert-course-name{font-size:20px;font-weight:800;color:#7c3aed;margin:.25rem 0 1rem;text-transform:uppercase;letter-spacing:.3px}
-    .cert-details-bar{display:flex;flex-wrap:wrap;justify-content:center;gap:.5rem 1.25rem;background:#eef1fd;border-radius:8px;padding:.75rem 1rem;margin-bottom:1.25rem;font-size:11.5px;color:#374151}
-    .cert-details-bar strong{color:#4361ee}
-    .cert-divider{border:none;border-top:1.5px dashed #e5e7eb;margin:1.25rem 0}
-    .cert-sigs{display:flex;justify-content:space-between;gap:1rem;margin-top:.25rem}
-    .cert-sig-box{flex:1;text-align:center}
-    .cert-sig-line{width:130px;height:50px;border-bottom:2px solid #374151;margin:0 auto 6px}
-    .cert-sig-label{font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px}
-    .cert-sig-title{font-size:9px;color:#9ca3af;margin-top:2px}
-    .cert-foot{text-align:center;font-size:9.5px;color:#9ca3af;margin-top:1rem;line-height:1.6}
-    .download-hint{text-align:center;padding:12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;font-size:12px;color:#92400e;margin-bottom:16px;font-weight:600}
-    @media print{body{padding:0;background:#fff}.download-hint{display:none}}
-    </style></head><body>`);
-    if (showHint) {
-        pw.document.write('<div class="download-hint">📥 Press <strong>Ctrl + P</strong> (or ⌘P on Mac) → Select <strong>"Save as PDF"</strong> as the printer to download.</div>');
-    }
-    pw.document.write(certHtml);
-    pw.document.write('</body></html>');
-    pw.document.close();
-    if (!showHint) setTimeout(() => pw.print(), 400);
-}
-
-function escHtml(str) {
-    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// Escape key
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCertModal(); });
 </script>
 </body>
 </html>
