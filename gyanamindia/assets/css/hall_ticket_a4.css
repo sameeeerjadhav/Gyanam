@@ -4,7 +4,7 @@
  */
 @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 8mm;
 }
 
 html, body {
@@ -12,6 +12,7 @@ html, body {
     padding: 0;
 }
 
+/* Screen preview (standalone or modal) */
 body.ht-a4-viewport {
     background: #d1d5db;
     min-height: 100vh;
@@ -22,14 +23,29 @@ body.ht-a4-viewport {
     box-sizing: border-box;
 }
 
+body.ht-a4-print {
+    background: #fff;
+    margin: 0;
+    padding: 0;
+}
+
 .ht-print-toolbar {
     width: 210mm;
-    max-width: 100%;
+    max-width: calc(100vw - 32px);
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     flex-shrink: 0;
+}
+
+.ht-print-hint {
+    width: 210mm;
+    max-width: calc(100vw - 32px);
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: #4b5563;
+    font-family: Arial, Helvetica, sans-serif;
 }
 
 .ht-print-toolbar button {
@@ -58,30 +74,30 @@ body.ht-a4-viewport {
 
 .ht-print {
     width: 210mm;
-    min-height: 297mm;
-    max-width: 210mm;
+    max-width: 100%;
     margin: 0 auto;
-    padding: 12mm 14mm;
+    padding: 10mm 12mm;
     background: #fff;
     border: 1px solid #000;
     box-sizing: border-box;
     font-family: Arial, Helvetica, sans-serif;
     color: #111;
-    font-size: 12px;
-    line-height: 1.4;
+    font-size: 11px;
+    line-height: 1.35;
 }
 
 .ht-print-tbl {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
-    margin-bottom: 6px;
+    font-size: 11px;
+    margin-bottom: 5px;
+    page-break-inside: avoid;
 }
 
 .ht-print-tbl th,
 .ht-print-tbl td {
     border: 1px solid #000;
-    padding: 6px 8px;
+    padding: 5px 7px;
     vertical-align: top;
 }
 
@@ -90,30 +106,57 @@ body.ht-a4-viewport {
 
 .ht-print ol {
     margin: 0;
-    padding-left: 18px;
-    font-size: 11px;
-    line-height: 1.65;
+    padding-left: 16px;
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.ht-print ol li {
+    margin-bottom: 3px;
+}
+
+.ht-print br {
+    display: none;
 }
 
 @media print {
-    body.ht-a4-viewport {
-        background: #fff;
-        padding: 0;
+    html, body {
+        width: 100%;
+        height: auto;
+        background: #fff !important;
+    }
+
+    body.ht-a4-viewport,
+    body.ht-a4-print {
+        padding: 0 !important;
+        margin: 0 !important;
+        background: #fff !important;
+        display: block !important;
+        min-height: 0 !important;
     }
 
     .ht-print-toolbar,
+    .ht-print-hint,
     .no-print {
         display: none !important;
+        height: 0 !important;
+        overflow: hidden !important;
     }
 
     .ht-print {
-        width: 100%;
-        min-height: auto;
-        max-width: none;
-        border: none;
-        padding: 0;
-        margin: 0;
-        box-shadow: none;
+        width: 100% !important;
+        max-width: none !important;
+        min-height: 0 !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        page-break-after: avoid;
+        page-break-inside: avoid;
+    }
+
+    .ht-print-tbl {
+        page-break-inside: avoid;
     }
 }
 

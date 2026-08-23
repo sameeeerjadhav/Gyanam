@@ -58,7 +58,10 @@ if ($embed !== '') {
         $examAddr = htmlspecialchars(implode(', ', array_filter([
             $atc['address'] ?? '', $atc['city'] ?? '', $atc['district'] ?? '', $atc['state'] ?? '',
         ])) . (!empty($atc['pin_code']) ? ' - ' . $atc['pin_code'] : ''));
-        $autoPrint = isset($_GET['print']) && $_GET['print'] === '1';
+        $autoPrint   = isset($_GET['print']) && $_GET['print'] === '1';
+        $inIframe    = isset($_GET['iframe']) && $_GET['iframe'] === '1';
+        $showToolbar = !$inIframe && !$autoPrint;
+        $bodyClass   = $autoPrint ? 'ht-a4-print' : 'ht-a4-viewport';
         header('Content-Type: text/html; charset=utf-8');
         ?>
 <!DOCTYPE html>
@@ -66,11 +69,14 @@ if ($embed !== '') {
 <meta charset="UTF-8">
 <title>Hall Ticket — <?= htmlspecialchars($fullName) ?></title>
 <link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">
-</head><body class="ht-a4-viewport">
+</head><body class="<?= $bodyClass ?>">
+<?php if ($showToolbar): ?>
 <div class="ht-print-toolbar no-print">
     <button type="button" class="ht-btn-secondary" onclick="window.close()">Close</button>
     <button type="button" onclick="window.print()">Print Hall Ticket</button>
 </div>
+<p class="ht-print-hint no-print">Tip: In the print dialog, turn off <b>Headers and footers</b> for a clean ticket.</p>
+<?php endif; ?>
 <div class="ht-print" id="hallTicketPrint">
   <table class="ht-print-tbl">
     <tr>
@@ -263,7 +269,10 @@ $docSections['hall_tickets']['items'][] = [
     'name'        => 'Examination Hall Ticket',
     'desc'        => 'Generated per student on ATC Hall Tickets (requires share paid + photo).',
     'live'        => 'atc/hall_tickets.php',
-    'preview_url' => ($selStudentId && $selAtcId) ? ('review_documents.php?embed=hall_ticket&student_id=' . $selStudentId . '&atc_id=' . $selAtcId) : null,
+    'preview_url' => ($selStudentId && $selAtcId) ? ('review_documents.php?embed=hall_ticket&iframe=1&student_id=' . $selStudentId . '&atc_id=' . $selAtcId) : null,
+    'open_url'    => ($selStudentId && $selAtcId) ? ('review_documents.php?embed=hall_ticket&view=1&student_id=' . $selStudentId . '&atc_id=' . $selAtcId) : null,
+    'print_url'   => ($selStudentId && $selAtcId) ? ('review_documents.php?embed=hall_ticket&print=1&student_id=' . $selStudentId . '&atc_id=' . $selAtcId) : null,
+    'preview_note' => 'Use Print for a clean A4 page. In the browser print dialog, turn off Headers and footers.',
     'code'        => 'atc/hall_tickets.php',
 ];
 $docSections['hall_tickets']['items'][] = [
@@ -397,8 +406,10 @@ $pageTitle = 'Review Documents (TEMP)';
             <h3><?= htmlspecialchars($section['title']) ?> <span><?= count($section['items']) ?></span></h3>
             <div class="rv-grid">
                 <?php foreach ($section['items'] as $item):
-                    $preview = $item['preview_url'] ?? null;
-                    $note    = $item['preview_note'] ?? null;
+                    $preview   = $item['preview_url'] ?? null;
+                    $openUrl   = $item['open_url'] ?? $preview;
+                    $printUrl  = $item['print_url'] ?? null;
+                    $note      = $item['preview_note'] ?? null;
                 ?>
                 <div class="rv-card">
                     <div class="rv-card-head">
@@ -416,9 +427,9 @@ $pageTitle = 'Review Documents (TEMP)';
                     </div>
                     <div class="rv-actions">
                         <?php if ($preview): ?>
-                        <a class="rv-btn primary" href="<?= htmlspecialchars($preview) ?>" target="_blank" rel="noopener">Open full preview</a>
-                        <?php if (str_contains($preview, 'embed=hall_ticket')): ?>
-                        <a class="rv-btn" href="<?= htmlspecialchars($preview . (str_contains($preview, '?') ? '&' : '?') . 'print=1') ?>" target="_blank" rel="noopener">Print</a>
+                        <a class="rv-btn primary" href="<?= htmlspecialchars($openUrl) ?>" target="_blank" rel="noopener">Open full preview</a>
+                        <?php if ($printUrl): ?>
+                        <a class="rv-btn" href="<?= htmlspecialchars($printUrl) ?>" target="_blank" rel="noopener">Print</a>
                         <?php endif; ?>
                         <?php endif; ?>
                         <?php if ($note && $preview): ?>
