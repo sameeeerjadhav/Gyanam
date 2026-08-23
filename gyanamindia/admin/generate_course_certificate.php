@@ -103,16 +103,14 @@ $duration = trim($student['course_duration'] ?? '');
 if (!$duration) $duration = '3 months';  // safe fallback
 $durationLine = 'The course duration is ' . $duration;
 
-// 5. Grade from score (0–100)
-$grade = 'C';
-if ($score >= 90)      $grade = 'A++';
-elseif ($score >= 80)  $grade = 'A+';
-elseif ($score >= 66)  $grade = 'A';
-elseif ($score >= 55)  $grade = 'B';
-elseif ($score >= 40)  $grade = 'C';
-else                   $grade = 'Fail'; // shouldn't be generated for fails
+// 5. Grade from score — bands match GIIT template footer (A++ … C)
+$grade = courseExamGradeFromScore($score);
+if ($grade === 'Fail') {
+    http_response_code(400);
+    die('<b>Error:</b> Certificate cannot be issued — exam score is below passing grade (40%).');
+}
 
-$gradeLine = 'and has passed the examination with "' . $grade . '" grade';
+$gradeLine = "and has passed the examination with '" . $grade . "' grade";
 
 // 6. Certificate number: CourseName(abbrev) + RegId + counter
 //    e.g. MSCIT-GYANAM1-001
@@ -145,10 +143,10 @@ $certNo = $certBase . '-' . str_pad($counter, 3, '0', STR_PAD_LEFT);
 // 7. Date of issue — the day student passed (from exam portal)
 $dateOfIssue = date('d/m/Y', strtotime($examDate ?: date('Y-m-d')));
 
-// ── Template path ─────────────────────────────────────────────────────────────
-$templatePath = __DIR__ . '/../assets/templates/giit_course_certificate.pdf';
-if (!file_exists($templatePath)) {
-    die('<b>Template not found:</b> ' . htmlspecialchars($templatePath));
+// ── Template (PDF or PNG fallback for PDF 1.5+ templates) ───────────────────────
+$template = courseCertificateTemplateBackground();
+if (!$template) {
+    die('<b>Template not found:</b> Upload <code>assets/templates/giit_course_certificate.pdf</code> (and optional PNG fallback).');
 }
 
 // ── Student photo ─────────────────────────────────────────────────────────────
@@ -161,15 +159,18 @@ if (!empty($student['photo'])) {
 // ── Generate PDF ──────────────────────────────────────────────────────────────
 try {
     $pdf = new Fpdi();
-    $pdf->setSourceFile($templatePath);
-    $tplId = $pdf->importPage(1);
-    $size  = $pdf->getTemplateSize($tplId);
-
-    $W = $size['width'];
-    $H = $size['height'];
+    $W = $template['width'];
+    $H = $template['height'];
 
     $pdf->AddPage($W > $H ? 'L' : 'P', [$W, $H]);
-    $pdf->useTemplate($tplId, 0, 0, $W, $H);
+
+    if ($template['type'] === 'pdf') {
+        $pdf->setSourceFile($template['path']);
+        $tplId = $pdf->importPage(1);
+        $pdf->useTemplate($tplId, 0, 0, $W, $H);
+    } else {
+        $pdf->Image($template['path'], 0, 0, $W, $H, 'PNG');
+    }
 
     // ── Helper: centered text ─────────────────────────────────────────────────
     $put = function (string $text, float $y, float $size, string $style = 'B', string $color = '0,0,0') use ($pdf, $W) {
@@ -189,42 +190,30 @@ try {
         $pdf->Write(0, $text);
     };
 
-    // ── Coordinate map for giit_course_certificate.pdf (A4: ~210.8 × 298.1 mm) ──
-    //
-    // Template layout (from image):
-    //   ~Y=110  → "Certificate" ribbon (template graphic)
-    //   ~Y=125  → "This is to certify that" (already on template)
-    //   Y=134   → Student name (RED, bold-italic, large)
-    //   ~Y=142  → "Has Successfully completed" (template)
-    //   Y=150   → Course name (RED, bold)
-    //   ~Y=158  → "Conducted at" (template)
-    //   Y=165   → ATC name, city
-    //   Y=173   → Duration line
-    //   Y=181   → Grade line
-    //   Y=196   → Certificate No. value (after label on template)
-    //   Y=203   → Date of issue value (after label on template)
+    // ── Coordinate map — giit_course_certificate (A4 ~210 × 298 mm, 2026 template) ──
+    // Grading table (A++ … C) is printed on the template; we only overlay dynamic fields.
 
     // Student name — RED, bold-italic
-    $put($fullName, 134, 20, 'BI', '180,0,0');
+    $put($fullName, 128, 20, 'BI', '180,0,0');
 
     // Course name — RED, bold
-    $put($courseName, 151, 17, 'B', '180,0,0');
+    $put($courseName, 146, 16, 'B', '180,0,0');
 
-    // Conducted at (ATC name + city)
-    $put($conductedAt, 167, 14, 'B', '30,30,30');
+    // Conducted at (ATC name + city) — blue on sample; dark grey for readability
+    $put($conductedAt, 161, 14, 'B', '0,0,128');
 
     // Duration line
-    $put($durationLine, 176, 14, 'B', '30,30,30');
+    $put($durationLine, 171, 14, 'B', '30,30,30');
 
-    // Grade line
-    $put($gradeLine, 185, 14, 'B', '30,30,30');
+    // Grade line — blue on sample
+    $put($gradeLine, 181, 14, 'B', '0,0,128');
 
-    // Certificate No. & Date of issue — commented out pending live calibration
-    // $putLeft($certNo, 50, 206, 11, 'B', '30,30,30');
-    // $putLeft($dateOfIssue, 44, 216, 11, 'B', '30,30,30');
+    // Certificate No. & Date of issue (left footer labels are on template)
+    $putLeft($certNo, 38, 248, 11, 'B', '30,30,30');
+    $putLeft($dateOfIssue, 38, 256, 11, 'B', '30,30,30');
 
     // ── Student photo overlay ─────────────────────────────────────────────────
-    // Photo area is top-right of content: roughly X=148, Y=118, 32×38mm
+    // Photo box — top-right of body area
     if ($photoPath) {
         try {
             $pdf->Image($photoPath, 148, 118, 32, 38, '', '', '', true, 72);
@@ -246,7 +235,8 @@ try {
 } catch (\setasign\Fpdi\PdfParser\CrossReference\CrossReferenceException $e) {
     http_response_code(500);
     echo '<h2>PDF Template Compatibility Issue</h2>';
-    echo '<p>The course certificate template uses a compressed format (PDF 1.5+). Please resave <code>giit_course_certificate.pdf</code> as <b>PDF 1.4</b> (Acrobat 5 compatible).</p>';
+    echo '<p>The course certificate template uses a compressed format (PDF 1.5+) that FPDI cannot read without a paid extension.</p>';
+    echo '<p><b>Fix:</b> Add <code>assets/templates/giit_course_certificate.png</code> (full-page raster of the PDF) — the generator will use it automatically.</p>';
     echo '<p><small>' . htmlspecialchars($e->getMessage()) . '</small></p>';
 } catch (\Exception $e) {
     http_response_code(500);

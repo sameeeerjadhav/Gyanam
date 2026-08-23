@@ -1101,6 +1101,71 @@ function markSharePaymentStatus(PDO $pdo, int $paymentId, string $status, ?int $
     ];
 }
 
+/**
+ * Course completion exam grade from score (0–100).
+ * Matches GIIT course certificate footer: A++ 90+, A+ 80–89, A 66–79, B 55–65, C 40–54.
+ */
+function courseExamGradeFromScore(int $score): string {
+    if ($score >= 90) {
+        return 'A++';
+    }
+    if ($score >= 80) {
+        return 'A+';
+    }
+    if ($score >= 66) {
+        return 'A';
+    }
+    if ($score >= 55) {
+        return 'B';
+    }
+    if ($score >= 40) {
+        return 'C';
+    }
+    return 'Fail';
+}
+
+/**
+ * Resolve course certificate background: PDF template if FPDI-readable, else PNG raster.
+ *
+ * @return array{type:'pdf'|'png', path:string, width:float, height:float}|null
+ */
+function courseCertificateTemplateBackground(): ?array {
+    $base = __DIR__ . '/../assets/templates/';
+    $pdf  = $base . 'giit_course_certificate.pdf';
+    $png  = $base . 'giit_course_certificate.png';
+
+    if (is_file($pdf)) {
+        if (!class_exists(\setasign\Fpdi\Fpdi::class, false)) {
+            $autoload = __DIR__ . '/../assets/fpdi/fpdi_autoload.php';
+            if (is_file($autoload)) {
+                require_once $autoload;
+            }
+        }
+        if (class_exists(\setasign\Fpdi\Fpdi::class)) {
+            try {
+                $probe = new \setasign\Fpdi\Fpdi();
+                $probe->setSourceFile($pdf);
+                $tplId = $probe->importPage(1);
+                $size  = $probe->getTemplateSize($tplId);
+                return [
+                    'type'   => 'pdf',
+                    'path'   => $pdf,
+                    'width'  => (float)$size['width'],
+                    'height' => (float)$size['height'],
+                ];
+            } catch (\Throwable $e) {
+                // PDF 1.5+ / compressed xref — fall back to PNG
+            }
+        }
+    }
+
+    if (is_file($png)) {
+        return ['type' => 'png', 'path' => $png, 'width' => 210.0, 'height' => 298.0];
+    }
+
+    return is_file($pdf) ? ['type' => 'pdf', 'path' => $pdf, 'width' => 210.0, 'height' => 298.0] : null;
+}
+
 /** Active dashboard banners — lean columns, capped. $audience = ATC|DLC */
 function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8): array {
     $audience = strtoupper($audience) === 'DLC' ? 'DLC' : 'ATC';
