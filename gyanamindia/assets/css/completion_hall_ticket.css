@@ -1,0 +1,245 @@
+/**
+ * Completion examination hall ticket (ATC Completion Hall Ticket page)
+ * Used by atc/completion_hall_ticket.php modal and admin/review_documents.php preview.
+ */
+@page {
+    size: A4 portrait;
+    margin: 8mm;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+body.cht-a4-viewport {
+    background: #d1d5db;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+body.cht-a4-print {
+    background: #fff;
+    margin: 0;
+    padding: 0;
+}
+
+.cht-print-toolbar {
+    width: 210mm;
+    max-width: calc(100vw - 32px);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.cht-print-hint {
+    width: 210mm;
+    max-width: calc(100vw - 32px);
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: #4b5563;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.cht-print-toolbar button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: Arial, Helvetica, sans-serif;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+}
+
+.cht-print-toolbar .cht-btn-secondary {
+    background: #fff;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    box-shadow: none;
+}
+
+.cht-ticket-wrap {
+    width: 210mm;
+    max-width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+.hall-ticket {
+    border: 3px solid #6366f1;
+    padding: 20px;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.hall-ticket-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 16px;
+    border-bottom: 3px solid #6366f1;
+    margin-bottom: 16px;
+}
+
+.hall-ticket-logo img {
+    width: 70px;
+    height: 70px;
+    object-fit: contain;
+}
+
+.hall-ticket-title {
+    flex: 1;
+    text-align: center;
+    padding: 0 12px;
+}
+
+.hall-ticket-title h1 {
+    font-size: 17px;
+    color: #6366f1;
+    margin: 0 0 4px;
+}
+
+.hall-ticket-title h2 {
+    font-size: 13px;
+    color: #8b5cf6;
+    margin: 0 0 4px;
+}
+
+.hall-ticket-center {
+    font-size: 12px;
+    color: #666;
+    margin: 0;
+}
+
+.hall-ticket-photo img {
+    width: 90px;
+    height: 110px;
+    object-fit: cover;
+    border: 2px solid #6366f1;
+}
+
+.hall-ticket-section {
+    margin-bottom: 14px;
+}
+
+.hall-ticket-section h3 {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    padding: 6px 12px;
+    font-size: 11px;
+    margin: 0 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.hall-ticket-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.hall-ticket-table td {
+    padding: 6px 8px;
+    border: 1px solid #e5e7eb;
+    font-size: 12px;
+}
+
+.hall-ticket-table td.label {
+    background: #f9fafb;
+    font-weight: 600;
+    width: 24%;
+    color: #374151;
+}
+
+.hall-ticket-instructions {
+    padding-left: 16px;
+    font-size: 11px;
+    line-height: 1.8;
+    margin: 0;
+}
+
+.hall-ticket-footer {
+    border-top: 2px solid #6366f1;
+    padding-top: 14px;
+    margin-top: 14px;
+}
+
+.hall-ticket-signature {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.signature-box {
+    text-align: center;
+    flex: 1;
+}
+
+.signature-line {
+    width: 120px;
+    height: 45px;
+    border-bottom: 2px solid #333;
+    margin: 0 auto 4px;
+}
+
+.signature-box p {
+    font-size: 11px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.hall-ticket-note {
+    text-align: center;
+    font-size: 10px;
+    color: #666;
+    line-height: 1.6;
+}
+
+.hall-ticket-note p {
+    margin: 0 0 4px;
+}
+
+@media print {
+    html, body {
+        background: #fff !important;
+    }
+
+    body.cht-a4-viewport,
+    body.cht-a4-print {
+        padding: 0 !important;
+        margin: 0 !important;
+        display: block !important;
+        min-height: 0 !important;
+    }
+
+    .cht-print-toolbar,
+    .cht-print-hint,
+    .no-print {
+        display: none !important;
+    }
+
+    .cht-ticket-wrap {
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    .hall-ticket {
+        border: 3px solid #000 !important;
+        page-break-inside: avoid;
+    }
+}
+
+@media screen {
+    .cht-modal-body .hall-ticket {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    }
+}
