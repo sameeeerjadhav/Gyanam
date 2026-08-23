@@ -202,10 +202,6 @@ $docSections = [
         'title' => 'Official PDF certificates',
         'items' => [],
     ],
-    'certificates_html' => [
-        'title' => 'HTML certificates (browser print)',
-        'items' => [],
-    ],
     'hall_tickets' => [
         'title' => 'Hall tickets',
         'items' => [],
@@ -237,21 +233,6 @@ foreach ($authVariants as $v) {
         'code'        => 'admin/generate_auth_certificate.php',
     ];
 }
-
-$docSections['certificates_html']['items'][] = [
-    'name'        => 'ATC Authorization (HTML legacy)',
-    'desc'        => 'Older HTML authorization layout — separate from GIIT PDF auth cert.',
-    'live'        => 'admin/atc_centers.php',
-    'preview_url' => $selAtcId ? ('atc_certificate.php?id=' . $selAtcId) : null,
-    'code'        => 'admin/atc_certificate.php',
-];
-$docSections['certificates_html']['items'][] = [
-    'name'        => 'Student Certificate (HTML legacy)',
-    'desc'        => 'Old generic HTML layout — not used for official course completion (use GIIT PDF above).',
-    'live'        => 'admin/print_certificates.php',
-    'preview_url' => $selStudentId ? ('student_certificate.php?id=' . $selStudentId) : null,
-    'code'        => 'admin/student_certificate.php',
-];
 
 $docSections['hall_tickets']['items'][] = [
     'name'        => 'Examination Hall Ticket',

@@ -2,7 +2,7 @@
 /**
  * Gyanam Portal — Admin: Print Certificates
  * Lists students who are eligible for an exam certificate (passed).
- * Certificate is printed via admin/student_certificate.php
+ * Certificate is printed via admin/generate_course_certificate.php (GIIT PDF)
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
