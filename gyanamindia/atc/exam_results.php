@@ -28,15 +28,16 @@ try {
 } catch (Exception $e) { $atcName = 'ATC Centre'; }
 
 // Check integration
-$integrationReady = function_exists('fetchAllExamResults') && defined('EXAM_API_TOKEN') && EXAM_API_TOKEN !== 'PASTE_YOUR_TOKEN_HERE';
+$integrationReady = function_exists('examIntegrationReady') && examIntegrationReady();
 
 // Fetch results from Exam Portal
 $submissions = [];
 $stats = ['total' => 0, 'passed' => 0, 'failed' => 0, 'avg' => 0];
 $fetchError = null;
+$certEligibleIds = [];
 
 if ($integrationReady) {
-    $res = fetchAllExamResults();
+    $res = fetchAllExamResultsComplete();
     if ($res['success'] && isset($res['data'])) {
         $allSubs = $res['data']['submissions'] ?? [];
         // Filter to only this ATC's students
@@ -50,6 +51,53 @@ if ($integrationReady) {
         $stats['avg'] = $stats['total'] > 0 ? round(array_sum(array_column($submissions, 'score')) / $stats['total']) : 0;
     } else {
         $fetchError = $res['error'] ?? 'Could not fetch exam results.';
+    }
+}
+
+// Map registration IDs → admission rows for certificate eligibility (share + photo)
+$admByReg = [];
+$paidIds = getHoSharePaidAdmissionIds($pdo, (int)$atcId);
+try {
+    ensureSharePaymentSchema($pdo);
+    $hasHoCol = isSchemaFlagSet('schema_ho_share_paid_col');
+    if (!$hasHoCol && !isSchemaFlagSet('schema_ho_share_paid_missing')) {
+        try {
+            $pdo->query('SELECT ho_share_paid FROM admissions LIMIT 1');
+            markSchemaFlag('schema_ho_share_paid_col');
+            $hasHoCol = true;
+        } catch (Exception $e) {
+            markSchemaFlag('schema_ho_share_paid_missing');
+        }
+    }
+    $hoSel = $hasHoCol ? 'COALESCE(a.ho_share_paid, 0) AS ho_share_paid' : '0 AS ho_share_paid';
+    $admStmt = $pdo->prepare("SELECT a.id, a.registration_id, a.roll_no, a.photo, {$hoSel} FROM admissions a WHERE a.atc_id = ? AND a.status = 'Active'");
+    $admStmt->execute([$atcId]);
+    foreach ($admStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $keys = array_filter([
+            trim((string)($row['registration_id'] ?? '')),
+            trim((string)($row['roll_no'] ?? '')),
+        ]);
+        foreach ($keys as $k) {
+            $admByReg[$k] = $row;
+        }
+    }
+} catch (Exception $e) {}
+
+foreach ($submissions as $sub) {
+    if (!is_array($sub) || !function_exists('examSubmissionPassRecord')) {
+        continue;
+    }
+    $rec = examSubmissionPassRecord($sub);
+    if (!$rec) {
+        continue;
+    }
+    $adm = $admByReg[$rec['identifier']] ?? null;
+    if (!$adm) {
+        continue;
+    }
+    $shareOk = isset($paidIds[(int)$adm['id']]) || !empty($adm['ho_share_paid']);
+    if ($shareOk && admissionHasPhoto($adm)) {
+        $certEligibleIds[$rec['identifier']] = true;
     }
 }
 
@@ -445,6 +493,8 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
                     $studentId = $sub['student']['identifier'] ?? '';
                     $examTitle = $sub['exam_title'] ?? ($sub['exam']['title'] ?? 'Exam');
                     $initial = strtoupper(mb_substr($studentName, 0, 1));
+                    $isDemo = function_exists('examSubmissionIsDemo') && examSubmissionIsDemo($sub);
+                    $canCert = ($result === 'pass' && !$isDemo && !empty($certEligibleIds[$studentId]));
                 ?>
                 <div class="er-card" data-result="<?= $result ?>" data-search="<?= htmlspecialchars(strtolower($studentName . ' ' . $studentId . ' ' . $examTitle)) ?>">
                     <div class="er-card-header">
@@ -488,13 +538,18 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
                             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                             View Details
                         </button>
-                        <?php if ($result === 'pass'): ?>
+                        <?php if ($canCert): ?>
                         <a class="er-card-btn cert"
-                           href="../admin/generate_course_certificate.php?reg_id=<?= urlencode($studentId) ?>&score=<?= intval($score) ?>&exam_date=<?= urlencode(date('Y-m-d', strtotime($sub['submitted_at'] ?? 'now'))) ?>&preview=1"
+                           href="../admin/generate_course_certificate.php?reg_id=<?= urlencode($studentId) ?>&preview=1"
                            target="_blank">
                             <svg viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
                             Certificate
                         </a>
+                        <?php elseif ($result === 'pass' && !$isDemo): ?>
+                        <span class="er-card-btn" style="opacity:.55;cursor:not-allowed" title="Upload photo and pay HO share to unlock certificate">
+                            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                            Cert Locked
+                        </span>
                         <?php endif; ?>
                     </div>
                 </div>

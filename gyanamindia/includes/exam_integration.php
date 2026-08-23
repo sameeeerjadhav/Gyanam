@@ -204,6 +204,167 @@ function fetchAllExamResults(int $page = 1, int $perPage = 100): array
     ]);
 }
 
+/**
+ * Whether Exam Portal API is configured for server-to-server calls.
+ */
+function examIntegrationReady(): bool
+{
+    return defined('EXAM_API_TOKEN')
+        && EXAM_API_TOKEN !== 'PASTE_YOUR_TOKEN_HERE'
+        && defined('EXAM_API_URL')
+        && EXAM_API_URL !== '';
+}
+
+/** Demo/practice exams must not count toward official certificates. */
+function examSubmissionIsDemo(array $sub): bool
+{
+    $examTitle = strtolower((string)($sub['exam_title'] ?? ($sub['exam']['title'] ?? '')));
+    return str_contains($examTitle, 'demo');
+}
+
+/**
+ * Normalize a passing, non-demo submission for certificate use.
+ *
+ * @return array{identifier:string,score:int,exam_date:string,exam_title:string,submitted_at:?string}|null
+ */
+function examSubmissionPassRecord(array $sub): ?array
+{
+    if (examSubmissionIsDemo($sub)) {
+        return null;
+    }
+    if (strtolower((string)($sub['result'] ?? '')) !== 'pass') {
+        return null;
+    }
+    $id = trim((string)($sub['student']['identifier'] ?? ''));
+    if ($id === '') {
+        return null;
+    }
+    $score = (int)($sub['score'] ?? 0);
+    return [
+        'identifier'   => $id,
+        'score'        => $score,
+        'exam_date'    => date('Y-m-d', strtotime((string)($sub['submitted_at'] ?? 'now'))),
+        'exam_title'   => (string)($sub['exam_title'] ?? ($sub['exam']['title'] ?? '')),
+        'submitted_at' => $sub['submitted_at'] ?? null,
+    ];
+}
+
+/**
+ * Fetch all exam results across paginated API pages (for certificates / dashboards).
+ *
+ * @return array Same shape as examApi_request — data.submissions holds every page merged.
+ */
+function fetchAllExamResultsComplete(int $perPage = 100): array
+{
+    if (!examIntegrationReady()) {
+        return ['success' => false, 'data' => null, 'error' => 'Exam portal not configured', 'http_code' => 0];
+    }
+
+    $allSubs = [];
+    $stats   = [];
+    $page    = 1;
+    $lastPage = 1;
+
+    do {
+        $res = fetchAllExamResults($page, $perPage);
+        if (!$res['success']) {
+            if ($page === 1) {
+                return $res;
+            }
+            break;
+        }
+        $data = $res['data'] ?? [];
+        $batch = $data['submissions'] ?? [];
+        if (is_array($batch)) {
+            $allSubs = array_merge($allSubs, $batch);
+        }
+        if (!empty($data['stats']) && is_array($data['stats'])) {
+            $stats = $data['stats'];
+        }
+        $lastPage = max(1, (int)($data['pagination']['last_page'] ?? 1));
+        $page++;
+    } while ($page <= $lastPage && $page <= 100);
+
+    return [
+        'success'   => true,
+        'data'      => [
+            'submissions' => $allSubs,
+            'stats'       => $stats,
+            'pagination'  => [
+                'page'      => 1,
+                'per_page'  => count($allSubs),
+                'total'     => count($allSubs),
+                'last_page' => 1,
+            ],
+        ],
+        'error'     => null,
+        'http_code' => 200,
+    ];
+}
+
+/**
+ * Index best passing main-exam result per student identifier.
+ *
+ * @return array<string, array{identifier:string,score:int,exam_date:string,exam_title:string,submitted_at:?string}>
+ */
+function buildExamPassIndex(array $submissions): array
+{
+    $index = [];
+    foreach ($submissions as $sub) {
+        if (!is_array($sub)) {
+            continue;
+        }
+        $rec = examSubmissionPassRecord($sub);
+        if (!$rec) {
+            continue;
+        }
+        $id = $rec['identifier'];
+        if (!isset($index[$id]) || $rec['score'] > $index[$id]['score']) {
+            $index[$id] = $rec;
+        }
+    }
+    return $index;
+}
+
+/**
+ * Authoritative pass record for one student from the Exam Portal (non-demo, passed).
+ */
+function fetchStudentPassingExamResult(string $registrationId): ?array
+{
+    if (!examIntegrationReady()) {
+        return null;
+    }
+    $registrationId = trim($registrationId);
+    if ($registrationId === '') {
+        return null;
+    }
+
+    $res = fetchStudentExamResults($registrationId);
+    if (!$res['success']) {
+        return null;
+    }
+
+    $subs = $res['data']['submissions'] ?? [];
+    if (!is_array($subs)) {
+        return null;
+    }
+
+    $best = null;
+    foreach ($subs as $sub) {
+        if (!is_array($sub)) {
+            continue;
+        }
+        $rec = examSubmissionPassRecord($sub);
+        if (!$rec) {
+            continue;
+        }
+        if ($best === null || $rec['score'] > $best['score']) {
+            $best = $rec;
+        }
+    }
+    return $best;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // EXAM ASSIGNMENTS
 // ─────────────────────────────────────────────────────────────────────────────

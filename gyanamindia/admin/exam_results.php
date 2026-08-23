@@ -17,7 +17,7 @@ $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 
 // Check integration
-$integrationReady = function_exists('fetchAllExamResults') && defined('EXAM_API_TOKEN') && EXAM_API_TOKEN !== 'PASTE_YOUR_TOKEN_HERE';
+$integrationReady = function_exists('examIntegrationReady') && examIntegrationReady();
 
 // Fetch results from Exam Portal
 $submissions = [];
@@ -25,7 +25,7 @@ $stats = ['total' => 0, 'passed' => 0, 'failed' => 0, 'avg' => 0];
 $fetchError = null;
 
 if ($integrationReady) {
-    $res = fetchAllExamResults();
+    $res = fetchAllExamResultsComplete();
     if ($res['success'] && isset($res['data'])) {
         $submissions = $res['data']['submissions'] ?? [];
         $stats = $res['data']['stats'] ?? $stats;

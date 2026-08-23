@@ -5,14 +5,17 @@
  *
  * URL params:
  *   reg_id    = student registration_id (links to admissions)
- *   score     = exam score 0-100 (from exam portal)
- *   exam_date = date student passed (submitted_at from exam portal, YYYY-MM-DD)
  *   preview=1 = show inline (default downloads)
+ *
+ * Score and exam date are loaded from the Exam Portal — never from the URL.
  */
 
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
+if (file_exists(__DIR__ . '/../includes/exam_integration.php')) {
+    require_once __DIR__ . '/../includes/exam_integration.php';
+}
 requireLogin(['Admin', 'DLC', 'ATC CENTER']);
 
 // ── Load FPDI ─────────────────────────────────────────────────────────────────
@@ -22,9 +25,7 @@ use setasign\Fpdi\Fpdi;
 $pdo = getDBConnection();
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
-$regId    = trim($_GET['reg_id']    ?? '');
-$score    = intval($_GET['score']   ?? 0);
-$examDate = trim($_GET['exam_date'] ?? date('Y-m-d'));
+$regId = trim($_GET['reg_id'] ?? '');
 
 if (!$regId) {
     http_response_code(400);
@@ -81,6 +82,17 @@ if ($sessionRole === 'ATC CENTER' && intval($student['atc_id']) !== $sessionAtcI
     http_response_code(403);
     die('Access denied.');
 }
+
+// ── Eligibility: exam portal pass + (ATC) share/photo ─────────────────────────
+$eligibility = validateCourseCertificateRequest($pdo, $student, $sessionRole);
+if (!$eligibility['eligible']) {
+    http_response_code(403);
+    die('<b>Certificate not available:</b> ' . htmlspecialchars($eligibility['message']));
+}
+
+$examPass = $eligibility['exam'];
+$score    = (int)($examPass['score'] ?? 0);
+$examDate = (string)($examPass['exam_date'] ?? date('Y-m-d'));
 
 // ── Build dynamic values ──────────────────────────────────────────────────────
 

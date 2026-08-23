@@ -18,15 +18,15 @@ $pdo      = getDBConnection();
 $userName = sanitize(getUserName());
 $atcId    = $_SESSION['atc_id'] ?? null;
 
-$integrationReady = function_exists('fetchAllExamResults') && defined('EXAM_API_TOKEN') && EXAM_API_TOKEN !== 'PASTE_YOUR_TOKEN_HERE';
+$integrationReady = function_exists('examIntegrationReady') && examIntegrationReady();
 
 // ── Fetch marks from Exam Portal API ─────────────────────────────────────────
 $examResults = [];
 $fetchError  = null;
 if ($integrationReady) {
-    $res = fetchAllExamResults();
+    $res = fetchAllExamResultsComplete();
     if ($res['success']) {
-        $examResults = $res['data']['submissions'] ?? $res['data'] ?? [];
+        $examResults = $res['data']['submissions'] ?? [];
     } else {
         $fetchError = $res['error'] ?? 'Failed to fetch results.';
     }

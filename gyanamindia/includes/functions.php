@@ -1124,6 +1124,111 @@ function courseExamGradeFromScore(int $score): string {
     return 'Fail';
 }
 
+/** Whether admission row has a usable passport photo on file. */
+function admissionHasPhoto(array $student): bool
+{
+    return !empty($student['photo']) && trim((string)$student['photo']) !== '';
+}
+
+/**
+ * HO share paid via Completed share_payments and/or admissions.ho_share_paid.
+ */
+function admissionHasHoSharePaid(PDO $pdo, int $admissionId, ?int $atcId = null, ?array $studentRow = null): bool
+{
+    ensureSharePaymentSchema($pdo);
+    if ($studentRow !== null && !empty($studentRow['ho_share_paid'])) {
+        return true;
+    }
+    $paidMap = getHoSharePaidAdmissionIds($pdo, $atcId);
+    if (isset($paidMap[$admissionId])) {
+        return true;
+    }
+    if ($studentRow !== null) {
+        return false;
+    }
+    try {
+        $st = $pdo->prepare('SELECT COALESCE(ho_share_paid, 0) FROM admissions WHERE id = ? LIMIT 1');
+        $st->execute([$admissionId]);
+        return (bool)$st->fetchColumn();
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+/**
+ * Validate local + exam-portal requirements before issuing a GIIT course certificate.
+ *
+ * @return array{eligible:bool,message:string,exam:?array}
+ */
+function validateCourseCertificateRequest(PDO $pdo, array $student, string $role): array
+{
+    if (!function_exists('examIntegrationReady')) {
+        $examFile = __DIR__ . '/exam_integration.php';
+        if (is_file($examFile)) {
+            require_once $examFile;
+        }
+    }
+
+    $atcRole = ($role === 'ATC CENTER');
+    $admissionId = (int)($student['id'] ?? 0);
+    $atcId = (int)($student['atc_id'] ?? 0);
+
+    if ($atcRole && !admissionHasHoSharePaid($pdo, $admissionId, $atcId ?: null, $student)) {
+        return [
+            'eligible' => false,
+            'message'  => 'HO share payment is required before a certificate can be issued. Complete Pay Share first.',
+            'exam'     => null,
+        ];
+    }
+
+    if ($atcRole && !admissionHasPhoto($student)) {
+        return [
+            'eligible' => false,
+            'message'  => 'Upload the student photo before generating the certificate.',
+            'exam'     => null,
+        ];
+    }
+
+    if (!function_exists('examIntegrationReady') || !examIntegrationReady()) {
+        return [
+            'eligible' => false,
+            'message'  => 'Exam portal is not connected. Certificate cannot be verified against exam results.',
+            'exam'     => null,
+        ];
+    }
+
+    $regId = trim((string)($student['registration_id'] ?? ''));
+    if ($regId === '') {
+        $regId = trim((string)($student['roll_no'] ?? ''));
+    }
+    if ($regId === '') {
+        return [
+            'eligible' => false,
+            'message'  => 'Student registration ID is missing.',
+            'exam'     => null,
+        ];
+    }
+
+    $examPass = fetchStudentPassingExamResult($regId);
+    if (!$examPass) {
+        return [
+            'eligible' => false,
+            'message'  => 'No passing main exam result found in the Exam Portal for this student.',
+            'exam'     => null,
+        ];
+    }
+
+    if ($examPass['score'] < 40) {
+        return [
+            'eligible' => false,
+            'message'  => 'Exam score is below the minimum passing grade (40%).',
+            'exam'     => null,
+        ];
+    }
+
+    return ['eligible' => true, 'message' => 'OK', 'exam' => $examPass];
+}
+
 /**
  * Resolve course certificate background: PDF template if FPDI-readable, else PNG raster.
  *
