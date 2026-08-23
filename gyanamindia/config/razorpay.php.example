@@ -8,3 +8,8 @@ define('RAZORPAY_KEY_ID',     'rzp_test_xxxxxxxx');
 define('RAZORPAY_KEY_SECRET', 'your_razorpay_secret');
 define('RAZORPAY_CURRENCY',   'INR');
 define('RAZORPAY_COMPANY',    'Gyanam India Educational Services');
+
+// Webhook signing secret from Razorpay Dashboard → Settings → Webhooks
+// Endpoint: https://YOUR-DOMAIN/webhooks/razorpay.php
+// Events: payment.captured, order.paid, payment.failed
+define('RAZORPAY_WEBHOOK_SECRET', 'whsec_xxxxxxxx');

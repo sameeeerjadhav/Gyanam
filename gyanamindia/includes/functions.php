@@ -944,6 +944,163 @@ function ensureHoShareSnapshotColumn(PDO $pdo): void {
     }
 }
 
+/**
+ * Ensure share payment schema: Failed/Cancelled statuses + admissions.ho_share_paid flag.
+ */
+function ensureSharePaymentSchema(PDO $pdo): void {
+    if (isSchemaFlagSet('schema_share_payment_flow_v1')) {
+        return;
+    }
+    try {
+        // Widen status to include Failed / Cancelled (idempotent-ish)
+        try {
+            $pdo->exec("ALTER TABLE share_payments MODIFY COLUMN status ENUM('Pending','Completed','Failed','Cancelled') NOT NULL DEFAULT 'Pending'");
+        } catch (Exception $e) {
+            // Table may use VARCHAR already
+        }
+
+        // Optional notes / failure reason
+        try {
+            $cols = $pdo->query("SHOW COLUMNS FROM share_payments LIKE 'failure_reason'")->fetch();
+            if (!$cols) {
+                $pdo->exec("ALTER TABLE share_payments ADD COLUMN failure_reason VARCHAR(255) DEFAULT NULL AFTER status");
+            }
+        } catch (Exception $e) {}
+
+        // Denormalized paid flag on admissions
+        try {
+            $cols = $pdo->query("SHOW COLUMNS FROM admissions LIKE 'ho_share_paid'")->fetch();
+            if (!$cols) {
+                $pdo->exec("ALTER TABLE admissions ADD COLUMN ho_share_paid TINYINT(1) NOT NULL DEFAULT 0");
+            }
+        } catch (Exception $e) {}
+        try {
+            $cols = $pdo->query("SHOW COLUMNS FROM admissions LIKE 'share_payment_date'")->fetch();
+            if (!$cols) {
+                $pdo->exec("ALTER TABLE admissions ADD COLUMN share_payment_date DATETIME DEFAULT NULL");
+            }
+        } catch (Exception $e) {}
+
+        markSchemaFlag('schema_share_payment_flow_v1');
+        // Clear conflicting "missing" probe flags from older code
+        @unlink(schemaFlagPath('schema_ho_share_paid_missing'));
+        markSchemaFlag('schema_ho_share_paid_col');
+    } catch (Exception $e) {
+        error_log('ensureSharePaymentSchema: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Mark a share_payment Completed and set ho_share_paid on linked admissions.
+ * Idempotent: safe if already Completed.
+ *
+ * @return array{success:bool,message:string,already_done?:bool}
+ */
+function completeSharePayment(
+    PDO $pdo,
+    int $paymentId,
+    ?string $razorpayPaymentId = null,
+    ?string $razorpayOrderId = null,
+    ?string $razorpaySignature = null
+): array {
+    ensureSharePaymentSchema($pdo);
+
+    $stmt = $pdo->prepare("SELECT * FROM share_payments WHERE id = ? LIMIT 1");
+    $stmt->execute([$paymentId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return ['success' => false, 'message' => 'Payment record not found'];
+    }
+
+    if (($row['status'] ?? '') === 'Completed') {
+        // Still ensure admissions flags in case of partial prior write
+        applyHoSharePaidForPayment($pdo, $row);
+        return ['success' => true, 'message' => 'Already completed', 'already_done' => true];
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $upd = $pdo->prepare("
+            UPDATE share_payments
+            SET status = 'Completed',
+                razorpay_payment_id = COALESCE(?, razorpay_payment_id),
+                razorpay_order_id   = COALESCE(?, razorpay_order_id),
+                razorpay_signature  = COALESCE(?, razorpay_signature),
+                paid_at = COALESCE(paid_at, NOW()),
+                failure_reason = NULL
+            WHERE id = ? AND status IN ('Pending','Failed','Cancelled')
+        ");
+        $upd->execute([
+            $razorpayPaymentId ?: null,
+            $razorpayOrderId ?: null,
+            $razorpaySignature ?: null,
+            $paymentId,
+        ]);
+
+        $row['status'] = 'Completed';
+        applyHoSharePaidForPayment($pdo, $row);
+        $pdo->commit();
+        return ['success' => true, 'message' => 'Payment verified and recorded successfully'];
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+/**
+ * Set admissions.ho_share_paid from share_payments.student_ids JSON.
+ */
+function applyHoSharePaidForPayment(PDO $pdo, array $paymentRow): void {
+    $ids = json_decode((string)($paymentRow['student_ids'] ?? '[]'), true);
+    if (!is_array($ids) || empty($ids)) {
+        return;
+    }
+    $ids = array_values(array_unique(array_map('intval', $ids)));
+    $ids = array_filter($ids, fn($id) => $id > 0);
+    if (empty($ids)) {
+        return;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $params = $ids;
+    // Scope to ATC when available
+    $sql = "UPDATE admissions SET ho_share_paid = 1, share_payment_date = COALESCE(share_payment_date, NOW()) WHERE id IN ($placeholders)";
+    if (!empty($paymentRow['atc_id'])) {
+        $sql .= ' AND atc_id = ?';
+        $params[] = (int)$paymentRow['atc_id'];
+    }
+    try {
+        $pdo->prepare($sql)->execute($params);
+    } catch (Exception $e) {
+        // Column may not exist yet on very old DBs
+        error_log('applyHoSharePaidForPayment: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Mark share payment Failed or Cancelled (only from Pending).
+ */
+function markSharePaymentStatus(PDO $pdo, int $paymentId, string $status, ?int $atcId = null, ?string $reason = null): array {
+    ensureSharePaymentSchema($pdo);
+    $status = in_array($status, ['Failed', 'Cancelled'], true) ? $status : 'Failed';
+
+    $sql = "UPDATE share_payments SET status = ?, failure_reason = ? WHERE id = ? AND status = 'Pending'";
+    $params = [$status, $reason, $paymentId];
+    if ($atcId) {
+        $sql .= ' AND atc_id = ?';
+        $params[] = $atcId;
+    }
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return [
+        'success' => true,
+        'message' => $stmt->rowCount() ? "Marked $status" : 'No pending payment to update',
+        'updated' => $stmt->rowCount() > 0,
+    ];
+}
+
 /** Active dashboard banners — lean columns, capped. $audience = ATC|DLC */
 function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8): array {
     $audience = strtoupper($audience) === 'DLC' ? 'DLC' : 'ATC';

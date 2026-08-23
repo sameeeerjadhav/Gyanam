@@ -1,0 +1,2 @@
+# Deny directory listing; allow webhook PHP scripts
+Options -Indexes
