@@ -18,9 +18,17 @@ try { ensurePerformanceIndexes($pdo); } catch (Exception $e) {}
 
 // Birthday push notifications: use cron/birthday_notifications.php (not every dashboard load)
 
-// ── Stats ─────────────────────────────────────────────────────────────────────
+// ── Stats (session-cached 60s) ────────────────────────────────────────────────
+$dashCacheKey = 'admin_dash_stats_v1';
+$dashCacheAt  = 'admin_dash_stats_at';
+$useDashCache = isset($_SESSION[$dashCacheKey], $_SESSION[$dashCacheAt])
+    && (time() - (int)$_SESSION[$dashCacheAt]) < 60;
+
+if ($useDashCache) {
+    extract($_SESSION[$dashCacheKey], EXTR_OVERWRITE);
+} else {
 $totalUsers = $totalDLC = $totalATC = $totalInquiries = $totalAdmissions = 0;
-$pendingExam = 0; $todayBirthdays = []; $expiringATCs = [];
+$pendingExam = 0;
 
 try { $totalUsers      = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn(); }            catch (Exception $e) {}
 try { $totalDLC        = $pdo->query("SELECT COUNT(*) FROM dlc_offices")->fetchColumn(); }     catch (Exception $e) {}
@@ -35,6 +43,15 @@ try {
           AND (exam_date IS NULL OR exam_date >= CURDATE())
     ")->fetchColumn();
 } catch (Exception $e) {}
+
+$_SESSION[$dashCacheKey] = compact('totalUsers', 'totalDLC', 'totalATC', 'totalInquiries', 'totalAdmissions', 'pendingExam');
+$_SESSION[$dashCacheAt] = time();
+}
+
+$todayBirthdays = []; $expiringATCs = [];
+
+// Keep pendingExam as int for templates
+$pendingExam = (int)$pendingExam;
 
 // ── Pending Exam breakdown: per-ATC list for the clickable modal ────────────
 $pendingExamList = [];
@@ -333,6 +350,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard — Head Office | Gyanam India</title>
+    <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">

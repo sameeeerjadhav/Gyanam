@@ -298,7 +298,14 @@ try {
 } catch (Exception $e) {}
 
 // Fetch ALL active admissions — a re-enrolled student will have multiple rows (one per course)
-$stmt = $pdo->prepare("SELECT *, COALESCE(ho_share_snapshot, NULL) AS ho_share_snapshot FROM admissions WHERE atc_id = ? AND status = 'Active' ORDER BY roll_no ASC, id ASC");
+$stmt = $pdo->prepare("
+    SELECT id, roll_no, registration_id, first_name, middle_name, last_name, course,
+           material_type, mobile, photo, status, admission_date,
+           COALESCE(ho_share_snapshot, NULL) AS ho_share_snapshot
+    FROM admissions
+    WHERE atc_id = ? AND status = 'Active'
+    ORDER BY roll_no ASC, id ASC
+");
 $stmt->execute([$atcId]);
 $allAdmissions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -324,8 +331,20 @@ $atcDetails = $stmt->fetch(PDO::FETCH_ASSOC);
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+    <script>
+    // Lazy-load Razorpay only when user starts payment (saves ~100KB on first paint)
+    window.loadRazorpay = function () {
+        return new Promise(function (resolve, reject) {
+            if (window.Razorpay) { resolve(window.Razorpay); return; }
+            var s = document.createElement('script');
+            s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+            s.onload = function () { resolve(window.Razorpay); };
+            s.onerror = reject;
+            document.head.appendChild(s);
+        });
+    };
+    </script>
 </head>
 <body>
 <div class="dashboard-layout">
@@ -630,6 +649,13 @@ async function initiateRazorpayPayment(paymentData) {
             }
         }
     };
+
+    try {
+        await window.loadRazorpay();
+    } catch (e) {
+        alert('Could not load payment gateway. Check your internet and try again.');
+        return;
+    }
 
     const rzp = new Razorpay(options);
     rzp.on('payment.failed', function(resp) {

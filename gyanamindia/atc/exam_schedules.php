@@ -46,54 +46,56 @@ try {
     }
 } catch (Exception $e) {}
 
-// ── Auto-create & auto-migrate exam_schedules table ─────────────────────────
+// ── Auto-create & auto-migrate exam_schedules table (once per deploy) ───────
 try {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS exam_schedules (
-        id               INT AUTO_INCREMENT PRIMARY KEY,
-        admission_id     INT NOT NULL,
-        atc_id           INT NOT NULL,
-        exam_date        DATE DEFAULT NULL,
-        exam_time        TIME NOT NULL DEFAULT '10:00:00',
-        exam_slot        ENUM('Morning','Afternoon','Evening') NOT NULL DEFAULT 'Morning',
-        exam_hall        VARCHAR(100) DEFAULT NULL,
-        exam_name        VARCHAR(255) DEFAULT NULL,
-        exam_portal_id   INT DEFAULT NULL,
-        allowed_attempts TINYINT UNSIGNED NOT NULL DEFAULT 1,
-        exam_status      ENUM('Scheduled','Appeared','Passed','Failed','Absent') NOT NULL DEFAULT 'Scheduled',
-        notes            TEXT DEFAULT NULL,
-        created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_atc_id      (atc_id),
-        INDEX idx_admission_id(admission_id),
-        INDEX idx_exam_date   (exam_date)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    if (!isSchemaFlagSet('schema_exam_schedules_v2')) {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS exam_schedules (
+            id               INT AUTO_INCREMENT PRIMARY KEY,
+            admission_id     INT NOT NULL,
+            atc_id           INT NOT NULL,
+            exam_date        DATE DEFAULT NULL,
+            exam_time        TIME NOT NULL DEFAULT '10:00:00',
+            exam_slot        ENUM('Morning','Afternoon','Evening') NOT NULL DEFAULT 'Morning',
+            exam_hall        VARCHAR(100) DEFAULT NULL,
+            exam_name        VARCHAR(255) DEFAULT NULL,
+            exam_portal_id   INT DEFAULT NULL,
+            allowed_attempts TINYINT UNSIGNED NOT NULL DEFAULT 1,
+            exam_status      ENUM('Scheduled','Appeared','Passed','Failed','Absent') NOT NULL DEFAULT 'Scheduled',
+            notes            TEXT DEFAULT NULL,
+            created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_atc_id      (atc_id),
+            INDEX idx_admission_id(admission_id),
+            INDEX idx_exam_date   (exam_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    // Add columns if they don't exist (migration for older installs)
-    try {
-        $pdo->query("SELECT exam_slot FROM exam_schedules LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE exam_schedules ADD COLUMN exam_slot ENUM('Morning','Afternoon','Evening') NOT NULL DEFAULT 'Morning' AFTER exam_time");
-    }
-    try {
-        $pdo->query("SELECT exam_status FROM exam_schedules LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE exam_schedules ADD COLUMN exam_status ENUM('Scheduled','Appeared','Passed','Failed','Absent') NOT NULL DEFAULT 'Scheduled' AFTER exam_hall");
-    }
-    try {
-        $pdo->query("SELECT exam_name FROM exam_schedules LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE exam_schedules ADD COLUMN exam_name VARCHAR(255) DEFAULT NULL AFTER exam_hall");
-    }
-    try {
-        $pdo->query("SELECT exam_portal_id FROM exam_schedules LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE exam_schedules ADD COLUMN exam_portal_id INT DEFAULT NULL AFTER exam_name");
-    }
-    // Migrate: add allowed_attempts if missing
-    try {
-        $pdo->query("SELECT allowed_attempts FROM exam_schedules LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE exam_schedules ADD COLUMN allowed_attempts TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER exam_portal_id");
+        // Add columns if they don't exist (migration for older installs)
+        try {
+            $pdo->query("SELECT exam_slot FROM exam_schedules LIMIT 1");
+        } catch (Exception $e) {
+            $pdo->exec("ALTER TABLE exam_schedules ADD COLUMN exam_slot ENUM('Morning','Afternoon','Evening') NOT NULL DEFAULT 'Morning' AFTER exam_time");
+        }
+        try {
+            $pdo->query("SELECT exam_status FROM exam_schedules LIMIT 1");
+        } catch (Exception $e) {
+            $pdo->exec("ALTER TABLE exam_schedules ADD COLUMN exam_status ENUM('Scheduled','Appeared','Passed','Failed','Absent') NOT NULL DEFAULT 'Scheduled' AFTER exam_hall");
+        }
+        try {
+            $pdo->query("SELECT exam_name FROM exam_schedules LIMIT 1");
+        } catch (Exception $e) {
+            $pdo->exec("ALTER TABLE exam_schedules ADD COLUMN exam_name VARCHAR(255) DEFAULT NULL AFTER exam_hall");
+        }
+        try {
+            $pdo->query("SELECT exam_portal_id FROM exam_schedules LIMIT 1");
+        } catch (Exception $e) {
+            $pdo->exec("ALTER TABLE exam_schedules ADD COLUMN exam_portal_id INT DEFAULT NULL AFTER exam_name");
+        }
+        try {
+            $pdo->query("SELECT allowed_attempts FROM exam_schedules LIMIT 1");
+        } catch (Exception $e) {
+            $pdo->exec("ALTER TABLE exam_schedules ADD COLUMN allowed_attempts TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER exam_portal_id");
+        }
+        markSchemaFlag('schema_exam_schedules_v2');
     }
 } catch (Exception $e) {
 }
@@ -284,12 +286,16 @@ $statusFilter = trim($_GET['status'] ?? 'all');
 // ── Build set of student IDs whose share has been paid ──────────────────────
 $paidStudentIds = getHoSharePaidAdmissionIds($pdo, (int)$atcId);
 
-$hasHoSharePaidCol = false;
-try {
-    $pdo->query('SELECT ho_share_paid FROM admissions LIMIT 1');
-    $hasHoSharePaidCol = true;
-} catch (Exception $e) {}
-
+// Detect ho_share_paid column once, then cache via schema flag
+if (!isSchemaFlagSet('schema_ho_share_paid_col') && !isSchemaFlagSet('schema_ho_share_paid_missing')) {
+    try {
+        $pdo->query('SELECT ho_share_paid FROM admissions LIMIT 1');
+        markSchemaFlag('schema_ho_share_paid_col');
+    } catch (Exception $e) {
+        markSchemaFlag('schema_ho_share_paid_missing');
+    }
+}
+$hasHoSharePaidCol = isSchemaFlagSet('schema_ho_share_paid_col');
 $hoShareSelect = $hasHoSharePaidCol ? 'COALESCE(a.ho_share_paid, 0) AS ho_share_paid' : '0 AS ho_share_paid';
 
 $sql = "SELECT a.id, a.roll_no, a.registration_id,
