@@ -18,8 +18,68 @@
  * @param  array  $data     Request body (for POST/PUT) or query params (for GET)
  * @return array  ['success' => bool, 'data' => mixed, 'error' => string|null, 'http_code' => int]
  */
-function examApi_request(string $method, string $endpoint, array $data = []): array
+/**
+ * Session cache helper for GET Exam API responses (reduces repeated 15s cURL waits).
+ */
+function examApi_cacheGet(string $key, int $ttlSeconds = 90): ?array
 {
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return null;
+    }
+    $bucket = $_SESSION['exam_api_cache'][$key] ?? null;
+    if (!is_array($bucket) || !isset($bucket['at'], $bucket['data'])) {
+        return null;
+    }
+    if ((time() - (int)$bucket['at']) > $ttlSeconds) {
+        return null;
+    }
+    return $bucket['data'];
+}
+
+function examApi_cacheSet(string $key, array $payload): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return;
+    }
+    if (!isset($_SESSION['exam_api_cache']) || !is_array($_SESSION['exam_api_cache'])) {
+        $_SESSION['exam_api_cache'] = [];
+    }
+    $_SESSION['exam_api_cache'][$key] = ['at' => time(), 'data' => $payload];
+    // Cap cache size to avoid session bloat
+    if (count($_SESSION['exam_api_cache']) > 20) {
+        array_shift($_SESSION['exam_api_cache']);
+    }
+}
+
+function examApi_cacheForget(string $prefix = ''): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE || empty($_SESSION['exam_api_cache'])) {
+        return;
+    }
+    if ($prefix === '') {
+        unset($_SESSION['exam_api_cache']);
+        return;
+    }
+    foreach (array_keys($_SESSION['exam_api_cache']) as $key) {
+        if (str_starts_with((string)$key, $prefix)) {
+            unset($_SESSION['exam_api_cache'][$key]);
+        }
+    }
+}
+
+function examApi_request(string $method, string $endpoint, array $data = [], bool $useCache = true): array
+{
+    $method = strtoupper($method);
+    $cacheKey = null;
+
+    if ($method === 'GET' && $useCache) {
+        $cacheKey = $method . ':' . $endpoint . ':' . md5(json_encode($data));
+        $cached = examApi_cacheGet($cacheKey, 90);
+        if ($cached !== null) {
+            return $cached;
+        }
+    }
+
     $url = EXAM_API_URL . $endpoint;
 
     // For GET requests, append data as query params
@@ -32,8 +92,8 @@ function examApi_request(string $method, string $endpoint, array $data = []): ar
     curl_setopt_array($ch, [
         CURLOPT_URL            => $url,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 15,
-        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT        => 8,
+        CURLOPT_CONNECTTIMEOUT => 3,
         CURLOPT_HTTPHEADER     => [
             'Content-Type: application/json',
             'Accept: application/json',
@@ -67,7 +127,15 @@ function examApi_request(string $method, string $endpoint, array $data = []): ar
     $decoded = json_decode($response, true);
 
     if ($httpCode >= 200 && $httpCode < 300) {
-        return ['success' => true, 'data' => $decoded, 'error' => null, 'http_code' => $httpCode];
+        $ok = ['success' => true, 'data' => $decoded, 'error' => null, 'http_code' => $httpCode];
+        if ($cacheKey !== null) {
+            examApi_cacheSet($cacheKey, $ok);
+        }
+        // Mutating calls invalidate related GET caches
+        if (in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
+            examApi_cacheForget('GET:');
+        }
+        return $ok;
     }
 
     $errMsg = $decoded['message'] ?? $decoded['error'] ?? "HTTP {$httpCode}";
@@ -128,9 +196,12 @@ function fetchStudentExamResults(string $registrationId): array
  *
  * @return array  API result — ['success' => bool, 'data' => ['submissions' => [...], 'stats' => [...]]]
  */
-function fetchAllExamResults(): array
+function fetchAllExamResults(int $page = 1, int $perPage = 100): array
 {
-    return examApi_request('GET', '/results');
+    return examApi_request('GET', '/results', [
+        'page'     => max(1, $page),
+        'per_page' => max(1, min(200, $perPage)),
+    ]);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

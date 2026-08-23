@@ -67,8 +67,11 @@ AddDefaultCharset UTF-8
 
 # Browser cache for static files
 <IfModule mod_headers.c>
-    <FilesMatch "\.(css|js|png|jpg|jpeg|gif|webp|svg|woff2)$">
-        Header set Cache-Control "public, max-age=604800"
+    <FilesMatch "\.(css|js|png|jpg|jpeg|gif|webp|svg|woff2|ico)$">
+        Header set Cache-Control "public, max-age=2592000, immutable"
+    </FilesMatch>
+    <FilesMatch "\.(html|php)$">
+        Header set Cache-Control "no-cache, must-revalidate"
     </FilesMatch>
 </IfModule>
 

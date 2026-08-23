@@ -22,12 +22,12 @@ function buildNotificationVisibilityWhere(string $role): string {
 
 /**
  * Get unread notification count for the current user.
- * Cached in session for 45s to avoid hitting DB on every page.
+ * Cached in session for 90s to avoid hitting DB on every page.
  */
 function getUnreadNotificationCount(PDO $pdo, int $userId, string $role, ?int $dlcId = null, ?int $atcId = null): int {
     $cacheKey = 'notif_unread_' . $userId;
     $cacheAt  = 'notif_unread_at_' . $userId;
-    if (isset($_SESSION[$cacheKey], $_SESSION[$cacheAt]) && (time() - (int)$_SESSION[$cacheAt]) < 45) {
+    if (isset($_SESSION[$cacheKey], $_SESSION[$cacheAt]) && (time() - (int)$_SESSION[$cacheAt]) < 90) {
         return (int)$_SESSION[$cacheKey];
     }
 

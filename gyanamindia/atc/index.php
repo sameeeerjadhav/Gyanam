@@ -204,18 +204,21 @@ try {
 
 $totalStudents = $activeStudents = $activePaid = $activeUnpaid = 0;
 try {
-    $stmt = $pdo->prepare("SELECT status, COALESCE(fees_pending,0) as fp FROM admissions WHERE atc_id = ?");
+    $stmt = $pdo->prepare("
+        SELECT
+            COUNT(*) AS total_students,
+            SUM(status = 'Active') AS active_students,
+            SUM(status = 'Active' AND COALESCE(fees_pending, 0) <= 0) AS active_paid,
+            SUM(status = 'Active' AND COALESCE(fees_pending, 0) > 0) AS active_unpaid
+        FROM admissions
+        WHERE atc_id = ?
+    ");
     $stmt->execute([$atcId]);
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $s) {
-        $totalStudents++;
-        if ($s['status'] === 'Active') {
-            $activeStudents++;
-            if ((float) $s['fp'] <= 0)
-                $activePaid++;
-            else
-                $activeUnpaid++;
-        }
-    }
+    $agg = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $totalStudents  = (int)($agg['total_students'] ?? 0);
+    $activeStudents = (int)($agg['active_students'] ?? 0);
+    $activePaid     = (int)($agg['active_paid'] ?? 0);
+    $activeUnpaid   = (int)($agg['active_unpaid'] ?? 0);
 } catch (Exception $e) {
 }
 
@@ -385,12 +388,11 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard — ATC Center | Gyanam India</title>
+    <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style"
         href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
         onload="this.onload=null;this.rel='stylesheet'">

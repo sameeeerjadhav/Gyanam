@@ -3,7 +3,7 @@
    Premium sidebar, elevated cards, rich animations
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&display=swap');
+/* Playfair only needed on certificate pages — load there, not globally */
 
 /* ---------- Layout ---------- */
 .dashboard-layout {
