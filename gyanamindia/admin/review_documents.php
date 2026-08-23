@@ -58,15 +58,20 @@ if ($embed !== '') {
         $examAddr = htmlspecialchars(implode(', ', array_filter([
             $atc['address'] ?? '', $atc['city'] ?? '', $atc['district'] ?? '', $atc['state'] ?? '',
         ])) . (!empty($atc['pin_code']) ? ' - ' . $atc['pin_code'] : ''));
+        $autoPrint = isset($_GET['print']) && $_GET['print'] === '1';
         header('Content-Type: text/html; charset=utf-8');
         ?>
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8">
-<title>Hall Ticket Preview</title>
+<title>Hall Ticket — <?= htmlspecialchars($fullName) ?></title>
 <link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">
 </head><body class="ht-a4-viewport">
-<div class="ht-print">
+<div class="ht-print-toolbar no-print">
+    <button type="button" class="ht-btn-secondary" onclick="window.close()">Close</button>
+    <button type="button" onclick="window.print()">Print Hall Ticket</button>
+</div>
+<div class="ht-print" id="hallTicketPrint">
   <table class="ht-print-tbl">
     <tr>
       <td class="ht-p-center" style="width:20%"><img src="../assets/logo.png" style="height:70px;object-fit:contain" alt=""></td>
@@ -104,7 +109,33 @@ if ($embed !== '') {
     <tr><td class="ht-p-bold">Exam Centre</td><td colspan="3"><?= htmlspecialchars($atc['name'] ?? '-') ?></td></tr>
     <tr><td class="ht-p-bold">Centre Address</td><td colspan="3"><?= $examAddr ?></td></tr>
   </table>
+  <br>
+  <table class="ht-print-tbl">
+    <tr>
+      <td class="ht-p-center ht-p-bold" style="height:90px">Student Signature</td>
+      <td class="ht-p-center ht-p-bold" style="height:90px">Invigilator Signature</td>
+    </tr>
+  </table>
+  <br>
+  <table class="ht-print-tbl">
+    <tr><th class="ht-p-center">Instructions for Students</th></tr>
+    <tr>
+      <td>
+        <ol>
+          <li>Report to the exam centre at least 30 minutes before the exam time.</li>
+          <li>Candidate must carry the hall ticket and original photo ID.</li>
+          <li>If any mistake is found in candidate details, report immediately to centre staff.</li>
+          <li>Candidate must sign the attendance sheet before the start of exam.</li>
+          <li>Opening any other window during the exam will terminate the exam.</li>
+          <li>Use <b>FINISH EXAM</b> option carefully as it will end the exam.</li>
+        </ol>
+      </td>
+    </tr>
+  </table>
 </div>
+<?php if ($autoPrint): ?>
+<script>window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 400); });</script>
+<?php endif; ?>
 </body></html>
         <?php
         exit;
@@ -386,6 +417,9 @@ $pageTitle = 'Review Documents (TEMP)';
                     <div class="rv-actions">
                         <?php if ($preview): ?>
                         <a class="rv-btn primary" href="<?= htmlspecialchars($preview) ?>" target="_blank" rel="noopener">Open full preview</a>
+                        <?php if (str_contains($preview, 'embed=hall_ticket')): ?>
+                        <a class="rv-btn" href="<?= htmlspecialchars($preview . (str_contains($preview, '?') ? '&' : '?') . 'print=1') ?>" target="_blank" rel="noopener">Print</a>
+                        <?php endif; ?>
                         <?php endif; ?>
                         <?php if ($note && $preview): ?>
                         <span class="rv-btn" style="cursor:default;opacity:.85"><?= htmlspecialchars($note) ?></span>
