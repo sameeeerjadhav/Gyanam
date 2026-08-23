@@ -36,28 +36,12 @@ $filterCourse = trim($_GET['course']  ?? '');
 $filterSearch = trim($_GET['search']  ?? '');
 
 // ── Try to pull passed student identifiers from exam portal ───────────────────
-$passedIdentifiers = []; // Set of registration_id / GYANAM IDs that passed
-$integrationReady  = function_exists('fetchAllExamResults') && defined('EXAM_API_TOKEN') && EXAM_API_TOKEN !== 'PASTE_YOUR_TOKEN_HERE';
+$passedIdentifiers = [];
+$integrationReady  = function_exists('examIntegrationReady') && examIntegrationReady();
 if ($integrationReady) {
-    $res = fetchAllExamResults();
+    $res = fetchAllExamResultsComplete();
     if ($res['success'] && isset($res['data']['submissions'])) {
-        foreach ($res['data']['submissions'] as $sub) {
-            // Skip DEMO exams — only main exams count for certificate eligibility
-            $examTitle = strtolower($sub['exam_title'] ?? ($sub['exam']['title'] ?? ''));
-            if (str_contains($examTitle, 'demo')) continue;
-
-            if (strtolower($sub['result'] ?? '') === 'pass') {
-                $id = $sub['student']['identifier'] ?? '';
-                if ($id) {
-                    // Store score and date alongside the pass record
-                    $passedIdentifiers[$id] = [
-                        'score'      => intval($sub['score'] ?? 0),
-                        'exam_date'  => date('Y-m-d', strtotime($sub['submitted_at'] ?? 'now')),
-                        'exam_title' => $sub['exam_title'] ?? ($sub['exam']['title'] ?? ''),
-                    ];
-                }
-            }
-        }
+        $passedIdentifiers = buildExamPassIndex($res['data']['submissions']);
     }
 }
 
@@ -374,7 +358,7 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
                     <!-- Certificate button -->
                     <td style="text-align:center">
                         <?php if ($s['exam_passed']): ?>
-                        <a href="generate_course_certificate.php?reg_id=<?= urlencode($regId) ?>&score=<?= $s['exam_score'] ?>&exam_date=<?= urlencode($s['exam_date']) ?>&preview=1"
+                        <a href="generate_course_certificate.php?reg_id=<?= urlencode($regId) ?>&preview=1"
                            target="_blank" class="btn-cert">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                             Print Certificate

@@ -7,6 +7,9 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/notifications.php';
+if (file_exists(__DIR__ . '/../includes/exam_integration.php')) {
+    require_once __DIR__ . '/../includes/exam_integration.php';
+}
 
 requireLogin(['Admin']);
 
@@ -72,13 +75,13 @@ try {
 
     // Get identifiers of students who have already passed OR attempted the MAIN exam
     $attemptedIds = [];
-    if (function_exists('fetchAllExamResults') && defined('EXAM_API_TOKEN') && EXAM_API_TOKEN !== 'PASTE_YOUR_TOKEN_HERE') {
-        $erRes = fetchAllExamResults();
+    if (function_exists('examIntegrationReady') && examIntegrationReady()) {
+        $erRes = fetchAllExamResultsComplete();
         if ($erRes['success'] && isset($erRes['data']['submissions'])) {
             foreach ($erRes['data']['submissions'] as $sub) {
-                // Skip demo exams
-                $etitle = strtolower($sub['exam_title'] ?? ($sub['exam']['title'] ?? ''));
-                if (str_contains($etitle, 'demo')) continue;
+                if (function_exists('examSubmissionIsDemo') && examSubmissionIsDemo($sub)) {
+                    continue;
+                }
                 $sid = $sub['student']['identifier'] ?? '';
                 if ($sid) $attemptedIds[$sid] = true;
             }
