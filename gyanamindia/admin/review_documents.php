@@ -147,6 +147,121 @@ if ($embed !== '') {
         exit;
     }
 
+    if ($embed === 'completion_hall_ticket' && $student && $atc) {
+        $fullName = trim($student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name']);
+        $regNo    = $student['registration_id'] ?: ($student['roll_no'] ?: '-');
+        $rollNo   = $student['roll_no'] ?: '-';
+        $photo    = !empty($student['photo']) ? '../' . htmlspecialchars($student['photo']) : '../assets/logo.png';
+        $mobile   = htmlspecialchars($student['mobile'] ?? '—');
+        $examDt   = !empty($student['sched_exam_date']) ? date('d F Y', strtotime($student['sched_exam_date'])) : 'To Be Announced';
+        $examTm   = 'To Be Announced';
+        if (!empty($student['sched_exam_time'])) {
+            [$h, $m] = array_map('intval', explode(':', $student['sched_exam_time'] . ':0'));
+            $examTm = sprintf('%02d:%02d %s', ($h % 12) ?: 12, $m, $h >= 12 ? 'PM' : 'AM');
+        }
+        $examHall = htmlspecialchars($student['sched_exam_hall'] ?? '—');
+        $atcName  = htmlspecialchars($atc['name'] ?? '-');
+        $atcAddr  = htmlspecialchars($atc['address'] ?? '—');
+        $atcPhone = htmlspecialchars($atc['mobile'] ?? 'N/A');
+        $atcEmail = htmlspecialchars($atc['email'] ?? 'N/A');
+        $autoPrint   = isset($_GET['print']) && $_GET['print'] === '1';
+        $inIframe    = isset($_GET['iframe']) && $_GET['iframe'] === '1';
+        $showToolbar = !$inIframe && !$autoPrint;
+        $bodyClass   = $autoPrint ? 'cht-a4-print' : 'cht-a4-viewport';
+        $printUrl    = 'review_documents.php?embed=completion_hall_ticket&print=1&student_id=' . (int)$student['id'] . '&atc_id=' . (int)$atc['id'];
+        header('Content-Type: text/html; charset=utf-8');
+        ?>
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<title>Completion Hall Ticket — <?= htmlspecialchars($fullName) ?></title>
+<link rel="stylesheet" href="../assets/css/completion_hall_ticket.css?v=1">
+</head><body class="<?= $bodyClass ?>">
+<?php if ($showToolbar): ?>
+<div class="cht-print-toolbar no-print">
+    <button type="button" class="cht-btn-secondary" onclick="window.close()">Close</button>
+    <button type="button" onclick="window.location.href='<?= htmlspecialchars($printUrl) ?>'">Print Hall Ticket</button>
+</div>
+<p class="cht-print-hint no-print">Tip: In the print dialog, turn off <b>Headers and footers</b> for a clean ticket.</p>
+<?php endif; ?>
+<div class="cht-ticket-wrap">
+<div class="hall-ticket" id="completionHallTicket">
+    <div class="hall-ticket-header">
+        <div class="hall-ticket-logo"><img src="../assets/logo.png" alt="Gyanam India"></div>
+        <div class="hall-ticket-title">
+            <h1>GYANAM INDIA EDUCATIONAL SERVICES</h1>
+            <h2>EXAMINATION HALL TICKET</h2>
+            <p class="hall-ticket-center"><?= $atcName ?></p>
+        </div>
+        <div class="hall-ticket-photo"><img src="<?= $photo ?>" alt="Student Photo"></div>
+    </div>
+    <div class="hall-ticket-body">
+        <div class="hall-ticket-section">
+            <h3>Candidate Details</h3>
+            <table class="hall-ticket-table">
+                <tr>
+                    <td class="label">Roll Number:</td><td class="value"><strong><?= htmlspecialchars($rollNo) ?></strong></td>
+                    <td class="label">Registration ID:</td><td class="value"><strong><?= htmlspecialchars($regNo) ?></strong></td>
+                </tr>
+                <tr>
+                    <td class="label">Candidate Name:</td><td class="value" colspan="3"><strong><?= htmlspecialchars(strtoupper($fullName)) ?></strong></td>
+                </tr>
+                <tr>
+                    <td class="label">Course:</td><td class="value"><strong><?= htmlspecialchars($student['course'] ?? '-') ?></strong></td>
+                    <td class="label">Mobile:</td><td class="value"><?= $mobile ?></td>
+                </tr>
+            </table>
+        </div>
+        <div class="hall-ticket-section">
+            <h3>Examination Details</h3>
+            <table class="hall-ticket-table">
+                <tr>
+                    <td class="label">Exam Date:</td><td class="value"><strong><?= htmlspecialchars($examDt) ?></strong></td>
+                    <td class="label">Exam Time:</td><td class="value"><strong><?= htmlspecialchars($examTm) ?></strong></td>
+                </tr>
+                <tr>
+                    <td class="label">Exam Hall:</td><td class="value" colspan="3"><?= $examHall ?></td>
+                </tr>
+                <tr>
+                    <td class="label">Center Name:</td><td class="value" colspan="3"><?= $atcName ?></td>
+                </tr>
+                <tr>
+                    <td class="label">Address:</td><td class="value" colspan="3"><?= $atcAddr ?></td>
+                </tr>
+            </table>
+        </div>
+        <div class="hall-ticket-section">
+            <h3>Important Instructions</h3>
+            <ol class="hall-ticket-instructions">
+                <li>Candidates must bring this hall ticket to the examination center.</li>
+                <li>Candidates must reach 30 minutes before the exam starts.</li>
+                <li>Mobile phones and electronic devices are strictly prohibited.</li>
+                <li>Candidates must carry a valid photo ID proof along with this hall ticket.</li>
+                <li>Use of unfair means will result in cancellation of the examination.</li>
+            </ol>
+        </div>
+    </div>
+    <div class="hall-ticket-footer">
+        <div class="hall-ticket-signature">
+            <div class="signature-box"><div class="signature-line"></div><p>Candidate's Signature</p></div>
+            <div class="signature-box"><div class="signature-line"></div><p>Invigilator's Signature</p></div>
+            <div class="signature-box"><div class="signature-line"></div><p>Center Superintendent</p></div>
+        </div>
+        <div class="hall-ticket-note">
+            <p><strong>Note:</strong> Computer-generated, does not require stamp.</p>
+            <p>Contact: <?= $atcPhone ?> | <?= $atcEmail ?></p>
+        </div>
+    </div>
+</div>
+</div>
+<?php if ($autoPrint): ?>
+<script>window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 400); });</script>
+<?php endif; ?>
+</body></html>
+        <?php
+        exit;
+    }
+
     http_response_code(404);
     echo 'Preview not available — select a valid ATC and student.';
     exit;
@@ -277,10 +392,12 @@ $docSections['hall_tickets']['items'][] = [
 ];
 $docSections['hall_tickets']['items'][] = [
     'name'        => 'Completion Hall Ticket',
-    'desc'        => 'Separate hall ticket flow on ATC Completion Hall Ticket page.',
+    'desc'        => 'Separate hall ticket flow on ATC Completion Hall Ticket page (uses exam schedule date/time/hall).',
     'live'        => 'atc/completion_hall_ticket.php',
-    'preview_url' => null,
-    'preview_note'=> 'Open live ATC page to preview — same layout family as exam hall ticket.',
+    'preview_url' => ($selStudentId && $selAtcId) ? ('review_documents.php?embed=completion_hall_ticket&iframe=1&student_id=' . $selStudentId . '&atc_id=' . $selAtcId) : null,
+    'open_url'    => ($selStudentId && $selAtcId) ? ('review_documents.php?embed=completion_hall_ticket&view=1&student_id=' . $selStudentId . '&atc_id=' . $selAtcId) : null,
+    'print_url'   => ($selStudentId && $selAtcId) ? ('review_documents.php?embed=completion_hall_ticket&print=1&student_id=' . $selStudentId . '&atc_id=' . $selAtcId) : null,
+    'preview_note' => 'Exam date/time/hall come from exam_schedules. Schedule a student on the ATC page if fields show “To Be Announced”.',
     'code'        => 'atc/completion_hall_ticket.php',
 ];
 
