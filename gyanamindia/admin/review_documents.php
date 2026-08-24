@@ -316,8 +316,6 @@ foreach ($atcs as $a) {
 
 $passRegId  = null;
 $passNote   = '';
-$marksRegId = null;
-$marksNote  = '';
 $tryReg     = '';
 if ($selStudent) {
     $tryReg = trim((string)($selStudent['registration_id'] ?? ''));
@@ -329,32 +327,30 @@ if ($selStudent && function_exists('examIntegrationReady') && examIntegrationRea
     if ($tryReg !== '' && function_exists('fetchStudentPassingExamResult')) {
         $pass = fetchStudentPassingExamResult($tryReg);
         if ($pass) {
-            $passRegId  = $tryReg;
-            $marksRegId = $tryReg;
+            $passRegId = $tryReg;
         } else {
             $passNote = 'Selected student has no passing main exam in Exam Portal — certificate preview unavailable.';
         }
     }
-    if (!$marksRegId && $tryReg !== '' && function_exists('fetchStudentExamResults')) {
-        $res  = fetchStudentExamResults($tryReg);
-        $subs = ($res['success'] ?? false) ? ($res['data']['submissions'] ?? []) : [];
-        foreach ($subs as $sub) {
-            if (!is_array($sub)) continue;
-            if (function_exists('examSubmissionIsDemo') && examSubmissionIsDemo($sub)) continue;
-            $id = trim((string)($sub['student']['identifier'] ?? ''));
-            if ($id !== '') {
-                $marksRegId = $tryReg;
-                break;
-            }
-        }
-        if (!$marksRegId) {
-            $marksNote = 'Selected student has no exam result in Exam Portal — marksheet preview unavailable.';
-        }
-    }
 } elseif ($selStudent) {
-    $passNote  = 'Exam portal not connected — certificate preview unavailable.';
-    $marksNote = 'Exam portal not connected — marksheet preview unavailable.';
+    $passNote = 'Exam portal not connected — certificate preview unavailable.';
 }
+
+$marksBrand = strtolower(trim((string)($_GET['marks_brand'] ?? 'auto')));
+if ($marksBrand !== 'it' && $marksBrand !== 'abacus') {
+    $marksBrand = 'auto';
+}
+$marksQs = ['sample' => '1', 'preview' => '1'];
+if ($tryReg !== '') {
+    $marksQs['reg_id'] = $tryReg;
+}
+if ($selAtcId > 0) {
+    $marksQs['atc_id'] = $selAtcId;
+}
+if ($marksBrand !== 'auto') {
+    $marksQs['brand'] = $marksBrand;
+}
+$marksPreviewUrl = 'generate_marksheet.php?' . http_build_query($marksQs);
 
 $tplBase = __DIR__ . '/../assets/templates/';
 $templateFiles = [
@@ -396,10 +392,12 @@ $docSections['certificates_pdf']['items'][] = [
 
 $docSections['certificates_pdf']['items'][] = [
     'name'        => 'Statement of Marks (Marksheet)',
-    'desc'        => 'MCCE layout with Gyanam logo and stamp. IT uses GIIT branding; Abacus uses Gyanam Abacus. Same PDF for Admin and ATC.',
+    'desc'        => 'MCCE layout with Gyanam logo and stamp. Review uses dummy marks (82 / A+) so you can check layout without an exam result. Live print still needs a real exam.',
     'live'        => 'admin/print_certificates.php · atc/exam_results.php · atc/completion_certificate.php',
-    'preview_url' => $marksRegId ? ('generate_marksheet.php?reg_id=' . urlencode($marksRegId) . '&preview=1') : null,
-    'preview_note'=> $marksNote ?: 'Preview fills the selected student’s exam marks. Open full preview for a readable A4 PDF.',
+    'preview_url' => $marksPreviewUrl,
+    'preview_note'=> $tryReg !== ''
+        ? 'Dummy marks on the selected student/ATC. Open full preview for A4.'
+        : 'Dummy student + selected ATC. Open full preview for A4.',
     'code'        => 'admin/generate_marksheet.php',
 ];
 
@@ -548,6 +546,14 @@ $pageTitle = 'Review Documents (TEMP)';
                         <?= htmlspecialchars($sn) ?> · <?= htmlspecialchars($s['roll_no']) ?><?= $hasPhoto ? ' · photo' : ' · no photo' ?>
                     </option>
                     <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label>Marksheet dummy brand</label>
+                <select name="marks_brand">
+                    <option value="auto" <?= $marksBrand === 'auto' ? 'selected' : '' ?>>Auto (from course)</option>
+                    <option value="it" <?= $marksBrand === 'it' ? 'selected' : '' ?>>GIIT (IT sample)</option>
+                    <option value="abacus" <?= $marksBrand === 'abacus' ? 'selected' : '' ?>>Gyanam Abacus sample</option>
                 </select>
             </div>
             <button type="submit">Apply sample data</button>
