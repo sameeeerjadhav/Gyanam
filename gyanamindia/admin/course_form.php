@@ -286,8 +286,14 @@ $materialOption = $isEdit
         .hidden { display:none; }
         .items-block { border:1.5px solid var(--border-color); border-radius:14px; padding:.85rem 1rem; background:#fafafa; }
         .items-title { font-size:.78rem; font-weight:900; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.6rem; }
-        .items-list { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .5rem; max-height: 280px; overflow:auto; padding-right:.25rem; }
+        .mat-filter-row { display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:.9rem; }
+        .mat-filter-row .mf-field { flex: 1; min-width: 220px; }
+        .mat-filter-row .mf-field.cat { flex: 0 0 180px; min-width: 160px; }
+        .items-list { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .5rem; max-height: 360px; overflow:auto; padding-right:.25rem; }
         .item-check { display:flex; align-items:flex-start; gap:.6rem; padding:.55rem .65rem; border:1.5px solid var(--border-color); border-radius:12px; background:#fff; }
+        .item-check.is-hidden, .cat-block.is-hidden { display: none !important; }
+        .filter-empty { display:none; font-size:.8rem; color:var(--text-secondary); padding:.35rem .1rem; }
+        .filter-empty.show { display:block; }
         .item-check input { margin-top: .15rem; }
         .item-check .meta { display:flex; flex-direction:column; gap:.2rem; }
         .item-check .nm { font-weight:850; font-size:.86rem; color:#111827; }
@@ -433,16 +439,29 @@ $materialOption = $isEdit
                                 Existing inventory items are shown category-wise. Admin can create a new item (and stock it) if needed.
                             </div>
 
-                            <button type="button" class="btn-add" onclick="openNewItemModal()" style="margin-bottom:.85rem">
-                                + Create New Item
-                            </button>
+                            <div class="mat-filter-row">
+                                <div class="mf-field">
+                                    <label for="matSearch">Search items</label>
+                                    <input type="search" class="field-input" id="matSearch" placeholder="e.g. Size 32, Level 1, Yellow…" autocomplete="off">
+                                </div>
+                                <div class="mf-field cat">
+                                    <label for="matCategory">Category</label>
+                                    <select class="field-select" id="matCategory">
+                                        <option value="all">All</option>
+                                        <option value="tshirts">T-Shirts</option>
+                                        <option value="books">Books</option>
+                                    </select>
+                                </div>
+                                <button type="button" class="btn-add" onclick="openNewItemModal()">+ Create New Item</button>
+                            </div>
+                            <div class="filter-empty" id="matFilterEmpty">No items match this filter.</div>
 
-                            <div class="items-block" style="background:transparent; border:none; padding:0; margin-bottom: .9rem">
+                            <div class="cat-block items-block" data-cat="tshirts" style="background:transparent; border:none; padding:0; margin-bottom: .9rem">
                                 <div class="items-title" style="margin:0 .1rem .5rem">T-Shirts</div>
                                 <div class="items-list">
                                     <?php foreach ($itemsTshirts as $it): ?>
                                         <?php $checked = in_array((int)$it['id'], $selectedItemIds, true) ? 'checked' : ''; ?>
-                                        <label class="item-check">
+                                        <label class="item-check" data-name="<?= htmlspecialchars(strtolower($it['item_name']), ENT_QUOTES) ?>">
                                             <input type="checkbox" name="with_material_inventory_item_ids[]" value="<?= (int)$it['id'] ?>" <?= $checked ?>>
                                             <span class="meta">
                                                 <span class="nm"><?= htmlspecialchars($it['item_name']) ?></span>
@@ -456,12 +475,12 @@ $materialOption = $isEdit
                                 </div>
                             </div>
 
-                            <div class="items-block" style="background:transparent; border:none; padding:0; margin-bottom: .2rem">
+                            <div class="cat-block items-block" data-cat="books" style="background:transparent; border:none; padding:0; margin-bottom: .2rem">
                                 <div class="items-title" style="margin:0 .1rem .5rem">Books</div>
                                 <div class="items-list">
                                     <?php foreach ($itemsBooks as $it): ?>
                                         <?php $checked = in_array((int)$it['id'], $selectedItemIds, true) ? 'checked' : ''; ?>
-                                        <label class="item-check">
+                                        <label class="item-check" data-name="<?= htmlspecialchars(strtolower($it['item_name']), ENT_QUOTES) ?>">
                                             <input type="checkbox" name="with_material_inventory_item_ids[]" value="<?= (int)$it['id'] ?>" <?= $checked ?>>
                                             <span class="meta">
                                                 <span class="nm"><?= htmlspecialchars($it['item_name']) ?></span>
@@ -622,6 +641,31 @@ $materialOption = $isEdit
     function closeNewItemModal() {
         document.getElementById('newItemModal').classList.remove('active');
     }
+
+    function filterCourseMaterials() {
+        const q = (document.getElementById('matSearch')?.value || '').trim().toLowerCase();
+        const cat = document.getElementById('matCategory')?.value || 'all';
+        let anyVisible = false;
+
+        document.querySelectorAll('.cat-block').forEach((block) => {
+            const blockCat = block.getAttribute('data-cat');
+            const catOk = (cat === 'all' || cat === blockCat);
+            let visibleInBlock = 0;
+            block.querySelectorAll('.item-check').forEach((el) => {
+                const name = el.getAttribute('data-name') || '';
+                const match = catOk && (!q || name.indexOf(q) !== -1);
+                el.classList.toggle('is-hidden', !match);
+                if (match) visibleInBlock++;
+            });
+            block.classList.toggle('is-hidden', !catOk || visibleInBlock === 0);
+            if (catOk && visibleInBlock > 0) anyVisible = true;
+        });
+
+        const emptyEl = document.getElementById('matFilterEmpty');
+        if (emptyEl) emptyEl.classList.toggle('show', !anyVisible);
+    }
+    document.getElementById('matSearch')?.addEventListener('input', filterCourseMaterials);
+    document.getElementById('matCategory')?.addEventListener('change', filterCourseMaterials);
 
     async function createAndStockItem() {
         const item_name = document.getElementById('ni_item_name').value.trim();
