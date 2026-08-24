@@ -340,7 +340,7 @@ $marksBrand = strtolower(trim((string)($_GET['marks_brand'] ?? 'auto')));
 if ($marksBrand !== 'it' && $marksBrand !== 'abacus') {
     $marksBrand = 'auto';
 }
-$marksQs = ['sample' => '1', 'preview' => '1', 'v' => '7'];
+$marksQs = ['sample' => '1', 'preview' => '1', 'v' => '8'];
 if ($tryReg !== '') {
     $marksQs['reg_id'] = $tryReg;
 }
