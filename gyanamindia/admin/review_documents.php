@@ -314,23 +314,46 @@ foreach ($atcs as $a) {
     }
 }
 
-$passRegId = null;
-$passNote  = '';
-if ($selStudent && function_exists('examIntegrationReady') && examIntegrationReady()) {
+$passRegId  = null;
+$passNote   = '';
+$marksRegId = null;
+$marksNote  = '';
+$tryReg     = '';
+if ($selStudent) {
     $tryReg = trim((string)($selStudent['registration_id'] ?? ''));
     if ($tryReg === '') {
         $tryReg = trim((string)($selStudent['roll_no'] ?? ''));
     }
+}
+if ($selStudent && function_exists('examIntegrationReady') && examIntegrationReady()) {
     if ($tryReg !== '' && function_exists('fetchStudentPassingExamResult')) {
         $pass = fetchStudentPassingExamResult($tryReg);
         if ($pass) {
-            $passRegId = $tryReg;
+            $passRegId  = $tryReg;
+            $marksRegId = $tryReg;
         } else {
             $passNote = 'Selected student has no passing main exam in Exam Portal — certificate preview unavailable.';
         }
     }
+    if (!$marksRegId && $tryReg !== '' && function_exists('fetchStudentExamResults')) {
+        $res  = fetchStudentExamResults($tryReg);
+        $subs = ($res['success'] ?? false) ? ($res['data']['submissions'] ?? []) : [];
+        foreach ($subs as $sub) {
+            if (!is_array($sub)) continue;
+            if (function_exists('examSubmissionIsDemo') && examSubmissionIsDemo($sub)) continue;
+            $id = trim((string)($sub['student']['identifier'] ?? ''));
+            if ($id !== '') {
+                $marksRegId = $tryReg;
+                break;
+            }
+        }
+        if (!$marksRegId) {
+            $marksNote = 'Selected student has no exam result in Exam Portal — marksheet preview unavailable.';
+        }
+    }
 } elseif ($selStudent) {
-    $passNote = 'Exam portal not connected — certificate preview unavailable.';
+    $passNote  = 'Exam portal not connected — certificate preview unavailable.';
+    $marksNote = 'Exam portal not connected — marksheet preview unavailable.';
 }
 
 $tplBase = __DIR__ . '/../assets/templates/';
@@ -341,6 +364,7 @@ $templateFiles = [
     'gyanam_abacus_course_certificate.png' => 'Gyanam Abacus course completion (optional PNG)',
     'giit_auth_certificate.pdf'         => 'GIIT IT authorization',
     'gyanam_abacus_auth_certificate.pdf'=> 'Gyanam Abacus authorization',
+    'gyanam_marksheet_stamp.png'        => 'Gyanam marksheet authorized-signatory stamp',
 ];
 
 $authVariants = $selAtc ? atcAuthCertificateVariants($selAtc['center_type'] ?? '') : [];
@@ -368,6 +392,15 @@ $docSections['certificates_pdf']['items'][] = [
     'preview_url' => $passRegId ? ('generate_course_certificate.php?reg_id=' . urlencode($passRegId) . '&preview=1') : null,
     'preview_note'=> $passNote ?: 'Preview uses the selected student’s course type.',
     'code'        => 'admin/generate_course_certificate.php',
+];
+
+$docSections['certificates_pdf']['items'][] = [
+    'name'        => 'Statement of Marks (Marksheet)',
+    'desc'        => 'MCCE layout with Gyanam logo and stamp. IT uses GIIT branding; Abacus uses Gyanam Abacus. Same PDF for Admin and ATC.',
+    'live'        => 'admin/print_certificates.php · atc/exam_results.php · atc/completion_certificate.php',
+    'preview_url' => $marksRegId ? ('generate_marksheet.php?reg_id=' . urlencode($marksRegId) . '&preview=1') : null,
+    'preview_note'=> $marksNote ?: 'Preview fills the selected student’s exam marks. Open full preview for a readable A4 PDF.',
+    'code'        => 'admin/generate_marksheet.php',
 ];
 
 foreach ($authVariants as $v) {
