@@ -177,7 +177,7 @@ $duration = trim((string)($student['course_duration'] ?? '')) ?: '—';
 $contents = trim((string)($student['course_content'] ?? ''));
 if ($contents === '') $contents = '—';
 $contents = preg_replace('/\s+/', ' ', $contents);
-if (mb_strlen($contents) > 220) $contents = mb_substr($contents, 0, 217) . '…';
+if (mb_strlen($contents) > 420) $contents = mb_substr($contents, 0, 417) . '…';
 
 $monthYear = date('F-Y', strtotime($examDate ?: 'now'));
 $centerCode = trim((string)($student['atc_code'] ?? '')) ?: '—';
