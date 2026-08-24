@@ -332,12 +332,12 @@ $infoRows = [
 ];
 foreach ($infoRows as $i => $pair) {
     $ry = $rowsY + $i * $rowH;
-    $cell($x, $ry, $labelW, $rowH, $pair[0], true, 'C', $FONT, 'B', true);
+    $cell($x, $ry, $labelW, $rowH, $pair[0], false, 'C', $FONT, 'B', true);
     $cell($x + $labelW, $ry, $valW, $rowH, $pair[1], false, 'C', $FONT, 'B');
 }
 
 $contentY = $rowsY + 3 * $rowH;
-$cell($x, $contentY, $labelW, $contentH, "Course\nContents", true, 'C', $FONT, 'B', true);
+$cell($x, $contentY, $labelW, $contentH, "Course\nContents", false, 'C', $FONT, 'B', true);
 $cell($x + $labelW, $contentY, $valW, $contentH, $contents, false, 'C', $FONT, 'B', true);
 
 // ── Marks ───────────────────────────────────────────────────────────────────
@@ -350,14 +350,14 @@ $pctW = $restW * 0.35;
 $gW = $restW - $mW - $pctW;
 $rh = $marksBodyH / 2;
 
-$cell($x, $marksY, $pW, $marksHdrH, 'Particulars', true, 'C', $FONT, 'B');
-$cell($x + $pW, $marksY, $mW, $marksHdrH, 'Marks', true, 'C', $FONT, 'B');
-$cell($x + $pW + $mW, $marksY, $pctW, $marksHdrH, 'Percentage', true, 'C', $FONT, 'B');
-$cell($x + $pW + $mW + $pctW, $marksY, $gW, $marksHdrH, 'Grade', true, 'C', $FONT, 'B');
+$cell($x, $marksY, $pW, $marksHdrH, 'Particulars', false, 'C', $FONT, 'B');
+$cell($x + $pW, $marksY, $mW, $marksHdrH, 'Marks', false, 'C', $FONT, 'B');
+$cell($x + $pW + $mW, $marksY, $pctW, $marksHdrH, 'Percentage', false, 'C', $FONT, 'B');
+$cell($x + $pW + $mW + $pctW, $marksY, $gW, $marksHdrH, 'Grade', false, 'C', $FONT, 'B');
 
-$cell($x, $marksY + $marksHdrH, $pW, $rh, 'Maximum Marks', true, 'C', $FONT, 'B');
+$cell($x, $marksY + $marksHdrH, $pW, $rh, 'Maximum Marks', false, 'C', $FONT, 'B');
 $cell($x + $pW, $marksY + $marksHdrH, $mW, $rh, '100', false, 'C', $FONT, 'B');
-$cell($x, $marksY + $marksHdrH + $rh, $pW, $rh, 'Marks Obtained', true, 'C', $FONT, 'B');
+$cell($x, $marksY + $marksHdrH + $rh, $pW, $rh, 'Marks Obtained', false, 'C', $FONT, 'B');
 $cell($x + $pW, $marksY + $marksHdrH + $rh, $mW, $rh, (string)$score, false, 'C', $FONT, 'B');
 
 $pdf->Rect($x + $pW + $mW, $marksY + $marksHdrH, $pctW, $marksBodyH, 'D');
