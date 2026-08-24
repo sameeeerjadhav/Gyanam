@@ -908,6 +908,46 @@ function markSchemaFlag(string $name): void {
     @file_put_contents(schemaFlagPath($name), date('c') . "\n");
 }
 
+/** Allowed franchise payment modes on ATC create/edit. */
+function atcFranchisePaymentModes(): array {
+    return ['Cash', 'UPI', 'Cheque', 'Bank Transfer', 'Other'];
+}
+
+function parseOptionalMoney($raw): ?float {
+    if ($raw === '' || $raw === null) {
+        return null;
+    }
+    return (float)$raw;
+}
+
+/**
+ * Ensure ATC franchise + DLC share columns exist (once via flag).
+ */
+function ensureAtcFranchisePaymentSchema(PDO $pdo): void {
+    if (isSchemaFlagSet('schema_atc_franchise_pay_v2')) {
+        return;
+    }
+    $cols = [
+        'franchise_fees'             => 'DECIMAL(12,2) DEFAULT NULL',
+        'franchise_amount_received'  => 'DECIMAL(12,2) DEFAULT NULL',
+        'franchise_payment_mode'     => 'VARCHAR(30) DEFAULT NULL',
+        'franchise_paid_date'        => 'DATE DEFAULT NULL',
+        'franchise_payment_ref'      => 'VARCHAR(80) DEFAULT NULL',
+        'dlc_share_amount'           => 'DECIMAL(12,2) DEFAULT NULL',
+    ];
+    try {
+        $existing = $pdo->query('SHOW COLUMNS FROM atc_centers')->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($cols as $col => $def) {
+            if (!in_array($col, $existing, true)) {
+                $pdo->exec("ALTER TABLE atc_centers ADD COLUMN `$col` $def");
+            }
+        }
+        markSchemaFlag('schema_atc_franchise_pay_v2');
+    } catch (Exception $e) {
+        error_log('[ATC franchise schema] ' . $e->getMessage());
+    }
+}
+
 /**
  * Resize/compress an uploaded image in place (or to $destPath).
  * Max edge 1600px; JPEG quality 75. Returns final path on success.
