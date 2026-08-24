@@ -183,7 +183,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
-// ── Load courses for dropdown ──────────────────────────────────────────────
+// ── Load courses for dropdown (matching center type) ────────────────────────
+$centerType = getAtcCenterType($pdo, $atcId ? (int)$atcId : null);
+[$visSql, $visParams] = courseVisibilitySql($centerType);
 $coursesStmt = $pdo->prepare("
     SELECT c.id, c.course_name, c.course_type, c.duration,
            c.material_type, c.material_language,
@@ -197,9 +199,10 @@ $coursesStmt = $pdo->prepare("
       AND  (COALESCE(acf.fee_with_material, 0) > 0
          OR COALESCE(acf.fee_without_material, 0) > 0
          OR COALESCE(acf.final_fee, 0) > 0)
+      $visSql
     ORDER BY c.course_name ASC
 ");
-$coursesStmt->execute([$atcId]);
+$coursesStmt->execute(array_merge([$atcId], $visParams));
 $atcCourses = $coursesStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $courseSelectOptions = [];

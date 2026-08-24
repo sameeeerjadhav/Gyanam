@@ -234,7 +234,9 @@ $stmt = $pdo->prepare('SELECT * FROM telephonic_inquiries' . $telWhereSql . ' OR
 $stmt->execute($telParams);
 $inquiries = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch active master courses with this ATC's fee (either material fee > 0)
+// Fetch active master courses with this ATC's fee (matching center type)
+$centerType = getAtcCenterType($pdo, $atcId ? (int)$atcId : null);
+[$visSql, $visParams] = courseVisibilitySql($centerType);
 $courseStmt = $pdo->prepare("
     SELECT c.course_name, acf.final_fee AS fees,
            acf.fee_with_material, acf.fee_without_material
@@ -244,9 +246,10 @@ $courseStmt = $pdo->prepare("
       AND  (COALESCE(acf.fee_with_material, 0) > 0
          OR COALESCE(acf.fee_without_material, 0) > 0
          OR COALESCE(acf.final_fee, 0) > 0)
+      $visSql
     ORDER BY c.course_name ASC
 ");
-$courseStmt->execute([$atcId]);
+$courseStmt->execute(array_merge([$atcId], $visParams));
 $activeCourses = $courseStmt->fetchAll(PDO::FETCH_ASSOC);
 
 
