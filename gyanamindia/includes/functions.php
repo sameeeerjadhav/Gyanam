@@ -1297,16 +1297,29 @@ function validateCourseCertificateRequest(PDO $pdo, array $student, string $role
 }
 
 /**
- * Resolve course certificate background: PDF template if FPDI-readable, else PNG raster.
+ * Course completion certificate brand: IT → GIIT, Abacus/Vedic → Gyanam Abacus.
+ * Prefers the master course type; falls back to ATC center type / course name.
+ *
+ * @return 'it'|'abacus'
+ */
+function courseCertificateBrand(?string $courseType, ?string $centerType = null, ?string $courseName = null): string {
+    $ct = strtolower(trim((string)$courseType));
+    if ($ct === 'abacus' || str_contains($ct, 'vedic')) {
+        return 'abacus';
+    }
+    if ($ct === 'it') {
+        return 'it';
+    }
+    return admissionFormBrandVariant($centerType, $courseName, $courseType);
+}
+
+/**
+ * Probe a PDF (FPDI) or PNG raster as the certificate background.
  *
  * @return array{type:'pdf'|'png', path:string, width:float, height:float}|null
  */
-function courseCertificateTemplateBackground(): ?array {
-    $base = __DIR__ . '/../assets/templates/';
-    $pdf  = $base . 'giit_course_certificate.pdf';
-    $png  = $base . 'giit_course_certificate.png';
-
-    if (is_file($pdf)) {
+function courseCertificateTemplateFromFiles(string $pdfPath, string $pngPath): ?array {
+    if (is_file($pdfPath)) {
         if (!class_exists(\setasign\Fpdi\Fpdi::class, false)) {
             $autoload = __DIR__ . '/../assets/fpdi/fpdi_autoload.php';
             if (is_file($autoload)) {
@@ -1316,12 +1329,12 @@ function courseCertificateTemplateBackground(): ?array {
         if (class_exists(\setasign\Fpdi\Fpdi::class)) {
             try {
                 $probe = new \setasign\Fpdi\Fpdi();
-                $probe->setSourceFile($pdf);
+                $probe->setSourceFile($pdfPath);
                 $tplId = $probe->importPage(1);
                 $size  = $probe->getTemplateSize($tplId);
                 return [
                     'type'   => 'pdf',
-                    'path'   => $pdf,
+                    'path'   => $pdfPath,
                     'width'  => (float)$size['width'],
                     'height' => (float)$size['height'],
                 ];
@@ -1331,11 +1344,137 @@ function courseCertificateTemplateBackground(): ?array {
         }
     }
 
-    if (is_file($png)) {
-        return ['type' => 'png', 'path' => $png, 'width' => 210.0, 'height' => 298.0];
+    if (is_file($pngPath)) {
+        return ['type' => 'png', 'path' => $pngPath, 'width' => 210.0, 'height' => 298.0];
     }
 
-    return is_file($pdf) ? ['type' => 'pdf', 'path' => $pdf, 'width' => 210.0, 'height' => 298.0] : null;
+    return is_file($pdfPath) ? ['type' => 'pdf', 'path' => $pdfPath, 'width' => 210.0, 'height' => 298.0] : null;
+}
+
+/**
+ * Resolve course certificate background for GIIT (IT) or Gyanam Abacus.
+ *
+ * @param 'it'|'abacus' $variant
+ * @return array{type:'pdf'|'png', path:string, width:float, height:float}|null
+ */
+function courseCertificateTemplateBackground(string $variant = 'it'): ?array {
+    $base = __DIR__ . '/../assets/templates/';
+    if ($variant === 'abacus') {
+        foreach ([
+            ['gyanam_abacus_course_certificate.pdf', 'gyanam_abacus_course_certificate.png'],
+            ['gyanam_course_certificate.pdf', 'gyanam_course_certificate.png'],
+        ] as [$pdf, $png]) {
+            $found = courseCertificateTemplateFromFiles($base . $pdf, $base . $png);
+            if ($found) {
+                return $found;
+            }
+        }
+        return null;
+    }
+
+    return courseCertificateTemplateFromFiles(
+        $base . 'giit_course_certificate.pdf',
+        $base . 'giit_course_certificate.png'
+    );
+}
+
+/**
+ * Drawn Gyanam Abacus completion certificate frame (used when no official PDF/PNG is uploaded).
+ * Field positions match GIIT overlay coordinates in generate_course_certificate.php.
+ */
+function gyanamAbacusCourseCertificateDrawFrame($pdf, float $W, float $H): void {
+    $red   = [196, 30, 58];
+    $green = [22, 140, 62];
+    $navy  = [30, 40, 70];
+    $muted = [90, 90, 90];
+
+    $pdf->SetFillColor(255, 255, 255);
+    $pdf->Rect(0, 0, $W, $H, 'F');
+
+    $pdf->SetDrawColor($red[0], $red[1], $red[2]);
+    $pdf->SetLineWidth(1.4);
+    $pdf->Rect(8, 8, $W - 16, $H - 16);
+    $pdf->SetDrawColor($green[0], $green[1], $green[2]);
+    $pdf->SetLineWidth(0.45);
+    $pdf->Rect(11, 11, $W - 22, $H - 22);
+
+    $logo = admissionFormBrandLogoPath('abacus');
+    if (is_file($logo)) {
+        try {
+            $pdf->Image($logo, ($W - 62) / 2, 16, 62);
+        } catch (\Throwable $e) {
+            // skip logo
+        }
+    }
+
+    $pdf->SetTextColor($muted[0], $muted[1], $muted[2]);
+    $pdf->SetFont('Helvetica', '', 8);
+    $pdf->SetXY(0, 38);
+    $pdf->Cell($W, 4, 'Reg. under Udyam (MSME) No. MH-14-0160225', 0, 0, 'C');
+
+    $pdf->SetTextColor($navy[0], $navy[1], $navy[2]);
+    $pdf->SetFont('Helvetica', 'B', 11);
+    $pdf->SetXY(0, 44);
+    $pdf->Cell($W, 5, 'GYANAM INDIA EDUCATIONAL SERVICES', 0, 0, 'C');
+
+    $pdf->SetTextColor($red[0], $red[1], $red[2]);
+    $pdf->SetFont('Times', 'B', 20);
+    $pdf->SetXY(0, 51);
+    $pdf->Cell($W, 8, 'Gyanam Abacus Academy', 0, 0, 'C');
+
+    $pdf->SetTextColor($green[0], $green[1], $green[2]);
+    $pdf->SetFont('Helvetica', 'B', 11);
+    $pdf->SetXY(0, 59);
+    $pdf->Cell($W, 5, 'Abacus & Vedic Maths', 0, 0, 'C');
+
+    $pdf->SetFillColor($red[0], $red[1], $red[2]);
+    $pdf->Rect(28, 70, $W - 56, 16, 'F');
+    $pdf->SetTextColor(255, 255, 255);
+    $pdf->SetFont('Times', 'BI', 22);
+    $pdf->SetXY(0, 73);
+    $pdf->Cell($W, 10, 'Certificate', 0, 0, 'C');
+
+    $pdf->SetTextColor(40, 40, 40);
+    $pdf->SetFont('Times', 'I', 13);
+    $pdf->SetXY(0, 96);
+    $pdf->Cell($W, 6, 'This is to certify That', 0, 0, 'C');
+
+    $pdf->SetXY(0, 136);
+    $pdf->Cell($W, 6, 'Has Successfully completed', 0, 0, 'C');
+
+    $pdf->SetXY(0, 153);
+    $pdf->Cell($W, 6, 'Conducted at', 0, 0, 'C');
+
+    // Photo frame (student photo is overlaid at 148, 118)
+    $pdf->SetDrawColor(40, 40, 40);
+    $pdf->SetLineWidth(0.35);
+    $pdf->Rect(148, 118, 32, 38);
+
+    $pdf->SetDrawColor(180, 180, 180);
+    $pdf->SetLineWidth(0.3);
+    $pdf->Line(48, 232, 90, 232);
+    $pdf->Line($W - 90, 232, $W - 48, 232);
+
+    $pdf->SetTextColor($red[0], $red[1], $red[2]);
+    $pdf->SetFont('Helvetica', 'B', 8);
+    $pdf->SetXY(48, 234);
+    $pdf->Cell(42, 4, 'Authorized Signatory', 0, 0, 'C');
+    $pdf->SetXY($W - 90, 234);
+    $pdf->Cell(42, 4, 'Authorized Signatory', 0, 0, 'C');
+    $pdf->SetTextColor(40, 40, 40);
+    $pdf->SetFont('Helvetica', '', 7);
+    $pdf->SetXY(0, 239);
+    $pdf->Cell($W, 4, 'for GYANAM INDIA EDUCATIONAL SERVICES', 0, 0, 'C');
+
+    $pdf->SetFont('Helvetica', 'B', 9);
+    $pdf->SetXY(16, 247);
+    $pdf->Cell(24, 4, 'Certificate No. :', 0, 0, 'L');
+    $pdf->SetXY(16, 255);
+    $pdf->Cell(24, 4, 'Date of issue :', 0, 0, 'L');
+
+    $pdf->SetFont('Helvetica', '', 8);
+    $pdf->SetXY(0, 272);
+    $pdf->Cell($W, 4, '(Grade : A++: 90 & above, A+ : 80 to 89, A : 66 to 79, B : 55 to 65, C : 40 to 54)', 0, 0, 'C');
 }
 
 /** Active dashboard banners — lean columns, capped. $audience = ATC|DLC */

@@ -326,17 +326,19 @@ if ($selStudent && function_exists('examIntegrationReady') && examIntegrationRea
         if ($pass) {
             $passRegId = $tryReg;
         } else {
-            $passNote = 'Selected student has no passing main exam in Exam Portal — GIIT PDF preview unavailable.';
+            $passNote = 'Selected student has no passing main exam in Exam Portal — certificate preview unavailable.';
         }
     }
 } elseif ($selStudent) {
-    $passNote = 'Exam portal not connected — GIIT PDF preview unavailable.';
+    $passNote = 'Exam portal not connected — certificate preview unavailable.';
 }
 
 $tplBase = __DIR__ . '/../assets/templates/';
 $templateFiles = [
-    'giit_course_certificate.pdf'       => 'GIIT course completion (source PDF)',
+    'giit_course_certificate.pdf'       => 'GIIT course completion (IT courses)',
     'giit_course_certificate.png'       => 'GIIT course completion (FPDI fallback PNG)',
+    'gyanam_abacus_course_certificate.pdf' => 'Gyanam Abacus course completion (optional official PDF)',
+    'gyanam_abacus_course_certificate.png' => 'Gyanam Abacus course completion (optional PNG)',
     'giit_auth_certificate.pdf'         => 'GIIT IT authorization',
     'gyanam_abacus_auth_certificate.pdf'=> 'Gyanam Abacus authorization',
 ];
@@ -358,13 +360,13 @@ $docSections = [
     ],
 ];
 
-// GIIT course PDF
+// Course completion PDF (brand follows course type)
 $docSections['certificates_pdf']['items'][] = [
-    'name'        => 'GIIT Course Completion Certificate',
-    'desc'        => 'Official student course completion PDF (GIIT template, grade A++–C). Used by Admin and ATC Completion Certificates.',
+    'name'        => 'Course Completion Certificate',
+    'desc'        => 'IT courses use the GIIT template. Abacus / Vedic Maths courses use Gyanam Abacus. Same generator for Admin and ATC.',
     'live'        => 'atc/completion_certificate.php · admin/course_certificates.php',
     'preview_url' => $passRegId ? ('generate_course_certificate.php?reg_id=' . urlencode($passRegId) . '&preview=1') : null,
-    'preview_note'=> $passNote ?: null,
+    'preview_note'=> $passNote ?: 'Preview uses the selected student’s course type.',
     'code'        => 'admin/generate_course_certificate.php',
 ];
 
@@ -564,7 +566,7 @@ $pageTitle = 'Review Documents (TEMP)';
             <div class="rv-card" style="padding:1rem 1.15rem">
                 <p style="font-size:.86rem;line-height:1.6;margin:0;color:#374151">
                     <b>Hall ticket?</b> Yes — ATC portal → <b>Hall Tickets</b> (<code>atc/hall_tickets.php</code>). Requires HO share paid + student photo.<br>
-                    <b>GIIT course PDF?</b> Official completion cert — Admin → Course Certificates or ATC → Completion Certificates.<br>
+                    <b>Course completion PDF?</b> IT courses → GIIT template; Abacus/Vedic → Gyanam Abacus. Admin → Course Certificates or ATC → Completion Certificates.<br>
                     <b>Auth PDFs?</b> Admin → Auth Certificates (GIIT IT + Gyanam Abacus by center type).<br>
                     <b>Exam connection?</b>
                     <?php if (function_exists('examIntegrationReady') && examIntegrationReady()): ?>
