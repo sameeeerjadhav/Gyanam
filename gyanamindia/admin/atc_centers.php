@@ -14,6 +14,7 @@ requireLogin(['Admin']);
 
 $pdo = getDBConnection();
 $userName = sanitize(getUserName());
+ensureAtcFranchisePaymentSchema($pdo);
 
 // Handle AJAX requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -23,22 +24,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         switch ($_POST['action']) {
 
             case 'add':
-                // Schema columns are ensured on page load via flags — avoid ALTER on every save
-                $rawFees = $_POST['franchise_fees'] ?? '';
-                $franchiseFees = ($rawFees !== '' && $rawFees !== null) ? floatval($rawFees) : null;
-                $allowedPayModes = ['Cash', 'UPI', 'Cheque'];
-                $franchisePayMode = trim((string)($_POST['franchise_payment_mode'] ?? ''));
-                $franchisePayMode = in_array($franchisePayMode, $allowedPayModes, true) ? $franchisePayMode : null;
+                $franchiseFees     = parseOptionalMoney($_POST['franchise_fees'] ?? '');
+                $franchiseReceived = parseOptionalMoney($_POST['franchise_amount_received'] ?? '');
+                $allowedPayModes   = atcFranchisePaymentModes();
+                $franchisePayMode  = trim((string)($_POST['franchise_payment_mode'] ?? ''));
+                $franchisePayMode  = in_array($franchisePayMode, $allowedPayModes, true) ? $franchisePayMode : null;
                 $franchisePaidDate = !empty($_POST['franchise_paid_date']) ? $_POST['franchise_paid_date'] : null;
+                $franchisePayRef   = trim((string)($_POST['franchise_payment_ref'] ?? ''));
+                $franchisePayRef   = $franchisePayRef !== '' ? $franchisePayRef : null;
+                $dlcShareAmount    = parseOptionalMoney($_POST['dlc_share_amount'] ?? '');
                 $tempPassword = 'password'; // temporary — ATC must change after first login
                 $atcCode = null;
 
                 $stmt = $pdo->prepare("
                     INSERT INTO atc_centers (name, district, state, taluka, city, pin_code, center_type, dlc_id,
+                        dlc_share_amount,
                         contact_person, email, mobile, alternate_mobile, address, dob,
-                        date_created, authorization_expires_at, franchise_fees, franchise_payment_mode, franchise_paid_date,
+                        date_created, authorization_expires_at,
+                        franchise_fees, franchise_amount_received, franchise_payment_mode, franchise_paid_date, franchise_payment_ref,
                         login_username, login_password, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
                 ");
                 $stmt->execute([
                     $_POST['name'],
@@ -49,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $_POST['pin_code'],
                     $_POST['center_type'],
                     $_POST['dlc_id'] ?: null,
+                    $dlcShareAmount,
                     $_POST['contact_person'] ?: null,
                     $_POST['email'] ?: null,
                     $_POST['mobile'] ?: null,
@@ -58,8 +64,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     !empty($_POST['date_created']) ? $_POST['date_created'] : date('Y-m-d'),
                     !empty($_POST['authorization_expires_at']) ? $_POST['authorization_expires_at'] : null,
                     $franchiseFees,
+                    $franchiseReceived,
                     $franchisePayMode,
                     $franchisePaidDate,
+                    $franchisePayRef,
                     $_POST['status']
                 ]);
                 $newId = $pdo->lastInsertId();
@@ -134,12 +142,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
 
             case 'edit':
-                $rawFees = $_POST['franchise_fees'] ?? '';
-                $franchiseFees = ($rawFees !== '' && $rawFees !== null) ? floatval($rawFees) : null;
-                $allowedPayModes = ['Cash', 'UPI', 'Cheque'];
-                $franchisePayMode = trim((string)($_POST['franchise_payment_mode'] ?? ''));
-                $franchisePayMode = in_array($franchisePayMode, $allowedPayModes, true) ? $franchisePayMode : null;
+                $franchiseFees     = parseOptionalMoney($_POST['franchise_fees'] ?? '');
+                $franchiseReceived = parseOptionalMoney($_POST['franchise_amount_received'] ?? '');
+                $allowedPayModes   = atcFranchisePaymentModes();
+                $franchisePayMode  = trim((string)($_POST['franchise_payment_mode'] ?? ''));
+                $franchisePayMode  = in_array($franchisePayMode, $allowedPayModes, true) ? $franchisePayMode : null;
                 $franchisePaidDate = !empty($_POST['franchise_paid_date']) ? $_POST['franchise_paid_date'] : null;
+                $franchisePayRef   = trim((string)($_POST['franchise_payment_ref'] ?? ''));
+                $franchisePayRef   = $franchisePayRef !== '' ? $franchisePayRef : null;
+                $dlcShareAmount    = parseOptionalMoney($_POST['dlc_share_amount'] ?? '');
                 $editId = intval($_POST['id']);
 
                 // Credentials: username is always the ATC code; password optional on edit
@@ -178,9 +189,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt = $pdo->prepare("
                     UPDATE atc_centers
                     SET name=?, district=?, state=?, taluka=?, city=?, pin_code=?, center_type=?, dlc_id=?,
+                        dlc_share_amount=?,
                         contact_person=?, email=?, mobile=?, alternate_mobile=?, address=?,
-                        dob=?, date_created=?, authorization_expires_at=?, franchise_fees=?,
-                        franchise_payment_mode=?, franchise_paid_date=?,
+                        dob=?, date_created=?, authorization_expires_at=?,
+                        franchise_fees=?, franchise_amount_received=?,
+                        franchise_payment_mode=?, franchise_paid_date=?, franchise_payment_ref=?,
                         login_username=?,
                         login_password=?,
                         status=?
@@ -195,6 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $_POST['pin_code'],
                     $_POST['center_type'],
                     $_POST['dlc_id'] ?: null,
+                    $dlcShareAmount,
                     $_POST['contact_person'] ?: null,
                     $_POST['email'] ?: null,
                     $_POST['mobile'] ?: null,
@@ -204,8 +218,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     !empty($_POST['date_created']) ? $_POST['date_created'] : null,
                     !empty($_POST['authorization_expires_at']) ? $_POST['authorization_expires_at'] : null,
                     $franchiseFees,
+                    $franchiseReceived,
                     $franchisePayMode,
                     $franchisePaidDate,
+                    $franchisePayRef,
                     $newLoginUser,
                     $newLoginPass !== '' ? $newLoginPass : null,
                     $_POST['status'],
@@ -2773,6 +2789,12 @@ try {
                     <div class="detail-label">DLC Office</div>
                     <div class="detail-value">${atc.dlc_name}</div>
                 </div>
+                ${(atc.dlc_share_amount !== null && atc.dlc_share_amount !== undefined && atc.dlc_share_amount !== '') ? `
+                <div class="detail-item">
+                    <div class="detail-label">DLC Share Amount</div>
+                    <div class="detail-value">₹${Number(atc.dlc_share_amount).toLocaleString('en-IN')}</div>
+                </div>
+                ` : ''}
                 <div class="detail-item">
                     <div class="detail-label">Location</div>
                     <div class="detail-value">${atc.district}, ${atc.state}</div>
@@ -2809,20 +2831,32 @@ try {
                 ` : ''}
                 ${atc.franchise_payment_mode ? `
                 <div class="detail-item">
-                    <div class="detail-label">Payment Mode</div>
+                    <div class="detail-label">Payment Done By</div>
                     <div class="detail-value">${atc.franchise_payment_mode}</div>
                 </div>
                 ` : ''}
                 ${(atc.franchise_fees !== null && atc.franchise_fees !== undefined && atc.franchise_fees !== '') ? `
                 <div class="detail-item">
-                    <div class="detail-label">Franchise Fees / Amount Paid</div>
+                    <div class="detail-label">Franchise Fees</div>
                     <div class="detail-value">₹${Number(atc.franchise_fees).toLocaleString('en-IN')}</div>
+                </div>
+                ` : ''}
+                ${(atc.franchise_amount_received !== null && atc.franchise_amount_received !== undefined && atc.franchise_amount_received !== '') ? `
+                <div class="detail-item">
+                    <div class="detail-label">Amount Received</div>
+                    <div class="detail-value">₹${Number(atc.franchise_amount_received).toLocaleString('en-IN')}</div>
                 </div>
                 ` : ''}
                 ${atc.franchise_paid_date ? `
                 <div class="detail-item">
-                    <div class="detail-label">Amount Paid Date</div>
+                    <div class="detail-label">Date of Amount Received</div>
                     <div class="detail-value">${atc.franchise_paid_date}</div>
+                </div>
+                ` : ''}
+                ${atc.franchise_payment_ref ? `
+                <div class="detail-item">
+                    <div class="detail-label">Cheque / UPI / Reference No.</div>
+                    <div class="detail-value">${atc.franchise_payment_ref}</div>
                 </div>
                 ` : ''}
             </div>

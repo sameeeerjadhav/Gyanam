@@ -13,17 +13,7 @@ requireLogin(['Admin']);
 
 $pdo = getDBConnection();
 $userName = sanitize(getUserName());
-
-// Ensure franchise payment columns exist
-try {
-    $flag = __DIR__ . '/../config/.schema_atc_franchise_pay_ok';
-    if (!is_file($flag)) {
-        try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_payment_mode VARCHAR(20) DEFAULT NULL"); } catch (Exception $e) {}
-        try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_paid_date DATE DEFAULT NULL"); } catch (Exception $e) {}
-        try { $pdo->exec("ALTER TABLE atc_centers ADD COLUMN IF NOT EXISTS franchise_fees DECIMAL(12,2) DEFAULT NULL"); } catch (Exception $e) {}
-        @file_put_contents($flag, date('c') . "\n");
-    }
-} catch (Exception $e) {}
+ensureAtcFranchisePaymentSchema($pdo);
 
 $editId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $isEdit = $editId > 0;
@@ -238,6 +228,12 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
                                     </select>
                                 </div>
                                 <div class="atc-form-field">
+                                    <label for="f_dlc_share_amount">DLC Share Amount (&#8377;)</label>
+                                    <input type="number" id="f_dlc_share_amount" name="dlc_share_amount" min="0" step="0.01"
+                                        value="<?= htmlspecialchars($v('dlc_share_amount')) ?>"
+                                        placeholder="e.g. 5000">
+                                </div>
+                                <div class="atc-form-field">
                                     <label for="f_date_created">Date Created</label>
                                     <input type="date" id="f_date_created" name="date_created" max="<?= $today ?>"
                                         value="<?= htmlspecialchars($v('date_created', $isEdit ? '' : $today)) ?>">
@@ -247,25 +243,47 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
                                     <input type="date" id="f_authorization_expires_at" name="authorization_expires_at"
                                         value="<?= htmlspecialchars($v('authorization_expires_at', $isEdit ? '' : $defaultExpiry)) ?>">
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Franchise Payment -->
+                        <div class="atc-form-section">
+                            <div class="atc-form-section-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                                Franchise Payment
+                            </div>
+                            <div class="atc-form-grid">
                                 <div class="atc-form-field">
-                                    <label for="f_franchise_payment_mode">Payment Mode</label>
+                                    <label for="f_franchise_fees">Franchise Fees (&#8377;)</label>
+                                    <input type="number" id="f_franchise_fees" name="franchise_fees" min="0" step="0.01"
+                                        value="<?= htmlspecialchars($v('franchise_fees')) ?>"
+                                        placeholder="Agreed franchise fee">
+                                </div>
+                                <div class="atc-form-field">
+                                    <label for="f_franchise_amount_received">Amount Received (&#8377;)</label>
+                                    <input type="number" id="f_franchise_amount_received" name="franchise_amount_received" min="0" step="0.01"
+                                        value="<?= htmlspecialchars($v('franchise_amount_received')) ?>"
+                                        placeholder="Amount actually received">
+                                </div>
+                                <div class="atc-form-field">
+                                    <label for="f_franchise_paid_date">Date of Amount Received</label>
+                                    <input type="date" id="f_franchise_paid_date" name="franchise_paid_date" max="<?= $today ?>"
+                                        value="<?= htmlspecialchars($v('franchise_paid_date')) ?>">
+                                </div>
+                                <div class="atc-form-field">
+                                    <label for="f_franchise_payment_mode">Payment Done By</label>
                                     <select id="f_franchise_payment_mode" name="franchise_payment_mode">
-                                        <option value="">-- Select Mode --</option>
-                                        <?php foreach (['Cash','UPI','Cheque'] as $pm): ?>
-                                        <option value="<?= $pm ?>" <?= $v('franchise_payment_mode') === $pm ? 'selected' : '' ?>><?= $pm ?></option>
+                                        <option value="">-- Select --</option>
+                                        <?php foreach (atcFranchisePaymentModes() as $pm): ?>
+                                        <option value="<?= htmlspecialchars($pm) ?>" <?= $v('franchise_payment_mode') === $pm ? 'selected' : '' ?>><?= htmlspecialchars($pm) ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
                                 <div class="atc-form-field">
-                                    <label for="f_franchise_fees">Franchise Fees / Amount Paid (&#8377;)</label>
-                                    <input type="number" id="f_franchise_fees" name="franchise_fees" min="0" step="0.01"
-                                        value="<?= htmlspecialchars($v('franchise_fees')) ?>"
-                                        placeholder="e.g. 25000">
-                                </div>
-                                <div class="atc-form-field">
-                                    <label for="f_franchise_paid_date">Amount Paid Date</label>
-                                    <input type="date" id="f_franchise_paid_date" name="franchise_paid_date" max="<?= $today ?>"
-                                        value="<?= htmlspecialchars($v('franchise_paid_date')) ?>">
+                                    <label for="f_franchise_payment_ref">Cheque / UPI / Reference No.</label>
+                                    <input type="text" id="f_franchise_payment_ref" name="franchise_payment_ref" maxlength="80"
+                                        value="<?= htmlspecialchars($v('franchise_payment_ref')) ?>"
+                                        placeholder="Cheque no, UPI ID, or txn ref">
                                 </div>
                             </div>
                         </div>
