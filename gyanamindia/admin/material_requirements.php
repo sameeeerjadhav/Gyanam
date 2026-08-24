@@ -14,6 +14,9 @@ requireLogin(['Admin']);
 $pdo      = getDBConnection();
 $userName = sanitize(getUserName());
 
+ensureCourseMaterialItemsSchema($pdo);
+ensureInventoryTables($pdo);
+
 // ── ATC list ──────────────────────────────────────────────────────────────────
 $atcList = [];
 try { $atcList = $pdo->query("SELECT id, name, atc_code FROM atc_centers WHERE status='Active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC); } catch (Exception $e) {}
@@ -82,6 +85,58 @@ if ($filterAtc) {
         } catch (Exception $e) {}
     }
 
+    // ── 3.5 Course material selection flags ──────────────────────────────────
+    // For courses created with "With Material" mapping (with_material_configured=1),
+    // admin requirements must only show T-Shirt / Book needs that are part of that mapping.
+    $courseMap = []; // course_name => ['course_id'=>..,'with_material_configured'=>..]
+    $courseCategoryFlags = []; // course_id => ['hasTshirt'=>bool,'hasBooks'=>bool]
+
+    $courseNames = array_values(array_unique(array_filter(array_map(
+        fn($x) => trim((string)($x['course'] ?? '')),
+        $allStudents
+    ))));
+
+    if (!empty($courseNames)) {
+        $ph = implode(',', array_fill(0, count($courseNames), '?'));
+        $cStmt = $pdo->prepare("
+            SELECT id, course_name, with_material_configured
+            FROM courses
+            WHERE course_name IN ($ph)
+        ");
+        $cStmt->execute($courseNames);
+        foreach ($cStmt->fetchAll(PDO::FETCH_ASSOC) as $c) {
+            $courseMap[(string)$c['course_name']] = [
+                'course_id' => (int)$c['id'],
+                'with_material_configured' => (int)($c['with_material_configured'] ?? 0),
+            ];
+        }
+    }
+
+    $configuredCourseIds = [];
+    foreach ($courseMap as $row) {
+        if (!empty($row['with_material_configured'])) $configuredCourseIds[] = $row['course_id'];
+    }
+    $configuredCourseIds = array_values(array_unique($configuredCourseIds));
+
+    if (!empty($configuredCourseIds)) {
+        $ph = implode(',', array_fill(0, count($configuredCourseIds), '?'));
+        $mStmt = $pdo->prepare("
+            SELECT cmi.course_id, ii.category
+            FROM course_material_items cmi
+            INNER JOIN inventory_items ii ON ii.id = cmi.inventory_item_id
+            WHERE cmi.material_variant = 'With Material'
+              AND cmi.course_id IN ($ph)
+              AND ii.status='Active'
+        ");
+        $mStmt->execute($configuredCourseIds);
+        foreach ($mStmt->fetchAll(PDO::FETCH_ASSOC) as $m) {
+            $cid = (int)$m['course_id'];
+            if (!isset($courseCategoryFlags[$cid])) $courseCategoryFlags[$cid] = ['hasTshirt' => false, 'hasBooks' => false];
+            if (($m['category'] ?? '') === 'T-Shirts') $courseCategoryFlags[$cid]['hasTshirt'] = true;
+            if (($m['category'] ?? '') === 'Books') $courseCategoryFlags[$cid]['hasBooks'] = true;
+        }
+    }
+
     // ── 4. Categorize students ────────────────────────────────────────────────
     foreach ($allStudents as $s) {
         $isSharePaid = isset($paidMap[$s['id']]) || !empty($s['ho_share_paid']);
@@ -90,8 +145,15 @@ if ($filterAtc) {
         $materials     = [];
         $allDispatched = true;
 
+        $courseRow = $courseMap[(string)($s['course'] ?? '')] ?? null;
+        $isCourseConfigured = !empty($courseRow) && ((int)$courseRow['with_material_configured'] === 1);
+        $courseId = !empty($courseRow) ? (int)$courseRow['course_id'] : 0;
+        $courseFlags = $courseId && isset($courseCategoryFlags[$courseId]) ? $courseCategoryFlags[$courseId] : ['hasTshirt'=>false,'hasBooks'=>false];
+        $includeTshirt = !$isCourseConfigured ? true : !empty($courseFlags['hasTshirt']);
+        $includeBooks  = !$isCourseConfigured ? true : !empty($courseFlags['hasBooks']);
+
         // T-Shirt
-        if (!empty($s['uniform_size'])) {
+        if (!empty($s['uniform_size']) && $includeTshirt) {
             $tKey = $s['id'] . '_T-Shirt_Size ' . $s['uniform_size'];
             $status = $partialDispatched[$tKey] ?? null;
             // ONLY mark as dispatched if dispatch_items explicitly says 'Dispatched'
@@ -104,7 +166,7 @@ if ($filterAtc) {
         }
 
         // Book
-        if (!empty($s['material_language'])) {
+        if (!empty($s['material_language']) && $includeBooks) {
             $bKey = $s['id'] . '_Book_' . $s['material_language'];
             $status = $partialDispatched[$bKey] ?? null;
             if ($status === 'Dispatched') {
