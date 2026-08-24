@@ -40,7 +40,9 @@ $stmt = $pdo->prepare("
            atc.district   AS atc_district,
            atc.atc_code,
            atc.id         AS atc_id,
-           c.duration     AS course_duration
+           atc.center_type,
+           c.duration     AS course_duration,
+           c.course_type  AS course_type
     FROM   admissions a
     LEFT JOIN atc_centers atc ON atc.id = a.atc_id
     LEFT JOIN courses      c   ON c.course_name = a.course AND c.status = 'Active'
@@ -59,7 +61,9 @@ if (!$student) {
                atc.district AS atc_district,
                atc.atc_code,
                atc.id       AS atc_id,
-               c.duration   AS course_duration
+               atc.center_type,
+               c.duration   AS course_duration,
+               c.course_type AS course_type
         FROM   admissions a
         LEFT JOIN atc_centers atc ON atc.id = a.atc_id
         LEFT JOIN courses      c   ON c.course_name = a.course AND c.status = 'Active'
@@ -105,6 +109,16 @@ $fullName = strtoupper(trim(
 
 // 2. Course name
 $courseName = trim($student['course'] ?? 'N/A');
+if (empty($student['course_type']) && $courseName !== '' && $courseName !== 'N/A') {
+    try {
+        $ctSt = $pdo->prepare("SELECT course_type FROM courses WHERE status = 'Active' AND (course_name = ? OR ? LIKE CONCAT(course_name, '%')) LIMIT 1");
+        $ctSt->execute([$courseName, $courseName]);
+        $foundType = $ctSt->fetchColumn();
+        if ($foundType) {
+            $student['course_type'] = $foundType;
+        }
+    } catch (\Exception $e) {}
+}
 
 // 3. ATC name + city  (e.g. "Aim Computers, Jalgaon")
 $atcCity     = trim($student['atc_city'] ?? $student['atc_district'] ?? '');
@@ -155,9 +169,14 @@ $certNo = $certBase . '-' . str_pad($counter, 3, '0', STR_PAD_LEFT);
 // 7. Date of issue — the day student passed (from exam portal)
 $dateOfIssue = date('d/m/Y', strtotime($examDate ?: date('Y-m-d')));
 
-// ── Template (PDF or PNG fallback for PDF 1.5+ templates) ───────────────────────
-$template = courseCertificateTemplateBackground();
-if (!$template) {
+// ── Template (GIIT for IT courses, Gyanam Abacus for Abacus/Vedic) ───────────
+$certBrand = courseCertificateBrand(
+    $student['course_type'] ?? null,
+    $student['center_type'] ?? null,
+    $courseName
+);
+$template = courseCertificateTemplateBackground($certBrand);
+if (!$template && $certBrand !== 'abacus') {
     die('<b>Template not found:</b> Upload <code>assets/templates/giit_course_certificate.pdf</code> (and optional PNG fallback).');
 }
 
@@ -171,17 +190,19 @@ if (!empty($student['photo'])) {
 // ── Generate PDF ──────────────────────────────────────────────────────────────
 try {
     $pdf = new Fpdi();
-    $W = $template['width'];
-    $H = $template['height'];
+    $W = (is_array($template) && !empty($template['width'])) ? (float)$template['width'] : 210.0;
+    $H = (is_array($template) && !empty($template['height'])) ? (float)$template['height'] : 297.0;
 
     $pdf->AddPage($W > $H ? 'L' : 'P', [$W, $H]);
 
-    if ($template['type'] === 'pdf') {
+    if ($template && $template['type'] === 'pdf') {
         $pdf->setSourceFile($template['path']);
         $tplId = $pdf->importPage(1);
         $pdf->useTemplate($tplId, 0, 0, $W, $H);
-    } else {
+    } elseif ($template && $template['type'] === 'png') {
         $pdf->Image($template['path'], 0, 0, $W, $H, 'PNG');
+    } else {
+        gyanamAbacusCourseCertificateDrawFrame($pdf, $W, $H);
     }
 
     // ── Helper: centered text ─────────────────────────────────────────────────
@@ -248,7 +269,7 @@ try {
     http_response_code(500);
     echo '<h2>PDF Template Compatibility Issue</h2>';
     echo '<p>The course certificate template uses a compressed format (PDF 1.5+) that FPDI cannot read without a paid extension.</p>';
-    echo '<p><b>Fix:</b> Add <code>assets/templates/giit_course_certificate.png</code> (full-page raster of the PDF) — the generator will use it automatically.</p>';
+    echo '<p><b>Fix:</b> Add <code>assets/templates/' . ($certBrand === 'abacus' ? 'gyanam_abacus_course_certificate.png' : 'giit_course_certificate.png') . '</code> (full-page raster of the PDF) — the generator will use it automatically.</p>';
     echo '<p><small>' . htmlspecialchars($e->getMessage()) . '</small></p>';
 } catch (\Exception $e) {
     http_response_code(500);

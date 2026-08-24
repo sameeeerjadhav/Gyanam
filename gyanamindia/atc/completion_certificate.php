@@ -1,7 +1,7 @@
 <?php
 /**
  * Gyanam Portal — ATC: Course Completion Certificates
- * Opens the official GIIT PDF (generate_course_certificate.php).
+ * Opens the official course completion PDF (GIIT or Gyanam Abacus by course type).
  *
  * Certificate is only available when:
  *   1. Student photo is uploaded
@@ -214,7 +214,7 @@ a.btn-generate { text-decoration:none; }
             </button>
             <div class="header-greeting">
                 <h2>Completion Certificates</h2>
-                <p>Print official GIIT course completion PDFs (exam pass + share paid + photo)</p>
+                <p>Print official course completion PDFs — GIIT for IT, Gyanam Abacus for Abacus/Vedic (exam pass + share paid + photo)</p>
             </div>
         </div>
         <div class="header-right">
@@ -233,7 +233,7 @@ a.btn-generate { text-decoration:none; }
                 </div>
                 <div>
                     <div class="cc-page-title">Course Completion Certificates</div>
-                    <div class="cc-page-sub">Official GIIT PDF after exam pass, HO share paid &amp; photo uploaded</div>
+                    <div class="cc-page-sub">GIIT or Gyanam Abacus PDF after exam pass, HO share paid &amp; photo uploaded</div>
                 </div>
             </div>
         </div>
@@ -376,12 +376,12 @@ a.btn-generate { text-decoration:none; }
                             <?php if ($ready): ?>
                             <a class="btn-generate" href="<?= htmlspecialchars($certUrl) ?>" target="_blank" rel="noopener">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
-                                View GIIT PDF
+                                View Certificate
                             </a>
                             <?php else: ?>
                             <span class="btn-generate disabled" title="<?= htmlspecialchars($reason) ?>">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
-                                View GIIT PDF
+                                View Certificate
                             </span>
                             <?php endif; ?>
                         </td>
