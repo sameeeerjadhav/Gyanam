@@ -29,26 +29,44 @@ $isEdit = $mode === 'edit' && $courseId > 0;
 $centerTypes = masterCourseTypes();
 $durations = ['1 Month', '2 Months', '3 Months', '6 Months', '1 Year', '2 Years'];
 
-// Inventory items (for With Material selection)
-$itemsTshirts = [];
-$itemsBooks = [];
+// Inventory items (for With Material selection), grouped by category.
+// Default list stays T-Shirts + Books; other categories are available via the filter.
+$inventoryCategories = [];
 try {
-    $itemsTshirts = $pdo->query("
-        SELECT id, item_name, current_stock, min_stock_level
+    $inventoryCategories = $pdo->query("SELECT name FROM inventory_categories ORDER BY name ASC")->fetchAll(PDO::FETCH_COLUMN);
+} catch (Exception $e) {}
+if (empty($inventoryCategories)) {
+    $inventoryCategories = ['Books', 'T-Shirts', 'Certificates', 'Stationery', 'Other'];
+}
+
+$itemsByCategory = [];
+foreach ($inventoryCategories as $catName) {
+    $itemsByCategory[$catName] = [];
+}
+try {
+    $allInvItems = $pdo->query("
+        SELECT id, item_name, category, current_stock
         FROM inventory_items
-        WHERE status='Active' AND category='T-Shirts'
-        ORDER BY item_name ASC
+        WHERE status = 'Active'
+        ORDER BY category ASC, item_name ASC
     ")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($allInvItems as $it) {
+        $catName = trim((string)($it['category'] ?? '')) ?: 'Other';
+        if (!isset($itemsByCategory[$catName])) {
+            $inventoryCategories[] = $catName;
+            $itemsByCategory[$catName] = [];
+        }
+        $itemsByCategory[$catName][] = $it;
+    }
+    $inventoryCategories = array_values(array_unique($inventoryCategories));
 } catch (Exception $e) {}
 
-try {
-    $itemsBooks = $pdo->query("
-        SELECT id, item_name, current_stock, min_stock_level
-        FROM inventory_items
-        WHERE status='Active' AND category='Books'
-        ORDER BY item_name ASC
-    ")->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {}
+$primaryMaterialCats = ['T-Shirts', 'Books'];
+$materialCatSlug = static function (string $name): string {
+    $slug = strtolower(trim($name));
+    $slug = preg_replace('/[^a-z0-9]+/', '-', $slug) ?? 'other';
+    return trim($slug, '-') ?: 'other';
+};
 
 // ── Load course (edit) ───────────────────────────────────────────────────────
 $course = [];
@@ -447,19 +465,27 @@ $materialOption = $isEdit
                                 <div class="mf-field cat">
                                     <label for="matCategory">Category</label>
                                     <select class="field-select" id="matCategory">
-                                        <option value="all">All</option>
-                                        <option value="tshirts">T-Shirts</option>
-                                        <option value="books">Books</option>
+                                        <option value="all">All (T-Shirts &amp; Books)</option>
+                                        <?php foreach ($inventoryCategories as $catName): ?>
+                                            <option value="<?= htmlspecialchars($materialCatSlug((string)$catName), ENT_QUOTES) ?>">
+                                                <?= htmlspecialchars((string)$catName) ?>
+                                            </option>
+                                        <?php endforeach; ?>
                                     </select>
                                 </div>
                                 <button type="button" class="btn-add" onclick="openNewItemModal()">+ Create New Item</button>
                             </div>
                             <div class="filter-empty" id="matFilterEmpty">No items match this filter.</div>
 
-                            <div class="cat-block items-block" data-cat="tshirts" style="background:transparent; border:none; padding:0; margin-bottom: .9rem">
-                                <div class="items-title" style="margin:0 .1rem .5rem">T-Shirts</div>
+                            <?php foreach ($inventoryCategories as $catName):
+                                $catSlug = $materialCatSlug((string)$catName);
+                                $catItems = $itemsByCategory[$catName] ?? [];
+                                $isPrimary = in_array((string)$catName, $primaryMaterialCats, true);
+                            ?>
+                            <div class="cat-block items-block<?= $isPrimary ? '' : ' is-hidden' ?>" data-cat="<?= htmlspecialchars($catSlug, ENT_QUOTES) ?>" data-primary="<?= $isPrimary ? '1' : '0' ?>" style="background:transparent; border:none; padding:0; margin-bottom: .9rem">
+                                <div class="items-title" style="margin:0 .1rem .5rem"><?= htmlspecialchars((string)$catName) ?></div>
                                 <div class="items-list">
-                                    <?php foreach ($itemsTshirts as $it): ?>
+                                    <?php foreach ($catItems as $it): ?>
                                         <?php $checked = in_array((int)$it['id'], $selectedItemIds, true) ? 'checked' : ''; ?>
                                         <label class="item-check" data-name="<?= htmlspecialchars(strtolower($it['item_name']), ENT_QUOTES) ?>">
                                             <input type="checkbox" name="with_material_inventory_item_ids[]" value="<?= (int)$it['id'] ?>" <?= $checked ?>>
@@ -469,30 +495,12 @@ $materialOption = $isEdit
                                             </span>
                                         </label>
                                     <?php endforeach; ?>
-                                    <?php if (empty($itemsTshirts)): ?>
-                                        <div class="field-hint">No active T-Shirt items in inventory.</div>
+                                    <?php if (empty($catItems)): ?>
+                                        <div class="field-hint">No active items in this category.</div>
                                     <?php endif; ?>
                                 </div>
                             </div>
-
-                            <div class="cat-block items-block" data-cat="books" style="background:transparent; border:none; padding:0; margin-bottom: .2rem">
-                                <div class="items-title" style="margin:0 .1rem .5rem">Books</div>
-                                <div class="items-list">
-                                    <?php foreach ($itemsBooks as $it): ?>
-                                        <?php $checked = in_array((int)$it['id'], $selectedItemIds, true) ? 'checked' : ''; ?>
-                                        <label class="item-check" data-name="<?= htmlspecialchars(strtolower($it['item_name']), ENT_QUOTES) ?>">
-                                            <input type="checkbox" name="with_material_inventory_item_ids[]" value="<?= (int)$it['id'] ?>" <?= $checked ?>>
-                                            <span class="meta">
-                                                <span class="nm"><?= htmlspecialchars($it['item_name']) ?></span>
-                                                <span class="st">Stock: <?= (int)$it['current_stock'] ?></span>
-                                            </span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                    <?php if (empty($itemsBooks)): ?>
-                                        <div class="field-hint">No active Book items in inventory.</div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
+                            <?php endforeach; ?>
                         </div>
                     </div>
 
@@ -649,7 +657,8 @@ $materialOption = $isEdit
 
         document.querySelectorAll('.cat-block').forEach((block) => {
             const blockCat = block.getAttribute('data-cat');
-            const catOk = (cat === 'all' || cat === blockCat);
+            const isPrimary = block.getAttribute('data-primary') === '1';
+            const catOk = (cat === 'all') ? isPrimary : (cat === blockCat);
             let visibleInBlock = 0;
             block.querySelectorAll('.item-check').forEach((el) => {
                 const name = el.getAttribute('data-name') || '';
@@ -657,8 +666,9 @@ $materialOption = $isEdit
                 el.classList.toggle('is-hidden', !match);
                 if (match) visibleInBlock++;
             });
-            block.classList.toggle('is-hidden', !catOk || visibleInBlock === 0);
-            if (catOk && visibleInBlock > 0) anyVisible = true;
+            const hideBlock = !catOk || (q !== '' && visibleInBlock === 0);
+            block.classList.toggle('is-hidden', hideBlock);
+            if (catOk && !hideBlock) anyVisible = true;
         });
 
         const emptyEl = document.getElementById('matFilterEmpty');
@@ -666,6 +676,7 @@ $materialOption = $isEdit
     }
     document.getElementById('matSearch')?.addEventListener('input', filterCourseMaterials);
     document.getElementById('matCategory')?.addEventListener('change', filterCourseMaterials);
+    filterCourseMaterials();
 
     async function createAndStockItem() {
         const item_name = document.getElementById('ni_item_name').value.trim();
