@@ -1781,3 +1781,44 @@ function ensureInventoryTables(PDO $pdo): void {
     }
 }
 
+/**
+ * Ensure course -> material inventory mapping schema exists.
+ *
+ * When a course is created with "With Material", admins can explicitly select
+ * which inventory items (T-Shirts / Books) belong to that course.
+ *
+ * This lets dispatching match the course configuration instead of using only
+ * student attributes (uniform_size / material_language).
+ */
+function ensureCourseMaterialItemsSchema(PDO $pdo): void {
+    if (!isSchemaFlagSet('schema_course_material_items_v1')) {
+        try {
+            // Ensure FK target exists
+            ensureInventoryTables($pdo);
+
+            // Courses table flag: when 1 => use course_material_items mapping.
+            // When 0 => legacy behavior (derive items from student attributes).
+            try {
+                $pdo->exec("ALTER TABLE courses ADD COLUMN with_material_configured TINYINT NOT NULL DEFAULT 0");
+            } catch (Exception $e) {}
+
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS course_material_items (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    course_id INT NOT NULL,
+                    material_variant ENUM('With Material','Without Material') NOT NULL DEFAULT 'With Material',
+                    inventory_item_id INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uniq_course_variant_item (course_id, material_variant, inventory_item_id),
+                    FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ");
+
+            markSchemaFlag('schema_course_material_items_v1');
+        } catch (Exception $e) {
+            error_log('[CourseMaterialSchema] ' . $e->getMessage());
+        }
+    }
+}
+
+

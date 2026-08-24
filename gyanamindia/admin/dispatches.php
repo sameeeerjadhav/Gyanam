@@ -15,6 +15,8 @@ $userName = sanitize(getUserName());
 
 // ── Auto-create / migrate tables (once, then flagged) ────────────────────────
 ensureDispatchTables($pdo);
+ensureCourseMaterialItemsSchema($pdo);
+ensureInventoryTables($pdo);
 
 // ── AJAX handlers ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -40,11 +42,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->execute([$atcId]);
                 $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-                // Get all inventory items for matching
-                $invItems = [];
+                // Load all inventory items (for legacy matching + certificates).
+                // Course-configured matching will restrict via `course_material_items`.
+                $invItemsLegacy = [];
                 try {
-                    $invItems = $pdo->query("SELECT id, item_name, category, current_stock FROM inventory_items WHERE status='Active'")->fetchAll(PDO::FETCH_ASSOC);
+                    $invItemsLegacy = $pdo->query("SELECT id, item_name, category, current_stock FROM inventory_items WHERE status='Active'")->fetchAll(PDO::FETCH_ASSOC);
                 } catch (Exception $e) {}
+
+                // Build course map (course_name -> {course_id, with_material_configured})
+                $courseNames = array_values(array_unique(array_filter(array_map(
+                    fn($x) => trim((string)($x['course'] ?? '')),
+                    $students
+                ))));
+
+                $courseMap = []; // course_name => ['course_id'=>..., 'with_material_configured'=>...]
+                if (!empty($courseNames)) {
+                    $ph = implode(',', array_fill(0, count($courseNames), '?'));
+                    $cStmt = $pdo->prepare("
+                        SELECT id, course_name, with_material_configured
+                        FROM courses
+                        WHERE course_name IN ($ph)
+                    ");
+                    $cStmt->execute($courseNames);
+                    foreach ($cStmt->fetchAll(PDO::FETCH_ASSOC) as $c) {
+                        $courseMap[(string)$c['course_name']] = [
+                            'course_id' => (int)$c['id'],
+                            'with_material_configured' => (int)($c['with_material_configured'] ?? 0),
+                        ];
+                    }
+                }
+
+                // Load mapped inventory items for configured courses only
+                $configuredCourseIds = [];
+                foreach ($courseMap as $row) {
+                    if (!empty($row['with_material_configured'])) {
+                        $configuredCourseIds[] = $row['course_id'];
+                    }
+                }
+                $configuredCourseIds = array_values(array_unique($configuredCourseIds));
+
+                $mappedInvItemsByCourseId = []; // course_id => [inventory_items...]
+                if (!empty($configuredCourseIds)) {
+                    $ph = implode(',', array_fill(0, count($configuredCourseIds), '?'));
+                    $mStmt = $pdo->prepare("
+                        SELECT cmi.course_id,
+                               ii.id as inventory_item_id,
+                               ii.item_name,
+                               ii.category,
+                               ii.current_stock
+                        FROM course_material_items cmi
+                        INNER JOIN inventory_items ii ON ii.id = cmi.inventory_item_id
+                        WHERE cmi.material_variant = 'With Material'
+                          AND cmi.course_id IN ($ph)
+                          AND ii.status = 'Active'
+                    ");
+                    $mStmt->execute($configuredCourseIds);
+                    foreach ($mStmt->fetchAll(PDO::FETCH_ASSOC) as $m) {
+                        $cid = (int)$m['course_id'];
+                        $mappedInvItemsByCourseId[$cid][] = [
+                            'id' => (int)$m['inventory_item_id'],
+                            'item_name' => $m['item_name'],
+                            'category' => $m['category'],
+                            'current_stock' => $m['current_stock'],
+                        ];
+                    }
+                }
 
                 // Get already dispatched items for these students
                 $dispatchedMap = []; // admission_id => [item_type => status]
@@ -75,6 +137,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 // Build per-student material data
                 $result = [];
                 foreach ($students as $s) {
+                    $courseName = (string)($s['course'] ?? '');
+                    $courseRow  = $courseMap[$courseName] ?? null;
+                    $isCourseConfigured = !empty($courseRow) && ((int)$courseRow['with_material_configured'] === 1);
+                    $courseIdForMapping  = !empty($courseRow) ? (int)$courseRow['course_id'] : 0;
+                    $invItemsForCourse   = $isCourseConfigured
+                        ? ($mappedInvItemsByCourseId[$courseIdForMapping] ?? [])
+                        : $invItemsLegacy;
+
                     $materials = [];
                     $studentFullyDispatched = true;
 
@@ -82,7 +152,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $isLegacyDispatched = in_array($s['id'], $legacyDispatched);
 
                     // T-Shirt material (if uniform_size is set)
-                    if (!empty($s['uniform_size'])) {
+                    $hasMappedTshirts = $isCourseConfigured
+                        ? array_reduce($invItemsForCourse, fn($carry, $it) => $carry || (($it['category'] ?? '') === 'T-Shirts'), false)
+                        : true;
+
+                    if (!empty($s['uniform_size']) && $hasMappedTshirts) {
                         $size = $s['uniform_size'];
                         $tKey = $s['id'] . '_T-Shirt_Size ' . $size;
                         $alreadyStatus = $dispatchedMap[$tKey] ?? null;
@@ -94,7 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             // Find matching inventory item
                             $matchedItem = null;
                             $matchedStock = 0;
-                            foreach ($invItems as $inv) {
+                            foreach ($invItemsForCourse as $inv) {
                                 if ($inv['category'] === 'T-Shirts' && stripos($inv['item_name'], $size) !== false) {
                                     $matchedItem = $inv;
                                     $matchedStock = (int)$inv['current_stock'];
@@ -115,7 +189,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     }
 
                     // Book material (if material_language is set)
-                    if (!empty($s['material_language'])) {
+                    $hasMappedBooks = $isCourseConfigured
+                        ? array_reduce($invItemsForCourse, fn($carry, $it) => $carry || (($it['category'] ?? '') === 'Books'), false)
+                        : true;
+
+                    if (!empty($s['material_language']) && $hasMappedBooks) {
                         $lang = $s['material_language'];
                         $bKey = $s['id'] . '_Book_' . $lang;
                         $alreadyStatus = $dispatchedMap[$bKey] ?? null;
@@ -125,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         } else {
                             $matchedItem = null;
                             $matchedStock = 0;
-                            foreach ($invItems as $inv) {
+                            foreach ($invItemsForCourse as $inv) {
                                 if ($inv['category'] === 'Books' && stripos($inv['item_name'], $lang) !== false) {
                                     $matchedItem = $inv;
                                     $matchedStock = (int)$inv['current_stock'];
@@ -151,7 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if ($certStatus !== 'Dispatched' && !($isLegacyDispatched && !$certStatus)) {
                         $matchedCert = null;
                         $matchedCertStock = 0;
-                        foreach ($invItems as $inv) {
+                        foreach ($invItemsLegacy as $inv) {
                             if ($inv['category'] === 'Certificates' && stripos($inv['item_name'], 'Course Completion') !== false) {
                                 $matchedCert = $inv;
                                 $matchedCertStock = (int)$inv['current_stock'];
