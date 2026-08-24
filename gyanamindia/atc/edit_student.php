@@ -26,7 +26,16 @@ $stmt->execute([$stuId, $atcId]);
 $stu = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$stu) { header('Location: students.php'); exit; }
 
-// Load ATC courses
+// Load ATC courses matching this center type (keep current course in the list)
+$centerType = getAtcCenterType($pdo, $atcId ? (int)$atcId : null);
+[$visSql, $visParams] = courseVisibilitySql($centerType);
+$currentCourse = trim((string)($stu['course'] ?? ''));
+$extraSql = '';
+$extraParams = [];
+if ($currentCourse !== '') {
+    $extraSql = ' OR c.course_name = ?';
+    $extraParams[] = $currentCourse;
+}
 $coursesStmt = $pdo->prepare("
     SELECT c.course_name,
            c.material_type, c.ho_share, c.ho_share_with_material, c.ho_share_without_material,
@@ -37,9 +46,10 @@ $coursesStmt = $pdo->prepare("
       AND (COALESCE(acf.fee_with_material, 0) > 0
         OR COALESCE(acf.fee_without_material, 0) > 0
         OR COALESCE(acf.final_fee, 0) > 0)
+      AND (1=1 $visSql $extraSql)
     ORDER BY c.course_name ASC
 ");
-$coursesStmt->execute([$atcId]);
+$coursesStmt->execute(array_merge([$atcId], $visParams, $extraParams));
 $atcCourseRows = $coursesStmt->fetchAll(PDO::FETCH_ASSOC);
 $atcCourses = array_column($atcCourseRows, 'course_name');
 

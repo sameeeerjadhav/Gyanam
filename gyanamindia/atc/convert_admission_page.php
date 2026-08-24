@@ -42,7 +42,9 @@ if (!$inquiry) {
     exit;
 }
 
-// Fetch active courses with dual material fees
+// Fetch active courses with dual material fees (matching center type)
+$centerType = getAtcCenterType($pdo, $atcId ? (int)$atcId : null);
+[$visSql, $visParams] = courseVisibilitySql($centerType);
 $courseStmt = $pdo->prepare("
     SELECT c.course_name, c.course_type, c.material_type, c.material_language, c.duration,
            c.ho_share, c.ho_share_with_material, c.ho_share_without_material,
@@ -55,9 +57,10 @@ $courseStmt = $pdo->prepare("
       AND (COALESCE(acf.fee_with_material, 0) > 0
         OR COALESCE(acf.fee_without_material, 0) > 0
         OR COALESCE(acf.final_fee, 0) > 0)
+      $visSql
     ORDER BY c.course_name ASC
 ");
-$courseStmt->execute([$atcId]);
+$courseStmt->execute(array_merge([$atcId], $visParams));
 $activeCourses = $courseStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $courseSelectOptions = [];

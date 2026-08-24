@@ -23,6 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         switch ($_POST['action']) {
 
             case 'add':
+                $courseType = trim($_POST['course_type'] ?? '');
+                if (!in_array($courseType, masterCourseTypes(), true)) {
+                    echo json_encode(['success' => false, 'message' => 'Select which center type can see this course (Abacus, Vedic Maths, or IT).']);
+                    exit;
+                }
                 $shareWith    = floatval($_POST['ho_share_with_material'] ?? 0);
                 $shareWithout = floatval($_POST['ho_share_without_material'] ?? 0);
                 $dlcWith      = floatval($_POST['dlc_share_with_material'] ?? 0);
@@ -39,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 ");
                 $stmt->execute([
                     trim($_POST['course_name']),
-                    trim($_POST['course_type'] ?? ''),
+                    $courseType,
                     $_POST['duration'] ?? null,
                     trim($_POST['course_content'] ?? ''),
                     $legacyShare,
@@ -56,6 +61,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
 
             case 'edit':
+                $courseType = trim($_POST['course_type'] ?? '');
+                if (!in_array($courseType, masterCourseTypes(), true)) {
+                    echo json_encode(['success' => false, 'message' => 'Select which center type can see this course (Abacus, Vedic Maths, or IT).']);
+                    exit;
+                }
                 $shareWith    = floatval($_POST['ho_share_with_material'] ?? 0);
                 $shareWithout = floatval($_POST['ho_share_without_material'] ?? 0);
                 $dlcWith      = floatval($_POST['dlc_share_with_material'] ?? 0);
@@ -78,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 ");
                 $stmt->execute([
                     trim($_POST['course_name']),
-                    trim($_POST['course_type'] ?? ''),
+                    $courseType,
                     $_POST['duration'] ?? null,
                     trim($_POST['course_content'] ?? ''),
                     $legacyShare,
@@ -649,7 +659,7 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                     <thead>
                         <tr>
                             <th>Course</th>
-                            <th>Type</th>
+                            <th>Center type</th>
                             <th>Duration</th>
                             <th>HO Share</th>
                             <th>DLC Share</th>
@@ -768,14 +778,14 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                             <input type="text" class="field-input" id="course_name" name="course_name" required maxlength="100" placeholder="e.g. Abacus Level 1, DCA, Vedic Maths">
                         </div>
                         <div>
-                            <label class="field-label" for="course_type">Course Type <span class="field-req">*</span></label>
+                            <label class="field-label" for="course_type">Visible to center type <span class="field-req">*</span></label>
                             <select class="field-select" id="course_type" name="course_type" required>
-                                <option value="">— Select Type —</option>
-                                <option value="Abacus">Abacus</option>
-                                <option value="Vedic Maths">Vedic Maths</option>
-                                <option value="IT">IT</option>
+                                <option value="">— Select center type —</option>
+                                <option value="Abacus">Abacus centers</option>
+                                <option value="Vedic Maths">Vedic Maths centers</option>
+                                <option value="IT">IT centers</option>
                             </select>
-                            <div class="field-hint">Determines which ATC centers can use this course</div>
+                            <div class="field-hint">Only ATCs of this type will see the course. Combo centers (e.g. Abacus + IT) see every type they include.</div>
                         </div>
                         <div>
                             <label class="field-label" for="duration">Duration</label>
@@ -990,7 +1000,7 @@ document.getElementById('courseForm').addEventListener('submit', async function(
     e.preventDefault();
 
     if (!document.getElementById('course_name').value.trim()) { alert('Course Name is required'); return; }
-    if (!document.getElementById('course_type').value) { alert('Course Type is required'); return; }
+    if (!document.getElementById('course_type').value) { alert('Select which center type can see this course'); return; }
     if (!document.getElementById('course_content').value.trim()) { alert('Course Content is required'); return; }
 
     // Resolve duration

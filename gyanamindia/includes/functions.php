@@ -423,6 +423,73 @@ function calculateDlcShareSummary(PDO $pdo, int $dlcId, bool $includeStudents = 
 }
 
 /**
+ * Master course types — also used as ATC center-type visibility.
+ * Combo centers (e.g. "Abacus + IT") see every listed type they include.
+ *
+ * @return list<string>
+ */
+function masterCourseTypes(): array {
+    return ['Abacus', 'Vedic Maths', 'IT'];
+}
+
+function getAtcCenterType(PDO $pdo, ?int $atcId): string {
+    if (!$atcId) {
+        return '';
+    }
+    static $cache = [];
+    if (array_key_exists($atcId, $cache)) {
+        return $cache[$atcId];
+    }
+    $st = $pdo->prepare('SELECT center_type FROM atc_centers WHERE id = ? LIMIT 1');
+    $st->execute([$atcId]);
+    $cache[$atcId] = (string)($st->fetchColumn() ?: '');
+    return $cache[$atcId];
+}
+
+/**
+ * Course types an ATC of this center_type is allowed to see.
+ *
+ * @return list<string>
+ */
+function courseTypesForCenter(?string $centerType): array {
+    $raw = strtolower(trim((string)$centerType));
+    if ($raw === '') {
+        return [];
+    }
+    $types = [];
+    if (str_contains($raw, 'abacus')) {
+        $types[] = 'Abacus';
+    }
+    if (str_contains($raw, 'vedic')) {
+        $types[] = 'Vedic Maths';
+    }
+    if (preg_match('/(^|[^a-z])it([^a-z]|$)/', $raw) || str_contains($raw, 'all three')) {
+        $types[] = 'IT';
+    }
+    return $types;
+}
+
+/**
+ * SQL fragment so ATCs only see courses for their center type.
+ * Never falls back to showing every course.
+ *
+ * @return array{0:string,1:list<string>}
+ */
+function courseVisibilitySql(?string $centerType, string $column = 'c.course_type'): array {
+    $types = courseTypesForCenter($centerType);
+    if ($types === []) {
+        return [' AND 1=0', []];
+    }
+    $ph = implode(',', array_fill(0, count($types), '?'));
+    return [" AND {$column} IN ($ph)", $types];
+}
+
+function courseIsVisibleToCenter(?string $courseType, ?string $centerType): bool {
+    $type = trim((string)$courseType);
+    return $type !== '' && in_array($type, courseTypesForCenter($centerType), true);
+}
+
+/**
  * Build With/Without course dropdown options from an ATC fee row.
  * Only includes variants where the ATC fee is > 0.
  *

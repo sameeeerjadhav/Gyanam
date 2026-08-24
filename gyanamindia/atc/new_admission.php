@@ -624,7 +624,9 @@ $telInquiries = $telStmt->fetchAll(PDO::FETCH_ASSOC);
 $pendingInquiries = array_merge($pendingInquiries, $telInquiries);
 usort($pendingInquiries, fn($a, $b) => strtotime($b['created_at']) - strtotime($a['created_at']));
 
-// Fetch Active master courses for this ATC (only courses where either material fee > 0)
+// Fetch Active master courses for this ATC (only matching center type + fee set)
+$centerType = getAtcCenterType($pdo, $atcId ? (int)$atcId : null);
+[$visSql, $visParams] = courseVisibilitySql($centerType);
 $coursesStmt = $pdo->prepare("
     SELECT c.id, c.course_name, c.course_type, c.duration,
            c.material_type, c.material_language,
@@ -638,9 +640,10 @@ $coursesStmt = $pdo->prepare("
       AND  (COALESCE(acf.fee_with_material, 0) > 0
          OR COALESCE(acf.fee_without_material, 0) > 0
          OR COALESCE(acf.final_fee, 0) > 0)
+      $visSql
     ORDER BY c.course_name ASC
 ");
-$coursesStmt->execute([$atcId]);
+$coursesStmt->execute(array_merge([$atcId], $visParams));
 $atcCourses = $coursesStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Expand into With / Without Material dropdown options

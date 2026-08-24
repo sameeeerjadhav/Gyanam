@@ -24,26 +24,7 @@ $atcStmt = $pdo->prepare("SELECT * FROM atc_centers WHERE id = ?");
 $atcStmt->execute([$atcId]);
 $atcCenter = $atcStmt->fetch(PDO::FETCH_ASSOC);
 $centerType = $atcCenter['center_type'] ?? '';
-
-// Build center-type → course_type matching logic
-// center_type can be: "Abacus", "Vedic Maths", "IT", "Abacus + IT", etc.
-function getCourseTypesForCenter(string $centerType): array {
-    $map = [
-        'Abacus'                   => ['Abacus'],
-        'Vedic Maths'              => ['Vedic Maths'],
-        'IT'                       => ['IT'],
-        'Abacus + IT'              => ['Abacus', 'IT'],
-        'IT + Abacus'              => ['Abacus', 'IT'],
-        'Abacus + Vedic Maths'     => ['Abacus', 'Vedic Maths'],
-        'Vedic Maths + Abacus'     => ['Abacus', 'Vedic Maths'],
-        'Vedic Maths + IT'         => ['Vedic Maths', 'IT'],
-        'IT + Vedic Maths'         => ['Vedic Maths', 'IT'],
-        'Abacus + Vedic Maths + IT'     => ['Abacus', 'Vedic Maths', 'IT'],
-        'All Three (IT + Abacus + Vedic Maths)' => ['Abacus', 'Vedic Maths', 'IT'],
-    ];
-    return $map[$centerType] ?? [];
-}
-$allowedTypes = getCourseTypesForCenter($centerType);
+$allowedTypes = courseTypesForCenter($centerType);
 
 // ── AJAX handlers ─────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -59,12 +40,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if ($feeWithout < 0) $feeWithout = 0;
                 $finalFee = max($feeWith, $feeWithout);
 
-                // Verify course exists and belongs to an allowed type
-                $chk = $pdo->prepare("SELECT id, course_name FROM courses WHERE id = ? AND status = 'Active'");
+                // Verify course exists, is active, and matches this ATC's center type
+                $chk = $pdo->prepare("SELECT id, course_name, course_type FROM courses WHERE id = ? AND status = 'Active'");
                 $chk->execute([$courseId]);
                 $row = $chk->fetch(PDO::FETCH_ASSOC);
                 if (!$row) {
                     echo json_encode(['success' => false, 'message' => 'Course not found or inactive']);
+                    exit;
+                }
+                if (!courseIsVisibleToCenter($row['course_type'] ?? '', $centerType)) {
+                    echo json_encode(['success' => false, 'message' => 'This course is not available for your center type.']);
                     exit;
                 }
 
@@ -100,13 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $searchTerm  = trim($_GET['search'] ?? '');
 $typeFilter  = $_GET['type'] ?? 'all';   // 'all' | 'active' | 'inactive'
 
-if (empty($allowedTypes)) {
-    // No matching center type — show all master courses
-    $allowedTypes = ['Abacus', 'Vedic Maths', 'IT'];
-}
-
-// Build placeholders
-$phList  = implode(',', array_fill(0, count($allowedTypes), '?'));
+[$visSql, $visParams] = courseVisibilitySql($centerType);
 
 $sql = "
     SELECT c.id, c.course_name, c.course_type, c.duration,
@@ -120,9 +99,9 @@ $sql = "
     FROM courses c
     LEFT JOIN atc_course_fees acf ON acf.course_id = c.id AND acf.atc_id = ?
     WHERE c.status = 'Active'
-      AND c.course_type IN ($phList)
+    $visSql
 ";
-$params = [$atcId, ...$allowedTypes];
+$params = [$atcId, ...$visParams];
 
 if ($searchTerm) {
     $sql     .= " AND c.course_name LIKE ?";
@@ -375,7 +354,7 @@ $qsSearch = $searchTerm !== '' ? '&search=' . urlencode($searchTerm) : '';
             <div class="info-banner">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                 <div class="info-banner-text">
-                    Showing courses for your centre type: <strong><?= htmlspecialchars($centerType ?: 'All') ?></strong>.
+                    Showing courses for your centre type: <strong><?= htmlspecialchars($centerType ?: 'Not set') ?></strong><?php if ($allowedTypes): ?> (<?= htmlspecialchars(implode(', ', $allowedTypes)) ?>)<?php endif; ?>.
                     Set fees for <strong>With Material</strong> and/or <strong>Without Material</strong>.
                     If either fee is <strong>&gt; ₹0</strong>, the course becomes <strong>Active</strong> and appears in admissions with both options.
                     Set both to <strong>₹0</strong> to deactivate the course for your centre.
