@@ -17,7 +17,7 @@ require_once __DIR__ . '/../assets/fpdi/fpdi_autoload.php';
 use setasign\Fpdi\Fpdi;
 
 $pdo = getDBConnection();
-$sessionRole  = $_SESSION['role'] ?? '';
+$sessionRole  = (string)(getUserRole() ?? '');
 $sessionAtcId = intval($_SESSION['atc_id'] ?? 0);
 $isSample     = isset($_GET['sample']) && (string)$_GET['sample'] === '1';
 if ($isSample && $sessionRole !== 'Admin') {
