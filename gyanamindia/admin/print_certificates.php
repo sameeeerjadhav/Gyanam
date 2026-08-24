@@ -170,7 +170,10 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
 /* Print button */
 .btn-cert { display:inline-flex;align-items:center;gap:.3rem;padding:.42rem .9rem;border-radius:8px;border:1.5px solid #a7f3d0;background:#ecfdf5;color:#065f46;font-size:.78rem;font-weight:800;text-decoration:none;transition:all .15s;white-space:nowrap }
 .btn-cert:hover { background:#d1fae5;transform:translateY(-1px);box-shadow:0 2px 8px rgba(16,185,129,.2) }
+.btn-marks { display:inline-flex;align-items:center;gap:.3rem;padding:.42rem .9rem;border-radius:8px;border:1.5px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;font-size:.78rem;font-weight:800;text-decoration:none;transition:all .15s;white-space:nowrap }
+.btn-marks:hover { background:#dbeafe;transform:translateY(-1px);box-shadow:0 2px 8px rgba(37,99,235,.2) }
 .btn-cert-disabled { display:inline-flex;align-items:center;gap:.3rem;padding:.42rem .9rem;border-radius:8px;border:1.5px solid #e5e7eb;background:#f9fafb;color:#9ca3af;font-size:.78rem;font-weight:800;cursor:not-allowed;white-space:nowrap }
+.cert-actions { display:flex;flex-direction:column;align-items:center;gap:.35rem }
 
 /* Empty */
 .empty-state { text-align:center;padding:4rem 2rem }
@@ -303,7 +306,7 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
                         <th>ATC Center</th>
                         <th>Admission Date</th>
                         <th>Exam Status</th>
-                        <th style="text-align:center">Certificate</th>
+                        <th style="text-align:center">Documents</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -358,7 +361,10 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
 
                     <!-- Certificate button -->
                     <td style="text-align:center">
+                        <div class="cert-actions">
                         <?php if ($s['exam_passed']): ?>
+                        <a href="generate_marksheet.php?reg_id=<?= urlencode($regId) ?>&preview=1"
+                           target="_blank" class="btn-marks">Print Marksheet</a>
                         <a href="generate_course_certificate.php?reg_id=<?= urlencode($regId) ?>&preview=1"
                            target="_blank" class="btn-cert">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -370,6 +376,7 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
                             Not Eligible
                         </span>
                         <?php endif; ?>
+                        </div>
                     </td>
                 </tr>
                 <?php endforeach; ?>

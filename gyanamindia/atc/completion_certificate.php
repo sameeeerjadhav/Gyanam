@@ -373,6 +373,12 @@ a.btn-generate { text-decoration:none; }
                                 else $reason = 'Pay HO share first';
                             endif;
                             ?>
+                            <div style="display:flex;flex-direction:column;gap:.35rem;align-items:flex-start">
+                            <?php if ($examPassed || ($s['exam_status'] ?? '') === 'Failed'): ?>
+                            <a class="btn-generate" href="../admin/generate_marksheet.php?reg_id=<?= urlencode($regIdForCert) ?>&preview=1" target="_blank" rel="noopener">
+                                Marksheet
+                            </a>
+                            <?php endif; ?>
                             <?php if ($ready): ?>
                             <a class="btn-generate" href="<?= htmlspecialchars($certUrl) ?>" target="_blank" rel="noopener">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
@@ -384,6 +390,7 @@ a.btn-generate { text-decoration:none; }
                                 View Certificate
                             </span>
                             <?php endif; ?>
+                            </div>
                         </td>
                     </tr>
                     <?php endforeach; ?>
