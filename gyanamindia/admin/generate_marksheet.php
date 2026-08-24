@@ -213,164 +213,197 @@ $pdf->AddPage('P', 'A4');
 
 $W = 210.0;
 $H = 297.0;
-$margin = 10.0;
-$x = $margin + 4.0;
-$y = $margin + 3.0;
-$tw = $W - 2 * $margin - 8.0;
-$borderX = $margin;
-$borderY = $margin;
-$borderW = $W - 2 * $margin;
-$borderH = $H - 2 * $margin;
+$pad = 8.0;
+$x = $pad;
+$tw = $W - 2 * $pad;
+$top = $pad;
+$bottom = $H - $pad;
 
+// Outer border flush to content area (MCCE-style single frame)
 $pdf->SetDrawColor(0, 0, 0);
-$pdf->SetLineWidth(0.45);
-$pdf->Rect($borderX, $borderY, $borderW, $borderH);
-$pdf->SetLineWidth(0.2);
-$pdf->Rect($borderX + 1.6, $borderY + 1.6, $borderW - 3.2, $borderH - 3.2);
+$pdf->SetLineWidth(0.4);
+$pdf->Rect($pad, $pad, $tw, $bottom - $top);
 
-$innerBottom = $borderY + $borderH - 4.0;
+$cell = function (
+    float $cx, float $cy, float $cw, float $ch, string $text, bool $fill,
+    string $align = 'C', float $size = 9, string $style = '', bool $wrap = false
+) use ($pdf) {
+    if ($fill) {
+        $pdf->SetFillColor(210, 210, 210);
+    }
+    $pdf->SetDrawColor(0, 0, 0);
+    $pdf->SetLineWidth(0.25);
+    $pdf->Rect($cx, $cy, $cw, $ch, $fill ? 'DF' : 'D');
+    $pdf->SetTextColor(0, 0, 0);
+    $pdf->SetFont('Helvetica', $style, $size);
+    $lineH = max(3.5, $size * 0.42);
+    if ($wrap) {
+        $pdf->SetXY($cx + 1.2, $cy + 1.6);
+        $pdf->MultiCell($cw - 2.4, $lineH, $text, 0, $align);
+        return;
+    }
+    $pdf->SetXY($cx + 1.0, $cy + ($ch - $lineH) / 2);
+    $pdf->Cell($cw - 2.0, $lineH, $text, 0, 0, $align);
+};
 
-// Top org line
-$pdf->SetFont('Helvetica', 'B', 13);
+// ── Fixed heights that must always fit ──────────────────────────────────────
+$headerTopH   = 8.0;   // GYANAM INDIA… line
+$headerBodyH  = 34.0;  // logo + MSME / org / ISO
+$barH         = 11.0;
+$legHdrH      = 12.0;
+$legValH      = 14.0;
+$legendTotal  = $legHdrH + $legValH;
+
+// Everything between title bar and grade legend stretches to fill the page
+$gridStart = $top + $headerTopH + $headerBodyH + $barH;
+$gridEnd   = $bottom - $legendTotal;
+$stretchH  = max(120.0, $gridEnd - $gridStart);
+
+// Proportional slots (weights sum to 1.0)
+$wMetaHdr = 0.08;
+$wMetaVal = 0.09;
+$wRow     = 0.10; // ×3 student / ATC / course
+$wContent = 0.18;
+$wMarksHd = 0.09;
+$wMarksBd = 0.26; // ×2 max + obtained (shared via body)
+
+$metaHdrH   = $stretchH * $wMetaHdr;
+$metaValH   = $stretchH * $wMetaVal;
+$rowH       = $stretchH * $wRow;
+$contentH   = $stretchH * $wContent;
+$marksHdrH  = $stretchH * $wMarksHd;
+$marksBodyH = $stretchH * $wMarksBd;
+
+// Absorb rounding so bottom of marks lands exactly on legend top
+$planned = $metaHdrH + $metaValH + ($rowH * 3) + $contentH + $marksHdrH + $marksBodyH;
+$marksBodyH += ($stretchH - $planned);
+
+// ── Header ──────────────────────────────────────────────────────────────────
+$pdf->SetFont('Helvetica', 'B', 12);
 $pdf->SetTextColor(0, 0, 0);
-$pdf->SetXY($x, $y);
-$pdf->Cell($tw, 8, $headerOrg, 0, 0, 'C');
+$pdf->SetXY($x, $top + 1.5);
+$pdf->Cell($tw, 5.5, $headerOrg, 0, 0, 'C');
 
-// Logo + org block
-$logoY = $y + 10;
-$logoW = 42;
+$logoY = $top + $headerTopH;
+$logoW = 30.0;
+$logoH = 28.0;
 if (is_file($logoPath)) {
     try {
-        $pdf->Image($logoPath, $x, $logoY, $logoW);
+        $pdf->Image($logoPath, $x + 2, $logoY + 2, $logoW, $logoH);
     } catch (Exception $e) {}
 }
 
-$pdf->SetXY($x + $logoW + 8, $logoY + 4);
-$pdf->SetFont('Helvetica', '', 10);
-$pdf->Cell($tw - $logoW - 8, 6, 'Udyam (MSME) No: MH-14-0160225', 0, 2, 'L');
-$pdf->SetFont('Helvetica', 'B', 16);
-$pdf->Cell($tw - $logoW - 8, 8, $displayOrg, 0, 2, 'L');
-$pdf->SetFont('Helvetica', '', 10);
-$pdf->Cell($tw - $logoW - 8, 6, 'An ISO 9001:2015 Certified Organisation', 0, 2, 'L');
+$textX = $x + $logoW + 8;
+$textW = $tw - $logoW - 10;
+$pdf->SetXY($textX, $logoY + 4);
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell($textW, 5, 'Udyam (MSME) No: MH-14-0160225', 0, 2, 'L');
+$pdf->SetFont('Helvetica', 'B', 13);
+$pdf->MultiCell($textW, 6, $displayOrg, 0, 'L');
+$pdf->SetX($textX);
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell($textW, 5, 'An ISO 9001:2015 Certified Organisation', 0, 2, 'L');
 
-// Statement of Marks bar
-$barY = $logoY + 40;
-$barH = 12;
-$pdf->SetFillColor(220, 220, 220);
-$pdf->SetLineWidth(0.3);
+// Title bar
+$barY = $top + $headerTopH + $headerBodyH;
+$pdf->SetFillColor(210, 210, 210);
 $pdf->Rect($x, $barY, $tw, $barH, 'DF');
-$pdf->SetFont('Helvetica', 'B', 16);
-$pdf->SetXY($x, $barY + 2.5);
-$pdf->Cell($tw, 8, 'Statement of Marks', 0, 0, 'C');
+$pdf->SetFont('Helvetica', 'B', 14);
+$pdf->SetXY($x, $barY + ($barH - 6) / 2);
+$pdf->Cell($tw, 6, 'Statement of Marks', 0, 0, 'C');
 
-$cell = function (float $cx, float $cy, float $cw, float $ch, string $text, bool $fill, string $align = 'C', float $size = 9, string $style = '') use ($pdf) {
-    if ($fill) $pdf->SetFillColor(220, 220, 220);
-    $pdf->Rect($cx, $cy, $cw, $ch, $fill ? 'DF' : 'D');
-    $pdf->SetFont('Helvetica', $style, $size);
-    $lineH = $size * 0.45 + 1.2;
-    $pdf->SetXY($cx + 1.2, $cy + ($ch - $lineH) / 2);
-    $pdf->Cell($cw - 2.4, $lineH, $text, 0, 0, $align);
-};
-
+// ── Meta 4-column grid ──────────────────────────────────────────────────────
 $infoY = $barY + $barH;
 $colW = $tw / 4;
-$hdrH = 14;
-$valH = 16;
 $headers = ['Month & Year of Exam', 'Course Duration', 'Center Code', 'Student ID'];
 $values  = [$monthYear, $duration, $centerCode, $studentId];
 for ($i = 0; $i < 4; $i++) {
-    $cell($x + $i * $colW, $infoY, $colW, $hdrH, $headers[$i], true, 'C', 9, 'B');
-    $cell($x + $i * $colW, $infoY + $hdrH, $colW, $valH, $values[$i], false, 'C', 11, 'B');
+    $cell($x + $i * $colW, $infoY, $colW, $metaHdrH, $headers[$i], true, 'C', 8, 'B', true);
+    $cell($x + $i * $colW, $infoY + $metaHdrH, $colW, $metaValH, $values[$i], false, 'C', 11, 'B');
 }
 
-$rowsY = $infoY + $hdrH + $valH;
-$labelW = 62;
+// ── Student / ATC / Course rows ─────────────────────────────────────────────
+$rowsY = $infoY + $metaHdrH + $metaValH;
+$labelW = 58.0;
 $valW = $tw - $labelW;
 $infoRows = [
     ['Name of Student', $fullName],
-    ['Name of ATC (Authorized Training Center)', $atcName],
+    ["Name of ATC\n(Authorized Training Center)", $atcName],
     ['Name of the Course', $courseName],
 ];
-$rowH = 18;
 foreach ($infoRows as $i => $pair) {
     $ry = $rowsY + $i * $rowH;
-    $cell($x, $ry, $labelW, $rowH, $pair[0], true, 'L', 9, 'B');
+    $cell($x, $ry, $labelW, $rowH, $pair[0], true, 'L', 8, 'B', true);
     $cell($x + $labelW, $ry, $valW, $rowH, $pair[1], false, 'L', 11, 'B');
 }
 
-$contentY = $rowsY + count($infoRows) * $rowH;
-$legH = 14;
-$legValH = 16;
-$marksHeaderH = 16;
-$usedAbove = $contentY;
-$remaining = $innerBottom - $usedAbove - $legH - $legValH;
-$contentH = max(28.0, $remaining * 0.28);
-$marksBodyH = max(56.0, $remaining - $contentH - $marksHeaderH);
-
-$pdf->SetFillColor(220, 220, 220);
+// ── Course contents ─────────────────────────────────────────────────────────
+$contentY = $rowsY + 3 * $rowH;
+$pdf->SetFillColor(210, 210, 210);
 $pdf->Rect($x, $contentY, $labelW, $contentH, 'DF');
 $pdf->Rect($x + $labelW, $contentY, $valW, $contentH, 'D');
-$pdf->SetFont('Helvetica', 'B', 10);
-$pdf->SetXY($x + 1.5, $contentY + ($contentH - 5) / 2);
-$pdf->Cell($labelW - 3, 5, 'Course Contents', 0, 0, 'L');
-$pdf->SetFont('Helvetica', 'B', 10);
-$pdf->SetXY($x + $labelW + 2, $contentY + 4);
-$pdf->MultiCell($valW - 4, 5, $contents, 0, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->SetXY($x + 1.5, $contentY + 3);
+$pdf->MultiCell($labelW - 3, 4, "Course\nContents", 0, 'L');
+$pdf->SetFont('Helvetica', '', 10);
+$pdf->SetXY($x + $labelW + 2, $contentY + 3);
+$pdf->MultiCell($valW - 4, 4.5, $contents, 0, 'L');
 
-// Marks table + signatory
+// ── Marks + signatory ───────────────────────────────────────────────────────
 $marksY = $contentY + $contentH;
-$leftW = 124;
+$leftW = $tw * 0.68;
 $rightW = $tw - $leftW;
-$mh = $marksHeaderH;
-$rh = $marksBodyH / 2;
-$pW = 48;
-$mW = 26;
-$pctW = 28;
+$pW = $leftW * 0.38;
+$mW = $leftW * 0.18;
+$pctW = $leftW * 0.22;
 $gW = $leftW - $pW - $mW - $pctW;
+$rh = $marksBodyH / 2;
 
-$cell($x, $marksY, $pW, $mh, 'Particulars', true, 'C', 11, 'B');
-$cell($x + $pW, $marksY, $mW, $mh, 'Marks', true, 'C', 11, 'B');
-$cell($x + $pW + $mW, $marksY, $pctW, $mh, 'Percentage', true, 'C', 11, 'B');
-$cell($x + $pW + $mW + $pctW, $marksY, $gW, $mh, 'Grade', true, 'C', 11, 'B');
+$cell($x, $marksY, $pW, $marksHdrH, 'Particulars', true, 'C', 10, 'B');
+$cell($x + $pW, $marksY, $mW, $marksHdrH, 'Marks', true, 'C', 10, 'B');
+$cell($x + $pW + $mW, $marksY, $pctW, $marksHdrH, 'Percentage', true, 'C', 10, 'B');
+$cell($x + $pW + $mW + $pctW, $marksY, $gW, $marksHdrH, 'Grade', true, 'C', 10, 'B');
 
-$bodyH = $rh * 2;
-$cell($x, $marksY + $mh, $pW, $rh, 'Maximum Marks', true, 'L', 11, 'B');
-$cell($x + $pW, $marksY + $mh, $mW, $rh, '100', false, 'C', 16, 'B');
-$cell($x, $marksY + $mh + $rh, $pW, $rh, 'Marks Obtained', true, 'L', 11, 'B');
-$cell($x + $pW, $marksY + $mh + $rh, $mW, $rh, (string)$score, false, 'C', 16, 'B');
+$cell($x, $marksY + $marksHdrH, $pW, $rh, 'Maximum Marks', true, 'L', 10, 'B');
+$cell($x + $pW, $marksY + $marksHdrH, $mW, $rh, '100', false, 'C', 14, 'B');
+$cell($x, $marksY + $marksHdrH + $rh, $pW, $rh, 'Marks Obtained', true, 'L', 10, 'B');
+$cell($x + $pW, $marksY + $marksHdrH + $rh, $mW, $rh, (string)$score, false, 'C', 14, 'B');
 
-$pdf->Rect($x + $pW + $mW, $marksY + $mh, $pctW, $bodyH, 'D');
-$pdf->Rect($x + $pW + $mW + $pctW, $marksY + $mh, $gW, $bodyH, 'D');
-$pdf->SetFont('Helvetica', 'B', 22);
-$pdf->SetXY($x + $pW + $mW, $marksY + $mh + $bodyH / 2 - 6);
-$pdf->Cell($pctW, 12, (string)$score, 0, 0, 'C');
-$pdf->SetXY($x + $pW + $mW + $pctW, $marksY + $mh + $bodyH / 2 - 6);
-$pdf->Cell($gW, 12, $grade, 0, 0, 'C');
+$pdf->Rect($x + $pW + $mW, $marksY + $marksHdrH, $pctW, $marksBodyH, 'D');
+$pdf->Rect($x + $pW + $mW + $pctW, $marksY + $marksHdrH, $gW, $marksBodyH, 'D');
+$pdf->SetFont('Helvetica', 'B', 20);
+$pdf->SetXY($x + $pW + $mW, $marksY + $marksHdrH + $marksBodyH / 2 - 5);
+$pdf->Cell($pctW, 10, (string)$score, 0, 0, 'C');
+$pdf->SetXY($x + $pW + $mW + $pctW, $marksY + $marksHdrH + $marksBodyH / 2 - 5);
+$pdf->Cell($gW, 10, $grade, 0, 0, 'C');
 
 $sx = $x + $leftW;
 $sy = $marksY;
-$sh = $mh + $bodyH;
+$sh = $marksHdrH + $marksBodyH;
 $pdf->Rect($sx, $sy, $rightW, $sh, 'D');
-$stampSize = min(52.0, $rightW - 8, $sh - 22);
+
+$stampSize = min(48.0, $rightW - 10, max(28.0, $sh - 28));
+$stampTop = $sy + max(4.0, ($sh - 20 - $stampSize) / 2);
 if (is_file($stampPath)) {
     try {
-        $pdf->Image($stampPath, $sx + ($rightW - $stampSize) / 2, $sy + 6, $stampSize, $stampSize);
+        $pdf->Image($stampPath, $sx + ($rightW - $stampSize) / 2, $stampTop, $stampSize, $stampSize);
     } catch (Exception $e) {}
 }
-$pdf->SetFont('Helvetica', 'B', 8.5);
+$pdf->SetFont('Helvetica', 'B', 8);
 $pdf->SetXY($sx + 1, $sy + $sh - 14);
 $pdf->Cell($rightW - 2, 5, $signatory, 0, 0, 'C');
-$pdf->SetFont('Helvetica', '', 7.5);
+$pdf->SetFont('Helvetica', '', 7);
 $pdf->SetXY($sx + 1, $sy + $sh - 8);
-$pdf->Cell($rightW - 2, 5, 'Gyanam India Educational Services', 0, 0, 'C');
+$pdf->Cell($rightW - 2, 4.5, 'Gyanam India Educational Services', 0, 0, 'C');
 
-$legY = $marksY + $sh;
+// ── Grade legend flush to bottom border ─────────────────────────────────────
+$legY = $bottom - $legendTotal;
 $grades = ['A++', 'A+', 'A', 'B', 'C', 'Fail', 'AB'];
 $bands  = ['90 & Above', '80 to 89', '66 to 79', '55 to 65', '40 to 54', 'Below 40', 'Absent'];
 $gw = $tw / 7;
 for ($i = 0; $i < 7; $i++) {
-    $cell($x + $i * $gw, $legY, $gw, $legH, $grades[$i], true, 'C', 11, 'B');
-    $cell($x + $i * $gw, $legY + $legH, $gw, $legValH, $bands[$i], false, 'C', 9, '');
+    $cell($x + $i * $gw, $legY, $gw, $legHdrH, $grades[$i], true, 'C', 10, 'B');
+    $cell($x + $i * $gw, $legY + $legHdrH, $gw, $legValH, $bands[$i], false, 'C', 8, '');
 }
 
 $inline = isset($_GET['preview']);
