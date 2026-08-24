@@ -203,8 +203,6 @@ $signatory = $brand === 'abacus'
     ? 'Authorized Signatory For Gyanam Abacus'
     : 'Authorized Signatory For GIIT';
 
-$stampPath = __DIR__ . '/../assets/templates/gyanam_marksheet_stamp.png';
-
 $pdf = new Fpdi();
 $pdf->SetTitle('Statement of Marks — ' . $studentId);
 $pdf->SetAuthor('Gyanam India Educational Services');
@@ -382,13 +380,6 @@ $sy = $marksY;
 $sh = $marksHdrH + $marksBodyH;
 $pdf->Rect($sx, $sy, $rightW, $sh, 'D');
 
-$stampSize = min(48.0, $rightW - 10, max(28.0, $sh - 28));
-$stampTop = $sy + max(4.0, ($sh - 20 - $stampSize) / 2);
-if (is_file($stampPath)) {
-    try {
-        $pdf->Image($stampPath, $sx + ($rightW - $stampSize) / 2, $stampTop, $stampSize, $stampSize);
-    } catch (Exception $e) {}
-}
 $pdf->SetFont('Helvetica', 'B', 8);
 $pdf->SetXY($sx + 1, $sy + $sh - 14);
 $pdf->Cell($rightW - 2, 5, $signatory, 0, 0, 'C');
