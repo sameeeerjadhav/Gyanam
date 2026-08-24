@@ -194,16 +194,15 @@ if ($isSample) {
         $brand = $forceBrand;
     }
 }
-$logoPath = admissionFormBrandLogoPath($brand === 'abacus' ? 'abacus' : 'it');
-// Marksheet uses a cropped logo (no institute name / ISO text baked in)
-$markLogoFs = __DIR__ . '/../assets/templates/' . ($brand === 'abacus' ? 'abacus_marksheet_logo.png' : 'giit_marksheet_logo.png');
-if (is_file($markLogoFs)) {
-    $logoPath = $markLogoFs;
-}
-$headerOrg = 'GYANAM INDIA EDUCATIONAL SERVICES';
 $signatory = $brand === 'abacus'
     ? 'Authorized Signatory For Gyanam Abacus'
     : 'Authorized Signatory For GIIT';
+
+$headerBannerPath = __DIR__ . '/../assets/templates/giit_marksheet_header.png';
+$abacusLogoPath   = __DIR__ . '/../assets/templates/abacus_marksheet_logo.png';
+if (!is_file($abacusLogoPath)) {
+    $abacusLogoPath = admissionFormBrandLogoPath('abacus');
+}
 
 $pdf = new Fpdi();
 $pdf->SetTitle('Statement of Marks — ' . $studentId);
@@ -257,16 +256,29 @@ $cell = function (
 };
 
 $FONT = 10.0;
-$headerTopH  = 8.0;
-$headerBodyH = 48.0;
 $barH        = 11.0;
 $legHdrH     = 12.0;
 $legValH     = 14.0;
 $legendTotal = $legHdrH + $legValH;
 
-$gridStart = $top + $headerTopH + $headerBodyH + $barH;
+// Header image replaces org title + MSME text + GIIT logo
+$headerGap = 2.0;
+if ($brand === 'abacus') {
+    $headerImgW = 72.0;
+    $headerImgH = 24.0;
+    $headerImgX = $x + ($tw - $headerImgW) / 2;
+    $headerImgPath = $abacusLogoPath;
+} else {
+    $headerImgW = $tw;
+    $headerImgH = $tw * (542.0 / 1280.0); // image.png aspect
+    $headerImgX = $x;
+    $headerImgPath = $headerBannerPath;
+}
+$headerBodyH = $headerImgH + $headerGap;
+
+$gridStart = $top + $headerBodyH + $barH;
 $gridEnd   = $bottom - $legendTotal;
-$stretchH  = max(120.0, $gridEnd - $gridStart);
+$stretchH  = max(100.0, $gridEnd - $gridStart);
 
 $wMetaHdr = 0.08;
 $wMetaVal = 0.09;
@@ -289,25 +301,14 @@ $labelW = $colW;
 $valW   = $tw - $labelW;
 $pW     = $labelW;
 
-// ── Header: org title + centered full GIIT logo ─────────────────────────────
-$pdf->SetFont('Times', 'B', $FONT);
-$pdf->SetTextColor(0, 0, 0);
-$pdf->SetXY($x, $top + 1.5);
-$pdf->Cell($tw, 5.5, $headerOrg, 0, 0, 'C');
-
-$logoY = $top + $headerTopH;
-$logoW = ($brand === 'abacus') ? 72.0 : 34.0;
-$logoH = ($brand === 'abacus') ? 24.0 : 40.0;
-if (is_file($logoPath)) {
+// ── Header banner image (no separate org / MSME text) ───────────────────────
+if (is_file($headerImgPath)) {
     try {
-        $pdf->Image($logoPath, $x + ($tw - $logoW) / 2, $logoY + 0.5, $logoW, $logoH);
+        $pdf->Image($headerImgPath, $headerImgX, $top + 0.5, $headerImgW, $headerImgH);
     } catch (Exception $e) {}
 }
-$pdf->SetFont('Times', '', $FONT);
-$pdf->SetXY($x, $logoY + $logoH + 1.5);
-$pdf->Cell($tw, 4, 'Udyam (MSME) No: MH-14-0160225', 0, 0, 'C');
 
-$barY = $top + $headerTopH + $headerBodyH;
+$barY = $top + $headerBodyH;
 $pdf->SetFillColor(210, 210, 210);
 $pdf->Rect($x, $barY, $tw, $barH, 'DF');
 $pdf->SetFont('Times', 'B', $FONT);
