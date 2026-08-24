@@ -521,7 +521,17 @@ try {
                         <div style="font-weight:800;font-size:.95rem;color:var(--text)">ATC Material Requirements</div>
                         <div style="font-size:.78rem;color:var(--text-3);margin-top:.2rem">Pending kit quantities from With Material students (course mapping + stock).</div>
                     </div>
-                    <span style="background:#fff7ed;color:#9a3412;padding:.2rem .65rem;border-radius:999px;font-size:.72rem;font-weight:800"><?= count($atcMaterialReport) ?> ATC<?= count($atcMaterialReport)===1?'':'s' ?> pending</span>
+                    <div style="display:flex;align-items:center;gap:.55rem;flex-wrap:wrap">
+                        <span style="background:#fff7ed;color:#9a3412;padding:.2rem .65rem;border-radius:999px;font-size:.72rem;font-weight:800"><?= count($atcMaterialReport) ?> ATC<?= count($atcMaterialReport)===1?'':'s' ?> pending</span>
+                        <?php if (!empty($atcMaterialReport)): ?>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="exportAtcReqExcel()" title="Export Excel">
+                            Export Excel
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="exportAtcReqPdf()" title="Export PDF">
+                            Export PDF
+                        </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <?php if (empty($atcMaterialReport)): ?>
                     <div style="padding:1.25rem;color:var(--text-3);font-size:.85rem">No pending course kits. All With Material students are fully dispatched, or courses still need material items assigned.</div>
@@ -795,9 +805,73 @@ try {
     </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="../assets/js/dashboard.js"></script>
 <script>
 let studentData = []; // Stores current student material data
+const atcMaterialReportData = <?= json_encode($atcMaterialReport, JSON_UNESCAPED_UNICODE) ?>;
+
+function getAtcReqExportRows() {
+    const headers = ['ATC', 'Pending Students', 'Qty', 'Item', 'Category', 'Stock'];
+    const rows = [];
+    (atcMaterialReportData || []).forEach((ar) => {
+        const items = ar.items || [];
+        if (!items.length) {
+            rows.push([ar.atc_name || '', ar.student_count || 0, '', '', '', '']);
+            return;
+        }
+        items.forEach((it) => {
+            rows.push([
+                ar.atc_name || '',
+                ar.student_count || 0,
+                it.qty || 0,
+                it.item_name || '',
+                it.category || '',
+                it.stock ?? ''
+            ]);
+        });
+    });
+    return { headers, rows };
+}
+
+function exportAtcReqExcel() {
+    const { headers, rows } = getAtcReqExportRows();
+    if (!rows.length) { alert('No ATC material requirements to export.'); return; }
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = [{ wch: 28 }, { wch: 16 }, { wch: 8 }, { wch: 36 }, { wch: 14 }, { wch: 10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ATC Requirements');
+    XLSX.writeFile(wb, 'atc_material_requirements_' + Date.now() + '.xlsx');
+}
+
+function exportAtcReqPdf() {
+    const { headers, rows } = getAtcReqExportRows();
+    if (!rows.length) { alert('No ATC material requirements to export.'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(13);
+    doc.text('ATC Material Requirements — Gyanam India', 14, 14);
+    doc.setFontSize(9);
+    doc.text('Generated: ' + new Date().toLocaleString('en-IN') + '  |  ' + (atcMaterialReportData || []).length + ' ATC(s) pending', 14, 21);
+    doc.autoTable({
+        head: [headers],
+        body: rows,
+        startY: 26,
+        styles: { fontSize: 8, cellPadding: 2.5 },
+        headStyles: { fillColor: [249, 115, 22], textColor: 255, fontStyle: 'bold' },
+        columnStyles: {
+            0: { cellWidth: 50 },
+            1: { cellWidth: 28, halign: 'center' },
+            2: { cellWidth: 16, halign: 'center' },
+            3: { cellWidth: 80 },
+            4: { cellWidth: 30 },
+            5: { cellWidth: 20, halign: 'center' }
+        }
+    });
+    doc.save('atc_material_requirements_' + Date.now() + '.pdf');
+}
 
 function openCreateModal() { document.getElementById('createModal').classList.add('open'); }
 function openCreateModalForAtc(atcId) {
