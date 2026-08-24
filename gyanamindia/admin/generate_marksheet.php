@@ -17,28 +17,16 @@ require_once __DIR__ . '/../assets/fpdi/fpdi_autoload.php';
 use setasign\Fpdi\Fpdi;
 
 $pdo = getDBConnection();
-$regId = trim($_GET['reg_id'] ?? '');
-if (!$regId) {
-    http_response_code(400);
-    die('<b>Error:</b> Missing <code>reg_id</code> parameter.');
+$sessionRole  = $_SESSION['role'] ?? '';
+$sessionAtcId = intval($_SESSION['atc_id'] ?? 0);
+$isSample     = isset($_GET['sample']) && (string)$_GET['sample'] === '1';
+if ($isSample && $sessionRole !== 'Admin') {
+    http_response_code(403);
+    die('Sample marksheet is only available to Admin.');
 }
 
-$stmt = $pdo->prepare("
-    SELECT a.*,
-           atc.name AS atc_name, atc.city AS atc_city, atc.district AS atc_district,
-           atc.atc_code, atc.id AS atc_id, atc.center_type,
-           c.duration AS course_duration, c.course_type AS course_type,
-           c.course_content
-    FROM admissions a
-    LEFT JOIN atc_centers atc ON atc.id = a.atc_id
-    LEFT JOIN courses c ON c.course_name = a.course AND c.status = 'Active'
-    WHERE a.registration_id = ?
-    LIMIT 1
-");
-$stmt->execute([$regId]);
-$student = $stmt->fetch(PDO::FETCH_ASSOC);
-if (!$student) {
-    $stmt = $pdo->prepare("
+$loadStudentByReg = static function (PDO $pdo, string $regId): ?array {
+    $sql = "
         SELECT a.*,
                atc.name AS atc_name, atc.city AS atc_city, atc.district AS atc_district,
                atc.atc_code, atc.id AS atc_id, atc.center_type,
@@ -47,60 +35,112 @@ if (!$student) {
         FROM admissions a
         LEFT JOIN atc_centers atc ON atc.id = a.atc_id
         LEFT JOIN courses c ON c.course_name = a.course AND c.status = 'Active'
-        WHERE a.roll_no = ?
+        WHERE a.registration_id = ?
         LIMIT 1
-    ");
+    ";
+    $stmt = $pdo->prepare($sql);
     $stmt->execute([$regId]);
-    $student = $stmt->fetch(PDO::FETCH_ASSOC);
-}
-if (!$student) {
-    http_response_code(404);
-    die('<b>Error:</b> Student not found.');
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($row) return $row;
+    $sql2 = str_replace('a.registration_id = ?', 'a.roll_no = ?', $sql);
+    $stmt = $pdo->prepare($sql2);
+    $stmt->execute([$regId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+};
+
+$regId   = trim($_GET['reg_id'] ?? '');
+$student = null;
+if ($regId !== '') {
+    $student = $loadStudentByReg($pdo, $regId);
 }
 
-$sessionRole  = $_SESSION['role'] ?? '';
-$sessionAtcId = intval($_SESSION['atc_id'] ?? 0);
+if ($isSample && !$student) {
+    $sampleAtcId = (int)($_GET['atc_id'] ?? 0);
+    $atcRow = null;
+    if ($sampleAtcId > 0) {
+        $as = $pdo->prepare("SELECT id, name, city, district, atc_code, center_type FROM atc_centers WHERE id = ? LIMIT 1");
+        $as->execute([$sampleAtcId]);
+        $atcRow = $as->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+    $sampleBrand = strtolower(trim((string)($_GET['brand'] ?? 'it')));
+    $isAbacus    = $sampleBrand === 'abacus';
+    $student = [
+        'first_name'        => 'SAMPLE',
+        'middle_name'       => '',
+        'last_name'         => 'STUDENT',
+        'course'            => $isAbacus ? 'Abacus Level 1' : 'MS-CIT',
+        'course_type'       => $isAbacus ? 'Abacus' : 'IT',
+        'course_content'    => $isAbacus
+            ? 'Abacus basics, visualization, speed and accuracy drills'
+            : 'MS Office, Internet, Digital Literacy',
+        'course_duration'   => $isAbacus ? '3 Months' : '2 Months',
+        'atc_name'          => $atcRow['name'] ?? 'Sample ATC',
+        'atc_city'          => $atcRow['city'] ?? 'Pune',
+        'atc_district'      => $atcRow['district'] ?? '',
+        'atc_code'          => $atcRow['atc_code'] ?? '202600001',
+        'atc_id'            => (int)($atcRow['id'] ?? 0),
+        'center_type'       => $atcRow['center_type'] ?? ($isAbacus ? 'Abacus' : 'IT'),
+        'registration_id'   => 'SAMPLE-REG-001',
+        'roll_no'           => 'SAMPLE-001',
+    ];
+}
+
+if (!$student) {
+    http_response_code($regId === '' ? 400 : 404);
+    die($regId === '' ? '<b>Error:</b> Missing <code>reg_id</code> parameter.' : '<b>Error:</b> Student not found.');
+}
+
 if ($sessionRole === 'ATC CENTER' && intval($student['atc_id']) !== $sessionAtcId) {
     http_response_code(403);
     die('Access denied.');
 }
 
-if (!function_exists('examIntegrationReady') || !examIntegrationReady()) {
-    http_response_code(403);
-    die('<b>Marksheet not available:</b> Exam portal is not connected.');
-}
-
-$lookupId = trim((string)($student['registration_id'] ?? '')) ?: trim((string)($student['roll_no'] ?? ''));
-$exam = fetchStudentPassingExamResult($lookupId);
-if (!$exam) {
-    $res = fetchStudentExamResults($lookupId);
-    $subs = $res['success'] ? ($res['data']['submissions'] ?? []) : [];
-    $best = null;
-    foreach ($subs as $sub) {
-        if (!is_array($sub) || examSubmissionIsDemo($sub)) {
-            continue;
-        }
-        $id = trim((string)($sub['student']['identifier'] ?? ''));
-        if ($id === '') {
-            continue;
-        }
-        $rec = [
-            'identifier'   => $id,
-            'score'        => (int)($sub['score'] ?? 0),
-            'exam_date'    => date('Y-m-d', strtotime((string)($sub['submitted_at'] ?? 'now'))),
-            'exam_title'   => (string)($sub['exam_title'] ?? ($sub['exam']['title'] ?? '')),
-            'submitted_at' => $sub['submitted_at'] ?? null,
-            'result'       => strtolower((string)($sub['result'] ?? '')),
-        ];
-        if ($best === null || strtotime((string)$rec['submitted_at']) > strtotime((string)($best['submitted_at'] ?? '0'))) {
-            $best = $rec;
-        }
+$lookupId = trim((string)($student['registration_id'] ?? '')) ?: trim((string)($student['roll_no'] ?? $regId));
+$exam = null;
+if ($isSample) {
+    $exam = [
+        'identifier' => $lookupId ?: 'SAMPLE-REG-001',
+        'score'      => 82,
+        'exam_date'  => date('Y-m-d'),
+        'result'     => 'pass',
+    ];
+} else {
+    if (!function_exists('examIntegrationReady') || !examIntegrationReady()) {
+        http_response_code(403);
+        die('<b>Marksheet not available:</b> Exam portal is not connected.');
     }
-    $exam = $best;
-}
-if (!$exam) {
-    http_response_code(403);
-    die('<b>Marksheet not available:</b> No exam result found for this student.');
+    $exam = function_exists('fetchStudentPassingExamResult') ? fetchStudentPassingExamResult($lookupId) : null;
+    if (!$exam) {
+        $res = fetchStudentExamResults($lookupId);
+        $subs = $res['success'] ? ($res['data']['submissions'] ?? []) : [];
+        $best = null;
+        foreach ($subs as $sub) {
+            if (!is_array($sub) || examSubmissionIsDemo($sub)) {
+                continue;
+            }
+            $id = trim((string)($sub['student']['identifier'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            $rec = [
+                'identifier'   => $id,
+                'score'        => (int)($sub['score'] ?? 0),
+                'exam_date'    => date('Y-m-d', strtotime((string)($sub['submitted_at'] ?? 'now'))),
+                'exam_title'   => (string)($sub['exam_title'] ?? ($sub['exam']['title'] ?? '')),
+                'submitted_at' => $sub['submitted_at'] ?? null,
+                'result'       => strtolower((string)($sub['result'] ?? '')),
+            ];
+            if ($best === null || strtotime((string)$rec['submitted_at']) > strtotime((string)($best['submitted_at'] ?? '0'))) {
+                $best = $rec;
+            }
+        }
+        $exam = $best;
+    }
+    if (!$exam) {
+        http_response_code(403);
+        die('<b>Marksheet not available:</b> No exam result found for this student.');
+    }
 }
 
 $score = (int)($exam['score'] ?? 0);
@@ -148,6 +188,12 @@ $brand = courseCertificateBrand(
     $student['center_type'] ?? null,
     $courseName
 );
+if ($isSample) {
+    $forceBrand = strtolower(trim((string)($_GET['brand'] ?? '')));
+    if ($forceBrand === 'abacus' || $forceBrand === 'it') {
+        $brand = $forceBrand;
+    }
+}
 $logoPath = admissionFormBrandLogoPath($brand === 'abacus' ? 'abacus' : 'it');
 $headerOrg = 'GYANAM INDIA EDUCATIONAL SERVICES';
 $displayOrg = $brand === 'abacus'
