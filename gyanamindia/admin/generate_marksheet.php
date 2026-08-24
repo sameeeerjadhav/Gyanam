@@ -195,10 +195,12 @@ if ($isSample) {
     }
 }
 $logoPath = admissionFormBrandLogoPath($brand === 'abacus' ? 'abacus' : 'it');
+// Marksheet uses a cropped logo (no institute name / ISO text baked in)
+$markLogoFs = __DIR__ . '/../assets/templates/' . ($brand === 'abacus' ? 'abacus_marksheet_logo.png' : 'giit_marksheet_logo.png');
+if (is_file($markLogoFs)) {
+    $logoPath = $markLogoFs;
+}
 $headerOrg = 'GYANAM INDIA EDUCATIONAL SERVICES';
-$displayOrg = $brand === 'abacus'
-    ? 'Gyanam Abacus — A Unit of Gyanam India Educational Services'
-    : 'Gyanam Institute of Information Technology';
 $signatory = $brand === 'abacus'
     ? 'Authorized Signatory For Gyanam Abacus'
     : 'Authorized Signatory For GIIT';
@@ -217,7 +219,6 @@ $tw = $W - 2 * $pad;
 $top = $pad;
 $bottom = $H - $pad;
 
-// Outer border flush to content area (MCCE-style single frame)
 $pdf->SetDrawColor(0, 0, 0);
 $pdf->SetLineWidth(0.4);
 $pdf->Rect($pad, $pad, $tw, $bottom - $top);
@@ -244,26 +245,23 @@ $cell = function (
     $pdf->Cell($cw - 2.0, $lineH, $text, 0, 0, $align);
 };
 
-// ── Fixed heights that must always fit ──────────────────────────────────────
-$headerTopH   = 8.0;   // GYANAM INDIA… line
-$headerBodyH  = 34.0;  // logo + MSME / org / ISO
-$barH         = 11.0;
-$legHdrH      = 12.0;
-$legValH      = 14.0;
-$legendTotal  = $legHdrH + $legValH;
+$headerTopH  = 8.0;
+$headerBodyH = 34.0;
+$barH        = 11.0;
+$legHdrH     = 12.0;
+$legValH     = 14.0;
+$legendTotal = $legHdrH + $legValH;
 
-// Everything between title bar and grade legend stretches to fill the page
 $gridStart = $top + $headerTopH + $headerBodyH + $barH;
 $gridEnd   = $bottom - $legendTotal;
 $stretchH  = max(120.0, $gridEnd - $gridStart);
 
-// Proportional slots (weights sum to 1.0)
 $wMetaHdr = 0.08;
 $wMetaVal = 0.09;
-$wRow     = 0.10; // ×3 student / ATC / course
+$wRow     = 0.10;
 $wContent = 0.18;
 $wMarksHd = 0.09;
-$wMarksBd = 0.26; // ×2 max + obtained (shared via body)
+$wMarksBd = 0.26;
 
 $metaHdrH   = $stretchH * $wMetaHdr;
 $metaValH   = $stretchH * $wMetaVal;
@@ -271,38 +269,34 @@ $rowH       = $stretchH * $wRow;
 $contentH   = $stretchH * $wContent;
 $marksHdrH  = $stretchH * $wMarksHd;
 $marksBodyH = $stretchH * $wMarksBd;
-
-// Absorb rounding so bottom of marks lands exactly on legend top
 $planned = $metaHdrH + $metaValH + ($rowH * 3) + $contentH + $marksHdrH + $marksBodyH;
 $marksBodyH += ($stretchH - $planned);
 
-// ── Header ──────────────────────────────────────────────────────────────────
+// One shared left-column width for:
+// Month & Year of Exam | Name of Student/ATC/Course/Contents | Particulars/Maximum Marks/Marks Obtained
+$colW   = $tw / 4;
+$labelW = $colW;
+$valW   = $tw - $labelW;
+$pW     = $labelW;
+
+// ── Header: org title + centered logo only (no institute / ISO text lines) ──
 $pdf->SetFont('Helvetica', 'B', 12);
 $pdf->SetTextColor(0, 0, 0);
 $pdf->SetXY($x, $top + 1.5);
 $pdf->Cell($tw, 5.5, $headerOrg, 0, 0, 'C');
 
 $logoY = $top + $headerTopH;
-$logoW = 30.0;
-$logoH = 28.0;
+$logoW = ($brand === 'abacus') ? 70.0 : 38.0;
+$logoH = ($brand === 'abacus') ? 22.0 : 28.0;
 if (is_file($logoPath)) {
     try {
-        $pdf->Image($logoPath, $x + 2, $logoY + 2, $logoW, $logoH);
+        $pdf->Image($logoPath, $x + ($tw - $logoW) / 2, $logoY + 1, $logoW, $logoH);
     } catch (Exception $e) {}
 }
-
-$textX = $x + $logoW + 8;
-$textW = $tw - $logoW - 10;
-$pdf->SetXY($textX, $logoY + 4);
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell($textW, 5, 'Udyam (MSME) No: MH-14-0160225', 0, 2, 'L');
-$pdf->SetFont('Helvetica', 'B', 13);
-$pdf->MultiCell($textW, 6, $displayOrg, 0, 'L');
-$pdf->SetX($textX);
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell($textW, 5, 'An ISO 9001:2015 Certified Organisation', 0, 2, 'L');
+$pdf->SetXY($x, $logoY + $logoH + 2.5);
+$pdf->Cell($tw, 4, 'Udyam (MSME) No: MH-14-0160225', 0, 0, 'C');
 
-// Title bar
 $barY = $top + $headerTopH + $headerBodyH;
 $pdf->SetFillColor(210, 210, 210);
 $pdf->Rect($x, $barY, $tw, $barH, 'DF');
@@ -312,7 +306,6 @@ $pdf->Cell($tw, 6, 'Statement of Marks', 0, 0, 'C');
 
 // ── Meta 4-column grid ──────────────────────────────────────────────────────
 $infoY = $barY + $barH;
-$colW = $tw / 4;
 $headers = ['Month & Year of Exam', 'Course Duration', 'Center Code', 'Student ID'];
 $values  = [$monthYear, $duration, $centerCode, $studentId];
 for ($i = 0; $i < 4; $i++) {
@@ -320,10 +313,8 @@ for ($i = 0; $i < 4; $i++) {
     $cell($x + $i * $colW, $infoY + $metaHdrH, $colW, $metaValH, $values[$i], false, 'C', 11, 'B');
 }
 
-// ── Student / ATC / Course rows ─────────────────────────────────────────────
+// ── Student / ATC / Course (label width = Month & Year of Exam) ─────────────
 $rowsY = $infoY + $metaHdrH + $metaValH;
-$labelW = 58.0;
-$valW = $tw - $labelW;
 $infoRows = [
     ['Name of Student', $fullName],
     ["Name of ATC\n(Authorized Training Center)", $atcName],
@@ -335,7 +326,6 @@ foreach ($infoRows as $i => $pair) {
     $cell($x + $labelW, $ry, $valW, $rowH, $pair[1], false, 'L', 11, 'B');
 }
 
-// ── Course contents ─────────────────────────────────────────────────────────
 $contentY = $rowsY + 3 * $rowH;
 $pdf->SetFillColor(210, 210, 210);
 $pdf->Rect($x, $contentY, $labelW, $contentH, 'DF');
@@ -347,14 +337,14 @@ $pdf->SetFont('Helvetica', '', 10);
 $pdf->SetXY($x + $labelW + 2, $contentY + 3);
 $pdf->MultiCell($valW - 4, 4.5, $contents, 0, 'L');
 
-// ── Marks + signatory ───────────────────────────────────────────────────────
+// ── Marks: Particulars / Max / Obtained use same $pW as Month & Year ────────
 $marksY = $contentY + $contentH;
 $leftW = $tw * 0.68;
 $rightW = $tw - $leftW;
-$pW = $leftW * 0.38;
-$mW = $leftW * 0.18;
-$pctW = $leftW * 0.22;
-$gW = $leftW - $pW - $mW - $pctW;
+$restW = $leftW - $pW;
+$mW = $restW * 0.30;
+$pctW = $restW * 0.35;
+$gW = $restW - $mW - $pctW;
 $rh = $marksBodyH / 2;
 
 $cell($x, $marksY, $pW, $marksHdrH, 'Particulars', true, 'C', 10, 'B');
@@ -387,7 +377,6 @@ $pdf->SetFont('Helvetica', '', 7);
 $pdf->SetXY($sx + 1, $sy + $sh - 8);
 $pdf->Cell($rightW - 2, 4.5, 'Gyanam India Educational Services', 0, 0, 'C');
 
-// ── Grade legend flush to bottom border ─────────────────────────────────────
 $legY = $bottom - $legendTotal;
 $grades = ['A++', 'A+', 'A', 'B', 'C', 'Fail', 'AB'];
 $bands  = ['90 & Above', '80 to 89', '66 to 79', '55 to 65', '40 to 54', 'Below 40', 'Absent'];
