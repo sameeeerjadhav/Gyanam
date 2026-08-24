@@ -29,240 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $atcId = (int)$_POST['atc_id'];
                 if (!$atcId) { echo json_encode(['success' => false, 'message' => 'ATC ID required']); exit; }
 
-                // Get students who have material_type = 'With Material' and are Active
-                $stmt = $pdo->prepare("
-                    SELECT a.id, a.roll_no, a.registration_id,
-                           TRIM(CONCAT(a.first_name,' ',COALESCE(a.middle_name,''),' ',a.last_name)) AS student_name,
-                           a.course, a.uniform_size, a.material_language, a.material_type,
-                           a.admission_date
-                    FROM admissions a
-                    WHERE a.atc_id = ? AND a.status = 'Active' AND a.material_type = 'With Material'
-                    ORDER BY a.first_name ASC
-                ");
-                $stmt->execute([$atcId]);
-                $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                // Load all inventory items (for legacy matching + certificates).
-                // Course-configured matching will restrict via `course_material_items`.
-                $invItemsLegacy = [];
-                try {
-                    $invItemsLegacy = $pdo->query("SELECT id, item_name, category, current_stock FROM inventory_items WHERE status='Active'")->fetchAll(PDO::FETCH_ASSOC);
-                } catch (Exception $e) {}
-
-                // Build course map (course_name -> {course_id, with_material_configured})
-                $courseNames = array_values(array_unique(array_filter(array_map(
-                    fn($x) => trim((string)($x['course'] ?? '')),
-                    $students
-                ))));
-
-                $courseMap = []; // course_name => ['course_id'=>..., 'with_material_configured'=>...]
-                if (!empty($courseNames)) {
-                    $ph = implode(',', array_fill(0, count($courseNames), '?'));
-                    $cStmt = $pdo->prepare("
-                        SELECT id, course_name, with_material_configured
-                        FROM courses
-                        WHERE course_name IN ($ph)
-                    ");
-                    $cStmt->execute($courseNames);
-                    foreach ($cStmt->fetchAll(PDO::FETCH_ASSOC) as $c) {
-                        $courseMap[(string)$c['course_name']] = [
-                            'course_id' => (int)$c['id'],
-                            'with_material_configured' => (int)($c['with_material_configured'] ?? 0),
-                        ];
-                    }
-                }
-
-                // Load mapped inventory items for configured courses only
-                $configuredCourseIds = [];
-                foreach ($courseMap as $row) {
-                    if (!empty($row['with_material_configured'])) {
-                        $configuredCourseIds[] = $row['course_id'];
-                    }
-                }
-                $configuredCourseIds = array_values(array_unique($configuredCourseIds));
-
-                $mappedInvItemsByCourseId = []; // course_id => [inventory_items...]
-                if (!empty($configuredCourseIds)) {
-                    $ph = implode(',', array_fill(0, count($configuredCourseIds), '?'));
-                    $mStmt = $pdo->prepare("
-                        SELECT cmi.course_id,
-                               ii.id as inventory_item_id,
-                               ii.item_name,
-                               ii.category,
-                               ii.current_stock
-                        FROM course_material_items cmi
-                        INNER JOIN inventory_items ii ON ii.id = cmi.inventory_item_id
-                        WHERE cmi.material_variant = 'With Material'
-                          AND cmi.course_id IN ($ph)
-                          AND ii.status = 'Active'
-                    ");
-                    $mStmt->execute($configuredCourseIds);
-                    foreach ($mStmt->fetchAll(PDO::FETCH_ASSOC) as $m) {
-                        $cid = (int)$m['course_id'];
-                        $mappedInvItemsByCourseId[$cid][] = [
-                            'id' => (int)$m['inventory_item_id'],
-                            'item_name' => $m['item_name'],
-                            'category' => $m['category'],
-                            'current_stock' => $m['current_stock'],
-                        ];
-                    }
-                }
-
-                // Get already dispatched items for these students
-                $dispatchedMap = []; // admission_id => [item_type => status]
-                try {
-                    $admIds = array_column($students, 'id');
-                    if (!empty($admIds)) {
-                        $placeholders = implode(',', array_fill(0, count($admIds), '?'));
-                        $diStmt = $pdo->prepare("SELECT admission_id, item_type, item_detail, status FROM dispatch_items WHERE admission_id IN ($placeholders)");
-                        $diStmt->execute($admIds);
-                        foreach ($diStmt->fetchAll(PDO::FETCH_ASSOC) as $di) {
-                            $key = $di['admission_id'] . '_' . $di['item_type'] . '_' . $di['item_detail'];
-                            $dispatchedMap[$key] = $di['status'];
-                        }
-                    }
-                } catch (Exception $e) {}
-
-                // Also check legacy material_dispatch_students (old dispatches without dispatch_items)
-                $legacyDispatched = [];
-                try {
-                    if (!empty($admIds)) {
-                        $placeholders = implode(',', array_fill(0, count($admIds), '?'));
-                        $legStmt = $pdo->prepare("SELECT DISTINCT admission_id FROM material_dispatch_students WHERE admission_id IN ($placeholders)");
-                        $legStmt->execute($admIds);
-                        $legacyDispatched = $legStmt->fetchAll(PDO::FETCH_COLUMN);
-                    }
-                } catch (Exception $e) {}
-
-                // Build per-student material data
-                $result = [];
-                foreach ($students as $s) {
-                    $courseName = (string)($s['course'] ?? '');
-                    $courseRow  = $courseMap[$courseName] ?? null;
-                    $isCourseConfigured = !empty($courseRow) && ((int)$courseRow['with_material_configured'] === 1);
-                    $courseIdForMapping  = !empty($courseRow) ? (int)$courseRow['course_id'] : 0;
-                    $invItemsForCourse   = $isCourseConfigured
-                        ? ($mappedInvItemsByCourseId[$courseIdForMapping] ?? [])
-                        : $invItemsLegacy;
-
-                    $materials = [];
-                    $studentFullyDispatched = true;
-
-                    // Check if this student was dispatched via legacy system (old dispatches)
-                    $isLegacyDispatched = in_array($s['id'], $legacyDispatched);
-
-                    // T-Shirt material (if uniform_size is set)
-                    $hasMappedTshirts = $isCourseConfigured
-                        ? array_reduce($invItemsForCourse, fn($carry, $it) => $carry || (($it['category'] ?? '') === 'T-Shirts'), false)
-                        : true;
-
-                    if (!empty($s['uniform_size']) && $hasMappedTshirts) {
-                        $size = $s['uniform_size'];
-                        $tKey = $s['id'] . '_T-Shirt_Size ' . $size;
-                        $alreadyStatus = $dispatchedMap[$tKey] ?? null;
-
-                        // Skip if already dispatched
-                        if ($alreadyStatus === 'Dispatched' || ($isLegacyDispatched && !$alreadyStatus)) {
-                            // Already handled
-                        } else {
-                            // Find matching inventory item
-                            $matchedItem = null;
-                            $matchedStock = 0;
-                            foreach ($invItemsForCourse as $inv) {
-                                if ($inv['category'] === 'T-Shirts' && stripos($inv['item_name'], $size) !== false) {
-                                    $matchedItem = $inv;
-                                    $matchedStock = (int)$inv['current_stock'];
-                                    break;
-                                }
-                            }
-                            $materials[] = [
-                                'type' => 'T-Shirt',
-                                'detail' => 'Size ' . $size,
-                                'inventory_item_id' => $matchedItem ? $matchedItem['id'] : null,
-                                'inventory_item_name' => $matchedItem ? $matchedItem['item_name'] : null,
-                                'stock' => $matchedStock,
-                                'status' => $alreadyStatus === 'Pending' ? 'pending_dispatch' : ($matchedStock > 0 ? 'available' : 'out_of_stock'),
-                                'pending_dispatch_id' => $alreadyStatus === 'Pending' ? true : false
-                            ];
-                            $studentFullyDispatched = false;
-                        }
-                    }
-
-                    // Book material (if material_language is set)
-                    $hasMappedBooks = $isCourseConfigured
-                        ? array_reduce($invItemsForCourse, fn($carry, $it) => $carry || (($it['category'] ?? '') === 'Books'), false)
-                        : true;
-
-                    if (!empty($s['material_language']) && $hasMappedBooks) {
-                        $lang = $s['material_language'];
-                        $bKey = $s['id'] . '_Book_' . $lang;
-                        $alreadyStatus = $dispatchedMap[$bKey] ?? null;
-
-                        if ($alreadyStatus === 'Dispatched' || ($isLegacyDispatched && !$alreadyStatus)) {
-                            // Already handled
-                        } else {
-                            $matchedItem = null;
-                            $matchedStock = 0;
-                            foreach ($invItemsForCourse as $inv) {
-                                if ($inv['category'] === 'Books' && stripos($inv['item_name'], $lang) !== false) {
-                                    $matchedItem = $inv;
-                                    $matchedStock = (int)$inv['current_stock'];
-                                    break;
-                                }
-                            }
-                            $materials[] = [
-                                'type' => 'Book',
-                                'detail' => $lang,
-                                'inventory_item_id' => $matchedItem ? $matchedItem['id'] : null,
-                                'inventory_item_name' => $matchedItem ? $matchedItem['item_name'] : null,
-                                'stock' => $matchedStock,
-                                'status' => $alreadyStatus === 'Pending' ? 'pending_dispatch' : ($matchedStock > 0 ? 'available' : 'out_of_stock'),
-                                'pending_dispatch_id' => $alreadyStatus === 'Pending' ? true : false
-                            ];
-                            $studentFullyDispatched = false;
-                        }
-                    }
-
-                    // Certificate material (every student needs a certificate with their course)
-                    $certKey = $s['id'] . '_Certificate_' . ($s['course'] ?? 'General');
-                    $certStatus = $dispatchedMap[$certKey] ?? null;
-                    if ($certStatus !== 'Dispatched' && !($isLegacyDispatched && !$certStatus)) {
-                        $matchedCert = null;
-                        $matchedCertStock = 0;
-                        foreach ($invItemsLegacy as $inv) {
-                            if ($inv['category'] === 'Certificates' && stripos($inv['item_name'], 'Course Completion') !== false) {
-                                $matchedCert = $inv;
-                                $matchedCertStock = (int)$inv['current_stock'];
-                                break;
-                            }
-                        }
-                        $materials[] = [
-                            'type' => 'Certificate',
-                            'detail' => $s['course'] ?? 'General',
-                            'inventory_item_id' => $matchedCert ? $matchedCert['id'] : null,
-                            'inventory_item_name' => $matchedCert ? $matchedCert['item_name'] : null,
-                            'stock' => $matchedCertStock,
-                            'status' => $certStatus === 'Pending' ? 'pending_dispatch' : ($matchedCertStock > 0 ? 'available' : 'out_of_stock'),
-                            'pending_dispatch_id' => $certStatus === 'Pending' ? true : false
-                        ];
-                        $studentFullyDispatched = false;
-                    }
-
-                    // Only include students who have un-dispatched materials
-                    if (!empty($materials)) {
-                        $result[] = [
-                            'id' => $s['id'],
-                            'student_name' => $s['student_name'],
-                            'roll_no' => $s['roll_no'],
-                            'registration_id' => $s['registration_id'],
-                            'course' => $s['course'],
-                            'admission_date' => $s['admission_date'],
-                            'materials' => $materials
-                        ];
-                    }
-                }
-
-                echo json_encode(['success' => true, 'data' => $result]);
+                $pack = collectPendingAtcMaterials($pdo, $atcId);
+                echo json_encode(['success' => true, 'data' => $pack['students'], 'totals' => $pack['totals']]);
                 exit;
 
             // ── Create dispatch with per-student, per-item tracking ──
@@ -279,16 +47,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     exit;
                 }
 
-                // Validate stock for items marked as 'dispatch'
+                // Validate stock for items marked as 'dispatch' (sum qty per inventory item)
+                $needByInv = [];
                 foreach ($itemsData as $item) {
-                    if ($item['action'] === 'dispatch' && !empty($item['inventory_item_id'])) {
-                        $chk = $pdo->prepare("SELECT item_name, current_stock FROM inventory_items WHERE id = ?");
-                        $chk->execute([$item['inventory_item_id']]);
-                        $row = $chk->fetch(PDO::FETCH_ASSOC);
-                        if ($row && $row['current_stock'] < 1) {
-                            echo json_encode(['success' => false, 'message' => "Insufficient stock for \"{$row['item_name']}\". Available: {$row['current_stock']}"]);
-                            exit;
-                        }
+                    if (($item['action'] ?? '') === 'dispatch' && !empty($item['inventory_item_id'])) {
+                        $iid = (int)$item['inventory_item_id'];
+                        $needByInv[$iid] = ($needByInv[$iid] ?? 0) + 1;
+                    }
+                }
+                foreach ($needByInv as $iid => $qtyNeed) {
+                    $chk = $pdo->prepare("SELECT item_name, current_stock FROM inventory_items WHERE id = ?");
+                    $chk->execute([$iid]);
+                    $row = $chk->fetch(PDO::FETCH_ASSOC);
+                    if ($row && (int)$row['current_stock'] < $qtyNeed) {
+                        echo json_encode(['success' => false, 'message' => "Insufficient stock for \"{$row['item_name']}\". Needed: {$qtyNeed}, available: {$row['current_stock']}"]);
+                        exit;
                     }
                 }
 
@@ -538,86 +311,22 @@ try {
 $pendingItemCount = 0;
 try { $pendingItemCount = $pdo->query("SELECT COUNT(*) FROM dispatch_items WHERE status='Pending'")->fetchColumn(); } catch (Exception $e) {}
 
-// ── Stock Requirements Dashboard Data ─────────────────────────────────────
+// ── ATC-wise pending kit report + stock totals ────────────────────────────
+$atcMaterialReport = [];
 $stockRequirements = [];
 try {
-    // Get all inventory items
-    $allInv = $pdo->query("SELECT id, item_name, category, current_stock, min_stock_level FROM inventory_items WHERE status='Active' ORDER BY category, item_name")->fetchAll(PDO::FETCH_ASSOC);
-
-    // Get all un-dispatched material needs
-    // Books needed
-    $bookNeeds = $pdo->query("
-        SELECT a.material_language AS detail, COUNT(*) AS cnt
-        FROM admissions a
-        WHERE a.material_type = 'With Material' AND a.status = 'Active'
-          AND a.material_language IS NOT NULL AND a.material_language != ''
-          AND CONCAT(a.id, '_Book_', a.material_language) NOT IN (
-              SELECT CONCAT(di.admission_id, '_', di.item_type, '_', di.item_detail)
-              FROM dispatch_items di WHERE di.item_type = 'Book' AND di.status = 'Dispatched'
-          )
-          AND a.id NOT IN (SELECT DISTINCT admission_id FROM material_dispatch_students)
-        GROUP BY a.material_language
-    ")->fetchAll(PDO::FETCH_ASSOC);
-
-    // T-Shirts needed
-    $tshirtNeeds = $pdo->query("
-        SELECT CONCAT('Size ', a.uniform_size) AS detail, COUNT(*) AS cnt
-        FROM admissions a
-        WHERE a.material_type = 'With Material' AND a.status = 'Active'
-          AND a.uniform_size IS NOT NULL AND a.uniform_size != ''
-          AND CONCAT(a.id, '_T-Shirt_Size ', a.uniform_size) NOT IN (
-              SELECT CONCAT(di.admission_id, '_', di.item_type, '_', di.item_detail)
-              FROM dispatch_items di WHERE di.item_type = 'T-Shirt' AND di.status = 'Dispatched'
-          )
-          AND a.id NOT IN (SELECT DISTINCT admission_id FROM material_dispatch_students)
-        GROUP BY a.uniform_size
-    ")->fetchAll(PDO::FETCH_ASSOC);
-
-    // Certificates needed (every student with material)
-    $certNeeds = $pdo->query("
-        SELECT COALESCE(a.course, 'General') AS detail, COUNT(*) AS cnt
-        FROM admissions a
-        WHERE a.material_type = 'With Material' AND a.status = 'Active'
-          AND CONCAT(a.id, '_Certificate_', COALESCE(a.course, 'General')) NOT IN (
-              SELECT CONCAT(di.admission_id, '_', di.item_type, '_', di.item_detail)
-              FROM dispatch_items di WHERE di.item_type = 'Certificate' AND di.status = 'Dispatched'
-          )
-          AND a.id NOT IN (SELECT DISTINCT admission_id FROM material_dispatch_students)
-        GROUP BY a.course
-    ")->fetchAll(PDO::FETCH_ASSOC);
-
-    // Build needs map: item_name => needed_count
+    $atcMaterialReport = buildAtcMaterialRequirementReport($pdo);
+    $allInv = $pdo->query("SELECT id, item_name, category, current_stock, min_stock_level FROM inventory_items WHERE status='Active'")->fetchAll(PDO::FETCH_ASSOC);
     $needsMap = [];
-    foreach ($bookNeeds as $b) {
-        foreach ($allInv as $inv) {
-            if ($inv['category'] === 'Books' && stripos($inv['item_name'], $b['detail']) !== false) {
-                $needsMap[$inv['id']] = ($needsMap[$inv['id']] ?? 0) + (int)$b['cnt'];
-                break;
-            }
+    foreach ($atcMaterialReport as $row) {
+        foreach ($row['items'] as $it) {
+            $iid = (int)($it['inventory_item_id'] ?? 0);
+            $key = $iid > 0 ? $iid : ('n:' . $it['item_name']);
+            $needsMap[$key] = ($needsMap[$key] ?? 0) + (int)$it['qty'];
         }
     }
-    foreach ($tshirtNeeds as $t) {
-        $sz = str_replace('Size ', '', $t['detail']);
-        foreach ($allInv as $inv) {
-            if ($inv['category'] === 'T-Shirts' && stripos($inv['item_name'], $sz) !== false) {
-                $needsMap[$inv['id']] = ($needsMap[$inv['id']] ?? 0) + (int)$t['cnt'];
-                break;
-            }
-        }
-    }
-    // All certs map to Course Completion Certificate item
-    $totalCertNeed = 0;
-    foreach ($certNeeds as $c) $totalCertNeed += (int)$c['cnt'];
     foreach ($allInv as $inv) {
-        if ($inv['category'] === 'Certificates' && stripos($inv['item_name'], 'Course Completion') !== false) {
-            $needsMap[$inv['id']] = ($needsMap[$inv['id']] ?? 0) + $totalCertNeed;
-            break;
-        }
-    }
-
-    // Build final stock requirements array
-    foreach ($allInv as $inv) {
-        $needed = $needsMap[$inv['id']] ?? 0;
+        $needed = $needsMap[(int)$inv['id']] ?? 0;
         $stock = (int)$inv['current_stock'];
         $deficit = $stock - $needed;
         if ($needed > 0 || $stock > 0) {
@@ -633,7 +342,7 @@ try {
         }
     }
 } catch (Exception $e) {
-    // Stock dashboard is non-critical, silently fail
+    error_log('[DispatchReport] ' . $e->getMessage());
 }
 ?>
 <!DOCTYPE html>
@@ -702,6 +411,10 @@ try {
     .items-pill { padding: .2rem .55rem; border-radius: 6px; font-size: .7rem; font-weight: 700; }
     .items-pill.green { background: var(--emerald-soft); color: var(--emerald-dark); }
     .items-pill.amber { background: var(--amber-soft); color: var(--amber-dark); }
+    .req-chip { display:inline-flex; align-items:center; gap:.35rem; padding:.28rem .65rem; border-radius:8px; font-size:.75rem; font-weight:700; border:1px solid var(--border); background:#f8fafc; }
+    .req-chip .qty { font-family: var(--mono); font-weight:800; color: var(--brand); }
+    .atc-req-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+    .atc-totals { margin:.65rem 0 0; display:flex; flex-wrap:wrap; gap:.45rem; padding:.75rem .85rem; border:1.5px dashed var(--border); border-radius:12px; background:var(--surface-2); }
     /* Modal */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 1000; }
     .modal-overlay.open { display: flex; }
@@ -799,6 +512,54 @@ try {
                     <div class="kpi-val"><?= $kpiDelivered ?></div>
                     <div class="kpi-lbl">Delivered</div>
                 </div>
+            </div>
+
+            <!-- ATC-wise material need report -->
+            <div class="section-card" style="margin-bottom:1.5rem;border-left:4px solid #f97316">
+                <div style="padding:1rem 1.25rem;border-bottom:1.5px solid var(--border);background:var(--surface-2);display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+                    <div>
+                        <div style="font-weight:800;font-size:.95rem;color:var(--text)">ATC Material Requirements</div>
+                        <div style="font-size:.78rem;color:var(--text-3);margin-top:.2rem">Pending kit quantities from With Material students (course mapping + stock).</div>
+                    </div>
+                    <span style="background:#fff7ed;color:#9a3412;padding:.2rem .65rem;border-radius:999px;font-size:.72rem;font-weight:800"><?= count($atcMaterialReport) ?> ATC<?= count($atcMaterialReport)===1?'':'s' ?> pending</span>
+                </div>
+                <?php if (empty($atcMaterialReport)): ?>
+                    <div style="padding:1.25rem;color:var(--text-3);font-size:.85rem">No pending course kits. All With Material students are fully dispatched, or courses still need material items assigned.</div>
+                <?php else: ?>
+                    <div style="overflow-x:auto">
+                    <table class="tbl">
+                        <thead>
+                            <tr>
+                                <th>ATC</th>
+                                <th>Pending students</th>
+                                <th>Required materials</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($atcMaterialReport as $ar): ?>
+                            <tr>
+                                <td style="font-weight:800;color:var(--text)"><?= htmlspecialchars($ar['atc_name']) ?></td>
+                                <td style="font-family:var(--mono);font-weight:700"><?= (int)$ar['student_count'] ?></td>
+                                <td>
+                                    <div class="items-pills">
+                                        <?php foreach ($ar['items'] as $it): ?>
+                                            <span class="req-chip" title="<?= htmlspecialchars($it['category']) ?> · stock <?= (int)$it['stock'] ?>">
+                                                <span class="qty"><?= (int)$it['qty'] ?>×</span>
+                                                <?= htmlspecialchars($it['item_name']) ?>
+                                            </span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-primary btn-sm" onclick="openCreateModalForAtc(<?= (int)$ar['atc_id'] ?>)">Dispatch</button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    </div>
+                <?php endif; ?>
             </div>
 
             <!-- Stock Requirements Dashboard -->
@@ -1039,7 +800,25 @@ try {
 let studentData = []; // Stores current student material data
 
 function openCreateModal() { document.getElementById('createModal').classList.add('open'); }
+function openCreateModalForAtc(atcId) {
+    document.getElementById('mdAtc').value = String(atcId);
+    openCreateModal();
+    loadStudentMaterials();
+}
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function materialIcon(type) {
+    if (type === 'T-Shirt') return '👕';
+    if (type === 'Certificate') return '📜';
+    if (type === 'Book') return '📚';
+    return '📦';
+}
+
+function renderAtcTotals(totals) {
+    if (!totals || !totals.length) return '';
+    let chips = totals.map(t => `<span class="req-chip"><span class="qty">${t.qty}×</span> ${t.item_name}</span>`).join('');
+    return `<div class="atc-totals"><strong style="font-size:.75rem;color:var(--text-3);width:100%">This ATC needs</strong>${chips}</div>`;
+}
 
 // ── Load student materials for selected ATC ──
 async function loadStudentMaterials() {
@@ -1074,15 +853,16 @@ async function loadStudentMaterials() {
         
         studentData = data.data;
         actions.style.display = 'flex';
-        renderStudentMaterials();
+        renderStudentMaterials(data.totals || []);
     } catch(e) {
         list.innerHTML = '<div class="alert-empty">Error loading data. Please try again.</div>';
     }
 }
 
-function renderStudentMaterials() {
+function renderStudentMaterials(totals) {
+    totals = totals || [];
     const list = document.getElementById('studentMaterialList');
-    let html = '';
+    let html = renderAtcTotals(totals);
     
     studentData.forEach((s, si) => {
         html += `<div class="stu-card">
@@ -1096,7 +876,7 @@ function renderStudentMaterials() {
             <div class="stu-items">`;
         
         s.materials.forEach((m, mi) => {
-            const icon = m.type === 'T-Shirt' ? '👕' : (m.type === 'Certificate' ? '📜' : '📚');
+            const icon = materialIcon(m.type);
             let stockClass = 'available';
             let stockLabel = `Stock: ${m.stock}`;
             let checked = 'checked';
