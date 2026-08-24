@@ -573,7 +573,7 @@ try {
                     </div>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--text-3);transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
-                <div id="stockDash" style="overflow-x:auto">
+                <div id="stockDash" style="overflow-x:auto;display:none">
                     <table class="tbl" style="font-size:.82rem">
                         <thead>
                             <tr>
