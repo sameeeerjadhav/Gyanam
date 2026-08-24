@@ -270,8 +270,8 @@ $materialOption = $isEdit
     <style>
         :root { --font: 'Sora', sans-serif; }
         .page-content { padding: 1.75rem 2rem; width: 100%; box-sizing: border-box; }
-        .form-wrap { max-width: 980px; }
-        .card { background:#fff;border:1.5px solid var(--border-color);border-radius:18px; padding:1.25rem 1.5rem; box-shadow:0 4px 12px rgba(0,0,0,.04); }
+        .form-wrap { width: 100%; max-width: none; }
+        .card { width: 100%; box-sizing: border-box; background:#fff;border:1.5px solid var(--border-color);border-radius:18px; padding:1.25rem 1.5rem; box-shadow:0 4px 12px rgba(0,0,0,.04); }
         .card + .card { margin-top: 1.2rem; }
         .card-title { font-size:.85rem;font-weight:900;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.85rem; }
         .field-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -303,6 +303,10 @@ $materialOption = $isEdit
         .modal-close:hover { background:#f3f4f6; }
         .modal-body { padding: 1rem 1.05rem 1.25rem; }
         .modal-footer { padding: .95rem 1.05rem; border-top:1.5px solid var(--border-color); display:flex; justify-content:flex-end; gap:.8rem; }
+        @media (max-width: 720px) {
+            .field-grid { grid-template-columns: 1fr; }
+            .page-content { padding: 1.1rem 1rem; }
+        }
     </style>
 </head>
 <body>
