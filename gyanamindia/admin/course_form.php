@@ -287,6 +287,7 @@ $materialOption = $isEdit
     <link rel="stylesheet" href="../assets/css/notifications.css">
     <style>
         :root { --font: 'Sora', sans-serif; }
+        body, button, input, select, textarea { font-family: var(--font); }
         .page-content { padding: 1.75rem 2rem; width: 100%; box-sizing: border-box; }
         .form-wrap { width: 100%; max-width: none; }
         .card { width: 100%; box-sizing: border-box; background:#fff;border:1.5px solid var(--border-color);border-radius:18px; padding:1.25rem 1.5rem; box-shadow:0 4px 12px rgba(0,0,0,.04); }
@@ -317,7 +318,50 @@ $materialOption = $isEdit
         .item-check .nm { font-weight:850; font-size:.86rem; color:#111827; }
         .item-check .st { font-size:.74rem; color:var(--text-secondary); }
         .btn-row { display:flex; justify-content:flex-end; gap:.8rem; margin-top: 1.1rem; flex-wrap:wrap; }
-        .btn-secondary { background:#fff; border:1.5px solid var(--border-color); color:var(--text-primary); }
+        .btn-primary,
+        .btn-secondary {
+            min-width: 126px;
+            height: 42px;
+            padding: 0 1.15rem;
+            border-radius: 10px;
+            font-size: .84rem;
+            font-weight: 700;
+            font-family: inherit;
+            letter-spacing: .01em;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .4rem;
+            text-decoration: none;
+            transition: all .2s ease;
+            box-sizing: border-box;
+        }
+        .btn-secondary {
+            border: 1.5px solid #e5e7eb;
+            background: #f8fafc;
+            color: #374151;
+        }
+        .btn-secondary:hover {
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+        }
+        .btn-primary {
+            border: 1.5px solid #3730a3;
+            background: linear-gradient(135deg, #4361ee, #3730a3);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(67, 97, 238, .25);
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(67, 97, 238, .32);
+        }
+        .btn-primary:disabled {
+            opacity: .75;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
         .error-banner { background:#fef2f2; border:1.5px solid #fecaca; color:#991b1b; padding:.85rem 1rem; border-radius:14px; margin-bottom:1rem; }
         .modal-overlay { position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(2,6,23,.55); display:none; align-items:center; justify-content:center; z-index: 999; padding: 1.2rem; }
         .modal-overlay.active { display:flex; }
@@ -744,6 +788,7 @@ $materialOption = $isEdit
     });
 
 </script>
+<script src="../assets/js/dashboard.js"></script>
 
 </body>
 </html>
