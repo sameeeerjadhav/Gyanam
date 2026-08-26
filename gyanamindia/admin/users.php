@@ -562,10 +562,10 @@ $activeCount = $pdo->query("SELECT COUNT(*) FROM users WHERE status = 'Active'")
                         <p class="page-header-subtitle">Manage system users, roles &amp; access control</p>
                     </div>
                 </div>
-                <button class="btn-add-user" onclick="openAddModal()">
+                <a class="btn-add-user" href="user_form.php" style="text-decoration:none">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Add User
-                </button>
+                </a>
             </div>
 
             <!-- KPI cards -->
@@ -1098,6 +1098,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key !== 'Escape') return;
         document.querySelectorAll('.modal-overlay.active, .confirm-overlay.active').forEach(el => el.classList.remove('active'));
     });
+
+    if (new URLSearchParams(location.search).get('created') === '1') {
+        showToast('User created successfully', 'success');
+        history.replaceState({}, '', 'users.php' + location.search.replace(/([?&])created=1&?/, '$1').replace(/[?&]$/, ''));
+    }
 });
 
 // CSS spin keyframe (referenced in setLoading)
