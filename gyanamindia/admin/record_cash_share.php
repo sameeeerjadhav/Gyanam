@@ -109,7 +109,7 @@ if ($selAtcId > 0) {
 <link rel="stylesheet" href="../assets/css/notifications.css">
 <style>
 :root { --font:'Sora',sans-serif; --mono:'JetBrains Mono',monospace; }
-.cash-page { padding:1.5rem 2rem; max-width:1100px; }
+.cash-page { padding:1.5rem 2rem; max-width:none; width:100%; }
 .cash-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:14px; padding:1.25rem 1.4rem; margin-bottom:1.25rem; }
 .cash-card h3 { margin:0 0 .85rem; font-size:1rem; font-weight:800; }
 .cash-alert { padding:.85rem 1rem; border-radius:10px; margin-bottom:1rem; font-size:.88rem; font-weight:600; }
