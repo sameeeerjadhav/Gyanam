@@ -1055,7 +1055,7 @@ function ensureHoShareSnapshotColumn(PDO $pdo): void {
  * Ensure share payment schema: Failed/Cancelled statuses + admissions.ho_share_paid flag.
  */
 function ensureSharePaymentSchema(PDO $pdo): void {
-    if (isSchemaFlagSet('schema_share_payment_flow_v1')) {
+    if (isSchemaFlagSet('schema_share_payment_flow_v2')) {
         return;
     }
     try {
@@ -1074,6 +1074,20 @@ function ensureSharePaymentSchema(PDO $pdo): void {
             }
         } catch (Exception $e) {}
 
+        // Offline / cash recording fields
+        try {
+            $cols = $pdo->query("SHOW COLUMNS FROM share_payments LIKE 'payment_mode'")->fetch();
+            if (!$cols) {
+                $pdo->exec("ALTER TABLE share_payments ADD COLUMN payment_mode VARCHAR(32) NOT NULL DEFAULT 'Online' AFTER status");
+            }
+        } catch (Exception $e) {}
+        try {
+            $cols = $pdo->query("SHOW COLUMNS FROM share_payments LIKE 'remarks'")->fetch();
+            if (!$cols) {
+                $pdo->exec("ALTER TABLE share_payments ADD COLUMN remarks VARCHAR(500) DEFAULT NULL AFTER failure_reason");
+            }
+        } catch (Exception $e) {}
+
         // Denormalized paid flag on admissions
         try {
             $cols = $pdo->query("SHOW COLUMNS FROM admissions LIKE 'ho_share_paid'")->fetch();
@@ -1089,12 +1103,264 @@ function ensureSharePaymentSchema(PDO $pdo): void {
         } catch (Exception $e) {}
 
         markSchemaFlag('schema_share_payment_flow_v1');
+        markSchemaFlag('schema_share_payment_flow_v2');
         // Clear conflicting "missing" probe flags from older code
         @unlink(schemaFlagPath('schema_ho_share_paid_missing'));
         markSchemaFlag('schema_ho_share_paid_col');
     } catch (Exception $e) {
         error_log('ensureSharePaymentSchema: ' . $e->getMessage());
     }
+}
+
+/**
+ * Build course → HO share amount map (with/without material keys).
+ * @return array{map: array<string,float>, default: float}
+ */
+function buildHoShareAmountMap(PDO $pdo, ?int $atcId = null): array {
+    ensureDualMaterialCourseSchema($pdo);
+    $normalizedShareMap = [];
+    $defaultShareAmount = 0.0;
+
+    $rows = [];
+    try {
+        if ($atcId) {
+            $shareStmt = $pdo->prepare("
+                SELECT DISTINCT c.course_name,
+                       c.ho_share, c.ho_share_with_material, c.ho_share_without_material, c.material_type
+                FROM courses c
+                WHERE c.status = 'Active'
+                  AND EXISTS (
+                      SELECT 1 FROM atc_course_fees acf
+                      WHERE acf.course_id = c.id AND acf.atc_id = ?
+                  )
+                ORDER BY c.course_name ASC
+            ");
+            $shareStmt->execute([$atcId]);
+            $rows = $shareStmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+        if (empty($rows)) {
+            $rows = $pdo->query("
+                SELECT course_name, ho_share, ho_share_with_material, ho_share_without_material, material_type
+                FROM courses WHERE status = 'Active' ORDER BY course_name ASC
+            ")->fetchAll(PDO::FETCH_ASSOC);
+        }
+    } catch (Exception $e) {
+        try {
+            $rows = $pdo->query("SELECT course_name, ho_share FROM courses WHERE status = 'Active'")->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e2) {
+            $rows = [];
+        }
+    }
+
+    foreach ($rows as $row) {
+        $name = trim((string)($row['course_name'] ?? ''));
+        if ($name === '') continue;
+        $with    = max(0, (float)($row['ho_share_with_material'] ?? 0));
+        $without = max(0, (float)($row['ho_share_without_material'] ?? 0));
+        $legacy  = max(0, (float)($row['ho_share'] ?? 0));
+        if ($with <= 0 && $without <= 0 && $legacy > 0) {
+            if (($row['material_type'] ?? '') === 'With Material') $with = $legacy;
+            else $without = $legacy;
+        }
+        $displayShare = $without > 0 ? $without : $with;
+        $key = mb_strtolower($name);
+        $normalizedShareMap[$key] = $displayShare;
+        $normalizedShareMap[$key . '|with material']    = $with > 0 ? $with : $displayShare;
+        $normalizedShareMap[$key . '|without material'] = $without > 0 ? $without : $displayShare;
+        if ($key === 'other') {
+            $defaultShareAmount = $displayShare;
+        }
+    }
+
+    return ['map' => $normalizedShareMap, 'default' => $defaultShareAmount];
+}
+
+/**
+ * Resolve HO share for one admission (snapshot preferred).
+ */
+function resolveAdmissionHoShareAmount(
+    string $courseName,
+    array $normalizedShareMap,
+    float $defaultShareAmount,
+    $snapshot = null,
+    ?string $materialType = null
+): float {
+    if ($snapshot !== null && (float)$snapshot > 0) {
+        return (float)$snapshot;
+    }
+    $key = mb_strtolower(trim($courseName));
+    if ($materialType) {
+        $matKey = $key . '|' . mb_strtolower(trim($materialType));
+        if ($matKey !== '' && array_key_exists($matKey, $normalizedShareMap)) {
+            return (float)$normalizedShareMap[$matKey];
+        }
+    }
+    if ($key !== '' && array_key_exists($key, $normalizedShareMap)) {
+        return (float)$normalizedShareMap[$key];
+    }
+    return (float)$defaultShareAmount;
+}
+
+/**
+ * Admin: record an offline (cash/bank/UPI) HO share payment for selected admissions.
+ *
+ * @param int[] $admissionIds
+ * @return array{success:bool,message:string,payment_id?:int}
+ */
+function recordOfflineSharePayment(
+    PDO $pdo,
+    int $atcId,
+    array $admissionIds,
+    string $paymentMode = 'Cash',
+    ?string $referenceNo = null,
+    ?string $remarks = null,
+    ?string $paidAt = null
+): array {
+    ensureSharePaymentSchema($pdo);
+
+    $allowedModes = ['Cash', 'Bank Transfer', 'UPI', 'Cheque'];
+    if (!in_array($paymentMode, $allowedModes, true)) {
+        $paymentMode = 'Cash';
+    }
+
+    $admissionIds = array_values(array_unique(array_map('intval', $admissionIds)));
+    $admissionIds = array_values(array_filter($admissionIds, fn($id) => $id > 0));
+    if ($atcId <= 0 || empty($admissionIds)) {
+        return ['success' => false, 'message' => 'Select an ATC and at least one unpaid student.'];
+    }
+
+    // Already-paid admissions for this ATC
+    $paidMap = [];
+    try {
+        $sp = $pdo->prepare("SELECT student_ids FROM share_payments WHERE atc_id = ? AND status = 'Completed'");
+        $sp->execute([$atcId]);
+        foreach ($sp->fetchAll(PDO::FETCH_COLUMN) as $json) {
+            $ids = json_decode((string)$json, true);
+            if (is_array($ids)) {
+                foreach ($ids as $id) {
+                    $paidMap[(int)$id] = true;
+                }
+            }
+        }
+    } catch (Exception $e) {}
+
+    $sharePack = buildHoShareAmountMap($pdo, $atcId);
+    $map = $sharePack['map'];
+    $defaultShare = $sharePack['default'];
+
+    $placeholders = implode(',', array_fill(0, count($admissionIds), '?'));
+    $stmt = $pdo->prepare("
+        SELECT id, course, material_type, COALESCE(ho_share_snapshot, 0) AS ho_share_snapshot
+        FROM admissions
+        WHERE atc_id = ? AND status = 'Active' AND id IN ($placeholders)
+    ");
+    $stmt->execute(array_merge([$atcId], $admissionIds));
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (count($rows) !== count($admissionIds)) {
+        return ['success' => false, 'message' => 'One or more students are invalid for this ATC.'];
+    }
+
+    $validIds = [];
+    $totalShare = 0.0;
+    foreach ($rows as $row) {
+        $id = (int)$row['id'];
+        if (isset($paidMap[$id])) {
+            return ['success' => false, 'message' => 'Student admission #' . $id . ' is already share-paid.'];
+        }
+        $snap = ((float)$row['ho_share_snapshot'] > 0) ? (float)$row['ho_share_snapshot'] : null;
+        $amt = resolveAdmissionHoShareAmount(
+            (string)$row['course'],
+            $map,
+            $defaultShare,
+            $snap,
+            $row['material_type'] ?? null
+        );
+        $totalShare += $amt;
+        $validIds[] = $id;
+    }
+
+    if ($totalShare <= 0) {
+        return ['success' => false, 'message' => 'Total share amount must be greater than zero.'];
+    }
+
+    $refNote = trim((string)$referenceNo);
+    $remarkText = trim((string)$remarks);
+    $parts = array_filter([
+        $paymentMode . ' (offline)',
+        $refNote !== '' ? 'Ref: ' . $refNote : null,
+        $remarkText !== '' ? $remarkText : null,
+    ]);
+    $combinedRemarks = implode(' · ', $parts);
+
+    $paidAtSql = null;
+    if ($paidAt && preg_match('/^\d{4}-\d{2}-\d{2}/', $paidAt)) {
+        $paidAtSql = date('Y-m-d H:i:s', strtotime($paidAt));
+    }
+
+    try {
+        $pdo->beginTransaction();
+        $ins = $pdo->prepare("
+            INSERT INTO share_payments
+                (atc_id, student_ids, total_share_amount, transaction_fee, total_amount, status, payment_mode, remarks, created_at)
+            VALUES (?, ?, ?, 0, ?, 'Pending', ?, ?, NOW())
+        ");
+        $ins->execute([
+            $atcId,
+            json_encode($validIds),
+            $totalShare,
+            $totalShare,
+            $paymentMode,
+            $combinedRemarks !== '' ? $combinedRemarks : null,
+        ]);
+        $paymentId = (int)$pdo->lastInsertId();
+        $cashRef = 'CASH-' . $paymentId . ($refNote !== '' ? '-' . preg_replace('/[^A-Za-z0-9]/', '', substr($refNote, 0, 12)) : '');
+        $pdo->commit();
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        // Retry without payment_mode/remarks if columns missing on old DB
+        try {
+            $ins = $pdo->prepare("
+                INSERT INTO share_payments
+                    (atc_id, student_ids, total_share_amount, transaction_fee, total_amount, status, failure_reason, created_at)
+                VALUES (?, ?, ?, 0, ?, 'Pending', ?, NOW())
+            ");
+            $ins->execute([
+                $atcId,
+                json_encode($validIds),
+                $totalShare,
+                $totalShare,
+                $combinedRemarks !== '' ? $combinedRemarks : null,
+            ]);
+            $paymentId = (int)$pdo->lastInsertId();
+            $cashRef = 'CASH-' . $paymentId;
+        } catch (Exception $e2) {
+            return ['success' => false, 'message' => $e2->getMessage()];
+        }
+    }
+
+    $done = completeSharePayment($pdo, $paymentId, $cashRef, null, null);
+    if (!$done['success']) {
+        return ['success' => false, 'message' => $done['message'] ?? 'Could not complete payment.'];
+    }
+
+    if ($paidAtSql) {
+        try {
+            $pdo->prepare("UPDATE share_payments SET paid_at = ? WHERE id = ?")->execute([$paidAtSql, $paymentId]);
+            $pdo->prepare("
+                UPDATE admissions SET share_payment_date = ?
+                WHERE atc_id = ? AND id IN ($placeholders)
+            ")->execute(array_merge([$paidAtSql, $atcId], $validIds));
+        } catch (Exception $e) {}
+    }
+
+    return [
+        'success' => true,
+        'message' => 'Cash/offline share payment recorded for ' . count($validIds) . ' student(s).',
+        'payment_id' => $paymentId,
+        'total_share_amount' => $totalShare,
+    ];
 }
 
 /**
