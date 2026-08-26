@@ -1227,6 +1227,9 @@ $monthlyTrend = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     </div>
                 </div>
                 <div class="page-header-right">
+                    <a href="record_cash_share.php" class="btn-outline" style="text-decoration:none;background:#ecfdf5;border-color:#a7f3d0;color:#065f46;font-weight:800">
+                        Record Cash Payment
+                    </a>
                     <span class="live-badge">
                         <span class="live-dot"></span>
                         Live Tracking
