@@ -20,6 +20,7 @@ $userName = sanitize(getUserName());
 ensureDualMaterialCourseSchema($pdo);
 ensureCourseMaterialItemsSchema($pdo);
 ensureInventoryTables($pdo);
+$globalTshirtId = ensureGlobalTshirtCourseMarkerItem($pdo);
 
 $mode = $_GET['action'] ?? 'add'; // add | edit
 $courseId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -105,6 +106,23 @@ if ($isEdit) {
         $selectedItemIds = array_map(fn($x) => (int)$x, $mstmt->fetchAll(PDO::FETCH_COLUMN));
     } catch (Exception $e) {
         $selectedItemIds = [];
+    }
+}
+
+$tshirtsTotalStock = 0;
+$tshirtsGlobalSelected = false;
+$invById = [];
+foreach ($allInvItems ?? [] as $it) {
+    $invById[(int)$it['id']] = $it;
+    if (isSizeSpecificTshirtInventoryItem($it)) {
+        $tshirtsTotalStock += (int)($it['current_stock'] ?? 0);
+    }
+}
+foreach ($selectedItemIds as $sid) {
+    $it = $invById[$sid] ?? null;
+    if ($it && (string)($it['category'] ?? '') === 'T-Shirts') {
+        $tshirtsGlobalSelected = true;
+        break;
     }
 }
 
@@ -225,6 +243,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             if (!is_array($selectedIds)) $selectedIds = [];
             $selectedIds = array_values(array_unique(array_map(fn($x) => (int)$x, $selectedIds)));
             $selectedIds = array_values(array_filter($selectedIds, fn($x) => $x > 0));
+
+            $tshirtsGlobal = !empty($_POST['with_material_tshirts_global']);
+            $tshirtItemIds = [];
+            try {
+                $tshirtRows = $pdo->query("
+                    SELECT id FROM inventory_items
+                    WHERE category = 'T-Shirts' AND status = 'Active'
+                ")->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($tshirtRows as $tid) {
+                    $tshirtItemIds[(int)$tid] = true;
+                }
+            } catch (Exception $e) {}
+
+            $selectedIds = array_values(array_filter(
+                $selectedIds,
+                fn($x) => !isset($tshirtItemIds[(int)$x])
+            ));
+            if ($tshirtsGlobal && $globalTshirtId > 0) {
+                $selectedIds[] = $globalTshirtId;
+            }
+            $selectedIds = array_values(array_unique($selectedIds));
 
             if (!empty($selectedIds)) {
                 $ins = $pdo->prepare("
@@ -498,7 +537,7 @@ $materialOption = $isEdit
                         <div style="margin-top:1.1rem" class="items-block">
                             <div class="items-title">Select Materials for this Course</div>
                             <div class="field-hint" style="margin-bottom:.85rem">
-                                Existing inventory items are shown category-wise. Admin can create a new item (and stock it) if needed.
+                                Pick books for this course kit. For T-shirts, use the single Tshirts option — student size is taken from admission at dispatch.
                             </div>
 
                             <div class="mat-filter-row">
@@ -525,11 +564,28 @@ $materialOption = $isEdit
                                 $catSlug = $materialCatSlug((string)$catName);
                                 $catItems = $itemsByCategory[$catName] ?? [];
                                 $isPrimary = in_array((string)$catName, $primaryMaterialCats, true);
+                                if ((string)$catName === 'T-Shirts'):
                             ?>
+                            <div class="cat-block items-block<?= $isPrimary ? '' : ' is-hidden' ?>" data-cat="<?= htmlspecialchars($catSlug, ENT_QUOTES) ?>" data-primary="<?= $isPrimary ? '1' : '0' ?>" style="background:transparent; border:none; padding:0; margin-bottom: .9rem">
+                                <div class="items-title" style="margin:0 .1rem .5rem">T-Shirts</div>
+                                <div class="items-list">
+                                    <label class="item-check" data-name="tshirts all sizes">
+                                        <input type="checkbox" name="with_material_tshirts_global" value="1" <?= $tshirtsGlobalSelected ? 'checked' : '' ?>>
+                                        <span class="meta">
+                                            <span class="nm">Tshirts</span>
+                                            <span class="st">All sizes · Total stock: <?= (int)$tshirtsTotalStock ?> · Size auto-picked per student</span>
+                                        </span>
+                                    </label>
+                                </div>
+                                <div class="field-hint" style="margin:.45rem .1rem 0">Student T-shirt size comes from admission. Dispatch uses that size automatically.</div>
+                            </div>
+                            <?php continue; endif; ?>
                             <div class="cat-block items-block<?= $isPrimary ? '' : ' is-hidden' ?>" data-cat="<?= htmlspecialchars($catSlug, ENT_QUOTES) ?>" data-primary="<?= $isPrimary ? '1' : '0' ?>" style="background:transparent; border:none; padding:0; margin-bottom: .9rem">
                                 <div class="items-title" style="margin:0 .1rem .5rem"><?= htmlspecialchars((string)$catName) ?></div>
                                 <div class="items-list">
-                                    <?php foreach ($catItems as $it): ?>
+                                    <?php foreach ($catItems as $it):
+                                        if (isGlobalTshirtCourseMarkerItem($it)) continue;
+                                    ?>
                                         <?php $checked = in_array((int)$it['id'], $selectedItemIds, true) ? 'checked' : ''; ?>
                                         <label class="item-check" data-name="<?= htmlspecialchars(strtolower($it['item_name']), ENT_QUOTES) ?>">
                                             <input type="checkbox" name="with_material_inventory_item_ids[]" value="<?= (int)$it['id'] ?>" <?= $checked ?>>
@@ -776,7 +832,8 @@ $materialOption = $isEdit
         if (optWith) {
             const hoWith = parseFloat(document.getElementById('ho_share_with_material')?.value || '0');
             const dlcWith = parseFloat(document.getElementById('dlc_share_with_material')?.value || '0');
-            const selected = document.querySelectorAll('input[name="with_material_inventory_item_ids[]"]:checked').length;
+            const selected = document.querySelectorAll('input[name="with_material_inventory_item_ids[]"]:checked').length
+                + (document.querySelector('input[name="with_material_tshirts_global"]:checked') ? 1 : 0);
             if ((hoWith > 0 || dlcWith > 0) && selected <= 0) {
                 e.preventDefault();
                 alert('Select at least one Book/T-Shirt item for this course (or set HO/DLC share to 0).');
