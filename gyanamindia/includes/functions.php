@@ -2087,6 +2087,104 @@ function ensureCourseMaterialItemsSchema(PDO $pdo): void {
     }
 }
 
+/** Display name for the course-kit T-shirt option (all sizes). */
+function globalTshirtCourseMarkerName(): string {
+    return 'Tshirts';
+}
+
+/**
+ * System inventory row used on courses to mean "include a T-shirt (size per student)".
+ */
+function ensureGlobalTshirtCourseMarkerItem(PDO $pdo): int {
+    ensureInventoryTables($pdo);
+    $name = globalTshirtCourseMarkerName();
+    try {
+        $stmt = $pdo->prepare("
+            SELECT id FROM inventory_items
+            WHERE category = 'T-Shirts' AND LOWER(TRIM(item_name)) = LOWER(?)
+            LIMIT 1
+        ");
+        $stmt->execute([$name]);
+        $id = (int)$stmt->fetchColumn();
+        if ($id > 0) {
+            return $id;
+        }
+
+        $ins = $pdo->prepare("
+            INSERT INTO inventory_items
+                (item_name, category, unit, current_stock, min_stock_level, description, status)
+            VALUES (?, 'T-Shirts', 'pcs', 0, 0, ?, 'Active')
+        ");
+        $ins->execute([
+            $name,
+            'System marker: course kit includes T-shirts; student size is chosen at dispatch.',
+        ]);
+        return (int)$pdo->lastInsertId();
+    } catch (Exception $e) {
+        error_log('[GlobalTshirtMarker] ' . $e->getMessage());
+        return 0;
+    }
+}
+
+function isGlobalTshirtCourseMarkerItem(array $item): bool {
+    if ((string)($item['category'] ?? '') !== 'T-Shirts') {
+        return false;
+    }
+    return strcasecmp(trim((string)($item['item_name'] ?? '')), globalTshirtCourseMarkerName()) === 0;
+}
+
+function isSizeSpecificTshirtInventoryItem(array $item): bool {
+    return (string)($item['category'] ?? '') === 'T-Shirts' && !isGlobalTshirtCourseMarkerItem($item);
+}
+
+/**
+ * Pick the stocked inventory row for a student's T-shirt size.
+ */
+function resolveStudentTshirtInventoryItem(array $student, array $inventoryItems): ?array {
+    $size = trim((string)($student['uniform_size'] ?? ''));
+    if ($size === '') {
+        return null;
+    }
+
+    foreach ($inventoryItems as $inv) {
+        if (!isSizeSpecificTshirtInventoryItem($inv)) {
+            continue;
+        }
+        if (stripos((string)($inv['item_name'] ?? ''), $size) !== false) {
+            return $inv;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Resolve a mapped course item to the inventory row used for stock/dispatch.
+ */
+function resolveMappedInventoryItemForStudent(array $mappedItem, array $student, array $allInventoryItems): ?array {
+    if (!courseMappedItemAppliesToStudent($mappedItem, $student)) {
+        return null;
+    }
+
+    if (!isGlobalTshirtCourseMarkerItem($mappedItem)) {
+        return $mappedItem;
+    }
+
+    $resolved = resolveStudentTshirtInventoryItem($student, $allInventoryItems);
+    if ($resolved) {
+        return array_merge($mappedItem, [
+            'id' => (int)$resolved['id'],
+            'item_name' => (string)$resolved['item_name'],
+            'current_stock' => (int)($resolved['current_stock'] ?? 0),
+        ]);
+    }
+
+    return array_merge($mappedItem, [
+        'id' => null,
+        'current_stock' => 0,
+    ]);
+}
+
 /**
  * Whether a mapped inventory item belongs on this student's kit.
  */
@@ -2095,6 +2193,9 @@ function courseMappedItemAppliesToStudent(array $item, array $student): bool {
     $name = (string)($item['item_name'] ?? '');
 
     if ($cat === 'T-Shirts') {
+        if (isGlobalTshirtCourseMarkerItem($item)) {
+            return trim((string)($student['uniform_size'] ?? '')) !== '';
+        }
         $size = trim((string)($student['uniform_size'] ?? ''));
         return $size !== '' && stripos($name, $size) !== false;
     }
@@ -2292,22 +2393,25 @@ function collectPendingAtcMaterials(PDO $pdo, int $atcId): array {
                 if (($inv['category'] ?? '') === 'Certificates') {
                     $mappedHasCert = true;
                 }
-                if (!courseMappedItemAppliesToStudent($inv, $s)) {
+
+                $resolvedInv = resolveMappedInventoryItemForStudent($inv, $s, $invItemsLegacy);
+                if ($resolvedInv === null) {
                     continue;
                 }
+
                 $type = dispatchMaterialTypeForCategory((string)$inv['category']);
                 $detail = dispatchItemDetailForMappedItem($inv, $s);
-                $invId = (int)$inv['id'];
+                $invId = !empty($resolvedInv['id']) ? (int)$resolvedInv['id'] : null;
                 $already = $dispatchedMap[$s['id'] . '_' . $type . '_' . $detail] ?? null;
                 if ($isLineDispatched($s, $type, $detail, $invId)) {
                     continue;
                 }
-                $stock = (int)$inv['current_stock'];
+                $stock = (int)($resolvedInv['current_stock'] ?? 0);
                 $materials[] = [
                     'type' => $type,
                     'detail' => $detail,
                     'inventory_item_id' => $invId,
-                    'inventory_item_name' => $inv['item_name'],
+                    'inventory_item_name' => (string)($resolvedInv['item_name'] ?? $inv['item_name'] ?? ''),
                     'stock' => $stock,
                     'status' => $lineStatus($already, $stock),
                     'pending_dispatch_id' => $already === 'Pending',
