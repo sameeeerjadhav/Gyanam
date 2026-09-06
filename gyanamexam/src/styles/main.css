@@ -3092,11 +3092,19 @@ tbody tr:hover {
   aspect-ratio: 4 / 3;
 }
 
-.peg-camera {
+.peg-camera-wrap.is-captured {
+  border-color: #16a34a;
+}
+
+.peg-camera,
+.peg-photo {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.peg-camera {
   transform: scaleX(-1);
 }
 
@@ -3110,6 +3118,24 @@ tbody tr:hover {
   font-weight: 750;
   padding: 0.2rem 0.45rem;
   border-radius: 6px;
+}
+
+.peg-camera-tag-ok {
+  background: rgba(22, 163, 74, 0.95);
+}
+
+.peg-photo-actions {
+  margin-top: 0.65rem;
+  display: flex;
+  justify-content: center;
+}
+
+.peg-btn-sm {
+  padding: 0.5rem 0.9rem !important;
+  font-size: 0.8rem !important;
+  border-radius: 8px !important;
+  margin-left: 0 !important;
+  box-shadow: none !important;
 }
 
 .peg-hint {
