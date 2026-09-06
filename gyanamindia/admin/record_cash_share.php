@@ -25,8 +25,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['record_cash_share']))
     $ref = trim((string)($_POST['reference_no'] ?? ''));
     $remarks = trim((string)($_POST['remarks'] ?? ''));
     $payDate = trim((string)($_POST['payment_date'] ?? date('Y-m-d')));
+    $includeFee = !empty($_POST['include_txn_fee']);
+    $txnFee = $includeFee ? 15.0 : 0.0;
 
-    $result = recordOfflineSharePayment($pdo, $selAtcId, $studentIds, $mode, $ref, $remarks, $payDate);
+    $result = recordOfflineSharePayment($pdo, $selAtcId, $studentIds, $mode, $ref, $remarks, $payDate, $txnFee);
     $msg = $result['message'] ?? ($result['success'] ? 'Saved.' : 'Failed.');
     $msgType = $result['success'] ? 'success' : 'error';
 
@@ -147,7 +149,7 @@ if ($selAtcId > 0) {
         <div class="page-header" style="margin-bottom:1.25rem;display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap">
             <div>
                 <h2>Record Cash / Offline Share</h2>
-                <p>Mark HO share as paid when an ATC pays by cash, bank transfer, UPI, or cheque (no Razorpay fee).</p>
+                <p>Mark HO share as paid for cash/bank, or record an already-paid Razorpay UPI (includes ₹15 fee).</p>
             </div>
             <a class="btn-ghost" href="share_payments.php">← Back to Share Payments</a>
         </div>
@@ -227,10 +229,11 @@ if ($selAtcId > 0) {
                 <div class="cash-grid">
                     <div>
                         <label>Payment mode *</label>
-                        <select name="payment_mode" required>
+                        <select name="payment_mode" id="paymentMode" required>
+                            <option value="Razorpay" selected>Razorpay / PhonePe (already paid)</option>
+                            <option value="UPI">UPI</option>
                             <option value="Cash">Cash</option>
                             <option value="Bank Transfer">Bank Transfer</option>
-                            <option value="UPI">UPI</option>
                             <option value="Cheque">Cheque</option>
                         </select>
                     </div>
@@ -239,8 +242,14 @@ if ($selAtcId > 0) {
                         <input type="date" name="payment_date" value="<?= htmlspecialchars(date('Y-m-d')) ?>" required>
                     </div>
                     <div>
-                        <label>Reference / receipt no.</label>
-                        <input type="text" name="reference_no" placeholder="Optional">
+                        <label>Reference / UTR / receipt no.</label>
+                        <input type="text" name="reference_no" placeholder="e.g. PhonePe UTR 105324340617">
+                    </div>
+                    <div style="grid-column:1/-1">
+                        <label style="display:flex;align-items:center;gap:.5rem;text-transform:none;font-size:.88rem;font-weight:700;color:#065f46;cursor:pointer">
+                            <input type="checkbox" name="include_txn_fee" id="includeTxnFee" value="1" checked style="width:18px;height:18px">
+                            Include ₹15 Razorpay transaction fee (total = share + ₹15)
+                        </label>
                     </div>
                     <div style="grid-column:1/-1">
                         <label>Remarks</label>
@@ -250,11 +259,14 @@ if ($selAtcId > 0) {
 
                 <div class="cash-bar">
                     <div class="cash-total">
-                        Selected: <span id="selCount">0</span> · Total: <span id="selTotal">₹0.00</span>
-                        <div style="font-size:.75rem;font-weight:600;color:#94a3b8;margin-top:.25rem">Transaction fee: ₹0 (offline)</div>
+                        Selected: <span id="selCount">0</span>
+                        · Share: <span id="selShare">₹0.00</span>
+                        · Fee: <span id="selFee">₹15.00</span>
+                        · Total: <span id="selTotal">₹0.00</span>
+                        <div id="feeHint" style="font-size:.75rem;font-weight:600;color:#059669;margin-top:.25rem">Includes ₹15 gateway fee (matches Razorpay charge)</div>
                     </div>
                     <button type="submit" class="btn-cash" id="submitBtn" disabled
-                            onclick="return confirm('Record offline share payment for the selected students?');">
+                            onclick="return confirm('Record share payment for the selected students?');">
                         Record payment
                     </button>
                 </div>
@@ -269,12 +281,22 @@ if ($selAtcId > 0) {
 <script src="../assets/js/dashboard.js"></script>
 <script>
 (function () {
+    var TXN_FEE = 15;
     var checks = Array.prototype.slice.call(document.querySelectorAll('.stu-check'));
     var all = document.getElementById('checkAll');
     var countEl = document.getElementById('selCount');
+    var shareEl = document.getElementById('selShare');
+    var feeEl = document.getElementById('selFee');
     var totalEl = document.getElementById('selTotal');
+    var feeHint = document.getElementById('feeHint');
+    var feeBox = document.getElementById('includeTxnFee');
+    var modeEl = document.getElementById('paymentMode');
     var btn = document.getElementById('submitBtn');
     if (!checks.length) return;
+
+    function feeAmount() {
+        return (feeBox && feeBox.checked) ? TXN_FEE : 0;
+    }
 
     function refresh() {
         var n = 0, sum = 0;
@@ -284,13 +306,31 @@ if ($selAtcId > 0) {
                 sum += parseFloat(c.getAttribute('data-amount') || '0') || 0;
             }
         });
+        var fee = feeAmount();
+        var total = sum + fee;
         if (countEl) countEl.textContent = String(n);
-        if (totalEl) totalEl.textContent = '₹' + sum.toFixed(2);
+        if (shareEl) shareEl.textContent = '₹' + sum.toFixed(2);
+        if (feeEl) feeEl.textContent = '₹' + fee.toFixed(2);
+        if (totalEl) totalEl.textContent = '₹' + total.toFixed(2);
+        if (feeHint) {
+            feeHint.textContent = fee > 0
+                ? 'Includes ₹15 gateway fee (matches Razorpay charge)'
+                : 'No transaction fee (pure offline cash/cheque)';
+            feeHint.style.color = fee > 0 ? '#059669' : '#94a3b8';
+        }
         if (btn) btn.disabled = n === 0;
         if (all) {
             all.checked = n > 0 && n === checks.length;
             all.indeterminate = n > 0 && n < checks.length;
         }
+    }
+
+    function syncFeeDefault() {
+        if (!feeBox || !modeEl) return;
+        var m = modeEl.value;
+        // Razorpay / UPI receipts should include fee by default; cash/cheque off
+        feeBox.checked = (m === 'Razorpay' || m === 'UPI');
+        refresh();
     }
 
     checks.forEach(function (c) { c.addEventListener('change', refresh); });
@@ -300,7 +340,9 @@ if ($selAtcId > 0) {
             refresh();
         });
     }
-    refresh();
+    if (feeBox) feeBox.addEventListener('change', refresh);
+    if (modeEl) modeEl.addEventListener('change', syncFeeDefault);
+    syncFeeDefault();
 })();
 </script>
 </body>
