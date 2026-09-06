@@ -23,6 +23,9 @@ export async function renderStudents(ApiClient, { currentUser }) {
   // State for filtering
   let filterText = '';
   let filterCentre = '';
+  let filterSlot = '';
+  let filterWindow = '';
+  let filterExams = ''; // '' | 'assigned' | 'none'
 
   function updateBulkBar() {
     const selected = document.querySelectorAll('.student-select:checked');
@@ -43,19 +46,57 @@ export async function renderStudents(ApiClient, { currentUser }) {
     updateBulkBar();
   }
 
+  function hasActiveFilters() {
+    return !!(filterText || filterCentre || filterSlot || filterWindow || filterExams);
+  }
+
+  function syncClearBtn() {
+    const btn = document.getElementById('stu-clear-filters');
+    if (btn) btn.hidden = !hasActiveFilters();
+  }
+
+  function clearFilters() {
+    filterText = '';
+    filterCentre = '';
+    filterSlot = '';
+    filterWindow = '';
+    filterExams = '';
+    const search = document.getElementById('stu-search');
+    const centre = document.getElementById('stu-centre-filter');
+    const slot = document.getElementById('stu-slot-filter');
+    const win = document.getElementById('stu-window-filter');
+    const exams = document.getElementById('stu-exams-filter');
+    if (search) search.value = '';
+    if (centre) centre.value = '';
+    if (slot) slot.value = '';
+    if (win) win.value = '';
+    if (exams) exams.value = '';
+    renderTable();
+  }
+
   // Export to window for inline onclicks
   window.updateBulkBar = updateBulkBar;
   window.toggleAllStudents = toggleAllStudents;
+  window.clearStudentFilters = clearFilters;
 
   function renderTable() {
     const filtered = allStudents.filter(s => {
-      const matchesText = !filterText ||
-        s.name.toLowerCase().includes(filterText.toLowerCase()) ||
-        s.identifier.toLowerCase().includes(filterText.toLowerCase());
+      const q = filterText.trim().toLowerCase();
+      const matchesText = !q ||
+        (s.name || '').toLowerCase().includes(q) ||
+        (s.identifier || '').toLowerCase().includes(q) ||
+        (s.centre_name || '').toLowerCase().includes(q);
 
       const matchesCentre = !filterCentre || s.centre_name === filterCentre;
+      const matchesSlot = !filterSlot || s.exam_slot === filterSlot;
+      const matchesWindow = !filterWindow || s.time_window === filterWindow;
+      const examCount = (s.exams || []).length;
+      const matchesExams =
+        !filterExams ||
+        (filterExams === 'assigned' && examCount > 0) ||
+        (filterExams === 'none' && examCount === 0);
 
-      return matchesText && matchesCentre;
+      return matchesText && matchesCentre && matchesSlot && matchesWindow && matchesExams;
     });
 
     const tbody = document.querySelector('#students-table-body');
@@ -68,6 +109,7 @@ export async function renderStudents(ApiClient, { currentUser }) {
             <div class="stu-empty-inner">
               <div class="stu-empty-icon">👥</div>
               <div>No students match your filters</div>
+              ${hasActiveFilters() ? '<button type="button" class="btn btn-outline btn-sm" style="margin-top:0.65rem" onclick="clearStudentFilters()">Clear filters</button>' : ''}
             </div>
          </td></tr>`
       : filtered.map(s => {
@@ -117,12 +159,27 @@ export async function renderStudents(ApiClient, { currentUser }) {
     const master = document.getElementById('select-all-students');
     if (master) master.checked = false;
     updateBulkBar();
+    syncClearBtn();
   }
 
   const centres = [...new Set(allStudents.map(s => s.centre_name))].sort().filter(Boolean);
+  const slots = [...new Set(allStudents.map(s => s.exam_slot))].sort().filter(Boolean);
+  const windows = [...new Set(allStudents.map(s => s.time_window))].sort().filter(Boolean);
+  const slotOrder = { SLOT1: 1, SLOT2: 2, SLOT3: 3 };
+  const windowOrder = { MORNING: 1, AFTERNOON: 2, EVENING: 3 };
+  slots.sort((a, b) => (slotOrder[a] || 99) - (slotOrder[b] || 99) || a.localeCompare(b));
+  windows.sort((a, b) => (windowOrder[a] || 99) - (windowOrder[b] || 99) || a.localeCompare(b));
+
   const scopeNote = currentUser.centre_id
     ? `<span class="stu-scope">${currentUser.centre_id}</span>`
     : '';
+
+  const slotOpts = slots.length
+    ? slots.map(s => `<option value="${s}">${s}</option>`).join('')
+    : '<option value="SLOT1">SLOT1</option><option value="SLOT2">SLOT2</option><option value="SLOT3">SLOT3</option>';
+  const windowOpts = windows.length
+    ? windows.map(w => `<option value="${w}">${w.charAt(0) + w.slice(1).toLowerCase()}</option>`).join('')
+    : '<option value="MORNING">Morning</option><option value="AFTERNOON">Afternoon</option><option value="EVENING">Evening</option>';
 
   el.innerHTML = `
   <div class="stu-page">
@@ -145,13 +202,29 @@ export async function renderStudents(ApiClient, { currentUser }) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
         </svg>
-        <input type="text" id="stu-search" class="form-input" placeholder="Search by name or student ID…">
+        <input type="text" id="stu-search" class="form-input" placeholder="Search name, ID, or centre…">
       </div>
-      ${!currentUser.centre_id ? `
-      <select id="stu-centre-filter" class="form-select stu-centre-filter">
-        <option value="">All Centres</option>
-        ${centres.map(c => `<option value="${c}">${c}</option>`).join('')}
-      </select>` : ''}
+      <div class="stu-filters">
+        ${!currentUser.centre_id ? `
+        <select id="stu-centre-filter" class="form-select" title="Centre">
+          <option value="">All Centres</option>
+          ${centres.map(c => `<option value="${c}">${c}</option>`).join('')}
+        </select>` : ''}
+        <select id="stu-slot-filter" class="form-select" title="Exam slot">
+          <option value="">All Slots</option>
+          ${slotOpts}
+        </select>
+        <select id="stu-window-filter" class="form-select" title="Time window">
+          <option value="">All Times</option>
+          ${windowOpts}
+        </select>
+        <select id="stu-exams-filter" class="form-select" title="Exam assignment">
+          <option value="">All Exams</option>
+          <option value="assigned">Has exams</option>
+          <option value="none">No exams</option>
+        </select>
+        <button type="button" id="stu-clear-filters" class="btn btn-outline btn-sm stu-clear-btn" hidden onclick="clearStudentFilters()">Clear</button>
+      </div>
     </div>
 
     <div id="bulk-bar" class="stu-bulk-bar" style="display:none">
@@ -192,12 +265,22 @@ export async function renderStudents(ApiClient, { currentUser }) {
     renderTable();
   });
 
-  if (!currentUser.centre_id) {
-    document.getElementById('stu-centre-filter').addEventListener('change', e => {
-      filterCentre = e.target.value;
-      renderTable();
-    });
-  }
+  document.getElementById('stu-centre-filter')?.addEventListener('change', e => {
+    filterCentre = e.target.value;
+    renderTable();
+  });
+  document.getElementById('stu-slot-filter')?.addEventListener('change', e => {
+    filterSlot = e.target.value;
+    renderTable();
+  });
+  document.getElementById('stu-window-filter')?.addEventListener('change', e => {
+    filterWindow = e.target.value;
+    renderTable();
+  });
+  document.getElementById('stu-exams-filter')?.addEventListener('change', e => {
+    filterExams = e.target.value;
+    renderTable();
+  });
 
   document.getElementById('add-student-btn').addEventListener('click', () => showStudentModal(ApiClient, currentUser));
   document.getElementById('import-students-btn').addEventListener('click', () => showImportStudentsModal(ApiClient, currentUser));
