@@ -16,10 +16,11 @@ class ModalService {
             overlay.id = 'modal-overlay';
             overlay.style.cssText = `
         display:none; position:fixed; inset:0; z-index:9999;
-        background:rgba(0,0,0,0.7); backdrop-filter:blur(4px);
-        align-items:center; justify-content:center;
+        background:rgba(15,23,42,0.55); backdrop-filter:blur(4px);
+        align-items:flex-start; justify-content:center;
+        overflow-y:auto; overflow-x:hidden; padding:1.25rem 1rem; box-sizing:border-box;
       `;
-            overlay.innerHTML = `<div id="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div>`;
+            overlay.innerHTML = `<div id="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title" style="margin:auto;width:100%;display:flex;justify-content:center;padding:0.25rem 0"></div>`;
             document.body.appendChild(overlay);
         }
     }
@@ -50,7 +51,14 @@ class ModalService {
         if (!overlay) return;
         box.style.opacity = '0';
         box.style.transform = 'scale(0.95) translateY(8px)';
-        setTimeout(() => { overlay.style.display = 'none'; }, 200);
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            document.body.style.overflow = '';
+            if (box) {
+                box.style.transform = '';
+                box.style.opacity = '';
+            }
+        }, 200);
     }
 
     /**
