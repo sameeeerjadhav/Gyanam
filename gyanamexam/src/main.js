@@ -10,9 +10,9 @@
 
 import router from './services/Router.js';
 import { getAuthModule } from './services/AuthenticationModule.js';
-import LoginPage from './pages/LoginPage.js';
-import { StudentDashboard } from './pages/StudentDashboard.js';
-import ExamPage from './pages/ExamPage.js';
+import LoginPage from './pages/LoginPage.js?v=2';
+import { StudentDashboard } from './pages/StudentDashboard.js?v=2';
+import ExamPage from './pages/ExamPage.js?v=5';
 import ApiClient from './services/APIClient.js';
 
 // Single shared auth module
@@ -135,115 +135,170 @@ function setupRoutes(appContainer) {
 
       const sub = data.submission;
       const isPassed = sub.result === 'pass';
+      const outcome = isPassed ? 'pass' : 'fail';
       const answers  = sub.answers || [];
+      const scoreNum = Math.max(0, Math.min(100, Number(sub.score) || 0));
+      const circumference = 2 * Math.PI * 70;
+      const dashOffset = circumference - (scoreNum / 100) * circumference;
+      const wrongCount = answers.filter(a => !a.is_correct).length;
+      const correctCount = answers.length ? answers.filter(a => a.is_correct).length : (sub.correct_answers ?? 0);
 
-      // Build answer review HTML
+      // Clear leftover exam overlays; pick up auto-submit notice from session
+      document.getElementById('proctoring-warning-overlay')?.remove();
+      let notice = null;
+      try {
+        const raw = sessionStorage.getItem('gyanam_result_notice');
+        if (raw) {
+          notice = JSON.parse(raw);
+          sessionStorage.removeItem('gyanam_result_notice');
+        }
+      } catch (_) { notice = null; }
+
+      const submittedLabel = sub.submitted_at
+        ? new Date(sub.submitted_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+        : '';
+
+      const escapeAttr = (s) => String(s || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .substring(0, 80);
+
       const answerReviewHTML = answers.length > 0 ? `
-        <div style="text-align:left;margin-top:2rem">
-          <div style="font-weight:700;font-size:0.9rem;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem">Answer Review</div>
-          <div style="display:flex;flex-direction:column;gap:0.75rem">
-            ${answers.map((a, i) => {
-              const opts = typeof a.options === 'string' ? JSON.parse(a.options) : (a.options || []);
-              const correctOpt = opts.find(o => String(o.id) === String(a.correct_answer));
-              const selectedOpt = opts.find(o => String(o.id) === String(a.selected_answer));
-              return `
-              <div style="background:${a.is_correct ? '#f0fdf4' : '#fef2f2'};border:1px solid ${a.is_correct ? '#bbf7d0' : '#fecaca'};border-radius:12px;padding:1rem 1.25rem">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;margin-bottom:0.5rem">
-                  <div style="font-weight:600;font-size:0.875rem;color:#0f172a;flex:1">${i + 1}. ${a.question_text || '—'}</div>
-                  <span style="font-size:1.1rem">${a.is_correct ? '✅' : '❌'}</span>
-                </div>
-                <div style="font-size:0.8rem;color:#475569">
-                  <span>Your answer: <strong style="color:${a.is_correct ? '#16a34a' : '#dc2626'}">${selectedOpt ? selectedOpt.text : (a.selected_answer || 'Not answered')}</strong></span>
-                  ${!a.is_correct ? `<span style="margin-left:1rem;color:#16a34a">✓ Correct: <strong>${correctOpt ? correctOpt.text : a.correct_answer}</strong></span>` : ''}
-                </div>
-                ${!a.is_correct ? `
-                <div style="margin-top:0.5rem">
-                  <button onclick="window._openChallengeModal(${sub.submission_db_id},${a.question_id},'${(a.question_text || '').replace(/'/g, "\\'").substring(0,80)}')"
-                    style="background:none;border:1px solid #f59e0b;color:#92400e;padding:0.25rem 0.65rem;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:600">
-                    🚩 Challenge
-                  </button>
-                </div>` : ''}
-              </div>`;
-            }).join('')}
+        <div class="result-review">
+          <div class="result-review-head">
+            <div class="result-review-title">Answer review</div>
+            <div class="result-review-count">${correctCount} correct · ${wrongCount} incorrect</div>
           </div>
+          ${answers.map((a, i) => {
+            const opts = typeof a.options === 'string' ? JSON.parse(a.options) : (a.options || []);
+            const correctOpt = opts.find(o => String(o.id) === String(a.correct_answer));
+            const selectedOpt = opts.find(o => String(o.id) === String(a.selected_answer));
+            const ok = !!a.is_correct;
+            return `
+              <div class="result-answer ${ok ? 'correct' : 'wrong'}">
+                <div class="result-answer-top">
+                  <div class="result-answer-q">${i + 1}. ${a.question_text || '—'}</div>
+                  <span class="result-answer-badge">${ok ? 'Correct' : 'Incorrect'}</span>
+                </div>
+                <div class="result-answer-meta">
+                  Your answer: <strong class="${ok ? 'ok' : 'bad'}">${selectedOpt ? selectedOpt.text : (a.selected_answer || 'Not answered')}</strong>
+                  ${!ok ? `<br>Correct answer: <strong class="ok">${correctOpt ? correctOpt.text : a.correct_answer}</strong>` : ''}
+                </div>
+                ${!ok ? `
+                  <button type="button" class="result-challenge-btn"
+                    onclick="window._openChallengeModal(${sub.submission_db_id},${a.question_id},'${escapeAttr(a.question_text)}')">
+                    Challenge this question
+                  </button>` : ''}
+              </div>`;
+          }).join('')}
         </div>` : '';
 
       appContainer.innerHTML = `
-        <div style="min-height:100vh;background:#f8fafc;padding:2rem;font-family:'Inter',sans-serif;">
-          <div style="width:100%;max-width:620px;margin:0 auto;">
-            <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:1.5rem;padding:2.5rem;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.04);">
-
-              <!-- Result Icon -->
-              <div style="font-size:4rem;margin-bottom:1.25rem;">${isPassed ? '🎉' : '📚'}</div>
-              <h1 style="font-size:1.875rem;font-weight:800;color:${isPassed ? '#16a34a' : '#dc2626'};margin:0 0 0.5rem;letter-spacing:-0.02em;">
-                ${isPassed ? 'Congratulations!' : 'Keep Practicing'}
-              </h1>
-              <p style="color:#64748b;margin:0 0 2.5rem;font-size:1rem;font-weight:500;">${sub.exam_title || 'Exam'} — Final Results</p>
-
-              <!-- Score Circle -->
-              <div style="width:140px;height:140px;border-radius:50%;background:${isPassed ? '#f0fdf4' : '#fef2f2'};border:4px solid ${isPassed ? '#16a34a' : '#dc2626'};display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto 2.5rem;box-shadow:0 4px 12px ${isPassed ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)'};">
-                <div style="font-size:2.75rem;font-weight:800;color:${isPassed ? '#16a34a' : '#dc2626'};">${sub.score}%</div>
-                <div style="font-size:0.75rem;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Score</div>
+        <div class="result-page">
+          <div class="result-page-inner">
+            <div class="result-brand">
+              <div class="result-brand-mark">
+                <img src="assets/logo.png" alt="" onerror="this.style.display='none'">
+                <span>Gyanam Exam Portal</span>
               </div>
+              <div class="result-brand-sub">Results</div>
+            </div>
 
-              <!-- Stats Grid -->
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:2.5rem;">
-                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:1rem;padding:1.25rem;">
-                  <div style="font-size:1.625rem;font-weight:800;color:#0f172a;">${sub.correct_answers}</div>
-                  <div style="font-size:0.8125rem;color:#64748b;font-weight:600;">Correct Answers</div>
+            ${notice?.type === 'auto_submit' ? `
+              <div class="result-notice" style="margin-bottom:0.85rem">
+                <div class="result-notice-icon">!</div>
+                <div>
+                  <div class="result-notice-title">Exam auto-submitted</div>
+                  <div class="result-notice-text">${notice.message || 'This exam was auto-submitted due to a proctoring rule.'}</div>
                 </div>
-                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:1rem;padding:1.25rem;">
-                  <div style="font-size:1.625rem;font-weight:800;color:#0f172a;">${sub.total_questions}</div>
-                  <div style="font-size:0.8125rem;color:#64748b;font-weight:600;">Total Questions</div>
+              </div>` : ''}
+
+            <div class="result-card">
+              <div class="result-card-accent ${outcome}"></div>
+              <div class="result-card-body">
+                <div class="result-status-pill ${outcome}">${isPassed ? 'Passed' : 'Did not pass'}</div>
+                <h1 class="result-title ${outcome}">${isPassed ? 'Congratulations!' : 'Keep practicing'}</h1>
+                <p class="result-subtitle">${sub.exam_title || 'Exam'} — final results</p>
+
+                <div class="result-score-wrap">
+                  <svg class="result-score-ring" viewBox="0 0 160 160" aria-hidden="true">
+                    <circle class="track" cx="80" cy="80" r="70"></circle>
+                    <circle class="progress ${outcome}" cx="80" cy="80" r="70"
+                      stroke-dasharray="${circumference.toFixed(2)}"
+                      stroke-dashoffset="${dashOffset.toFixed(2)}"></circle>
+                  </svg>
+                  <div class="result-score-center">
+                    <div class="result-score-value ${outcome}">${sub.score}%</div>
+                    <div class="result-score-label">Score</div>
+                  </div>
                 </div>
-                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:1rem;padding:1.25rem;">
-                  <div style="font-size:1.625rem;font-weight:800;color:${isPassed ? '#16a34a' : '#dc2626'};">${isPassed ? 'PASS' : 'FAIL'}</div>
-                  <div style="font-size:0.8125rem;color:#64748b;font-weight:600;">Result</div>
+
+                <div class="result-stats">
+                  <div class="result-stat">
+                    <div class="result-stat-label">Correct</div>
+                    <div class="result-stat-value">${sub.correct_answers}</div>
+                  </div>
+                  <div class="result-stat">
+                    <div class="result-stat-label">Total questions</div>
+                    <div class="result-stat-value">${sub.total_questions}</div>
+                  </div>
+                  <div class="result-stat">
+                    <div class="result-stat-label">Result</div>
+                    <div class="result-stat-value ${outcome}">${isPassed ? 'PASS' : 'FAIL'}</div>
+                  </div>
+                  <div class="result-stat">
+                    <div class="result-stat-label">Passing score</div>
+                    <div class="result-stat-value">${sub.passing_score || 40}%</div>
+                  </div>
                 </div>
-                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:1rem;padding:1.25rem;">
-                  <div style="font-size:1.625rem;font-weight:800;color:#0f172a;">${sub.passing_score || 40}%</div>
-                  <div style="font-size:0.8125rem;color:#64748b;font-weight:600;">Passing Score</div>
+
+                ${submittedLabel || sub.student_name ? `
+                  <div class="result-meta">
+                    ${sub.student_name ? `<span>${sub.student_name}</span>` : ''}
+                    ${submittedLabel ? `<span>${submittedLabel}</span>` : ''}
+                  </div>` : ''}
+
+                ${answerReviewHTML}
+
+                <div class="result-actions">
+                  <button type="button" class="result-btn-primary" id="result-back-btn">
+                    ← Back to dashboard
+                  </button>
                 </div>
               </div>
-
-              ${answerReviewHTML}
-
-              <!-- Back Button -->
-              <button onclick="window.history.pushState(null,'','/student');window.dispatchEvent(new PopStateEvent('popstate'));"
-                style="width:100%;padding:1rem;background:#1d4ed8;color:white;border:none;border-radius:0.75rem;font-size:1.125rem;font-weight:700;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(29,78,216,0.2);margin-top:2rem;"
-                onmouseover="this.style.background='#1e40af'"
-                onmouseout="this.style.background='#1d4ed8'"
-              >
-                &larr; Back to Dashboard
-              </button>
             </div>
           </div>
         </div>
 
-        <!-- Challenge Modal -->
-        <div id="challenge-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center">
-          <div style="background:white;border-radius:16px;padding:2rem;max-width:440px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
-            <h3 style="margin:0 0 0.5rem;font-size:1.1rem;font-weight:700">🚩 Challenge This Question</h3>
-            <p id="challenge-q-text" style="font-size:0.8rem;color:#64748b;margin-bottom:1rem"></p>
-            <label style="font-size:0.85rem;font-weight:600;color:#374151;display:block;margin-bottom:0.5rem">Reason for challenge *</label>
-            <select id="challenge-reason" style="width:100%;padding:0.6rem 0.75rem;border:1px solid #d1d5db;border-radius:8px;font-size:0.9rem;margin-bottom:0.75rem">
+        <div id="challenge-overlay" class="result-challenge-modal">
+          <div class="result-challenge-dialog">
+            <h3>Challenge this question</h3>
+            <p id="challenge-q-text" style="font-size:0.8rem;color:#64748b;margin:0 0 1rem"></p>
+            <label for="challenge-reason">Reason *</label>
+            <select id="challenge-reason">
               <option value="Wrong answer key">Wrong answer key listed</option>
               <option value="Question is ambiguous">Question is ambiguous</option>
               <option value="Question has a typo">Question has a typo</option>
               <option value="Options are incorrect">Options are incorrect</option>
               <option value="Other">Other</option>
             </select>
-            <textarea id="challenge-detail" placeholder="Additional details (optional)" rows="3"
-              style="width:100%;padding:0.6rem 0.75rem;border:1px solid #d1d5db;border-radius:8px;font-size:0.85rem;resize:vertical;margin-bottom:1rem;box-sizing:border-box"></textarea>
-            <div style="display:flex;gap:0.75rem;justify-content:flex-end">
-              <button onclick="document.getElementById('challenge-overlay').style.display='none'"
-                style="padding:0.6rem 1.25rem;border:1px solid #d1d5db;border-radius:8px;background:white;cursor:pointer;font-weight:600">Cancel</button>
-              <button id="challenge-submit-btn" onclick="window._submitChallenge()"
-                style="padding:0.6rem 1.25rem;border:none;border-radius:8px;background:#f59e0b;color:white;cursor:pointer;font-weight:700">Submit Challenge</button>
+            <label for="challenge-detail">Additional details</label>
+            <textarea id="challenge-detail" placeholder="Optional notes…" rows="3"></textarea>
+            <div class="result-challenge-actions">
+              <button type="button" class="result-challenge-cancel" onclick="document.getElementById('challenge-overlay').style.display='none'">Cancel</button>
+              <button type="button" class="result-challenge-submit" id="challenge-submit-btn" onclick="window._submitChallenge()">Submit challenge</button>
             </div>
           </div>
         </div>
       `;
+
+      document.getElementById('result-back-btn')?.addEventListener('click', () => {
+        if (typeof router?.navigate === 'function') router.navigate('/student');
+        else {
+          window.history.pushState(null, '', '/student');
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+      });
 
       // Challenge modal logic
       let _challengeSubId = null, _challengeQId = null;
@@ -262,15 +317,14 @@ function setupRoutes(appContainer) {
         try {
           await ApiClient.flagQuestion(_challengeSubId, _challengeQId, fullReason);
           document.getElementById('challenge-overlay').style.display = 'none';
-          // Show success banner
           const banner = document.createElement('div');
-          banner.textContent = '✅ Challenge submitted! Admin will review it.';
+          banner.textContent = 'Challenge submitted — admin will review it.';
           banner.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;background:#1d4ed8;color:#fff;padding:0.875rem 1.25rem;border-radius:12px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(29,78,216,0.3)';
           document.body.appendChild(banner);
           setTimeout(() => banner.remove(), 4500);
         } catch (e) {
           alert('Failed to submit: ' + e.message);
-          btn.disabled = false; btn.textContent = 'Submit Challenge';
+          btn.disabled = false; btn.textContent = 'Submit challenge';
         }
       };
 
