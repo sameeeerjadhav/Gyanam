@@ -13,7 +13,7 @@
   <!-- Laravel Echo + Pusher JS for Reverb WebSocket connection -->
   <script src="https://cdn.jsdelivr.net/npm/pusher-js@8.3.0/dist/web/pusher.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="src/styles/main.css?v=8">
+  <link rel="stylesheet" href="src/styles/main.css?v=9">
 </head>
 
 <body>
@@ -190,7 +190,6 @@
           <div>
             <div class="sidebar-user-name" id="sidebar-uname">Admin</div>
             <div class="sidebar-user-role" id="sidebar-urole">Administrator</div>
-            <span id="centre-badge" style="display:none"></span>
           </div>
 
         </div>
@@ -230,7 +229,7 @@
     import { renderLive } from './src/modules/LiveMonitorModule.js?v=2';
     import { renderQuestions } from './src/modules/QuestionsModule.js?v=5';
     import { renderExams } from './src/modules/ExamsModule.js?v=6';
-    import { renderStudents } from './src/modules/StudentsModule.js?v=5';
+    import { renderStudents } from './src/modules/StudentsModule.js?v=6';
     import { renderResults } from './src/modules/ResultsModule.js?v=2';
     import { renderATC } from './src/modules/ATCModule.js?v=4';
     import { renderCredentials } from './src/modules/CredentialsModule.js?v=1';
@@ -329,17 +328,6 @@
 
     // ─── Sidebar ──────────────────────────────────────────────────────────
     function setupSidebar() {
-      const badge = document.getElementById('centre-badge');
-      if (badge) {
-        if (currentUser.centre_id) {
-          badge.textContent = currentUser.centre_id;
-          badge.style.cssText = 'display:inline-flex;align-items:center;margin-top:0.35rem;font-size:0.65rem;font-weight:700;letter-spacing:.02em;padding:0.18rem 0.5rem;border-radius:999px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.75);border:1px solid rgba(255,255,255,0.12)';
-        } else {
-          badge.style.display = 'none';
-          badge.textContent = '';
-        }
-      }
-
       const isATC = currentUser.role === 'atc' || currentUser.role === 'dlc';
 
       // Hide admin-only nav items for ATC/DLC, and hide atc-only nav for admin
