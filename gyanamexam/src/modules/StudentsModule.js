@@ -651,7 +651,14 @@ async function showStudentModal(ApiClient, currentUser, student = null) {
             <option value="EVENING" ${student?.time_window === 'EVENING' ? 'selected' : ''}>Evening (18:00 - 21:00)</option>
           </select>
         </div>
-
+        <div class="form-group">
+          <label class="form-label">${student ? 'New Password' : 'Password'} <span style="font-weight:400;color:var(--text-muted)">${student ? '(leave blank to keep)' : '(optional)'}</span></label>
+          <input id="st-password" class="form-input" type="password" placeholder="${student ? '••••••••' : 'Default: password'}" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm Password</label>
+          <input id="st-password2" class="form-input" type="password" placeholder="Re-enter password" autocomplete="new-password">
+        </div>
       </div>
       <div class="modal-actions">
         <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Cancel</button>
@@ -669,10 +676,20 @@ async function showStudentModal(ApiClient, currentUser, student = null) {
       exams: [...document.querySelectorAll('.exam-check:checked')].map(c => c.value)
     };
     if (!payload.name || !payload.identifier || !payload.centre_name) { modalService.toast('Fill all required fields', 'error'); return; }
+
+    const password = document.getElementById('st-password')?.value || '';
+    const password2 = document.getElementById('st-password2')?.value || '';
+    if (password || password2) {
+      if (password.length < 4) { modalService.toast('Password must be at least 4 characters', 'error'); return; }
+      if (password !== password2) { modalService.toast('Passwords do not match', 'error'); return; }
+      payload.password = password;
+    }
+
     try {
       if (studentDbId) { await ApiClient.updateStudent(studentDbId, payload); }
       else { await ApiClient.createStudent(payload); }
       window.closeModal();
+      modalService.toast(studentDbId ? 'Student updated!' : 'Student registered!', 'success');
       renderStudents(ApiClient, { currentUser });
     } catch (e) { modalService.toast('Save failed: ' + e.message, 'error'); }
   };

@@ -28,6 +28,7 @@ class StudentController extends Controller
             'centre_name' => 'required|string',
             'exam_slot'   => 'nullable|string',
             'time_window' => 'nullable|string',
+            'password'    => 'nullable|string|min:4',
             'exam_ids'    => 'nullable|array',
             'exam_ids.*'  => 'exists:exam_configs,id',
             'exams'       => 'nullable|array',
@@ -40,7 +41,7 @@ class StudentController extends Controller
             'centre_name' => $data['centre_name'],
             'exam_slot'   => strtoupper($data['exam_slot']   ?? 'SLOT1'),
             'time_window' => strtoupper($data['time_window']  ?? 'MORNING'),
-            'password'    => Hash::make('password'),
+            'password'    => Hash::make($data['password'] ?? 'password'),
         ]);
 
         $examIds = $data['exam_ids'] ?? $data['exams'] ?? [];
@@ -59,12 +60,21 @@ class StudentController extends Controller
     public function update(Request $request, $id)
     {
         $student = Student::findOrFail($id);
-        $student->update($request->validate([
+        $data = $request->validate([
             'name'        => 'sometimes|string',
             'centre_name' => 'sometimes|string',
             'exam_slot'   => 'sometimes|in:SLOT1,SLOT2,SLOT3',
             'time_window' => 'sometimes|in:MORNING,AFTERNOON,EVENING',
-        ]));
+            'password'    => 'nullable|string|min:4',
+        ]);
+
+        if (!empty($data['password'])) {
+            $data['password'] = Hash::make($data['password']);
+        } else {
+            unset($data['password']);
+        }
+
+        $student->update($data);
 
         // Accept either 'exam_ids' or 'exams' for flexibility
         $examIds = $request->input('exam_ids', $request->input('exams'));

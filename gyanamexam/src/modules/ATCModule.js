@@ -650,7 +650,11 @@ async function editStudentModal(ApiClient, student) {
         </div>
         <div class="form-group">
           <label class="form-label">New Password <span style="font-weight:400;color:var(--text-muted)">(leave blank to keep current)</span></label>
-          <input id="atc-edit-password" class="form-input" type="password" placeholder="••••••••">
+          <input id="atc-edit-password" class="form-input" type="password" placeholder="••••••••" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm Password</label>
+          <input id="atc-edit-password2" class="form-input" type="password" placeholder="Re-enter password" autocomplete="new-password">
         </div>
         <div class="modal-actions" style="padding-top:0.5rem;border-top:1px solid var(--gray-100)">
           <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Cancel</button>
@@ -663,9 +667,14 @@ async function editStudentModal(ApiClient, student) {
     const name = document.getElementById('atc-edit-name').value.trim();
     const exam_slot = document.getElementById('atc-edit-slot').value.trim();
     const password = document.getElementById('atc-edit-password').value;
+    const password2 = document.getElementById('atc-edit-password2')?.value || '';
     if (!name) { modalService.toast('Name is required', 'error'); return; }
     const payload = { name, exam_slot };
-    if (password) payload.password = password;
+    if (password || password2) {
+      if (password.length < 4) { modalService.toast('Password must be at least 4 characters', 'error'); return; }
+      if (password !== password2) { modalService.toast('Passwords do not match', 'error'); return; }
+      payload.password = password;
+    }
     try {
       await ApiClient.updateStudent(id, payload);
       window.closeModal();
