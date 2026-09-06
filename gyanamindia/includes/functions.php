@@ -1475,6 +1475,146 @@ function markSharePaymentStatus(PDO $pdo, int $paymentId, string $status, ?int $
 }
 
 /**
+ * Call Razorpay REST API (GET).
+ * @return array{ok:bool,http:int,data:?array,error:?string}
+ */
+function razorpayApiRequest(string $method, string $path, ?array $body = null): array {
+    if (!defined('RAZORPAY_KEY_ID') || !defined('RAZORPAY_KEY_SECRET')) {
+        $rzpFile = __DIR__ . '/../config/razorpay.php';
+        if (is_file($rzpFile)) {
+            require_once $rzpFile;
+        }
+    }
+    if (!defined('RAZORPAY_KEY_ID') || !defined('RAZORPAY_KEY_SECRET')) {
+        return ['ok' => false, 'http' => 0, 'data' => null, 'error' => 'Razorpay keys not configured'];
+    }
+    $url = 'https://api.razorpay.com/v1/' . ltrim($path, '/');
+    $ch = curl_init($url);
+    $opts = [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_USERPWD        => RAZORPAY_KEY_ID . ':' . RAZORPAY_KEY_SECRET,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_TIMEOUT        => 20,
+        CURLOPT_CONNECTTIMEOUT => 8,
+    ];
+    $method = strtoupper($method);
+    if ($method === 'POST') {
+        $opts[CURLOPT_POST] = true;
+        $opts[CURLOPT_POSTFIELDS] = json_encode($body ?? []);
+    } elseif ($method !== 'GET') {
+        $opts[CURLOPT_CUSTOMREQUEST] = $method;
+        if ($body !== null) {
+            $opts[CURLOPT_POSTFIELDS] = json_encode($body);
+        }
+    }
+    curl_setopt_array($ch, $opts);
+    $resp = curl_exec($ch);
+    $http = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+    if ($err) {
+        return ['ok' => false, 'http' => 0, 'data' => null, 'error' => $err];
+    }
+    $data = json_decode((string)$resp, true);
+    return [
+        'ok'    => $http >= 200 && $http < 300,
+        'http'  => $http,
+        'data'  => is_array($data) ? $data : null,
+        'error' => ($http >= 200 && $http < 300) ? null : (($data['error']['description'] ?? null) ?: "HTTP $http"),
+    ];
+}
+
+/**
+ * If Razorpay already captured money for this share_payment order, mark it Completed.
+ * Use after checkout dismiss / failed verify / admin sync.
+ *
+ * @return array{success:bool,completed:bool,message:string,razorpay_status?:string}
+ */
+function reconcileSharePaymentFromRazorpay(PDO $pdo, int $paymentId, ?int $atcId = null): array {
+    ensureSharePaymentSchema($pdo);
+
+    $sql = 'SELECT * FROM share_payments WHERE id = ?';
+    $params = [$paymentId];
+    if ($atcId) {
+        $sql .= ' AND atc_id = ?';
+        $params[] = $atcId;
+    }
+    $sql .= ' LIMIT 1';
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return ['success' => false, 'completed' => false, 'message' => 'Payment record not found'];
+    }
+
+    if (($row['status'] ?? '') === 'Completed') {
+        applyHoSharePaidForPayment($pdo, $row);
+        return ['success' => true, 'completed' => true, 'message' => 'Already completed', 'razorpay_status' => 'completed'];
+    }
+
+    $orderId = trim((string)($row['razorpay_order_id'] ?? ''));
+    if ($orderId === '') {
+        return [
+            'success' => true,
+            'completed' => false,
+            'message' => 'No Razorpay order linked — payment was never started at the gateway.',
+            'razorpay_status' => 'no_order',
+        ];
+    }
+
+    $api = razorpayApiRequest('GET', 'orders/' . rawurlencode($orderId) . '/payments');
+    if (!$api['ok']) {
+        return [
+            'success' => false,
+            'completed' => false,
+            'message' => 'Could not query Razorpay: ' . ($api['error'] ?? 'unknown'),
+            'razorpay_status' => 'api_error',
+        ];
+    }
+
+    $items = $api['data']['items'] ?? [];
+    if (!is_array($items) || empty($items)) {
+        return [
+            'success' => true,
+            'completed' => false,
+            'message' => 'No Razorpay payment found for this order (checkout was closed without paying).',
+            'razorpay_status' => 'no_payment',
+        ];
+    }
+
+    $captured = null;
+    foreach ($items as $p) {
+        $stt = strtolower((string)($p['status'] ?? ''));
+        if (in_array($stt, ['captured', 'authorized'], true)) {
+            $captured = $p;
+            break;
+        }
+    }
+
+    if (!$captured) {
+        $last = $items[0];
+        $lastStatus = (string)($last['status'] ?? 'unknown');
+        return [
+            'success' => true,
+            'completed' => false,
+            'message' => 'Razorpay order has payment(s) but none captured (last: ' . $lastStatus . ').',
+            'razorpay_status' => $lastStatus,
+        ];
+    }
+
+    $rzpPayId = (string)($captured['id'] ?? '');
+    $result = completeSharePayment($pdo, $paymentId, $rzpPayId !== '' ? $rzpPayId : null, $orderId, null);
+    return [
+        'success'   => (bool)($result['success'] ?? false),
+        'completed' => (bool)($result['success'] ?? false),
+        'message'   => $result['success']
+            ? 'Payment found on Razorpay and marked Completed.'
+            : ($result['message'] ?? 'Failed to complete payment'),
+        'razorpay_status' => (string)($captured['status'] ?? 'captured'),
+    ];
+}
+
+/**
  * Course completion exam grade from score (0–100).
  * Matches GIIT course certificate footer: A++ 90+, A+ 80–89, A 66–79, B 55–65, C 40–54.
  */

@@ -294,8 +294,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 echo json_encode(['success' => false, 'message' => 'Invalid status update.']);
                 exit;
             }
+            // Never cancel if Razorpay already captured money (dismiss race / closed modal after pay)
+            if ($status === 'Cancelled') {
+                $recon = reconcileSharePaymentFromRazorpay($pdo, $paymentId, (int)$atcId);
+                if (!empty($recon['completed'])) {
+                    echo json_encode([
+                        'success'   => true,
+                        'completed' => true,
+                        'message'   => $recon['message'],
+                        'updated'   => false,
+                    ]);
+                    exit;
+                }
+            }
             $result = markSharePaymentStatus($pdo, $paymentId, $status, (int)$atcId, $reason !== '' ? mb_substr($reason, 0, 250) : null);
             echo json_encode($result);
+            exit;
+        }
+
+        if ($_POST['action'] === 'reconcile_payment') {
+            $paymentId = intval($_POST['payment_id'] ?? 0);
+            if ($paymentId <= 0) {
+                echo json_encode(['success' => false, 'completed' => false, 'message' => 'Invalid payment id']);
+                exit;
+            }
+            echo json_encode(reconcileSharePaymentFromRazorpay($pdo, $paymentId, (int)$atcId));
             exit;
         }
     } catch (Exception $e) {
@@ -303,6 +326,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 }
+
+// Auto-heal: if ATC has recent Cancelled/Pending orders that Razorpay already captured, complete them
+try {
+    $heal = $pdo->prepare("
+        SELECT id FROM share_payments
+        WHERE atc_id = ?
+          AND status IN ('Pending','Cancelled','Failed')
+          AND razorpay_order_id IS NOT NULL AND razorpay_order_id != ''
+          AND created_at >= (NOW() - INTERVAL 7 DAY)
+        ORDER BY id DESC
+        LIMIT 8
+    ");
+    $heal->execute([$atcId]);
+    foreach ($heal->fetchAll(PDO::FETCH_COLUMN) as $healId) {
+        reconcileSharePaymentFromRazorpay($pdo, (int)$healId, (int)$atcId);
+    }
+} catch (Exception $e) { /* non-fatal */ }
 
 // Fetch students — properly detect share-paid status per admission (incl. re-enrollments)
 // Each admission row (even same student, different course) has its own unique ID.
@@ -327,7 +367,8 @@ try {
 $stmt = $pdo->prepare("
     SELECT id, roll_no, registration_id, first_name, middle_name, last_name, course,
            material_type, mobile, photo, status, admission_date,
-           COALESCE(ho_share_snapshot, NULL) AS ho_share_snapshot
+           COALESCE(ho_share_snapshot, NULL) AS ho_share_snapshot,
+           COALESCE(ho_share_paid, 0) AS ho_share_paid
     FROM admissions
     WHERE atc_id = ? AND status = 'Active'
     ORDER BY roll_no ASC, id ASC
@@ -338,7 +379,8 @@ $allAdmissions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // Mark each admission row with its share_paid status
 $students = [];
 foreach ($allAdmissions as $row) {
-    $row['share_paid'] = isset($paidAdmissionIds[intval($row['id'])]) ? 1 : 0;
+    $aid = intval($row['id']);
+    $row['share_paid'] = (isset($paidAdmissionIds[$aid]) || !empty($row['ho_share_paid'])) ? 1 : 0;
     $students[] = $row;
 }
 
@@ -650,6 +692,10 @@ async function initiateRazorpayPayment(paymentData) {
         return;
     }
 
+    // Prevent Razorpay modal.ondismiss from cancelling after a successful pay
+    // (ondismiss often fires when the checkout closes after payment too).
+    let checkoutSettled = false;
+
     const options = {
         key:         '<?= RAZORPAY_KEY_ID ?>',
         amount:      orderAmountPaise,
@@ -658,6 +704,7 @@ async function initiateRazorpayPayment(paymentData) {
         description: `Share payment for ${paymentData.student_details.length} student(s)`,
         order_id:    orderId,
         handler: function (response) {
+            checkoutSettled = true;
             verifyPayment(paymentData.payment_id, response);
         },
         prefill: {
@@ -672,8 +719,22 @@ async function initiateRazorpayPayment(paymentData) {
         },
         theme: { color: '#6366f1' },
         modal: {
-            ondismiss: function() {
-                markPaymentStatus(paymentData.payment_id, 'Cancelled', 'Checkout dismissed by user');
+            ondismiss: async function() {
+                if (checkoutSettled) return;
+                // Money may already be captured even if handler didn't run — check Razorpay first
+                try {
+                    const fd = new FormData();
+                    fd.append('action', 'reconcile_payment');
+                    fd.append('payment_id', paymentData.payment_id);
+                    const recon = await (await fetch('', { method: 'POST', body: fd })).json();
+                    if (recon && recon.completed) {
+                        checkoutSettled = true;
+                        showToast('Payment successful! Share payment completed.', 'success');
+                        setTimeout(() => location.reload(), 1500);
+                        return;
+                    }
+                } catch (e) { /* fall through to cancel */ }
+                await markPaymentStatus(paymentData.payment_id, 'Cancelled', 'Checkout dismissed by user');
                 showToast('Payment cancelled. You can try again anytime.', 'warning');
             }
         }
@@ -689,6 +750,7 @@ async function initiateRazorpayPayment(paymentData) {
 
     const rzp = new Razorpay(options);
     rzp.on('payment.failed', function(resp) {
+        checkoutSettled = true;
         const desc = (resp && resp.error && resp.error.description) ? resp.error.description : 'Payment failed';
         markPaymentStatus(paymentData.payment_id, 'Failed', desc);
         showToast('Payment failed: ' + desc, 'error');
@@ -703,8 +765,14 @@ async function markPaymentStatus(paymentId, status, reason) {
         fd.append('payment_id', paymentId);
         fd.append('status', status);
         fd.append('reason', reason || '');
-        await fetch('', { method: 'POST', body: fd });
+        const result = await (await fetch('', { method: 'POST', body: fd })).json();
+        if (result && result.completed) {
+            showToast('Payment successful! Share payment completed.', 'success');
+            setTimeout(() => location.reload(), 1500);
+        }
+        return result;
     } catch (e) { /* ignore */ }
+    return null;
 }
 
 // Verify payment with server
@@ -723,12 +791,34 @@ async function verifyPayment(paymentId, razorpayResponse) {
         if (result.success) {
             showToast('Payment successful! Share payment completed.', 'success');
             setTimeout(() => location.reload(), 2000);
-        } else {
-            showToast('Verification failed: ' + result.message, 'error');
+            return;
         }
+
+        // Signature/network edge case — ask Razorpay what actually happened
+        const reconFd = new FormData();
+        reconFd.append('action', 'reconcile_payment');
+        reconFd.append('payment_id', paymentId);
+        const recon = await (await fetch('', { method: 'POST', body: reconFd })).json();
+        if (recon && recon.completed) {
+            showToast('Payment successful! Share payment completed.', 'success');
+            setTimeout(() => location.reload(), 2000);
+            return;
+        }
+        showToast('Verification failed: ' + (result.message || 'Unknown error'), 'error');
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error verifying payment. If money was deducted, it will sync via webhook shortly — contact support if status stays Pending.', 'error');
+        try {
+            const reconFd = new FormData();
+            reconFd.append('action', 'reconcile_payment');
+            reconFd.append('payment_id', paymentId);
+            const recon = await (await fetch('', { method: 'POST', body: reconFd })).json();
+            if (recon && recon.completed) {
+                showToast('Payment successful! Share payment completed.', 'success');
+                setTimeout(() => location.reload(), 2000);
+                return;
+            }
+        } catch (e2) {}
+        showToast('Error verifying payment. If money was deducted, refresh this page or contact support.', 'error');
     }
 }
 
