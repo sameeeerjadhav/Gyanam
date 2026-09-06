@@ -47,7 +47,7 @@ export async function renderExams(ApiClient) {
           <td>${cfg.total_questions}</td>
           <td>${cfg.passing_score}%</td>
           <td><span class="badge ${cfg.active ? 'badge-green' : 'badge-gray'}">${cfg.active ? 'Active' : 'Inactive'}</span></td>
-          <td>${cfg.proctored ? '<span class="badge badge-red" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca">🛡️ Yes</span>' : '<span style="color:var(--text-muted);font-size:0.8rem">No</span>'}</td>
+          <td>${cfg.proctored ? '<span class="badge badge-red" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca">🛡️ Proctored</span>' : '<span class="badge" style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0">Normal</span>'}</td>
           <td>
             <div style="display:flex;gap:0.375rem">
               <button class="btn btn-outline btn-sm" onclick="toggleExam('${cfg.id}','${cfg.active}')">${cfg.active ? 'Deactivate' : 'Activate'}</button>
@@ -89,7 +89,7 @@ export async function renderExams(ApiClient) {
 
   <div class="table-wrap card">
     <table>
-      <thead><tr><th>Exam ID</th><th>Title</th><th>Type</th><th>Duration</th><th>Questions</th><th>Pass %</th><th>Status</th><th>Proctored</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Exam ID</th><th>Title</th><th>Type</th><th>Duration</th><th>Questions</th><th>Pass %</th><th>Status</th><th>Mode</th><th>Actions</th></tr></thead>
       <tbody id="exams-table-body"></tbody>
     </table>
   </div>`;
@@ -124,13 +124,13 @@ export async function renderExams(ApiClient) {
 
 function _proctoringToggle(id, label, icon, desc, checked) {
   return `
-    <div style="display:flex;align-items:flex-start;gap:0.6rem;padding:0.6rem 0.75rem;background:white;border:1px solid #e2e8f0;border-radius:8px">
-      <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} style="width:16px;height:16px;margin-top:2px;accent-color:#dc2626;flex-shrink:0">
-      <div>
-        <div style="font-size:0.8rem;font-weight:600;color:#1e293b">${icon} ${label}</div>
-        <div style="font-size:0.7rem;color:#64748b;margin-top:0.1rem">${desc}</div>
-      </div>
-    </div>
+    <label for="${id}" style="display:flex;align-items:flex-start;gap:0.55rem;padding:0.55rem 0.65rem;background:#fff;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;transition:border-color .15s">
+      <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} style="width:15px;height:15px;margin-top:2px;accent-color:#dc2626;flex-shrink:0">
+      <span>
+        <span style="display:block;font-size:0.78rem;font-weight:650;color:#1e293b;line-height:1.25">${icon} ${label}</span>
+        <span style="display:block;font-size:0.68rem;color:#64748b;margin-top:0.12rem;line-height:1.35">${desc}</span>
+      </span>
+    </label>
   `;
 }
 
@@ -139,11 +139,15 @@ function getOverlay() {
   if (!ov) {
     ov = document.createElement('div');
     ov.id = 'modal-overlay';
-    ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;overflow-y:auto;padding:1rem';
-    ov.innerHTML = '<div id="modal-box" style="margin:auto"></div>';
+    ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,0.5);align-items:flex-start;justify-content:center;overflow-y:auto;padding:1.25rem 1rem;box-sizing:border-box';
+    ov.innerHTML = '<div id="modal-box" style="margin:auto;width:100%;display:flex;justify-content:center;padding:0.5rem 0"></div>';
     document.body.appendChild(ov);
     ov.addEventListener('click', e => { if (e.target === ov) window.closeModal(); });
   }
+  // Ensure long modals can scroll even if overlay was created earlier with old styles
+  ov.style.alignItems = 'flex-start';
+  ov.style.overflowY = 'auto';
+  ov.style.padding = '1.25rem 1rem';
   return ov;
 }
 
@@ -171,107 +175,128 @@ async function showExamModal(ApiClient, exam = null) {
       + '<p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem">Sync courses from main portal (Admin › Courses) to get a dropdown.</p>';
   }
 
+  const isProctored = !!exam?.proctored;
+
   getOverlay().style.display = 'flex';
   document.getElementById('modal-box').innerHTML = `
-    <div class="modal-card" style="max-width:580px;width:95vw;padding:0">
-      <div class="modal-header" style="background:linear-gradient(135deg,#4361ee,#3730a3)">
-        <div style="display:flex;align-items:center;gap:0.75rem">
-          <div style="width:36px;height:36px;background:rgba(255,255,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="width:18px;height:18px"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+    <div class="modal-card exam-config-modal" style="max-width:640px;width:min(95vw,640px);padding:0;margin:0 auto;display:flex;flex-direction:column;max-height:min(92vh,900px);overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,.35)">
+      <div class="modal-header" style="flex-shrink:0;margin:0;padding:1rem 1.25rem;background:linear-gradient(135deg,#1e3a8a,#3730a3);border-radius:var(--radius-xl) var(--radius-xl) 0 0">
+        <div style="display:flex;align-items:center;gap:0.75rem;min-width:0">
+          <div style="width:36px;height:36px;background:rgba(255,255,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="width:18px;height:18px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           </div>
-          <h3 class="modal-title" style="color:#fff;margin:0">${exam ? 'Edit Exam Configuration' : 'New Exam Configuration'}</h3>
+          <div style="min-width:0">
+            <h3 class="modal-title" style="color:#fff;margin:0;font-size:1.05rem">${exam ? 'Edit Exam Configuration' : 'New Exam Configuration'}</h3>
+            <p style="margin:0.15rem 0 0;font-size:0.72rem;color:rgba(255,255,255,0.7)">Choose Normal or Proctored mode for this exam</p>
+          </div>
         </div>
-        <button onclick="closeModal()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:0.3rem 0.65rem;cursor:pointer;font-size:1rem;line-height:1">×</button>
+        <button type="button" onclick="closeModal()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:0.35rem 0.7rem;cursor:pointer;font-size:1.1rem;line-height:1;flex-shrink:0" aria-label="Close">×</button>
       </div>
-      <div style="padding:1.25rem;display:flex;flex-direction:column;gap:0">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
-          <div class="form-group" style="grid-column:1/-1">
+
+      <div style="flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:1.1rem 1.25rem 0.5rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.85rem 0.75rem">
+          <div class="form-group" style="grid-column:1/-1;margin:0">
             <label class="form-label">Exam Title *</label>
             <input id="ex-title" class="form-input" value="${exam?.title || ''}" placeholder="e.g. Abacus Level 1 — Final Exam 2025">
           </div>
-          <div class="form-group">
+          <div class="form-group" style="margin:0">
             <label class="form-label">Exam ID <span style="font-weight:400;color:var(--text-muted)">(auto if blank)</span></label>
             <input id="ex-id" class="form-input" value="${exam?.exam_id || ''}" placeholder="auto" ${exam ? 'readonly style="background:var(--gray-100)"' : ''}>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="margin:0">
             <label class="form-label">Type</label>
             <select id="ex-type" class="form-select">
               <option value="demo" ${exam?.exam_type === 'demo' ? 'selected' : ''}>Demo / Practice</option>
               <option value="main" ${exam?.exam_type === 'main' ? 'selected' : ''}>Main / Official</option>
             </select>
           </div>
-          <div class="form-group" style="grid-column:1/-1">
+          <div class="form-group" style="grid-column:1/-1;margin:0">
             <label class="form-label">Course / Subject *</label>
             ${subjectField}
           </div>
-          <div class="form-group">
+          <div class="form-group" style="margin:0">
             <label class="form-label">Duration (minutes)</label>
             <input id="ex-dur" class="form-input" type="number" value="${exam?.duration || 30}" min="1">
           </div>
-          <div class="form-group">
+          <div class="form-group" style="margin:0">
             <label class="form-label">Questions to Show</label>
             <input id="ex-qs" class="form-input" type="number" value="${exam?.total_questions || 10}" min="1">
           </div>
-          <div class="form-group">
+          <div class="form-group" style="margin:0">
             <label class="form-label">Passing Score (%)</label>
             <input id="ex-pass" class="form-input" type="number" value="${exam?.passing_score || 60}" min="1" max="100">
           </div>
-          <div class="form-group">
+          <div class="form-group" style="margin:0">
             <label class="form-label">Question Bank *</label>
             <select id="ex-bank" class="form-select">${bankOpts}</select>
           </div>
-          <div class="form-group" style="grid-column:1/-1">
+          <div class="form-group" style="grid-column:1/-1;margin:0">
             <label class="form-label">Instructions <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
-            <textarea id="ex-inst" class="form-textarea" style="min-height:70px" placeholder="Instructions shown to student before exam starts...">${exam?.instructions || ''}</textarea>
+            <textarea id="ex-inst" class="form-textarea" style="min-height:56px;max-height:100px;resize:vertical" placeholder="Shown to student before the exam starts…">${exam?.instructions || ''}</textarea>
           </div>
 
-          <!-- Proctoring Section -->
-          <div class="form-group" style="grid-column:1/-1;margin-top:0.5rem">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem 1rem;background:linear-gradient(135deg,#fef2f2,#fff1f2);border:1px solid #fecaca;border-radius:10px;cursor:pointer" onclick="document.getElementById('proctoring-panel').style.display=document.getElementById('proctoring-panel').style.display==='none'?'block':'none';this.querySelector('.proct-arrow').style.transform=document.getElementById('proctoring-panel').style.display==='none'?'':'rotate(180deg)'">
-              <div style="display:flex;align-items:center;gap:0.6rem">
-                <span style="font-size:1.1rem">🛡️</span>
-                <div>
-                  <div style="font-weight:700;font-size:0.85rem;color:#991b1b">Proctoring Settings</div>
-                  <div style="font-size:0.72rem;color:#b91c1c">Anti-cheating measures for this exam</div>
-                </div>
-              </div>
-              <div style="display:flex;align-items:center;gap:0.75rem">
-                <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer" onclick="event.stopPropagation()">
-                  <input type="checkbox" id="ex-proctored" ${exam?.proctored ? 'checked' : ''} style="width:18px;height:18px;accent-color:#dc2626">
-                  <span style="font-size:0.8rem;font-weight:600;color:#991b1b">Enable</span>
-                </label>
-                <svg class="proct-arrow" style="width:16px;height:16px;color:#991b1b;transition:transform 0.2s;${exam?.proctored ? 'transform:rotate(180deg)' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-              </div>
+          <div class="form-group" style="grid-column:1/-1;margin:0.25rem 0 0">
+            <label class="form-label" style="margin-bottom:0.45rem">Exam Mode *</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.55rem">
+              <label id="mode-normal-card" style="display:flex;align-items:flex-start;gap:0.55rem;padding:0.75rem 0.85rem;border:2px solid ${isProctored ? '#e5e7eb' : '#16a34a'};border-radius:10px;background:${isProctored ? '#fff' : '#f0fdf4'};cursor:pointer;transition:all .15s">
+                <input type="radio" name="ex-mode" id="ex-mode-normal" value="normal" ${isProctored ? '' : 'checked'} style="margin-top:2px;accent-color:#16a34a" onchange="window.setExamMode(false)">
+                <span>
+                  <span style="display:block;font-weight:700;font-size:0.84rem;color:#166534">Normal</span>
+                  <span style="display:block;font-size:0.68rem;color:#64748b;margin-top:0.12rem;line-height:1.35">Standard exam — no anti-cheat monitoring.</span>
+                </span>
+              </label>
+              <label id="mode-proctored-card" style="display:flex;align-items:flex-start;gap:0.55rem;padding:0.75rem 0.85rem;border:2px solid ${isProctored ? '#dc2626' : '#e5e7eb'};border-radius:10px;background:${isProctored ? '#fef2f2' : '#fff'};cursor:pointer;transition:all .15s">
+                <input type="radio" name="ex-mode" id="ex-mode-proctored" value="proctored" ${isProctored ? 'checked' : ''} style="margin-top:2px;accent-color:#dc2626" onchange="window.setExamMode(true)">
+                <span>
+                  <span style="display:block;font-weight:700;font-size:0.84rem;color:#991b1b">Proctored</span>
+                  <span style="display:block;font-size:0.68rem;color:#64748b;margin-top:0.12rem;line-height:1.35">Anti-cheat: tab switch, fullscreen, copy block.</span>
+                </span>
+              </label>
             </div>
-            <div id="proctoring-panel" style="display:${exam?.proctored ? 'block' : 'none'};margin-top:0.75rem;padding:1rem;background:#fafbfc;border:1px solid #e2e8f0;border-radius:10px">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
-                ${_proctoringToggle('proct-camera', 'Camera Access', '📷', 'Request camera for monitoring (non-mandatory)', exam?.proctoring_settings?.camera)}
-                ${_proctoringToggle('proct-mic', 'Microphone Access', '🎤', 'Request microphone for audio monitoring (non-mandatory)', exam?.proctoring_settings?.microphone)}
-                ${_proctoringToggle('proct-copypaste', 'Block Copy/Paste', '📋', 'Disable Ctrl+C, Ctrl+V, right-click copy', exam?.proctoring_settings?.copy_paste_block !== false)}
-                ${_proctoringToggle('proct-rightclick', 'Block Right Click', '🖱️', 'Disable context menu during exam', exam?.proctoring_settings?.right_click_block !== false)}
-                ${_proctoringToggle('proct-fullscreen', 'Enforce Fullscreen', '🖥️', 'Force fullscreen mode, warn on exit', exam?.proctoring_settings?.fullscreen_enforce !== false)}
-                ${_proctoringToggle('proct-devtools', 'DevTools Detection', '🔧', 'Detect if browser dev tools are opened', exam?.proctoring_settings?.devtools_detect !== false)}
-                ${_proctoringToggle('proct-textselect', 'Block Text Selection', '✂️', 'Prevent selecting/highlighting text', exam?.proctoring_settings?.text_select_block !== false)}
+            <input type="checkbox" id="ex-proctored" ${isProctored ? 'checked' : ''} style="display:none" aria-hidden="true" tabindex="-1">
+            <div id="proctoring-panel" style="display:${isProctored ? 'block' : 'none'};margin-top:0.65rem;padding:0.75rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
+              <div style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:0.55rem">Proctoring options</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+                ${_proctoringToggle('proct-camera', 'Camera Access', '📷', 'Request camera (optional)', exam?.proctoring_settings?.camera)}
+                ${_proctoringToggle('proct-mic', 'Microphone', '🎤', 'Request mic (optional)', exam?.proctoring_settings?.microphone)}
+                ${_proctoringToggle('proct-copypaste', 'Block Copy/Paste', '📋', 'Disable Ctrl+C / Ctrl+V', exam?.proctoring_settings?.copy_paste_block !== false)}
+                ${_proctoringToggle('proct-rightclick', 'Block Right Click', '🖱️', 'Disable context menu', exam?.proctoring_settings?.right_click_block !== false)}
+                ${_proctoringToggle('proct-fullscreen', 'Enforce Fullscreen', '🖥️', 'Warn on exit fullscreen', exam?.proctoring_settings?.fullscreen_enforce !== false)}
+                ${_proctoringToggle('proct-devtools', 'DevTools Detection', '🔧', 'Detect open dev tools', exam?.proctoring_settings?.devtools_detect !== false)}
+                ${_proctoringToggle('proct-textselect', 'Block Text Select', '✂️', 'Prevent text highlighting', exam?.proctoring_settings?.text_select_block !== false)}
               </div>
-              <div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.75rem">
-                <div style="flex:1">
-                  <label style="font-size:0.78rem;font-weight:600;color:#374151;display:block;margin-bottom:0.3rem">⚠️ Tab Switch Warning Limit</label>
-                  <div style="display:flex;align-items:center;gap:0.5rem">
-                    <input type="number" id="proct-tablimit" class="form-input" style="width:80px" min="1" max="10" value="${exam?.proctoring_settings?.tab_switch_limit ?? 3}">
-                    <span style="font-size:0.75rem;color:var(--text-muted)">warnings before auto-submit</span>
-                  </div>
-                </div>
+              <div style="margin-top:0.65rem;display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+                <label style="font-size:0.75rem;font-weight:600;color:#374151">Tab-switch warnings before auto-submit</label>
+                <input type="number" id="proct-tablimit" class="form-input" style="width:72px" min="1" max="10" value="${exam?.proctoring_settings?.tab_switch_limit ?? 3}">
               </div>
             </div>
           </div>
         </div>
-        <p style="font-size:0.78rem;color:var(--text-muted);margin:0.25rem 0 0.75rem">ℹ️ Questions are randomly selected from the bank for each student.</p>
-        <div class="modal-actions" style="padding-top:0.75rem;border-top:1px solid var(--gray-100);margin-top:0.25rem">
-          <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Cancel</button>
-          <button class="modal-btn modal-btn-confirm" onclick="doSaveExam('${exam?.id || ''}')">${exam ? 'Save Changes' : 'Create Exam'}</button>
-        </div>
+        <p style="font-size:0.74rem;color:#64748b;margin:0.85rem 0 0.35rem;line-height:1.45">Questions are randomly selected from the bank for each student.</p>
+      </div>
+
+      <div class="modal-actions" style="flex-shrink:0;margin:0;padding:0.85rem 1.25rem;border-top:1px solid #e5e7eb;background:#fafafa;border-radius:0 0 var(--radius-xl) var(--radius-xl);display:flex;justify-content:flex-end;gap:0.5rem">
+        <button type="button" class="modal-btn modal-btn-cancel" onclick="closeModal()">Cancel</button>
+        <button type="button" class="modal-btn modal-btn-confirm" onclick="doSaveExam('${exam?.id || ''}')">${exam ? 'Save Changes' : 'Create Exam'}</button>
       </div>
     </div>`;
+
+  window.setExamMode = (proctored) => {
+    const cb = document.getElementById('ex-proctored');
+    const panel = document.getElementById('proctoring-panel');
+    const normalCard = document.getElementById('mode-normal-card');
+    const proctCard = document.getElementById('mode-proctored-card');
+    if (cb) cb.checked = !!proctored;
+    if (panel) panel.style.display = proctored ? 'block' : 'none';
+    if (normalCard) {
+      normalCard.style.borderColor = proctored ? '#e5e7eb' : '#16a34a';
+      normalCard.style.background = proctored ? '#fff' : '#f0fdf4';
+    }
+    if (proctCard) {
+      proctCard.style.borderColor = proctored ? '#dc2626' : '#e5e7eb';
+      proctCard.style.background = proctored ? '#fef2f2' : '#fff';
+    }
+  };
 
   window.doSaveExam = async (existingDbId) => {
     const title = document.getElementById('ex-title').value.trim();
