@@ -2867,6 +2867,486 @@ tbody tr:hover {
   font-weight: 750;
 }
 
+/* ── Pre-exam gate ──────────────────────────────────────────── */
+.peg-page {
+  min-height: 100vh;
+  padding: 1.25rem 1rem 2rem;
+  background:
+    radial-gradient(ellipse 70% 45% at 50% -10%, rgba(29, 78, 216, 0.12), transparent),
+    linear-gradient(180deg, #0f172a 0%, #1e293b 35%, #f1f5f9 35%);
+  font-family: var(--font);
+}
+
+.peg-shell {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.peg-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.peg-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #fff;
+}
+
+.peg-brand img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.peg-brand-name {
+  font-weight: 750;
+  font-size: 0.95rem;
+}
+
+.peg-brand-sub {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.peg-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #e2e8f0;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  font-weight: 650;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.peg-cancel:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fecaca;
+}
+
+.peg-exam-bar {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1.15rem;
+  color: #fff;
+}
+
+.peg-exam-title {
+  font-weight: 750;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+.peg-exam-meta {
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.peg-pill {
+  display: inline-flex;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.peg-pill-red {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.peg-pill-green {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.peg-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.peg-step {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.peg-step.is-active { color: #1d4ed8; }
+.peg-step.is-done { color: #15803d; }
+
+.peg-step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.peg-step.is-active .peg-step-num {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.peg-step.is-done .peg-step-num {
+  background: #16a34a;
+  color: #fff;
+}
+
+.peg-step-line {
+  flex: 1;
+  min-width: 16px;
+  height: 2px;
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+.peg-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.35rem 1.35rem 1.2rem;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+}
+
+.peg-h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.peg-lead {
+  margin: 0 0 1.15rem;
+  color: #64748b;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.peg-identity {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 1.15rem;
+  margin-bottom: 1.1rem;
+}
+
+@media (max-width: 640px) {
+  .peg-identity {
+    grid-template-columns: 1fr;
+  }
+}
+
+.peg-photo-col {
+  text-align: center;
+}
+
+.peg-avatar {
+  width: 140px;
+  height: 140px;
+  margin: 0 auto;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #1d4ed8, #3730a3);
+  color: #fff;
+  font-size: 3rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.peg-camera-wrap {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 2px solid #e2e8f0;
+  background: #0f172a;
+  aspect-ratio: 4 / 3;
+}
+
+.peg-camera {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scaleX(-1);
+}
+
+.peg-camera-tag {
+  position: absolute;
+  left: 0.5rem;
+  top: 0.5rem;
+  background: rgba(15, 23, 42, 0.85);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 750;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+}
+
+.peg-hint {
+  margin: 0.55rem 0 0;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.peg-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.peg-info {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  text-align: left;
+}
+
+.peg-info span {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.peg-info strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.9rem;
+  color: #0f172a;
+  font-weight: 750;
+}
+
+.peg-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem 0.95rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.84rem;
+  color: #334155;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.peg-check input {
+  margin-top: 0.15rem;
+  width: 16px;
+  height: 16px;
+  accent-color: #1d4ed8;
+  flex-shrink: 0;
+}
+
+.peg-rules {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0 0 1rem;
+}
+
+.peg-rules li {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+}
+
+.peg-rules strong {
+  display: block;
+  font-size: 0.84rem;
+  color: #0f172a;
+  margin-bottom: 0.15rem;
+}
+
+.peg-rules span {
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.peg-terms {
+  text-align: left;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.peg-terms ol {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: #334155;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.peg-terms li { margin-bottom: 0.45rem; }
+
+.peg-instructions {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.peg-instructions-label {
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+
+.peg-instructions-body {
+  font-size: 0.84rem;
+  color: #0f172a;
+  line-height: 1.5;
+}
+
+.peg-ready-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.peg-ready-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.8rem;
+  text-align: left;
+}
+
+.peg-ready-item span {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.peg-ready-item strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+.peg-checklist {
+  margin: 0 0 1rem;
+  padding-left: 1.15rem;
+  text-align: left;
+  color: #475569;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.peg-alert {
+  text-align: left;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.peg-alert-blue {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e40af;
+}
+
+.peg-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.peg-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 0.75rem 1.15rem;
+  font-weight: 750;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.peg-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.peg-btn-ghost {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.peg-btn-primary {
+  background: #1d4ed8;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(29, 78, 216, 0.25);
+  margin-left: auto;
+}
+
+.peg-btn-primary:hover:not(:disabled) {
+  background: #1e40af;
+}
+
+.peg-footnote {
+  margin: 0.65rem 0 0;
+  color: #b91c1c;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 /* ── Exam Selection Screen ──────────────────────────────────── */
 .selection-page {
   min-height: 100vh;

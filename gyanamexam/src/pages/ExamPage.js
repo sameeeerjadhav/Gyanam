@@ -8,7 +8,7 @@
 
 import ApiClient from '../services/APIClient.js';
 import modalService from '../services/ModalService.js';
-import ProctoringService from '../services/ProctoringService.js';
+import ProctoringService from '../services/ProctoringService.js?v=2';
 import { QuestionView } from '../components/QuestionView.js';
 import { QuestionPalette } from '../components/QuestionPalette.js';
 import { Timer } from '../components/Timer.js';
@@ -30,7 +30,7 @@ class ExamPage {
     this.proctoring = new ProctoringService();
   }
 
-  async render(container, examConfig, questions, examId, router, draft = null) {
+  async render(container, examConfig, questions, examId, router, draft = null, options = {}) {
     this.currentIndex = 0;
     this.answers = {};
     this.markedForReview = new Set();
@@ -40,6 +40,7 @@ class ExamPage {
       : `sub-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     this._autosaveTimer = null;
     this._dirty = false;
+    this._preCameraStream = options.cameraStream || null;
 
     if (this.timer) this.timer.stop();
     if (this._timerInterval) clearInterval(this._timerInterval);
@@ -430,7 +431,8 @@ class ExamPage {
           }));
         } catch (_) { /* ignore */ }
         this._submitExam(true);
-      }
+      },
+      { cameraStream: this._preCameraStream || null }
     );
 
     // Show proctoring status indicator
@@ -448,8 +450,9 @@ class ExamPage {
     if (existing) existing.remove();
 
     const isAutoSubmit = type === 'tab_switch_exceeded';
-    const bgColor = isAutoSubmit ? '#dc2626' : '#f59e0b';
-    const iconBg = isAutoSubmit ? '#991b1b' : '#92400e';
+    const needsFullscreen = type === 'fullscreen_exit' || type === 'fullscreen_required';
+    const bgColor = isAutoSubmit ? '#dc2626' : (needsFullscreen ? '#1d4ed8' : '#f59e0b');
+    const iconBg = isAutoSubmit ? '#991b1b' : (needsFullscreen ? '#1e3a8a' : '#92400e');
 
     const overlay = document.createElement('div');
     overlay.id = 'proctoring-warning-overlay';
@@ -471,23 +474,36 @@ class ExamPage {
         ${isAutoSubmit ? 'animation:procWarnPulse 1s infinite;' : ''}
       ">
         <div style="width:40px;height:40px;background:${iconBg};border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1.3rem">
-          ${isAutoSubmit ? '🚫' : '⚠️'}
+          ${isAutoSubmit ? '🚫' : (needsFullscreen ? '⛶' : '⚠️')}
         </div>
         <div style="flex:1">
           <div style="font-weight:700;font-size:0.9rem;margin-bottom:0.2rem">
-            ${isAutoSubmit ? 'Exam Auto-Submitted' : 'Proctoring Warning'}
+            ${isAutoSubmit ? 'Exam Auto-Submitted' : (needsFullscreen ? 'Fullscreen Required' : 'Proctoring Warning')}
           </div>
           <div style="font-size:0.82rem;opacity:0.95">${message}</div>
         </div>
-        ${!isAutoSubmit ? `
-          <button onclick="this.closest('#proctoring-warning-overlay').remove()"
+        ${needsFullscreen ? `
+          <button type="button" id="proc-enter-fs-btn"
+            style="background:#fff;border:none;color:#1d4ed8;padding:0.5rem 0.9rem;border-radius:8px;cursor:pointer;font-weight:750;font-size:0.8rem;white-space:nowrap">
+            Enter Fullscreen
+          </button>
+        ` : (!isAutoSubmit ? `
+          <button type="button" onclick="this.closest('#proctoring-warning-overlay').remove()"
             style="background:rgba(255,255,255,0.2);border:none;color:white;padding:0.4rem 0.8rem;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem">
             OK
           </button>
-        ` : ''}
+        ` : '')}
       </div>
     `;
     document.body.appendChild(overlay);
+
+    if (needsFullscreen) {
+      document.getElementById('proc-enter-fs-btn')?.addEventListener('click', async () => {
+        const ok = this.proctoring ? await this.proctoring.requestFullscreen() : false;
+        if (ok) overlay.remove();
+      });
+      return; // sticky until re-entered
+    }
 
     // Auto-dismiss non-critical warnings after 5 seconds
     if (!isAutoSubmit) {

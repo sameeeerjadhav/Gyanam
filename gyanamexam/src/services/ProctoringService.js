@@ -35,8 +35,10 @@ class ProctoringService {
    * @param {Object} settings - proctoring_settings from exam config
    * @param {Function} onViolation - called on each violation (type, message, count, limit)
    * @param {Function} onAutoSubmit - called when tab switch limit is exceeded
+   * @param {Object} [opts]
+   * @param {MediaStream|null} [opts.cameraStream] - pre-opened camera from pre-exam gate
    */
-  async initialize(settings, onViolation, onAutoSubmit) {
+  async initialize(settings, onViolation, onAutoSubmit, opts = {}) {
     this.settings = {
       camera: false,
       microphone: false,
@@ -54,6 +56,10 @@ class ProctoringService {
     this._onViolation = onViolation;
     this._onAutoSubmit = onAutoSubmit;
     this.active = true;
+
+    if (opts.cameraStream) {
+      this._cameraStream = opts.cameraStream;
+    }
 
     // Set up each feature
     if (this.settings.camera) await this._setupCamera();
@@ -90,6 +96,7 @@ class ProctoringService {
   // ─── Camera ─────────────────────────────────────────────────────────────────
 
   async _setupCamera() {
+    if (this._cameraStream) return; // already provided by pre-exam gate
     try {
       this._cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
     } catch (e) {
@@ -199,37 +206,80 @@ class ProctoringService {
 
   // ─── Fullscreen Enforcement ─────────────────────────────────────────────────
 
+  isFullscreen() {
+    return !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    );
+  }
+
+  /**
+   * Request fullscreen. Must be called from a user gesture for browsers to allow it.
+   * @returns {Promise<boolean>}
+   */
+  async requestFullscreen() {
+    if (this.isFullscreen()) return true;
+    const el = document.documentElement;
+    try {
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+        await new Promise(r => setTimeout(r, 100));
+      } else if (el.mozRequestFullScreen) {
+        el.mozRequestFullScreen();
+        await new Promise(r => setTimeout(r, 100));
+      } else if (el.msRequestFullscreen) {
+        el.msRequestFullscreen();
+        await new Promise(r => setTimeout(r, 100));
+      }
+      return this.isFullscreen();
+    } catch (e) {
+      console.warn('Proctoring: Could not enter fullscreen.', e?.message || e);
+      return false;
+    }
+  }
+
+  /** @deprecated use requestFullscreen() */
+  _requestFullscreen() {
+    this.requestFullscreen();
+  }
+
   _setupFullscreen() {
-    // Request fullscreen
-    this._requestFullscreen();
+    // If already fullscreen (from pre-exam gate), keep it; otherwise try once
+    // (may fail without gesture — ExamPage / gate should have entered already).
+    if (!this.isFullscreen()) {
+      this.requestFullscreen().then(ok => {
+        if (!ok && this.active) {
+          this._triggerViolation(
+            'fullscreen_required',
+            'Fullscreen is required for this exam. Click “Enter Fullscreen” to continue.'
+          );
+        }
+      });
+    }
 
     const handler = () => {
       if (!this.active) return;
-      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (!this.isFullscreen()) {
         this._triggerViolation(
           'fullscreen_exit',
-          'You exited fullscreen mode. Please return to fullscreen to continue the exam.'
+          'You left fullscreen. Click “Enter Fullscreen” to continue the exam.'
         );
-        // Re-request fullscreen after a moment
-        setTimeout(() => {
-          if (this.active) this._requestFullscreen();
-        }, 2000);
       }
     };
+
     document.addEventListener('fullscreenchange', handler);
     document.addEventListener('webkitfullscreenchange', handler);
-    this._listeners.push(['fullscreenchange', handler], ['webkitfullscreenchange', handler]);
-  }
-
-  _requestFullscreen() {
-    const el = document.documentElement;
-    try {
-      if (el.requestFullscreen) el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-      else if (el.msRequestFullscreen) el.msRequestFullscreen();
-    } catch (e) {
-      console.warn('Proctoring: Could not enter fullscreen.', e.message);
-    }
+    document.addEventListener('mozfullscreenchange', handler);
+    document.addEventListener('MSFullscreenChange', handler);
+    this._listeners.push(
+      ['fullscreenchange', handler],
+      ['webkitfullscreenchange', handler],
+      ['mozfullscreenchange', handler],
+      ['MSFullscreenChange', handler]
+    );
   }
 
   // ─── DevTools Detection ─────────────────────────────────────────────────────
@@ -344,6 +394,8 @@ class ProctoringService {
     try {
       if (document.fullscreenElement) document.exitFullscreen();
       else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
+      else if (document.mozFullScreenElement) document.mozCancelFullScreen();
+      else if (document.msFullscreenElement) document.msExitFullscreen();
     } catch (e) { /* ignore */ }
   }
 }

@@ -34,6 +34,7 @@ class StudentExamController extends Controller
                 'exam_configs.subject', 'exam_configs.exam_type', 'exam_configs.duration',
                 'exam_configs.total_questions', 'exam_configs.passing_score',
                 'exam_configs.instructions', 'exam_configs.proctored',
+                'exam_configs.proctoring_settings',
             ]);
 
         $examIds = $exams->pluck('id')->all();
@@ -54,6 +55,7 @@ class StudentExamController extends Controller
                 'duration', 'total_questions', 'passing_score', 'instructions',
             ]), [
                 'proctored' => (bool) $exam->proctored,
+                'proctoring_settings' => $exam->proctored ? ($exam->proctoring_settings ?? []) : null,
                 'attempt_info' => [
                     'max_attempts'  => $maxAttempts,
                     'used_attempts' => $usedAttempts,

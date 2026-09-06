@@ -101,6 +101,7 @@ class AuthController extends Controller
                 'name'        => $student->name,
                 'centre_name' => $student->centre_name,
                 'exam_slot'   => $student->exam_slot,
+                'time_window' => $student->time_window,
                 'role'        => 'student',
             ],
         ]);
