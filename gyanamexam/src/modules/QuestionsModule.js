@@ -6,6 +6,7 @@
  * "Show" button navigates to a dedicated full-page view for the bank's questions.
  */
 import modalService from '../services/ModalService.js';
+import { setAssignBankId } from './AssignBankModule.js';
 
 // Cache for portal data (fetched once per session)
 let _coursesCache    = null;
@@ -45,7 +46,7 @@ function getOverlay() {
 // ════════════════════════════════════════════════════════════════════════════════
 // MAIN: Question Banks list page
 // ════════════════════════════════════════════════════════════════════════════════
-export async function renderQuestions(ApiClient, { currentUser }) {
+export async function renderQuestions(ApiClient, { currentUser, loadPage }) {
   const el = document.getElementById('page-content');
 
   el.innerHTML = `
@@ -107,7 +108,7 @@ export async function renderQuestions(ApiClient, { currentUser }) {
                 </button>
                 <button class="btn btn-outline btn-sm" onclick="addQuestion('${bank.id}')">+ Add Q</button>
                 <button class="btn btn-outline btn-sm" onclick="editBank('${bank.id}')">Edit</button>
-                ${currentUser.role === 'admin' ? '<button class="btn btn-outline btn-sm" onclick="showAssignBankModal(\'' + bank.id + '\')">🔗 Assign</button>' : ''}
+                ${currentUser.role === 'admin' ? '<button class="btn btn-outline btn-sm" onclick="openAssignBankPage(\'' + bank.id + '\')">🔗 Assign</button>' : ''}
                 ${(currentUser.role === 'admin' || isOwned) ? '<button class="btn btn-danger btn-sm" onclick="deleteBank(\'' + bank.id + '\')">Delete</button>' : ''}
               </div>
             </div>
@@ -183,117 +184,11 @@ export async function renderQuestions(ApiClient, { currentUser }) {
     } catch (e) { modalService.toast(e.message, 'error'); }
   };
 
-  // ── Assign Bank Modal ────────────────────────────────────────────────────
-  window.showAssignBankModal = async (bankId) => {
-    const banks    = await ApiClient.getQuestionBanks();
-    const bank     = banks.find(b => b.id == bankId);
-    if (!bank) return;
-
-    const assigned       = bank.assignedTo || bank.assigned_to || [];
-    const _atcData       = await getPortalATCData(ApiClient);
-    const allCentres     = _atcData.centres;
-    const availableTypes = _atcData.types;
-
-    const typeFilterOpts = availableTypes.length > 0
-      ? availableTypes.map(t => '<option value="' + t + '">' + t + '</option>').join('')
-      : '';
-
-    function renderCentreList(filterType) {
-      const visible = filterType
-        ? allCentres.filter(c => c.centre_type === filterType)
-        : allCentres;
-
-      if (visible.length === 0) {
-        return '<p style="font-size:0.85rem;color:var(--text-muted);padding:1rem;text-align:center">'
-          + (allCentres.length === 0
-            ? 'No ATC centres synced yet. Save/edit any ATC center in the main portal.'
-            : 'No centres found for this type.')
-          + '</p>';
-      }
-
-      return visible.map(c => {
-        const isChecked = assigned.includes(c.code) ? 'checked' : '';
-        const typeTag   = c.centre_type
-          ? '<span style="font-size:0.7rem;background:#e0e7ff;color:#4338ca;padding:0.15rem 0.4rem;border-radius:4px;margin-left:0.35rem">' + c.centre_type + '</span>'
-          : '';
-        const location  = c.district ? ' · ' + c.district : '';
-        return '<label style="display:flex;align-items:center;gap:0.75rem;font-size:0.875rem;cursor:pointer;padding:0.5rem 0.75rem;border-radius:6px;transition:background 0.15s" onmouseover="this.style.background=\'var(--gray-100)\'" onmouseout="this.style.background=\'transparent\'">'
-          + '<input type="checkbox" value="' + c.code + '" class="assign-centre-check" ' + isChecked + ' style="width:16px;height:16px;accent-color:#4361ee">'
-          + '<span style="flex:1"><strong>' + c.code + '</strong>' + typeTag + '<br>'
-          + '<small style="color:var(--text-muted)">' + c.name + location + '</small></span>'
-          + '</label>';
-      }).join('');
-    }
-
-    getOverlay().style.display = 'flex';
-    document.getElementById('modal-box').innerHTML = `
-      <div class="modal-card" style="max-width:540px;width:95vw;padding:0">
-        <div class="modal-header" style="background:linear-gradient(135deg,#0ea5e9,#0369a1);padding:1.25rem 1.5rem">
-          <div style="display:flex;align-items:center;gap:0.75rem">
-            <div style="width:36px;height:36px;background:rgba(255,255,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="width:18px;height:18px"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
-            </div>
-            <h3 style="color:#fff;margin:0;font-size:1.05rem;font-weight:700">Assign to ATC Centres</h3>
-          </div>
-          <button onclick="closeModal()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:0.35rem 0.7rem;cursor:pointer;font-size:1.1rem;line-height:1">×</button>
-        </div>
-        <div style="padding:1.25rem 1.5rem">
-          <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem">
-            <div style="width:40px;height:40px;background:#dbeafe;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" style="width:20px;height:20px"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z"/></svg>
-            </div>
-            <div>
-              <div style="font-weight:700;font-size:0.9rem">${bank.title}</div>
-              <div style="font-size:0.78rem;color:var(--text-muted)">${bank.subject} · ${bank.questions_count} questions</div>
-            </div>
-          </div>
-
-          ${availableTypes.length > 0 ? `
-          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem">
-            <label style="font-size:0.82rem;font-weight:600;white-space:nowrap">Filter by Type:</label>
-            <select id="centre-type-filter" class="form-select" style="flex:1;font-size:0.82rem">
-              <option value="">All Types (${allCentres.length} centres)</option>
-              ${typeFilterOpts}
-            </select>
-          </div>` : ''}
-
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
-            <label class="form-label" style="margin:0;font-size:0.82rem">Select ATC Centres <span style="font-weight:400;color:var(--text-muted)">(${allCentres.length} total)</span></label>
-            <div style="display:flex;gap:0.35rem">
-              <button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('.assign-centre-check').forEach(c=>c.checked=true)">All</button>
-              <button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('.assign-centre-check').forEach(c=>c.checked=false)">None</button>
-            </div>
-          </div>
-          <div id="centre-checklist" style="display:flex;flex-direction:column;max-height:280px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:8px;background:white">
-            ${renderCentreList('')}
-          </div>
-
-          <div style="display:flex;gap:0.75rem;justify-content:flex-end;padding-top:1rem;border-top:1px solid var(--gray-100);margin-top:1rem">
-            <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Cancel</button>
-            <button class="modal-btn modal-btn-confirm" onclick="doAssignBank('${bankId}')">Save Assignment</button>
-          </div>
-        </div>
-      </div>`;
-
-    const filterEl = document.getElementById('centre-type-filter');
-    if (filterEl) {
-      filterEl.addEventListener('change', () => {
-        document.getElementById('centre-checklist').innerHTML = renderCentreList(filterEl.value);
-      });
-    }
-
-    window.doAssignBank = async (bankId) => {
-      const checked = [...document.querySelectorAll('.assign-centre-check:checked')].map(c => c.value);
-      try {
-        await ApiClient.assignQuestionBank(bankId, checked);
-        window.closeModal();
-        renderQuestions(ApiClient, { currentUser });
-        modalService.toast(
-          checked.length ? 'Assigned to ' + checked.length + ' centre(s): ' + checked.join(', ') : 'Bank unassigned (admin-only)',
-          'success'
-        );
-      } catch (e) { modalService.toast('Assignment failed: ' + e.message, 'error'); }
-    };
+  // ── Assign Bank (dedicated page) ─────────────────────────────────────────
+  window.openAssignBankPage = (bankId) => {
+    setAssignBankId(bankId);
+    if (typeof loadPage === 'function') loadPage('assign-bank');
+    else if (typeof window.loadPage === 'function') window.loadPage('assign-bank');
   };
 
   window.deleteBank = async (bankId) => {
@@ -352,7 +247,8 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
         <h2 style="font-size:1.25rem;font-weight:800;margin-bottom:0.25rem">${bank.title}</h2>
         <p style="font-size:0.85rem;color:var(--text-muted)">${bank.subject} · ${questions.length} questions · by ${bank.creator_name || 'Admin'} · Assigned: <span class="badge badge-blue" style="font-size:0.7rem">${assignedLabel}</span></p>
       </div>
-      <div style="display:flex;gap:0.5rem">
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+        ${currentUser.role === 'admin' ? `<button class="btn btn-outline btn-sm" onclick="openAssignBankPage('${bank.id}')">🔗 Assign Centres</button>` : ''}
         <button class="btn btn-primary btn-sm" onclick="addQuestion('${bank.id}')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
           Add Question
@@ -490,7 +386,7 @@ function showNewBankModal(ApiClient, currentUser, bank = null, courses = []) {
         modalService.toast('Question bank updated!', 'success');
       } else {
         await ApiClient.createQuestionBank({ title, subject });
-        modalService.toast('Question bank created! Use the 🔗 Assign button to assign it to ATC centres.', 'success');
+        modalService.toast('Question bank created! Use Assign to choose ATC centres.', 'success');
       }
       window.closeModal();
       _coursesCache = null;
