@@ -61,28 +61,57 @@ export async function renderStudents(ApiClient, { currentUser }) {
     const tbody = document.querySelector('#students-table-body');
     if (!tbody) return;
 
+    const esc = (str) => String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
     tbody.innerHTML = filtered.length === 0
-      ? '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">No students found matching your criteria.</td></tr>'
-      : filtered.map(s => `<tr>
-            <td><input type="checkbox" class="student-select" value="${s.id}" onchange="updateBulkBar()"></td>
-            <td style="font-family:monospace;font-weight:600">${s.identifier}</td>
-            <td>${s.name}</td>
-            <td style="font-size:0.82rem">${s.centre_name}</td>
-            <td><span class="badge badge-gray">${s.exam_slot} · ${s.time_window}</span></td>
-            <td style="font-size:0.82rem">${(s.exams || []).length} exam(s)</td>
+      ? `<tr><td colspan="7" class="stu-empty">
+            <div class="stu-empty-inner">
+              <div class="stu-empty-icon">👥</div>
+              <div>No students match your filters</div>
+            </div>
+         </td></tr>`
+      : filtered.map(s => {
+          const examCount = (s.exams || []).length;
+          const nameSafe = esc(s.name);
+          return `<tr class="stu-row">
+            <td class="stu-check"><input type="checkbox" class="student-select" value="${s.id}" onchange="updateBulkBar()"></td>
             <td>
-              <div style="display:flex;gap:0.375rem;flex-wrap:wrap">
-                <button class="btn btn-primary btn-sm" onclick="showAssignExamsModal('${s.id}', '${s.name.replace(/'/g, "\\'")}')">📋 Assign Exams</button>
-                <button class="btn btn-outline btn-sm" onclick="viewStudentHistory('${s.id}')">History</button>
-                <button class="btn btn-outline btn-sm" onclick="editStudent('${s.id}')">Edit</button>
-                <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button>
+              <div class="stu-id">${s.identifier}</div>
+            </td>
+            <td>
+              <div class="stu-name">${s.name}</div>
+              <div class="stu-sub">${s.centre_name || '—'}</div>
+            </td>
+            <td class="stu-centre-col">${s.centre_name || '—'}</td>
+            <td>
+              <span class="stu-slot">${s.exam_slot || '—'} · ${s.time_window || '—'}</span>
+            </td>
+            <td>
+              <span class="stu-exam-count ${examCount > 0 ? 'has' : ''}">${examCount} exam${examCount === 1 ? '' : 's'}</span>
+            </td>
+            <td>
+              <div class="stu-actions" role="group" aria-label="Actions">
+                <button type="button" class="stu-act stu-act-primary" title="Assign Exams" onclick="showAssignExamsModal('${s.id}', '${nameSafe}')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  Assign
+                </button>
+                <button type="button" class="stu-act" title="Exam History" onclick="viewStudentHistory('${s.id}')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </button>
+                <button type="button" class="stu-act" title="Edit" onclick="editStudent('${s.id}')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+                </button>
+                <button type="button" class="stu-act stu-act-danger" title="Delete" onclick="deleteStudent('${s.id}')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+                </button>
               </div>
             </td>
-          </tr>`).join('');
+          </tr>`;
+        }).join('');
 
     // Update header count
     const countLabel = document.getElementById('student-count-label');
-    if (countLabel) countLabel.textContent = `${filtered.length} student(s)`;
+    if (countLabel) countLabel.textContent = `${filtered.length} of ${allStudents.length} student${allStudents.length === 1 ? '' : 's'}`;
 
     // Reset master checkbox and bulk bar
     const master = document.getElementById('select-all-students');
@@ -91,59 +120,68 @@ export async function renderStudents(ApiClient, { currentUser }) {
   }
 
   const centres = [...new Set(allStudents.map(s => s.centre_name))].sort().filter(Boolean);
-  const scopeNote = currentUser.centre_id ? ` <span style="font-size:0.78rem;color:var(--text-muted)">· ${currentUser.centre_id} only</span>` : '';
+  const scopeNote = currentUser.centre_id
+    ? `<span class="stu-scope">${currentUser.centre_id}</span>`
+    : '';
 
   el.innerHTML = `
-  <div class="page-header">
-    <div><h2>Student Records${scopeNote}</h2><p id="student-count-label">${allStudents.length} students enrolled</p></div>
-    <div style="display:flex;gap:0.5rem">
-      <button id="import-students-btn" class="btn btn-outline">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12L11.25 21m0 0l-3.75-3.75M11.25 21V9.75"/></svg>
-        Import CSV
-      </button>
-      <button id="add-student-btn" class="btn btn-primary">+ Register Student</button>
+  <div class="stu-page">
+    <div class="page-header stu-header">
+      <div>
+        <h2>Student Records ${scopeNote}</h2>
+        <p id="student-count-label">${allStudents.length} student${allStudents.length === 1 ? '' : 's'}</p>
+      </div>
+      <div class="stu-header-actions">
+        <button id="import-students-btn" class="btn btn-outline btn-sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+          Import CSV
+        </button>
+        <button id="add-student-btn" class="btn btn-primary btn-sm">+ Register Student</button>
+      </div>
     </div>
-  </div>
 
-  <div class="card" style="margin-bottom:1.5rem; padding:1rem; display:flex; gap:1rem; flex-wrap:wrap; align-items:center; background: var(--gray-50)">
-    <div style="flex:1; min-width:240px; position:relative">
-      <input type="text" id="stu-search" class="form-input" placeholder="Search by name or student ID..." style="padding-left:2.5rem">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute; left:0.75rem; top:50%; transform:translateY(-50%); width:18px; height:18px; color:var(--gray-400)">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-      </svg>
-    </div>
-    ${!currentUser.centre_id ? `
-    <div style="width:200px">
-      <select id="stu-centre-filter" class="form-select">
+    <div class="stu-toolbar card">
+      <div class="stu-search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+        </svg>
+        <input type="text" id="stu-search" class="form-input" placeholder="Search by name or student ID…">
+      </div>
+      ${!currentUser.centre_id ? `
+      <select id="stu-centre-filter" class="form-select stu-centre-filter">
         <option value="">All Centres</option>
         ${centres.map(c => `<option value="${c}">${c}</option>`).join('')}
-      </select>
-    </div>` : ''}
-  </div>
-
-  <!-- Bulk Action Bar -->
-  <div id="bulk-bar" class="card" style="display:none; margin-bottom: 1rem; background: #2563eb; color: white; padding: 0.75rem 1.25rem; align-items: center; justify-content: space-between; border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);">
-    <div style="display:flex; align-items:center; gap:12px">
-      <div style="background: rgba(255,255,255,0.2); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.82rem; font-weight: 700;" id="bulk-count">0</div>
-      <div style="font-weight: 600; font-size: 0.9375rem;">Students Selected</div>
+      </select>` : ''}
     </div>
-    <div style="display:flex; gap:0.5rem">
-      <button class="btn" style="background: white; color: #2563eb; font-weight: 700; border: none; font-size: 0.875rem;" onclick="showBulkEditModal()">✏️ Bulk Edit</button>
-      <button class="btn" style="background: white; color: #2563eb; font-weight: 700; border: none; font-size: 0.875rem;" onclick="showBulkAssignModal()">📋 Assign Exam</button>
-    </div>
-  </div>
 
-  <div class="card">
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:40px"><input type="checkbox" id="select-all-students" onchange="toggleAllStudents(this)"></th>
-            <th>Student ID</th><th>Name</th><th>Centre</th><th>Slot</th><th>Exams Assigned</th><th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="students-table-body"></tbody>
-      </table>
+    <div id="bulk-bar" class="stu-bulk-bar" style="display:none">
+      <div class="stu-bulk-left">
+        <span class="stu-bulk-count" id="bulk-count">0</span>
+        <span>selected</span>
+      </div>
+      <div class="stu-bulk-actions">
+        <button type="button" class="btn btn-sm" onclick="showBulkEditModal()">Bulk Edit</button>
+        <button type="button" class="btn btn-sm" onclick="showBulkAssignModal()">Assign Exam</button>
+      </div>
+    </div>
+
+    <div class="card stu-table-card">
+      <div class="table-wrap stu-table-wrap">
+        <table class="stu-table">
+          <thead>
+            <tr>
+              <th class="stu-check"><input type="checkbox" id="select-all-students" onchange="toggleAllStudents(this)" title="Select all"></th>
+              <th>Student ID</th>
+              <th>Name</th>
+              <th class="stu-centre-col">Centre</th>
+              <th>Slot</th>
+              <th>Exams</th>
+              <th style="text-align:right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="students-table-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>`;
 

@@ -13,7 +13,7 @@
   <!-- Laravel Echo + Pusher JS for Reverb WebSocket connection -->
   <script src="https://cdn.jsdelivr.net/npm/pusher-js@8.3.0/dist/web/pusher.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="src/styles/main.css?v=6">
+  <link rel="stylesheet" href="src/styles/main.css?v=7">
 </head>
 
 <body>
@@ -230,7 +230,7 @@
     import { renderLive } from './src/modules/LiveMonitorModule.js?v=2';
     import { renderQuestions } from './src/modules/QuestionsModule.js?v=5';
     import { renderExams } from './src/modules/ExamsModule.js?v=6';
-    import { renderStudents } from './src/modules/StudentsModule.js?v=4';
+    import { renderStudents } from './src/modules/StudentsModule.js?v=5';
     import { renderResults } from './src/modules/ResultsModule.js?v=2';
     import { renderATC } from './src/modules/ATCModule.js?v=4';
     import { renderCredentials } from './src/modules/CredentialsModule.js?v=1';
@@ -331,8 +331,8 @@
     function setupSidebar() {
       const badge = document.getElementById('centre-badge');
       if (badge) {
-        badge.textContent = currentUser.centre_id ? '📍 ' + currentUser.centre_id : '🌐 All Centres';
-        badge.style.cssText = 'display:block;font-size:0.72rem;padding:0.25rem 0.5rem;background:var(--primary-50,#eff6ff);color:var(--primary-700,#1d4ed8);border-radius:999px;margin:0.25rem auto 0;text-align:center;max-width:90%';
+        badge.textContent = currentUser.centre_id ? currentUser.centre_id : 'All Centres';
+        badge.style.cssText = 'display:inline-flex;align-items:center;margin-top:0.35rem;font-size:0.65rem;font-weight:700;letter-spacing:.02em;padding:0.18rem 0.5rem;border-radius:999px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.75);border:1px solid rgba(255,255,255,0.12)';
       }
 
       const isATC = currentUser.role === 'atc' || currentUser.role === 'dlc';

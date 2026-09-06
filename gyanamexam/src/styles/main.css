@@ -338,6 +338,331 @@ button {
   color: var(--gray-600);
 }
 
+/* ── Student Records page ───────────────────────────────────── */
+.stu-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-height: 0;
+}
+
+.stu-header {
+  margin-bottom: 0;
+  align-items: center;
+}
+
+.stu-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.stu-scope {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.stu-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.stu-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #fff;
+}
+
+.stu-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+}
+
+.stu-search-wrap svg {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--gray-400);
+  pointer-events: none;
+}
+
+.stu-search-wrap .form-input {
+  padding-left: 2.35rem;
+}
+
+.stu-centre-filter {
+  width: 200px;
+  flex-shrink: 0;
+}
+
+.stu-bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 1rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
+}
+
+.stu-bulk-left {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.stu-bulk-count {
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.stu-bulk-actions {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.stu-bulk-actions .btn {
+  background: #fff;
+  color: #1d4ed8;
+  border: none;
+  font-weight: 700;
+}
+
+.stu-bulk-actions .btn:hover {
+  background: #eff6ff;
+}
+
+.stu-table-card {
+  overflow: hidden;
+}
+
+.stu-table-wrap {
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+}
+
+.stu-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8fafc;
+  box-shadow: inset 0 -1px 0 var(--gray-200);
+}
+
+.stu-table td,
+.stu-table th {
+  padding: 0.65rem 0.9rem;
+}
+
+.stu-check {
+  width: 40px;
+}
+
+.stu-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.01em;
+}
+
+.stu-name {
+  font-weight: 650;
+  font-size: 0.9rem;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.stu-sub {
+  display: none;
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+.stu-slot {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.stu-exam-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #f8fafc;
+  color: #94a3b8;
+  border: 1px solid #e2e8f0;
+}
+
+.stu-exam-count.has {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.stu-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  width: 100%;
+}
+
+.stu-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 0.45rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.stu-act svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.stu-act:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.stu-act-primary {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  padding: 0 0.65rem;
+}
+
+.stu-act-primary:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.stu-act-danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fff;
+}
+
+.stu-act-danger:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.stu-empty {
+  text-align: center;
+  padding: 2.5rem 1rem !important;
+  color: #64748b;
+}
+
+.stu-empty-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+}
+
+.stu-empty-icon {
+  font-size: 1.4rem;
+  opacity: 0.7;
+}
+
+.stu-row:hover .stu-act {
+  border-color: #cbd5e1;
+}
+
+@media (max-width: 900px) {
+  .stu-centre-col {
+    display: none;
+  }
+
+  .stu-sub {
+    display: block;
+  }
+
+  .stu-act-primary span,
+  .stu-act-primary {
+    padding: 0 0.45rem;
+  }
+
+  .stu-act-primary {
+    font-size: 0;
+  }
+
+  .stu-act-primary svg {
+    margin: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .stu-table-wrap {
+    max-height: calc(100vh - 300px);
+  }
+
+  .stu-centre-filter {
+    width: 100%;
+  }
+}
+
 /* ── Table ──────────────────────────────────────────────────── */
 .table-wrap {
   overflow-x: auto;
