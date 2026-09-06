@@ -1214,14 +1214,16 @@ function recordOfflineSharePayment(
     string $paymentMode = 'Cash',
     ?string $referenceNo = null,
     ?string $remarks = null,
-    ?string $paidAt = null
+    ?string $paidAt = null,
+    float $transactionFee = 0.0
 ): array {
     ensureSharePaymentSchema($pdo);
 
-    $allowedModes = ['Cash', 'Bank Transfer', 'UPI', 'Cheque'];
+    $allowedModes = ['Cash', 'Bank Transfer', 'UPI', 'Cheque', 'Razorpay'];
     if (!in_array($paymentMode, $allowedModes, true)) {
         $paymentMode = 'Cash';
     }
+    $transactionFee = max(0, round($transactionFee, 2));
 
     $admissionIds = array_values(array_unique(array_map('intval', $admissionIds)));
     $admissionIds = array_values(array_filter($admissionIds, fn($id) => $id > 0));
@@ -1283,10 +1285,16 @@ function recordOfflineSharePayment(
         return ['success' => false, 'message' => 'Total share amount must be greater than zero.'];
     }
 
+    $totalAmount = $totalShare + $transactionFee;
+
     $refNote = trim((string)$referenceNo);
     $remarkText = trim((string)$remarks);
+    $modeLabel = $paymentMode === 'Razorpay'
+        ? 'Razorpay (recorded)'
+        : ($paymentMode . ($transactionFee > 0 ? ' + txn fee' : ' (offline)'));
     $parts = array_filter([
-        $paymentMode . ' (offline)',
+        $modeLabel,
+        $transactionFee > 0 ? ('Txn fee: ₹' . number_format($transactionFee, 2)) : null,
         $refNote !== '' ? 'Ref: ' . $refNote : null,
         $remarkText !== '' ? $remarkText : null,
     ]);
@@ -1302,18 +1310,20 @@ function recordOfflineSharePayment(
         $ins = $pdo->prepare("
             INSERT INTO share_payments
                 (atc_id, student_ids, total_share_amount, transaction_fee, total_amount, status, payment_mode, remarks, created_at)
-            VALUES (?, ?, ?, 0, ?, 'Pending', ?, ?, NOW())
+            VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, NOW())
         ");
         $ins->execute([
             $atcId,
             json_encode($validIds),
             $totalShare,
-            $totalShare,
+            $transactionFee,
+            $totalAmount,
             $paymentMode,
             $combinedRemarks !== '' ? $combinedRemarks : null,
         ]);
         $paymentId = (int)$pdo->lastInsertId();
-        $cashRef = 'CASH-' . $paymentId . ($refNote !== '' ? '-' . preg_replace('/[^A-Za-z0-9]/', '', substr($refNote, 0, 12)) : '');
+        $cashRef = ($paymentMode === 'Razorpay' ? 'RZP-' : 'CASH-') . $paymentId
+            . ($refNote !== '' ? '-' . preg_replace('/[^A-Za-z0-9_-]/', '', substr($refNote, 0, 20)) : '');
         $pdo->commit();
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
@@ -1324,13 +1334,14 @@ function recordOfflineSharePayment(
             $ins = $pdo->prepare("
                 INSERT INTO share_payments
                     (atc_id, student_ids, total_share_amount, transaction_fee, total_amount, status, failure_reason, created_at)
-                VALUES (?, ?, ?, 0, ?, 'Pending', ?, NOW())
+                VALUES (?, ?, ?, ?, ?, 'Pending', ?, NOW())
             ");
             $ins->execute([
                 $atcId,
                 json_encode($validIds),
                 $totalShare,
-                $totalShare,
+                $transactionFee,
+                $totalAmount,
                 $combinedRemarks !== '' ? $combinedRemarks : null,
             ]);
             $paymentId = (int)$pdo->lastInsertId();
@@ -1357,9 +1368,12 @@ function recordOfflineSharePayment(
 
     return [
         'success' => true,
-        'message' => 'Cash/offline share payment recorded for ' . count($validIds) . ' student(s).',
+        'message' => 'Share payment recorded for ' . count($validIds) . ' student(s)'
+            . ($transactionFee > 0 ? ' (incl. ₹' . number_format($transactionFee, 0) . ' txn fee).' : '.'),
         'payment_id' => $paymentId,
         'total_share_amount' => $totalShare,
+        'transaction_fee' => $transactionFee,
+        'total_amount' => $totalAmount,
     ];
 }
 
