@@ -157,6 +157,7 @@ export async function renderATC(ApiClient, ctx) {
     if (_liveStopped || _liveRunning) return;
     _liveRunning = true;
     try {
+      const { renderProctorCamerasHTML, bindProctorCameras } = await import('./ProctorCamerasModule.js?v=1');
       const oneHourAgo = new Date(Date.now() - 3600 * 1000).toISOString();
       const [live, resultData] = await Promise.all([
         getScopedLive(),
@@ -195,6 +196,8 @@ export async function renderATC(ApiClient, ctx) {
           </table></div>`}
         </div>
 
+        ${renderProctorCamerasHTML(live)}
+
         <div class="card">
           <div class="card-header"><h3>Recent Submissions (1h)</h3></div>
           ${subs.length === 0 ? '<div class="card-body" style="color:var(--text-muted);font-size:0.875rem">No recent submissions in the last hour.</div>' : `
@@ -212,6 +215,7 @@ export async function renderATC(ApiClient, ctx) {
 
         <p style="text-align:center;font-size:0.75rem;color:var(--text-muted);margin-top:1rem">Auto-refreshes every 10 seconds</p>
       `;
+      await bindProctorCameras(ApiClient, panel);
     } catch (e) {
       const panel = document.getElementById('atc-panel-live');
       if (panel) panel.innerHTML = `<div class="card" style="text-align:center;padding:2rem;color:var(--danger)">${e.message}</div>`;

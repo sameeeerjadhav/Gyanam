@@ -58,6 +58,9 @@ Route::prefix('v1')->group(function () {
         // Live Monitoring
         Route::get('live/active', [LiveMonitorController::class, 'active']);
         Route::post('live/{studentId}/exams/{examId}/extend', [LiveMonitorController::class, 'extendTime']);
+        Route::get('live/{studentId}/exams/{examId}/proctor-photo', [LiveMonitorController::class, 'proctorPhoto']);
+        Route::get('live/{studentId}/exams/{examId}/proctor-signal', [LiveMonitorController::class, 'getProctorSignal']);
+        Route::post('live/{studentId}/exams/{examId}/proctor-signal', [LiveMonitorController::class, 'postProctorSignal']);
 
         // Exam Assignments (ATC/DLC assign exams to students)
         Route::get ('assignments/students',                              [ExamAssignmentController::class, 'students']);
@@ -91,6 +94,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/exam/{examId}/heartbeat',         [StudentExamController::class, 'heartbeat']);
         Route::post('/exam/{examId}/answers',           [StudentExamController::class, 'saveAnswers']);
         Route::post('/exam/{examId}/proctoring-events', [StudentExamController::class, 'logProctoringEvent']);
+        Route::post('/exam/{examId}/proctor-photo',     [StudentExamController::class, 'uploadProctorPhoto']);
+        Route::post('/exam/{examId}/proctor-signal',    [StudentExamController::class, 'proctorSignal']);
+        Route::get ('/exam/{examId}/proctor-signal',    [StudentExamController::class, 'getProctorSignal']);
         Route::post('/exam/{examId}/submit',            [StudentExamController::class, 'submit']);
         Route::get ('/result/{submissionId}',           [StudentExamController::class, 'submissionResult']);
         Route::post('/flags',                           [QuestionFlagController::class, 'store']);

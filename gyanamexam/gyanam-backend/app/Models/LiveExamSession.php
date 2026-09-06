@@ -10,6 +10,7 @@ class LiveExamSession extends Model
         'student_id', 'exam_config_id', 'exam_code', 'student_name', 'exam_title',
         'centre_name', 'duration_minutes', 'extra_minutes', 'question_ids',
         'attempt_number', 'started_at', 'last_seen_at',
+        'proctor_photo_path', 'camera_active',
     ];
 
     protected $casts = [
@@ -19,6 +20,7 @@ class LiveExamSession extends Model
         'duration_minutes' => 'integer',
         'attempt_number'   => 'integer',
         'question_ids'     => 'array',
+        'camera_active'    => 'boolean',
     ];
 
     public function toMonitorArray(): array
@@ -35,6 +37,11 @@ class LiveExamSession extends Model
             'extraMinutes'    => (int) $this->extra_minutes,
             'durationMinutes' => (int) $this->duration_minutes,
             'attemptNumber'   => (int) $this->attempt_number,
+            'hasPhoto'        => !empty($this->proctor_photo_path),
+            'cameraActive'    => (bool) $this->camera_active,
+            'photoUrl'        => !empty($this->proctor_photo_path)
+                ? "/live/{$this->student_id}/exams/{$this->exam_config_id}/proctor-photo"
+                : null,
         ];
     }
 }

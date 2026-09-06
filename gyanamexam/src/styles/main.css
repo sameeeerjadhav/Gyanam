@@ -3918,3 +3918,138 @@ tbody tr:hover {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* -- Proctor Cameras (live monitor) --------------------------- */
+.proctor-cams-note {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin: 0 0 0.85rem;
+  line-height: 1.45;
+}
+
+.proctor-cams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.85rem;
+}
+
+.proctor-cam-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.proctor-cam-photo-wrap {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: #0f172a;
+}
+
+.proctor-cam-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.proctor-cam-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #94a3b8;
+  background: #1e293b;
+}
+
+.proctor-cam-live-tag {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.45rem;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 750;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+}
+
+.proctor-cam-meta {
+  padding: 0.65rem 0.75rem 0.35rem;
+}
+
+.proctor-cam-name {
+  font-weight: 750;
+  font-size: 0.88rem;
+  color: #0f172a;
+}
+
+.proctor-cam-sub {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+.proctor-cam-actions {
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.proctor-live-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  background: rgba(15, 23, 42, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.proctor-live-dialog {
+  background: #fff;
+  border-radius: 16px;
+  width: min(640px, 100%);
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+}
+
+.proctor-live-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.proctor-live-title {
+  font-weight: 750;
+  font-size: 1rem;
+}
+
+.proctor-live-sub {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.1rem;
+}
+
+.proctor-live-video {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #0f172a;
+  object-fit: cover;
+  display: block;
+  transform: scaleX(-1);
+}
+
+.proctor-live-status {
+  padding: 0.65rem 1rem 0.9rem;
+  font-size: 0.8rem;
+  color: #475569;
+  font-weight: 600;
+}
