@@ -139,15 +139,29 @@ function getOverlay() {
   if (!ov) {
     ov = document.createElement('div');
     ov.id = 'modal-overlay';
-    ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,0.5);align-items:flex-start;justify-content:center;overflow-y:auto;padding:1.25rem 1rem;box-sizing:border-box';
-    ov.innerHTML = '<div id="modal-box" style="margin:auto;width:100%;display:flex;justify-content:center;padding:0.5rem 0"></div>';
+    ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,0.55);align-items:flex-start;justify-content:center;overflow-y:auto;overflow-x:hidden;padding:1.25rem 1rem;box-sizing:border-box';
+    ov.innerHTML = '<div id="modal-box" style="margin:auto;width:100%;display:flex;justify-content:center;padding:0.25rem 0"></div>';
     document.body.appendChild(ov);
     ov.addEventListener('click', e => { if (e.target === ov) window.closeModal(); });
   }
-  // Ensure long modals can scroll even if overlay was created earlier with old styles
+  // Patch overlay created earlier by ModalService (centered, no scroll) so tall modals work
   ov.style.alignItems = 'flex-start';
+  ov.style.justifyContent = 'center';
   ov.style.overflowY = 'auto';
+  ov.style.overflowX = 'hidden';
   ov.style.padding = '1.25rem 1rem';
+  ov.style.boxSizing = 'border-box';
+  const box = document.getElementById('modal-box');
+  if (box) {
+    box.style.margin = 'auto';
+    box.style.width = '100%';
+    box.style.display = 'flex';
+    box.style.justifyContent = 'center';
+    box.style.padding = '0.25rem 0';
+    box.style.transform = 'none';
+    box.style.opacity = '1';
+  }
+  document.body.style.overflow = 'hidden';
   return ov;
 }
 

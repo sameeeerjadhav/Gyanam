@@ -13,7 +13,7 @@
   <!-- Laravel Echo + Pusher JS for Reverb WebSocket connection -->
   <script src="https://cdn.jsdelivr.net/npm/pusher-js@8.3.0/dist/web/pusher.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="src/styles/main.css?v=4">
+  <link rel="stylesheet" href="src/styles/main.css?v=6">
 </head>
 
 <body>
@@ -225,14 +225,14 @@
   <script type="module">
     import { CONFIG } from './src/config.js?v=3';
     import ApiClient from './src/services/APIClient.js?v=4';
-    import modalService from './src/services/ModalService.js?v=2';
+    import modalService from './src/services/ModalService.js?v=3';
     import { renderDashboard } from './src/modules/DashboardModule.js?v=2';
     import { renderLive } from './src/modules/LiveMonitorModule.js?v=2';
     import { renderQuestions } from './src/modules/QuestionsModule.js?v=5';
-    import { renderExams } from './src/modules/ExamsModule.js?v=4';
+    import { renderExams } from './src/modules/ExamsModule.js?v=6';
     import { renderStudents } from './src/modules/StudentsModule.js?v=4';
     import { renderResults } from './src/modules/ResultsModule.js?v=2';
-    import { renderATC } from './src/modules/ATCModule.js?v=3';
+    import { renderATC } from './src/modules/ATCModule.js?v=4';
     import { renderCredentials } from './src/modules/CredentialsModule.js?v=1';
 
     // ── CRITICAL: Set admin scope FIRST so we never share tokens with the student portal ──
@@ -433,7 +433,13 @@
     }
 
     // â”€â”€â”€ Modal helpers (shared) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    window.closeModal = () => { const ov = document.getElementById('modal-overlay'); if (ov) ov.style.display = 'none'; };
+    window.closeModal = () => {
+      const ov = document.getElementById('modal-overlay');
+      if (ov) ov.style.display = 'none';
+      document.body.style.overflow = '';
+      const box = document.getElementById('modal-box');
+      if (box) { box.style.transform = ''; box.style.opacity = ''; }
+    };
 
   </script>
 
