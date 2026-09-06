@@ -12,11 +12,18 @@ import { setAssignBankId } from './AssignBankModule.js';
 let _coursesCache    = null;
 let _atcDataCache    = null; // { centres: [{code,name,centre_type,...}], types: [...] }
 
-async function getPortalCourses(ApiClient) {
-  if (_coursesCache) return _coursesCache;
+async function getPortalCourses(ApiClient, { force = false } = {}) {
+  if (!force && _coursesCache) return _coursesCache;
   try {
     const res = await ApiClient.getPortalCourses();
-    _coursesCache = res.courses || [];
+    const list = Array.isArray(res.courses) ? res.courses : [];
+    // Active first, then name — keep Inactive available for QBs
+    _coursesCache = [...list].sort((a, b) => {
+      const aInactive = String(a.status || 'Active').toLowerCase() === 'inactive' ? 1 : 0;
+      const bInactive = String(b.status || 'Active').toLowerCase() === 'inactive' ? 1 : 0;
+      if (aInactive !== bInactive) return aInactive - bInactive;
+      return String(a.course_name || '').localeCompare(String(b.course_name || ''));
+    });
   } catch (e) { _coursesCache = []; }
   return _coursesCache;
 }
@@ -60,7 +67,7 @@ export async function renderQuestions(ApiClient, { currentUser, loadPage }) {
 
   const [allBanks, courses, atcData] = await Promise.all([
     ApiClient.getQuestionBanks(),
-    getPortalCourses(ApiClient),
+    getPortalCourses(ApiClient, { force: true }),
     getPortalATCData(ApiClient),
   ]);
   const centresList = atcData.centres;
@@ -336,13 +343,27 @@ function showNewBankModal(ApiClient, currentUser, bank = null, courses = []) {
   if (courses.length > 0) {
     const options = courses.map(c => {
       const val = c.course_name;
-      const label = c.course_type ? c.course_name + ' (' + c.course_type + ')' : c.course_name;
+      const inactive = String(c.status || 'Active').toLowerCase() === 'inactive';
+      const typePart = c.course_type ? ` (${c.course_type})` : '';
+      const label = inactive ? `${c.course_name}${typePart} — Inactive` : `${c.course_name}${typePart}`;
       const selected = bank?.subject === val ? 'selected' : '';
-      return '<option value="' + val + '" ' + selected + '>' + label + '</option>';
+      return '<option value="' + String(val).replace(/"/g, '&quot;') + '" ' + selected + '>' + label.replace(/</g, '&lt;') + '</option>';
     }).join('');
-    courseDropdownHtml = '<select id="nb-subject" class="form-select"><option value="">Select a course...</option>' + options + '</select>';
+    courseDropdownHtml = `
+      <select id="nb-subject" class="form-select" size="1" style="max-height:none">
+        <option value="">Select a course...</option>
+        ${options}
+      </select>
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.35rem">${courses.length} course(s) from main portal.
+        <button type="button" id="nb-refresh-courses" class="btn btn-ghost btn-sm" style="padding:0 0.35rem;font-size:0.75rem">Refresh list</button>
+      </p>`;
   } else {
-    courseDropdownHtml = '<input id="nb-subject" class="form-input" placeholder="e.g. Abacus Level 1, DCA, Vedic Maths..." value="' + (bank?.subject || '') + '"><p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem">⚠️ No courses synced yet. Sync from main portal (Admin &gt; Courses).</p>';
+    courseDropdownHtml = `
+      <input id="nb-subject" class="form-input" placeholder="e.g. Abacus Level 1, DCA, Vedic Maths..." value="${bank?.subject || ''}">
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem">No courses synced yet.
+        <button type="button" id="nb-refresh-courses" class="btn btn-ghost btn-sm" style="padding:0 0.35rem;font-size:0.75rem">Retry sync</button>
+        — or open Admin › Courses on main portal and click <strong>Sync to Exam Portal</strong>.
+      </p>`;
   }
 
   getOverlay().style.display = 'flex';
@@ -374,6 +395,19 @@ function showNewBankModal(ApiClient, currentUser, bank = null, courses = []) {
       </div>
     </div>`;
 
+  document.getElementById('nb-refresh-courses')?.addEventListener('click', async () => {
+    const btn = document.getElementById('nb-refresh-courses');
+    if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
+    try {
+      const fresh = await getPortalCourses(ApiClient, { force: true });
+      showNewBankModal(ApiClient, currentUser, bank, fresh);
+      modalService.toast(fresh.length ? `${fresh.length} course(s) loaded` : 'Still no courses — sync from main portal Admin › Courses', fresh.length ? 'success' : 'error');
+    } catch (e) {
+      modalService.toast('Refresh failed: ' + e.message, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Refresh list'; }
+    }
+  });
+
   window.saveBank = async (bankId) => {
     const title = document.getElementById('nb-title').value.trim();
     const subjectEl = document.getElementById('nb-subject');
@@ -390,7 +424,7 @@ function showNewBankModal(ApiClient, currentUser, bank = null, courses = []) {
       }
       window.closeModal();
       _coursesCache = null;
-      renderQuestions(ApiClient, { currentUser });
+      renderQuestions(ApiClient, { currentUser, loadPage: typeof loadPage === 'function' ? loadPage : window.loadPage });
     } catch (e) { modalService.toast('Failed to save bank: ' + e.message, 'error'); }
   };
 }

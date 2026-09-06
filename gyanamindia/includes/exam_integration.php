@@ -483,16 +483,35 @@ function deletePortalUserFromExam(string $username): array
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Push all active courses from the main portal to the Exam Portal.
- * Called manually or on course create/update to keep QBs in sync.
+ * Push courses from the main portal to the Exam Portal.
+ * Includes Active and Inactive so exam QBs can target every course name.
  *
  * @param  PDO $pdo  Database connection to the main portal
  * @return array  API result
  */
 function syncCoursesToExamPortal(PDO $pdo): array
 {
-    $stmt = $pdo->query("SELECT id, course_name, course_type, duration, status FROM courses WHERE status = 'Active' ORDER BY course_name");
+    // Prefer all courses; fall back if status column missing on older DBs
+    try {
+        $stmt = $pdo->query("
+            SELECT id, course_name, course_type, duration, status
+            FROM courses
+            ORDER BY
+              CASE WHEN status = 'Active' THEN 0 ELSE 1 END,
+              course_name ASC
+        ");
+    } catch (Throwable $e) {
+        $stmt = $pdo->query("SELECT id, course_name, course_type, duration FROM courses ORDER BY course_name ASC");
+    }
     $courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Normalize status for older rows
+    foreach ($courses as &$c) {
+        if (!isset($c['status']) || $c['status'] === '' || $c['status'] === null) {
+            $c['status'] = 'Active';
+        }
+    }
+    unset($c);
 
     return examApi_request('POST', '/portal-courses', [
         'courses' => $courses,
