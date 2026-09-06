@@ -10,6 +10,7 @@ import { setAssignBankId } from './AssignBankModule.js';
 
 // Cache for portal data (fetched once per session)
 let _coursesCache    = null;
+let _coursesSyncedAt = null;
 let _atcDataCache    = null; // { centres: [{code,name,centre_type,...}], types: [...] }
 
 async function getPortalCourses(ApiClient, { force = false } = {}) {
@@ -17,6 +18,7 @@ async function getPortalCourses(ApiClient, { force = false } = {}) {
   try {
     const res = await ApiClient.getPortalCourses();
     const list = Array.isArray(res.courses) ? res.courses : [];
+    _coursesSyncedAt = res.synced_at || null;
     // Active first, then name — keep Inactive available for QBs
     _coursesCache = [...list].sort((a, b) => {
       const aInactive = String(a.status || 'Active').toLowerCase() === 'inactive' ? 1 : 0;
@@ -24,8 +26,33 @@ async function getPortalCourses(ApiClient, { force = false } = {}) {
       if (aInactive !== bInactive) return aInactive - bInactive;
       return String(a.course_name || '').localeCompare(String(b.course_name || ''));
     });
-  } catch (e) { _coursesCache = []; }
+  } catch (e) {
+    _coursesCache = [];
+    _coursesSyncedAt = null;
+  }
   return _coursesCache;
+}
+
+function courseSubjectFieldHtml(courses, selectedValue = '', inputId = 'nb-subject') {
+  const selected = selectedValue || '';
+  const options = (courses || []).map(c => {
+    const val = String(c.course_name || '');
+    const inactive = String(c.status || 'Active').toLowerCase() === 'inactive';
+    const typePart = c.course_type ? ` (${c.course_type})` : '';
+    const label = inactive ? `${val}${typePart} — Inactive` : `${val}${typePart}`;
+    return `<option value="${val.replace(/"/g, '&quot;')}">${label.replace(/</g, '&lt;')}</option>`;
+  }).join('');
+  const syncHint = _coursesSyncedAt
+    ? ` Last sync: ${String(_coursesSyncedAt).replace('T', ' ').slice(0, 19)}.`
+    : '';
+  return `
+    <input id="${inputId}" class="form-input" list="${inputId}-list" autocomplete="off"
+      placeholder="Type or pick a course…" value="${String(selected).replace(/"/g, '&quot;')}">
+    <datalist id="${inputId}-list">${options}</datalist>
+    <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.35rem">
+      ${(courses || []).length} course(s) from main portal — you can also type any course name.${syncHint}
+      <button type="button" id="nb-refresh-courses" class="btn btn-ghost btn-sm" style="padding:0 0.35rem;font-size:0.75rem">Refresh list</button>
+    </p>`;
 }
 
 async function getPortalATCData(ApiClient) {
@@ -339,32 +366,14 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
 // MODAL: New / Edit Question Bank
 // ════════════════════════════════════════════════════════════════════════════════
 function showNewBankModal(ApiClient, currentUser, bank = null, courses = []) {
-  let courseDropdownHtml;
-  if (courses.length > 0) {
-    const options = courses.map(c => {
-      const val = c.course_name;
-      const inactive = String(c.status || 'Active').toLowerCase() === 'inactive';
-      const typePart = c.course_type ? ` (${c.course_type})` : '';
-      const label = inactive ? `${c.course_name}${typePart} — Inactive` : `${c.course_name}${typePart}`;
-      const selected = bank?.subject === val ? 'selected' : '';
-      return '<option value="' + String(val).replace(/"/g, '&quot;') + '" ' + selected + '>' + label.replace(/</g, '&lt;') + '</option>';
-    }).join('');
-    courseDropdownHtml = `
-      <select id="nb-subject" class="form-select" size="1" style="max-height:none">
-        <option value="">Select a course...</option>
-        ${options}
-      </select>
-      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.35rem">${courses.length} course(s) from main portal.
-        <button type="button" id="nb-refresh-courses" class="btn btn-ghost btn-sm" style="padding:0 0.35rem;font-size:0.75rem">Refresh list</button>
-      </p>`;
-  } else {
-    courseDropdownHtml = `
+  const courseDropdownHtml = courses.length > 0
+    ? courseSubjectFieldHtml(courses, bank?.subject || '', 'nb-subject')
+    : `
       <input id="nb-subject" class="form-input" placeholder="e.g. Abacus Level 1, DCA, Vedic Maths..." value="${bank?.subject || ''}">
       <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem">No courses synced yet.
         <button type="button" id="nb-refresh-courses" class="btn btn-ghost btn-sm" style="padding:0 0.35rem;font-size:0.75rem">Retry sync</button>
-        — or open Admin › Courses on main portal and click <strong>Sync to Exam Portal</strong>.
+        — open <strong>Gyanam India Admin › Courses</strong> and click <strong>Sync to Exam Portal</strong> (not just refresh here).
       </p>`;
-  }
 
   getOverlay().style.display = 'flex';
   document.getElementById('modal-box').innerHTML = `

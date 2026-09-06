@@ -140,15 +140,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     exit;
                 }
                 $result = syncCoursesToExamPortal($pdo);
+                unset($_SESSION['exam_courses_synced_at']);
                 if (!empty($result['success'])) {
-                    $count = $result['data']['count'] ?? (is_array($result['data']['courses'] ?? null) ? count($result['data']['courses']) : null);
-                    $msg = $result['data']['message'] ?? 'Courses synced to Exam Portal.';
-                    if ($count !== null) {
-                        $msg = is_numeric($count) ? (intval($count) . ' courses synced to Exam Portal.') : $msg;
-                    }
+                    $_SESSION['exam_courses_synced_at'] = time();
+                    $msg = $result['data']['message']
+                        ?? (($result['data']['verified_count'] ?? $result['data']['count'] ?? null) !== null
+                            ? (intval($result['data']['verified_count'] ?? $result['data']['count']) . ' courses synced to Exam Portal.')
+                            : 'Courses synced to Exam Portal.');
                     echo json_encode(['success' => true, 'message' => $msg, 'data' => $result['data'] ?? null]);
                 } else {
-                    echo json_encode(['success' => false, 'message' => $result['error'] ?? 'Sync failed. Check Exam Portal API credentials.']);
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $result['error'] ?? 'Sync failed. Check Exam Portal API credentials.',
+                        'data'    => $result['data'] ?? null,
+                    ]);
                 }
                 exit;
         }
@@ -686,8 +691,12 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                         </div>
                         <button type="submit" class="btn-primary" style="padding:0 1.25rem">Search</button>
                     </form>
+                    <?php
+                    $examSyncTotal = 0;
+                    try { $examSyncTotal = (int)$pdo->query('SELECT COUNT(*) FROM courses')->fetchColumn(); } catch (Exception $e) {}
+                    ?>
                     <button type="button" class="btn-primary" id="sync-exam-courses-btn" style="padding:0 1rem;background:#0f766e" title="Push all courses to Gyanam Exam Portal dropdowns">
-                        ↻ Sync to Exam Portal
+                        ↻ Sync to Exam Portal<?= $examSyncTotal ? ' (' . $examSyncTotal . ')' : '' ?>
                     </button>
                     <button class="btn-add" onclick="location.href='course_form.php?action=add'">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>

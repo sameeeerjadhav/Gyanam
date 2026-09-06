@@ -90,22 +90,24 @@ export async function renderExamForm(ApiClient, { loadPage }) {
 
   let subjectField;
   if (courses.length > 0) {
-    let opts = '<option value="">Select a course…</option>';
-    courses.forEach(c => {
-      const val = c.course_name;
+    const opts = courses.map(c => {
+      const val = String(c.course_name || '');
       const inactive = String(c.status || 'Active').toLowerCase() === 'inactive';
       const label = c.course_type
-        ? `${c.course_name} (${c.course_type})${inactive ? ' — Inactive' : ''}`
-        : `${c.course_name}${inactive ? ' — Inactive' : ''}`;
-      const sel = exam?.subject === val ? 'selected' : '';
-      opts += `<option value="${val}" ${sel}>${label}</option>`;
-    });
-    subjectField = `<select id="ex-subj" class="form-select">${opts}</select>
-      <p class="field-hint">${courses.length} course(s) synced from main portal.</p>`;
+        ? `${val} (${c.course_type})${inactive ? ' — Inactive' : ''}`
+        : `${val}${inactive ? ' — Inactive' : ''}`;
+      return `<option value="${val.replace(/"/g, '&quot;')}">${label.replace(/</g, '&lt;')}</option>`;
+    }).join('');
+    const cur = String(exam?.subject || '').replace(/"/g, '&quot;');
+    subjectField = `
+      <input id="ex-subj" class="form-input" list="ex-subj-list" autocomplete="off"
+        value="${cur}" placeholder="Type or pick a course…">
+      <datalist id="ex-subj-list">${opts}</datalist>
+      <p class="field-hint">${courses.length} course(s) from main portal — type any name if missing. Sync from Gyanam India Admin › Courses.</p>`;
   } else {
     subjectField = `
       <input id="ex-subj" class="form-input" value="${exam?.subject || ''}" placeholder="e.g. Abacus Level 1, DCA…">
-      <p class="field-hint">Sync courses from main portal (Admin › Courses → Sync to Exam Portal).</p>`;
+      <p class="field-hint">No synced list yet — type a course name, or sync from Gyanam India Admin › Courses → Sync to Exam Portal.</p>`;
   }
 
   el.innerHTML = `

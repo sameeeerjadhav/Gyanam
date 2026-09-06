@@ -67,10 +67,11 @@ function examApi_cacheForget(string $prefix = ''): void
     }
 }
 
-function examApi_request(string $method, string $endpoint, array $data = [], bool $useCache = true): array
+function examApi_request(string $method, string $endpoint, array $data = [], bool $useCache = true, int $timeout = 8): array
 {
     $method = strtoupper($method);
     $cacheKey = null;
+    $timeout = max(3, $timeout);
 
     if ($method === 'GET' && $useCache) {
         $cacheKey = $method . ':' . $endpoint . ':' . md5(json_encode($data));
@@ -92,8 +93,8 @@ function examApi_request(string $method, string $endpoint, array $data = [], boo
     curl_setopt_array($ch, [
         CURLOPT_URL            => $url,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 8,
-        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_TIMEOUT        => $timeout,
+        CURLOPT_CONNECTTIMEOUT => min(5, $timeout),
         CURLOPT_HTTPHEADER     => [
             'Content-Type: application/json',
             'Accept: application/json',
@@ -513,9 +514,61 @@ function syncCoursesToExamPortal(PDO $pdo): array
     }
     unset($c);
 
-    return examApi_request('POST', '/portal-courses', [
+    $sourceCount = count($courses);
+    if ($sourceCount === 0) {
+        return [
+            'success'   => false,
+            'data'      => ['source_count' => 0, 'count' => 0],
+            'error'     => 'No courses found in the main portal database to sync.',
+            'http_code' => 0,
+        ];
+    }
+
+    // Longer timeout: course payloads can be large; skip GET response cache
+    $result = examApi_request('POST', '/portal-courses', [
         'courses' => $courses,
-    ]);
+    ], false, 45);
+
+    if (empty($result['success'])) {
+        $err = $result['error'] ?? 'Sync failed';
+        $result['error'] = $err . " (tried to push {$sourceCount} course(s) from main portal DB)";
+        $result['data'] = array_merge(is_array($result['data'] ?? null) ? $result['data'] : [], [
+            'source_count' => $sourceCount,
+        ]);
+        return $result;
+    }
+
+    // Confirm the exam API actually stored the full list (catches silent write failures)
+    $verify = examApi_request('GET', '/portal-courses', [], false, 20);
+    $verifiedCount = null;
+    if (!empty($verify['success']) && is_array($verify['data']['courses'] ?? null)) {
+        $verifiedCount = count($verify['data']['courses']);
+    }
+
+    $data = is_array($result['data'] ?? null) ? $result['data'] : [];
+    $data['source_count'] = $sourceCount;
+    $data['count'] = $sourceCount;
+    $data['verified_count'] = $verifiedCount;
+    $data['message'] = "{$sourceCount} course(s) pushed to Exam Portal.";
+
+    if ($verifiedCount === null) {
+        $result['success'] = false;
+        $result['error'] = "Pushed {$sourceCount} course(s), but could not verify exam portal storage. Check EXAM_API_URL / token.";
+        $result['data'] = $data;
+        return $result;
+    }
+
+    if ($verifiedCount < $sourceCount) {
+        $result['success'] = false;
+        $result['error'] = "Pushed {$sourceCount} course(s), but exam portal still has only {$verifiedCount}. "
+            . 'Check write permissions on gyanam-backend/storage/app (portal_courses.json).';
+        $result['data'] = $data;
+        return $result;
+    }
+
+    $data['message'] = "{$verifiedCount} course(s) synced and verified on Exam Portal.";
+    $result['data'] = $data;
+    return $result;
 }
 
 /**
