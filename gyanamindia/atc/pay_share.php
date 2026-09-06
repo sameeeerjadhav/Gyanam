@@ -322,16 +322,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
 
-        if ($_POST['action'] === 'create_missing_course_admission') {
-            $inquiryId = intval($_POST['inquiry_id'] ?? 0);
-            $source = trim((string)($_POST['inquiry_source'] ?? 'walkin'));
-            if ($inquiryId <= 0) {
-                echo json_encode(['success' => false, 'message' => 'Invalid inquiry.']);
-                exit;
-            }
-            echo json_encode(createMissingAdmissionFromConvertedInquiry($pdo, (int)$atcId, $inquiryId, $source));
-            exit;
-        }
     } catch (Exception $e) {
         echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         exit;
@@ -388,11 +378,6 @@ $stmt = $pdo->prepare("SELECT * FROM atc_centers WHERE id = ?");
 $stmt->execute([$atcId]);
 $atcDetails = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Converted inquiries with no matching Active admission (2nd course missing from Pay Share)
-$missingCourseAdmissions = [];
-try {
-    $missingCourseAdmissions = findConvertedInquiriesMissingAdmission($pdo, (int)$atcId);
-} catch (Exception $e) {}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -442,36 +427,6 @@ try {
         </header>
 
         <div class="page-content">
-
-            <?php if (!empty($missingCourseAdmissions)): ?>
-            <div class="info-card" style="border-color:#fcd34d;background:#fffbeb;margin-bottom:1rem">
-                <div class="info-card-header" style="color:#92400e">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    <h3>Missing course admissions (<?= count($missingCourseAdmissions) ?>)</h3>
-                </div>
-                <p style="font-size:.85rem;color:#78350f;margin:0 0 .75rem">
-                    These inquiries are marked <strong>Converted</strong>, but there is no Active admission for that course — so they cannot appear in Pay Share.
-                    Click <strong>Add to Pay Share</strong> to create the missing course row (same Reg ID / Roll No).
-                </p>
-                <div style="display:flex;flex-direction:column;gap:.5rem">
-                    <?php foreach ($missingCourseAdmissions as $miss):
-                        $missName = trim($miss['first_name'] . ' ' . ($miss['middle_name'] ? $miss['middle_name'] . ' ' : '') . $miss['last_name']);
-                    ?>
-                    <div style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;background:#fff;border:1px solid #fde68a;border-radius:10px;padding:.65rem .85rem">
-                        <div style="font-size:.88rem">
-                            <strong><?= htmlspecialchars($missName) ?></strong>
-                            <span style="color:#92400e"> · <?= htmlspecialchars($miss['mobile']) ?></span>
-                            <div style="font-size:.8rem;color:#a16207;margin-top:.15rem"><?= htmlspecialchars($miss['course']) ?></div>
-                        </div>
-                        <button type="button" class="btn-primary" style="height:36px;padding:0 1rem;background:#d97706;border:none;border-radius:8px;font-weight:700;cursor:pointer"
-                                onclick="createMissingCourseAdmission(<?= (int)$miss['inquiry_id'] ?>, '<?= htmlspecialchars($miss['source'], ENT_QUOTES) ?>', this)">
-                            Add to Pay Share
-                        </button>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            <?php endif; ?>
             
             <!-- Course Share Rates -->
             <div class="info-card">
@@ -615,25 +570,6 @@ const transactionFee = <?= $transactionFee ?>;
 const atcDetails = <?= json_encode($atcDetails) ?>;
 
 let selectedStudents = [];
-
-async function createMissingCourseAdmission(inquiryId, source, btn) {
-    if (!confirm('Create the missing course admission so it appears in Pay Share?')) return;
-    const prev = btn ? btn.textContent : '';
-    if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
-    try {
-        const fd = new FormData();
-        fd.append('action', 'create_missing_course_admission');
-        fd.append('inquiry_id', String(inquiryId));
-        fd.append('inquiry_source', source || 'walkin');
-        const res = await (await fetch('', { method: 'POST', body: fd })).json();
-        alert(res.message || (res.success ? 'Created' : 'Failed'));
-        if (res.success) location.reload();
-    } catch (e) {
-        alert('Network error: ' + e.message);
-    } finally {
-        if (btn) { btn.disabled = false; btn.textContent = prev || 'Add to Pay Share'; }
-    }
-}
 
 // Search functionality
 document.getElementById('searchInput').addEventListener('input', function(e) {

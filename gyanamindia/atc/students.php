@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->execute([$_POST['status'], $_POST['id'], $atcId]);
                 echo json_encode(['success' => true, 'message' => 'Status updated successfully']);
                 exit;
-                
+
             case 'update_student':
                 $studentId = intval($_POST['id'] ?? 0);
                 if (!$studentId) {
@@ -427,6 +427,62 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Attach sibling courses for the same student (registration_id / mobile) so multi-course enrollments are visible
+$courseBundles = []; // key => list of ['id'=>, 'course'=>, 'status'=>]
+try {
+    $bundleSql = "
+        SELECT id, registration_id, mobile, course, status
+        FROM admissions
+        WHERE atc_id = ?
+        ORDER BY id ASC
+    ";
+    $bst = $pdo->prepare($bundleSql);
+    $bst->execute([$atcId]);
+    foreach ($bst->fetchAll(PDO::FETCH_ASSOC) as $b) {
+        $key = trim((string)($b['registration_id'] ?? ''));
+        if ($key === '') {
+            $key = 'm:' . preg_replace('/\D+/', '', (string)($b['mobile'] ?? ''));
+        }
+        if ($key === '' || $key === 'm:') {
+            continue;
+        }
+        if (!isset($courseBundles[$key])) {
+            $courseBundles[$key] = [];
+        }
+        $courseBundles[$key][] = [
+            'id' => (int)$b['id'],
+            'course' => (string)($b['course'] ?? ''),
+            'status' => (string)($b['status'] ?? ''),
+        ];
+    }
+} catch (Exception $e) {
+    $courseBundles = [];
+}
+
+foreach ($students as &$stu) {
+    $key = trim((string)($stu['registration_id'] ?? ''));
+    if ($key === '') {
+        $key = 'm:' . preg_replace('/\D+/', '', (string)($stu['mobile'] ?? ''));
+    }
+    $bundle = $courseBundles[$key] ?? [];
+    $names = [];
+    foreach ($bundle as $b) {
+        $c = trim($b['course']);
+        if ($c !== '' && !in_array($c, $names, true)) {
+            $names[] = $c;
+        }
+    }
+    // Always include this row's course
+    $own = trim((string)($stu['course'] ?? ''));
+    if ($own !== '' && !in_array($own, $names, true)) {
+        array_unshift($names, $own);
+    }
+    $stu['all_courses'] = $names;
+    $stu['course_count'] = count($names);
+    $stu['sibling_admissions'] = $bundle;
+}
+unset($stu);
+
 // Get counts
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM admissions WHERE atc_id = ?");
 $stmt->execute([$atcId]);
@@ -607,7 +663,7 @@ $courses = $stmt->fetchAll(PDO::FETCH_COLUMN);
         </header>
 
         <div class="page-content">
-            
+
             <!-- Status Filter Tabs -->
             <div class="status-tabs">
                 <a href="?status=all&course=<?= $courseFilter ?>&fees=<?= $feesFilter ?><?= $searchTerm ? '&search=' . urlencode($searchTerm) : '' ?>" class="status-tab <?= $statusFilter === 'all' ? 'active' : '' ?>">
@@ -725,7 +781,25 @@ $courses = $stmt->fetchAll(PDO::FETCH_COLUMN);
                                     </td>
                                     <td>
                                         <div class="cell-name"><?= htmlspecialchars($student['course']) ?></div>
-                                        <div class="cell-sub"><?= htmlspecialchars($student['qualification']) ?></div>
+                                        <?php
+                                        $courseCount = (int)($student['course_count'] ?? 1);
+                                        $allCourses = $student['all_courses'] ?? [$student['course']];
+                                        if ($courseCount > 1):
+                                            $others = array_values(array_filter($allCourses, fn($c) => $c !== $student['course']));
+                                        ?>
+                                            <div class="cell-sub" style="margin-top:.2rem">
+                                                <span style="display:inline-block;background:#eef2ff;color:#3730a3;border-radius:999px;padding:.1rem .45rem;font-size:.7rem;font-weight:800">
+                                                    <?= $courseCount ?> courses
+                                                </span>
+                                            </div>
+                                            <?php if (!empty($others)): ?>
+                                            <div class="cell-sub" style="margin-top:.2rem;max-width:220px;white-space:normal;line-height:1.35" title="<?= htmlspecialchars(implode(', ', $allCourses)) ?>">
+                                                Also: <?= htmlspecialchars(implode(' · ', $others)) ?>
+                                            </div>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <div class="cell-sub"><?= htmlspecialchars($student['qualification'] ?? '') ?></div>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <div><?= htmlspecialchars($student['mobile']) ?></div>
