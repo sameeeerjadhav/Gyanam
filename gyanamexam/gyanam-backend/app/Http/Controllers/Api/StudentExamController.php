@@ -10,14 +10,19 @@ use App\Models\ProctoringEvent;
 use App\Models\Question;
 use App\Models\Submission;
 use App\Services\LiveSessionService;
+use App\Services\ProctorMediaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class StudentExamController extends Controller
 {
-    public function __construct(private LiveSessionService $liveSessions) {}
+    public function __construct(
+        private LiveSessionService $liveSessions,
+        private ProctorMediaService $proctorMedia,
+    ) {}
 
     /**
      * Get exams assigned to this student (attempt counts via single grouped query).
@@ -291,6 +296,111 @@ class StudentExamController extends Controller
         ]);
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Upload one-time identity photo for the active live session (small JPEG only).
+     */
+    public function uploadProctorPhoto(Request $request, $examId)
+    {
+        $data = $request->validate([
+            'photo' => 'required|string',
+        ]);
+
+        $student = $request->user();
+        $session = $this->liveSessions->find((int) $student->id, (int) $examId);
+        if (!$session) {
+            abort(404, 'No active exam session. Start the exam first.');
+        }
+
+        $this->proctorMedia->savePhoto($session, $data['photo']);
+        cache()->forget('live_active:all');
+        if ($session->centre_name) {
+            cache()->forget('live_active:' . $session->centre_name);
+        }
+
+        return response()->json(['ok' => true, 'has_photo' => true]);
+    }
+
+    /**
+     * Mark camera availability and exchange WebRTC signaling (SDP/ICE only — no media).
+     */
+    public function proctorSignal(Request $request, $examId)
+    {
+        $data = $request->validate([
+            'action'         => 'required|in:status,offer,answer,ice,clear',
+            'camera_active'  => 'sometimes|boolean',
+            'sdp'            => 'nullable|array',
+            'candidate'      => 'nullable|array',
+            'role'           => 'nullable|in:student,viewer',
+        ]);
+
+        $student = $request->user();
+        $session = $this->liveSessions->find((int) $student->id, (int) $examId);
+        if (!$session) {
+            abort(404, 'No active exam session.');
+        }
+
+        if (array_key_exists('camera_active', $data)) {
+            $session->camera_active = (bool) $data['camera_active'];
+            $session->save();
+            cache()->forget('live_active:all');
+            if ($session->centre_name) {
+                cache()->forget('live_active:' . $session->centre_name);
+            }
+        }
+
+        $sid = (int) $student->id;
+        $eid = (int) $examId;
+        $signals = $this->proctorMedia->getSignals($sid, $eid);
+
+        if ($data['action'] === 'clear') {
+            $this->proctorMedia->clearSignals($sid, $eid);
+            return response()->json(['ok' => true, 'signals' => $this->proctorMedia->getSignals($sid, $eid)]);
+        }
+
+        if ($data['action'] === 'offer' && !empty($data['sdp'])) {
+            $signals['offer'] = $data['sdp'];
+            $signals['answer'] = null;
+            $signals['ice_student'] = [];
+            $signals['ice_viewer'] = [];
+            $this->proctorMedia->putSignals($sid, $eid, $signals);
+        } elseif ($data['action'] === 'answer' && !empty($data['sdp'])) {
+            $signals['answer'] = $data['sdp'];
+            $this->proctorMedia->putSignals($sid, $eid, $signals);
+        } elseif ($data['action'] === 'ice' && !empty($data['candidate'])) {
+            $role = $data['role'] ?? 'student';
+            $key = $role === 'viewer' ? 'ice_viewer' : 'ice_student';
+            $list = $signals[$key] ?? [];
+            $list[] = $data['candidate'];
+            // keep last 30 candidates
+            $signals[$key] = array_slice($list, -30);
+            $this->proctorMedia->putSignals($sid, $eid, $signals);
+        } else {
+            // refresh TTL on status poll
+            $this->proctorMedia->putSignals($sid, $eid, $signals);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'camera_active' => (bool) $session->camera_active,
+            'signals' => $this->proctorMedia->getSignals($sid, $eid),
+        ]);
+    }
+
+    public function getProctorSignal(Request $request, $examId)
+    {
+        $student = $request->user();
+        $session = $this->liveSessions->find((int) $student->id, (int) $examId);
+        if (!$session) {
+            abort(404, 'No active exam session.');
+        }
+
+        return response()->json([
+            'ok' => true,
+            'camera_active' => (bool) $session->camera_active,
+            'signals' => $this->proctorMedia->getSignals((int) $student->id, (int) $examId),
+        ]);
     }
 
     /**

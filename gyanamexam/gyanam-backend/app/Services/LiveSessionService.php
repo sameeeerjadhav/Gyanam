@@ -106,9 +106,19 @@ class LiveSessionService
 
     public function end(int $studentId, int $examConfigId): void
     {
-        LiveExamSession::where('student_id', $studentId)
+        $session = LiveExamSession::where('student_id', $studentId)
             ->where('exam_config_id', $examConfigId)
-            ->delete();
+            ->first();
+
+        if ($session) {
+            try {
+                app(\App\Services\ProctorMediaService::class)->deletePhoto($session);
+                app(\App\Services\ProctorMediaService::class)->clearSignals($studentId, $examConfigId);
+            } catch (\Throwable $e) {
+                // ignore cleanup errors
+            }
+            $session->delete();
+        }
     }
 
     public function activeSessions(?string $centreName = null): Collection

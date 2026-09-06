@@ -1,3 +1,5 @@
+import { renderProctorCamerasHTML, bindProctorCameras } from './ProctorCamerasModule.js?v=1';
+
 export async function renderLive(ApiClient, { getScopedLive }) {
   const el = document.getElementById('page-content');
   let _refreshRunning = false;
@@ -38,13 +40,14 @@ export async function renderLive(ApiClient, { getScopedLive }) {
           <div class="card-header"><h3><span class="live-dot"></span> Currently Appearing</h3><span class="badge badge-green">${live.length} students</span></div>
           ${live.length === 0 ? '<div class="card-body" style="color:var(--text-muted);font-size:0.875rem">No active exam sessions at the moment.</div>' : `
           <div class="table-wrap"><table>
-            <thead><tr><th>Student</th><th>Exam</th><th>Started At</th><th>Last Seen</th><th>Duration</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Student</th><th>Exam</th><th>Centre</th><th>Started At</th><th>Last Seen</th><th>Duration</th><th>Actions</th></tr></thead>
             <tbody>
               ${live.map(s => {
         const dur = Math.round((Date.now() - new Date(s.startedAt).getTime()) / 60000);
         return `<tr>
                   <td style="font-weight:600">${s.studentName || '—'}</td>
                   <td style="font-size:0.82rem;color:var(--text-muted)">${s.examTitle || s.examId || '—'}</td>
+                  <td style="font-size:0.8rem">${s.centreName || '—'}</td>
                   <td style="font-size:0.8rem">${new Date(s.startedAt).toLocaleTimeString('en-IN')}</td>
                   <td style="font-size:0.8rem">${new Date(s.lastSeen).toLocaleTimeString('en-IN')}</td>
                   <td><span class="badge badge-blue">${dur} min</span></td>
@@ -58,6 +61,8 @@ export async function renderLive(ApiClient, { getScopedLive }) {
             </tbody>
           </table></div>`}
         </div>
+
+        ${renderProctorCamerasHTML(live)}
 
         <div class="card">
           <div class="card-header"><h3>Recent Submissions (1h)</h3></div>
@@ -81,6 +86,7 @@ export async function renderLive(ApiClient, { getScopedLive }) {
 
       const btn = document.getElementById('live-refresh-btn');
       if (btn) btn.addEventListener('click', () => refresh());
+      await bindProctorCameras(ApiClient, el);
 
     } catch (e) {
       console.error('Live monitoring refresh failed', e);
@@ -98,7 +104,6 @@ export async function renderLive(ApiClient, { getScopedLive }) {
     if (!_stopped) setTimeout(refresh, 10000);
   }
 
-  // ── Time Extension ─────────────────────────────────────
   window.addStudentTime = async (studentId, examId, studentName) => {
     const input = prompt(`Add extra minutes for ${studentName}:\n(Enter 1–60 minutes)`, '5');
     if (!input) return;
@@ -114,7 +119,6 @@ export async function renderLive(ApiClient, { getScopedLive }) {
       msg.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;background:#22c55e;color:#fff;padding:0.75rem 1.25rem;border-radius:10px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(34,197,94,0.3)';
       document.body.appendChild(msg);
       setTimeout(() => msg.remove(), 3500);
-      // Refresh to update display
       setTimeout(refresh, 500);
     } catch (e) {
       alert('Failed: ' + e.message);

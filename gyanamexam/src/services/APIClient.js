@@ -205,6 +205,17 @@ class ApiClient {
   static pulseHeartbeat(id) { return this.post(`/student/exam/${id}/heartbeat`); }
   static saveExamAnswers(id, payload) { return this.post(`/student/exam/${id}/answers`, payload); }
   static logProctoringEvent(id, payload) { return this.post(`/student/exam/${id}/proctoring-events`, payload); }
+  static uploadProctorPhoto(id, photoDataUrl) {
+    return this.post(`/student/exam/${id}/proctor-photo`, { photo: photoDataUrl });
+  }
+  static postProctorSignal(id, payload) { return this.post(`/student/exam/${id}/proctor-signal`, payload); }
+  static getProctorSignal(id) { return this.get(`/student/exam/${id}/proctor-signal`); }
+  static getStaffProctorSignal(studentId, examId) {
+    return this.get(`/live/${studentId}/exams/${examId}/proctor-signal`);
+  }
+  static postStaffProctorSignal(studentId, examId, payload) {
+    return this.post(`/live/${studentId}/exams/${examId}/proctor-signal`, payload);
+  }
   static submitExam(id, payload) { return this.post(`/student/exam/${id}/submit`, payload); }
   static getSubmissionResult(subId) { return this.get(`/student/result/${subId}`); }
   // Student's own history (uses student-scoped route, not admin route)

@@ -12,9 +12,9 @@ import router from './services/Router.js?v=2';
 import { getAuthModule } from './services/AuthenticationModule.js';
 import LoginPage from './pages/LoginPage.js?v=2';
 import { StudentDashboard } from './pages/StudentDashboard.js?v=3';
-import ExamPage from './pages/ExamPage.js?v=7';
+import ExamPage from './pages/ExamPage.js?v=8';
 import PreExamGate from './pages/PreExamGate.js?v=2';
-import ApiClient from './services/APIClient.js';
+import ApiClient from './services/APIClient.js?v=5';
 
 // Single shared auth module
 const authModule = getAuthModule();
