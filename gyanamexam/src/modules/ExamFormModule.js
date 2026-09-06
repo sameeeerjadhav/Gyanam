@@ -78,20 +78,34 @@ export async function renderExamForm(ApiClient, { loadPage }) {
       }).join('')
     : '<option value="">No question banks created yet</option>';
 
+  // Prefer Active courses first; still list Inactive for completeness
+  if (Array.isArray(courses) && courses.length > 1) {
+    courses.sort((a, b) => {
+      const aInactive = String(a.status || 'Active').toLowerCase() === 'inactive' ? 1 : 0;
+      const bInactive = String(b.status || 'Active').toLowerCase() === 'inactive' ? 1 : 0;
+      if (aInactive !== bInactive) return aInactive - bInactive;
+      return String(a.course_name || '').localeCompare(String(b.course_name || ''));
+    });
+  }
+
   let subjectField;
   if (courses.length > 0) {
     let opts = '<option value="">Select a course…</option>';
     courses.forEach(c => {
       const val = c.course_name;
-      const label = c.course_type ? `${c.course_name} (${c.course_type})` : c.course_name;
+      const inactive = String(c.status || 'Active').toLowerCase() === 'inactive';
+      const label = c.course_type
+        ? `${c.course_name} (${c.course_type})${inactive ? ' — Inactive' : ''}`
+        : `${c.course_name}${inactive ? ' — Inactive' : ''}`;
       const sel = exam?.subject === val ? 'selected' : '';
       opts += `<option value="${val}" ${sel}>${label}</option>`;
     });
-    subjectField = `<select id="ex-subj" class="form-select">${opts}</select>`;
+    subjectField = `<select id="ex-subj" class="form-select">${opts}</select>
+      <p class="field-hint">${courses.length} course(s) synced from main portal.</p>`;
   } else {
     subjectField = `
       <input id="ex-subj" class="form-input" value="${exam?.subject || ''}" placeholder="e.g. Abacus Level 1, DCA…">
-      <p class="field-hint">Sync courses from main portal (Admin › Courses) to get a dropdown.</p>`;
+      <p class="field-hint">Sync courses from main portal (Admin › Courses → Sync to Exam Portal).</p>`;
   }
 
   el.innerHTML = `

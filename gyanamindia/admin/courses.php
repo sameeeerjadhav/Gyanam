@@ -131,6 +131,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt = $pdo->prepare("UPDATE courses SET status = IF(status='Active','Inactive','Active') WHERE id = ?");
                 $stmt->execute([intval($_POST['id'])]);
                 echo json_encode(['success' => true, 'message' => 'Status toggled']);
+                if (function_exists('syncCoursesToExamPortal')) { syncCoursesToExamPortal($pdo); }
+                exit;
+
+            case 'sync_exam_portal':
+                if (!function_exists('syncCoursesToExamPortal')) {
+                    echo json_encode(['success' => false, 'message' => 'Exam portal sync is not available.']);
+                    exit;
+                }
+                $result = syncCoursesToExamPortal($pdo);
+                if (!empty($result['success'])) {
+                    $count = $result['data']['count'] ?? (is_array($result['data']['courses'] ?? null) ? count($result['data']['courses']) : null);
+                    $msg = $result['data']['message'] ?? 'Courses synced to Exam Portal.';
+                    if ($count !== null) {
+                        $msg = is_numeric($count) ? (intval($count) . ' courses synced to Exam Portal.') : $msg;
+                    }
+                    echo json_encode(['success' => true, 'message' => $msg, 'data' => $result['data'] ?? null]);
+                } else {
+                    echo json_encode(['success' => false, 'message' => $result['error'] ?? 'Sync failed. Check Exam Portal API credentials.']);
+                }
                 exit;
         }
     } catch (Exception $e) {
@@ -143,6 +162,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $statusFilter = $_GET['status'] ?? 'all';
 $searchTerm   = trim($_GET['search'] ?? '');
 $pagerParams  = paginationParams(25);
+
+// Keep Exam Portal course dropdown up to date (once per admin session)
+$examSyncNotice = null;
+if (function_exists('syncCoursesToExamPortal') && empty($_SESSION['exam_courses_synced_at'])) {
+    $syncResult = syncCoursesToExamPortal($pdo);
+    $_SESSION['exam_courses_synced_at'] = time();
+    if (!empty($syncResult['success'])) {
+        $syncedCount = $syncResult['data']['count'] ?? null;
+        $examSyncNotice = $syncedCount !== null
+            ? ('Exam Portal courses updated (' . intval($syncedCount) . ' courses).')
+            : 'Exam Portal courses updated.';
+    } else {
+        $examSyncNotice = 'Exam Portal course sync failed: ' . ($syncResult['error'] ?? 'unknown error');
+    }
+}
 
 $where  = [];
 $params = [];
@@ -602,6 +636,12 @@ $inactiveCount = $counts['Inactive'] ?? 0;
 
         <div class="page-content">
 
+            <?php if (!empty($examSyncNotice)): ?>
+            <div style="margin-bottom:1rem;padding:.75rem 1rem;border-radius:10px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;font-size:.875rem;font-weight:600">
+                <?= htmlspecialchars($examSyncNotice) ?>
+            </div>
+            <?php endif; ?>
+
             <!-- Stat Cards -->
             <div class="stat-cards">
                 <div class="stat-card">
@@ -646,6 +686,9 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                         </div>
                         <button type="submit" class="btn-primary" style="padding:0 1.25rem">Search</button>
                     </form>
+                    <button type="button" class="btn-primary" id="sync-exam-courses-btn" style="padding:0 1rem;background:#0f766e" title="Push all courses to Gyanam Exam Portal dropdowns">
+                        ↻ Sync to Exam Portal
+                    </button>
                     <button class="btn-add" onclick="location.href='course_form.php?action=add'">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         Add Course
@@ -1042,6 +1085,25 @@ document.getElementById('courseModal').addEventListener('click', function(e) {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape' && document.getElementById('courseModal').classList.contains('active')) {
         closeModal();
+    }
+});
+
+document.getElementById('sync-exam-courses-btn')?.addEventListener('click', async function () {
+    const btn = this;
+    const prev = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Syncing…';
+    try {
+        const fd = new FormData();
+        fd.append('action', 'sync_exam_portal');
+        const r = await (await fetch('', { method: 'POST', body: fd })).json();
+        alert(r.message || (r.success ? 'Synced.' : 'Sync failed.'));
+        if (r.success) location.reload();
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = prev;
     }
 });
 </script>
