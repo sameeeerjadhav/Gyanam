@@ -83,6 +83,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
+// Link a Razorpay pay_xxx id (from Dashboard / PhonePe may show via Razorpay) to local share payment
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'link_razorpay_payment') {
+    header('Content-Type: application/json');
+    try {
+        ensureSharePaymentSchema($pdo);
+        $rzpId = trim((string)($_POST['razorpay_payment_id'] ?? ''));
+        $prefer = (int)($_POST['local_payment_id'] ?? 0);
+        $result = completeSharePaymentFromRazorpayPaymentId($pdo, $rzpId, $prefer > 0 ? $prefer : null);
+        echo json_encode($result);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'completed' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// Scan recent Razorpay captures and complete matching portal rows
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'heal_razorpay_payments') {
+    header('Content-Type: application/json');
+    try {
+        ensureSharePaymentSchema($pdo);
+        $result = healRecentSharePaymentsFromRazorpay($pdo, null, 20);
+        echo json_encode($result);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage(), 'completed_ids' => []]);
+    }
+    exit;
+}
+
 // Filters
 $atcFilter = $_GET['atc'] ?? 'all';
 $statusFilter = $_GET['status'] ?? 'all';
@@ -1249,23 +1277,32 @@ $monthlyTrend = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                     </div>
                     <div>
-                        <h1 class="page-header-title">Share Payments</h1>
-                        <p class="page-header-subtitle">Monitor ATC share payments &amp; transaction history</p>
+                        <h1 class="page-title">Share Payments</h1>
+                        <p class="page-sub">Track &amp; manage ATC share payments</p>
                     </div>
                 </div>
-                <div class="page-header-right">
-                    <a href="record_cash_share.php" class="btn-outline" style="text-decoration:none;background:#ecfdf5;border-color:#a7f3d0;color:#065f46;font-weight:800">
-                        Record Cash Payment
-                    </a>
-                    <span class="live-badge">
-                        <span class="live-dot"></span>
-                        Live Tracking
-                    </span>
-                    <button class="btn-outline" onclick="window.print()">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                        Print Report
-                    </button>
+                <div class="page-header-actions" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                    <button type="button" class="btn-outline" onclick="healAllRazorpay()" title="Scan Razorpay for captured payments and mark Completed">↻ Sync from Razorpay</button>
+                    <a href="record_cash_share.php" class="btn-primary" style="text-decoration:none">Record Cash / UPI Receipt</a>
                 </div>
+            </div>
+
+            <div class="filter-panel" style="margin-bottom:1rem">
+                <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
+                    <div style="flex:1;min-width:220px">
+                        <label style="font-size:.75rem;font-weight:600;color:var(--color-text-muted)">Link Razorpay payment id (pay_…)</label>
+                        <input type="text" id="link-rzp-pay-id" class="form-control" placeholder="pay_xxxxxxxx from Razorpay Dashboard">
+                    </div>
+                    <div style="width:140px">
+                        <label style="font-size:.75rem;font-weight:600;color:var(--color-text-muted)">Local # (optional)</label>
+                        <input type="number" id="link-local-pay-id" class="form-control" placeholder="e.g. 8">
+                    </div>
+                    <button type="button" class="btn-primary" onclick="linkRazorpayPaymentId()">Mark Completed</button>
+                </div>
+                <p style="margin:.5rem 0 0;font-size:.8rem;color:var(--color-text-muted)">
+                    If money is in the bank but status is Cancelled: open Razorpay Dashboard → Payments → copy <strong>pay_…</strong> id, paste here.
+                    Or use <strong>Record Cash / UPI Receipt</strong> with the PhonePe UTR for that ATC student.
+                </p>
             </div>
 
             <!-- KPI Grid -->
@@ -1740,6 +1777,36 @@ async function reconcileRazorpayPayment(paymentId, btn) {
         alert('Network error: ' + e.message);
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = prev || '↻'; }
+    }
+}
+
+async function linkRazorpayPaymentId() {
+    const rzp = (document.getElementById('link-rzp-pay-id')?.value || '').trim();
+    const local = (document.getElementById('link-local-pay-id')?.value || '').trim();
+    if (!rzp) { alert('Paste Razorpay payment id (pay_…)'); return; }
+    try {
+        const fd = new FormData();
+        fd.append('action', 'link_razorpay_payment');
+        fd.append('razorpay_payment_id', rzp);
+        if (local) fd.append('local_payment_id', local);
+        const res = await (await fetch('share_payments.php', { method: 'POST', body: fd })).json();
+        alert(res.message || 'Done');
+        if (res.completed) location.reload();
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    }
+}
+
+async function healAllRazorpay() {
+    if (!confirm('Scan recent Razorpay captures and mark matching share payments as Completed?')) return;
+    try {
+        const fd = new FormData();
+        fd.append('action', 'heal_razorpay_payments');
+        const res = await (await fetch('share_payments.php', { method: 'POST', body: fd })).json();
+        alert(res.message || 'Done');
+        if ((res.completed_ids || []).length) location.reload();
+    } catch (e) {
+        alert('Network error: ' + e.message);
     }
 }
 

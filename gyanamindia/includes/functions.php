@@ -1553,27 +1553,41 @@ function reconcileSharePaymentFromRazorpay(PDO $pdo, int $paymentId, ?int $atcId
     }
 
     $orderId = trim((string)($row['razorpay_order_id'] ?? ''));
-    if ($orderId === '') {
-        return [
-            'success' => true,
-            'completed' => false,
-            'message' => 'No Razorpay order linked — payment was never started at the gateway.',
-            'razorpay_status' => 'no_order',
-        ];
+    $captured = null;
+
+    if ($orderId !== '') {
+        $api = razorpayApiRequest('GET', 'orders/' . rawurlencode($orderId) . '/payments');
+        if (!$api['ok']) {
+            // Still try notes-based fallback below
+            $api = ['ok' => false, 'data' => null, 'error' => $api['error'] ?? 'unknown'];
+        } else {
+            $items = $api['data']['items'] ?? [];
+            if (is_array($items)) {
+                foreach ($items as $p) {
+                    $stt = strtolower((string)($p['status'] ?? ''));
+                    if (in_array($stt, ['captured', 'authorized'], true)) {
+                        $captured = $p;
+                        break;
+                    }
+                }
+            }
+        }
     }
 
-    $api = razorpayApiRequest('GET', 'orders/' . rawurlencode($orderId) . '/payments');
-    if (!$api['ok']) {
-        return [
-            'success' => false,
-            'completed' => false,
-            'message' => 'Could not query Razorpay: ' . ($api['error'] ?? 'unknown'),
-            'razorpay_status' => 'api_error',
-        ];
+    // Fallback: UPI may capture under a linked payment that notes our local payment_id
+    if (!$captured) {
+        $captured = findCapturedRazorpayPaymentForLocalId($paymentId);
     }
 
-    $items = $api['data']['items'] ?? [];
-    if (!is_array($items) || empty($items)) {
+    if (!$captured) {
+        if ($orderId === '') {
+            return [
+                'success' => true,
+                'completed' => false,
+                'message' => 'No Razorpay order linked — payment was never started at the gateway.',
+                'razorpay_status' => 'no_order',
+            ];
+        }
         return [
             'success' => true,
             'completed' => false,
@@ -1582,28 +1596,9 @@ function reconcileSharePaymentFromRazorpay(PDO $pdo, int $paymentId, ?int $atcId
         ];
     }
 
-    $captured = null;
-    foreach ($items as $p) {
-        $stt = strtolower((string)($p['status'] ?? ''));
-        if (in_array($stt, ['captured', 'authorized'], true)) {
-            $captured = $p;
-            break;
-        }
-    }
-
-    if (!$captured) {
-        $last = $items[0];
-        $lastStatus = (string)($last['status'] ?? 'unknown');
-        return [
-            'success' => true,
-            'completed' => false,
-            'message' => 'Razorpay order has payment(s) but none captured (last: ' . $lastStatus . ').',
-            'razorpay_status' => $lastStatus,
-        ];
-    }
-
     $rzpPayId = (string)($captured['id'] ?? '');
-    $result = completeSharePayment($pdo, $paymentId, $rzpPayId !== '' ? $rzpPayId : null, $orderId, null);
+    $orderFromPay = (string)($captured['order_id'] ?? $orderId);
+    $result = completeSharePayment($pdo, $paymentId, $rzpPayId !== '' ? $rzpPayId : null, $orderFromPay !== '' ? $orderFromPay : null, null);
     return [
         'success'   => (bool)($result['success'] ?? false),
         'completed' => (bool)($result['success'] ?? false),
@@ -1611,6 +1606,178 @@ function reconcileSharePaymentFromRazorpay(PDO $pdo, int $paymentId, ?int $atcId
             ? 'Payment found on Razorpay and marked Completed.'
             : ($result['message'] ?? 'Failed to complete payment'),
         'razorpay_status' => (string)($captured['status'] ?? 'captured'),
+    ];
+}
+
+/**
+ * Scan recent Razorpay payments for notes.payment_id = local share_payments.id
+ */
+function findCapturedRazorpayPaymentForLocalId(int $localPaymentId): ?array {
+    if ($localPaymentId <= 0) {
+        return null;
+    }
+    $api = razorpayApiRequest('GET', 'payments?count=50');
+    if (!$api['ok'] || !is_array($api['data']['items'] ?? null)) {
+        return null;
+    }
+    foreach ($api['data']['items'] as $p) {
+        if (!is_array($p)) {
+            continue;
+        }
+        $noteId = (int)($p['notes']['payment_id'] ?? 0);
+        $stt = strtolower((string)($p['status'] ?? ''));
+        if ($noteId === $localPaymentId && in_array($stt, ['captured', 'authorized'], true)) {
+            return $p;
+        }
+    }
+    return null;
+}
+
+/**
+ * Admin/ATC recovery: complete a share payment using a Razorpay payment id (pay_xxx)
+ * or by matching a recent captured payment to a local Pending/Cancelled row.
+ *
+ * @return array{success:bool,completed:bool,message:string,payment_id?:int}
+ */
+function completeSharePaymentFromRazorpayPaymentId(PDO $pdo, string $razorpayPaymentId, ?int $preferLocalId = null): array {
+    ensureSharePaymentSchema($pdo);
+    $razorpayPaymentId = trim($razorpayPaymentId);
+    if ($razorpayPaymentId === '' || !preg_match('/^pay_[A-Za-z0-9]+$/', $razorpayPaymentId)) {
+        return ['success' => false, 'completed' => false, 'message' => 'Enter a valid Razorpay payment id (starts with pay_).'];
+    }
+
+    // Already linked?
+    $dup = $pdo->prepare("SELECT id, status FROM share_payments WHERE razorpay_payment_id = ? LIMIT 1");
+    $dup->execute([$razorpayPaymentId]);
+    $existing = $dup->fetch(PDO::FETCH_ASSOC);
+    if ($existing && ($existing['status'] ?? '') === 'Completed') {
+        return [
+            'success' => true,
+            'completed' => true,
+            'message' => 'Already recorded as Completed (payment #' . $existing['id'] . ').',
+            'payment_id' => (int)$existing['id'],
+        ];
+    }
+
+    $api = razorpayApiRequest('GET', 'payments/' . rawurlencode($razorpayPaymentId));
+    if (!$api['ok'] || !is_array($api['data'])) {
+        return [
+            'success' => false,
+            'completed' => false,
+            'message' => 'Razorpay lookup failed: ' . ($api['error'] ?? 'not found'),
+        ];
+    }
+    $p = $api['data'];
+    $stt = strtolower((string)($p['status'] ?? ''));
+    if (!in_array($stt, ['captured', 'authorized'], true)) {
+        return [
+            'success' => false,
+            'completed' => false,
+            'message' => 'Razorpay payment status is "' . ($p['status'] ?? 'unknown') . '", not captured.',
+        ];
+    }
+
+    $orderId = (string)($p['order_id'] ?? '');
+    $noteLocalId = (int)($p['notes']['payment_id'] ?? 0);
+    $localId = $preferLocalId ?: $noteLocalId;
+
+    $row = null;
+    if ($localId > 0) {
+        $st = $pdo->prepare('SELECT * FROM share_payments WHERE id = ? LIMIT 1');
+        $st->execute([$localId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+    if (!$row && $orderId !== '') {
+        $st = $pdo->prepare('SELECT * FROM share_payments WHERE razorpay_order_id = ? ORDER BY id DESC LIMIT 1');
+        $st->execute([$orderId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+    if (!$row && $existing) {
+        $st = $pdo->prepare('SELECT * FROM share_payments WHERE id = ? LIMIT 1');
+        $st->execute([(int)$existing['id']]);
+        $row = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    if (!$row) {
+        return [
+            'success' => false,
+            'completed' => false,
+            'message' => 'Found captured Razorpay payment, but no matching share_payments row. Use Record Cash Share with UTR instead.',
+        ];
+    }
+
+    $result = completeSharePayment(
+        $pdo,
+        (int)$row['id'],
+        $razorpayPaymentId,
+        $orderId !== '' ? $orderId : null,
+        null
+    );
+    return [
+        'success' => (bool)($result['success'] ?? false),
+        'completed' => (bool)($result['success'] ?? false),
+        'message' => $result['success']
+            ? ('Marked payment #' . (int)$row['id'] . ' as Completed from Razorpay.')
+            : ($result['message'] ?? 'Failed'),
+        'payment_id' => (int)$row['id'],
+    ];
+}
+
+/**
+ * Scan last N Razorpay captures and complete any matching local Pending/Cancelled rows.
+ * @return array{success:bool,message:string,completed_ids:int[]}
+ */
+function healRecentSharePaymentsFromRazorpay(PDO $pdo, ?int $atcId = null, int $limit = 12): array {
+    ensureSharePaymentSchema($pdo);
+    $completedIds = [];
+
+    $sql = "
+        SELECT id FROM share_payments
+        WHERE status IN ('Pending','Cancelled','Failed')
+          AND created_at >= (NOW() - INTERVAL 14 DAY)
+    ";
+    $params = [];
+    if ($atcId) {
+        $sql .= ' AND atc_id = ?';
+        $params[] = $atcId;
+    }
+    $sql .= ' ORDER BY id DESC LIMIT ' . max(1, min(30, $limit));
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    $ids = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN) ?: []);
+
+    foreach ($ids as $id) {
+        $r = reconcileSharePaymentFromRazorpay($pdo, $id, $atcId);
+        if (!empty($r['completed'])) {
+            $completedIds[] = $id;
+        }
+    }
+
+    // Also walk recent Razorpay payments → local notes
+    $api = razorpayApiRequest('GET', 'payments?count=40');
+    if ($api['ok'] && is_array($api['data']['items'] ?? null)) {
+        foreach ($api['data']['items'] as $p) {
+            if (!is_array($p)) continue;
+            $stt = strtolower((string)($p['status'] ?? ''));
+            if (!in_array($stt, ['captured', 'authorized'], true)) continue;
+            $noteId = (int)($p['notes']['payment_id'] ?? 0);
+            $payId = (string)($p['id'] ?? '');
+            if ($noteId > 0 && $payId !== '') {
+                $r = completeSharePaymentFromRazorpayPaymentId($pdo, $payId, $noteId);
+                if (!empty($r['completed']) && !empty($r['payment_id'])) {
+                    $completedIds[] = (int)$r['payment_id'];
+                }
+            }
+        }
+    }
+
+    $completedIds = array_values(array_unique($completedIds));
+    return [
+        'success' => true,
+        'completed_ids' => $completedIds,
+        'message' => $completedIds
+            ? ('Completed ' . count($completedIds) . ' payment(s): #' . implode(', #', $completedIds))
+            : 'No captured Razorpay payments found to link.',
     ];
 }
 

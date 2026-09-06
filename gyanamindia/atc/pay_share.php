@@ -329,19 +329,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // Auto-heal: if ATC has recent Cancelled/Pending orders that Razorpay already captured, complete them
 try {
-    $heal = $pdo->prepare("
-        SELECT id FROM share_payments
-        WHERE atc_id = ?
-          AND status IN ('Pending','Cancelled','Failed')
-          AND razorpay_order_id IS NOT NULL AND razorpay_order_id != ''
-          AND created_at >= (NOW() - INTERVAL 7 DAY)
-        ORDER BY id DESC
-        LIMIT 8
-    ");
-    $heal->execute([$atcId]);
-    foreach ($heal->fetchAll(PDO::FETCH_COLUMN) as $healId) {
-        reconcileSharePaymentFromRazorpay($pdo, (int)$healId, (int)$atcId);
-    }
+    healRecentSharePaymentsFromRazorpay($pdo, (int)$atcId, 12);
 } catch (Exception $e) { /* non-fatal */ }
 
 // Fetch students — properly detect share-paid status per admission (incl. re-enrollments)
@@ -721,19 +709,26 @@ async function initiateRazorpayPayment(paymentData) {
         modal: {
             ondismiss: async function() {
                 if (checkoutSettled) return;
-                // Money may already be captured even if handler didn't run — check Razorpay first
-                try {
-                    const fd = new FormData();
-                    fd.append('action', 'reconcile_payment');
-                    fd.append('payment_id', paymentData.payment_id);
-                    const recon = await (await fetch('', { method: 'POST', body: fd })).json();
-                    if (recon && recon.completed) {
-                        checkoutSettled = true;
-                        showToast('Payment successful! Share payment completed.', 'success');
-                        setTimeout(() => location.reload(), 1500);
-                        return;
-                    }
-                } catch (e) { /* fall through to cancel */ }
+                // UPI capture can finish a few seconds after modal closes — wait, then reconcile twice
+                showToast('Checking payment status…', 'warning');
+                await new Promise(r => setTimeout(r, 3500));
+                if (checkoutSettled) return;
+                for (let i = 0; i < 2; i++) {
+                    try {
+                        const fd = new FormData();
+                        fd.append('action', 'reconcile_payment');
+                        fd.append('payment_id', paymentData.payment_id);
+                        const recon = await (await fetch('', { method: 'POST', body: fd })).json();
+                        if (recon && recon.completed) {
+                            checkoutSettled = true;
+                            showToast('Payment successful! Share payment completed.', 'success');
+                            setTimeout(() => location.reload(), 1500);
+                            return;
+                        }
+                    } catch (e) { /* retry */ }
+                    if (i === 0) await new Promise(r => setTimeout(r, 2500));
+                }
+                if (checkoutSettled) return;
                 await markPaymentStatus(paymentData.payment_id, 'Cancelled', 'Checkout dismissed by user');
                 showToast('Payment cancelled. You can try again anytime.', 'warning');
             }
