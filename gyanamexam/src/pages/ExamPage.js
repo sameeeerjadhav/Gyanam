@@ -423,6 +423,12 @@ class ExamPage {
           event_type: 'auto_submit',
           message: 'Tab switch limit exceeded',
         }).catch(() => {});
+        try {
+          sessionStorage.setItem('gyanam_result_notice', JSON.stringify({
+            type: 'auto_submit',
+            message: 'Window focus was lost too many times, so this exam was auto-submitted.',
+          }));
+        } catch (_) { /* ignore */ }
         this._submitExam(true);
       }
     );
@@ -795,6 +801,8 @@ class ExamPage {
       if (!submissionId) throw new Error('Server did not return a submission ID.');
 
       this._clearLocalDraft();
+
+      document.getElementById('proctoring-warning-overlay')?.remove();
 
       if (this.router) {
         this.router.navigate(`/student/result/${submissionId}`);
