@@ -34,6 +34,7 @@ export class PreExamGate {
     this.exam = null;
     this.termsAccepted = false;
     this.identityConfirmed = false;
+    this.capturedPhoto = null; // data URL of still capture
     this._cameraStream = null;
     this._container = null;
     this._resolve = null;
@@ -208,12 +209,11 @@ export class PreExamGate {
       });
       if (this.needsCamera) {
         this._ensureCamera().then(stream => {
-          const video = document.getElementById('peg-camera');
-          if (video && stream) {
-            video.srcObject = stream;
-            video.play().catch(() => {});
-          }
+          this._attachLivePreview(stream);
         }).catch(err => this._setError(err.message));
+
+        document.getElementById('peg-capture-btn')?.addEventListener('click', () => this._capturePhoto());
+        document.getElementById('peg-retake-btn')?.addEventListener('click', () => this._retakePhoto());
       }
     }
     if (key === 'terms') {
@@ -223,12 +223,61 @@ export class PreExamGate {
     }
   }
 
+  _attachLivePreview(stream) {
+    const video = document.getElementById('peg-camera');
+    if (video && stream) {
+      video.srcObject = stream;
+      video.play().catch(() => {});
+    }
+  }
+
+  _capturePhoto() {
+    this._setError('');
+    const video = document.getElementById('peg-camera');
+    if (!video || !this._cameraStream) {
+      this._setError('Camera is not ready yet. Please wait a moment and try again.');
+      return;
+    }
+    if (!video.videoWidth || !video.videoHeight) {
+      this._setError('Camera feed is still loading. Wait a second, then capture again.');
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    // Mirror to match preview
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    try {
+      this.capturedPhoto = canvas.toDataURL('image/jpeg', 0.92);
+    } catch (e) {
+      this._setError('Could not capture photo. Please try again.');
+      return;
+    }
+
+    // Re-render identity step to show captured still + retake
+    this._render();
+  }
+
+  _retakePhoto() {
+    this.capturedPhoto = null;
+    this._render();
+  }
+
   async _onNext() {
     this._setError('');
     const steps = this._steps();
     const key = steps[this.step].key;
 
     if (key === 'identity') {
+      if (this.needsCamera && !this.capturedPhoto) {
+        this._setError('Please capture your photo before continuing.');
+        return;
+      }
       if (!this.identityConfirmed) {
         this._setError('Please confirm that your details are correct before continuing.');
         return;
@@ -236,6 +285,10 @@ export class PreExamGate {
       if (this.needsCamera && !this._cameraStream) {
         try { await this._ensureCamera(); }
         catch (e) { this._setError(e.message); return; }
+      }
+      if (this.capturedPhoto) {
+        try { sessionStorage.setItem('gyanam_exam_photo', this.capturedPhoto); }
+        catch (_) { /* ignore quota */ }
       }
     }
 
@@ -275,6 +328,7 @@ export class PreExamGate {
       examMeta: this.exam,
       enteredFullscreen,
       cameraStream: stream,
+      capturedPhoto: this.capturedPhoto || null,
     });
   }
 
@@ -298,11 +352,25 @@ export class PreExamGate {
       <div class="peg-identity">
         <div class="peg-photo-col">
           ${this.needsCamera ? `
-            <div class="peg-camera-wrap">
-              <video id="peg-camera" class="peg-camera" autoplay playsinline muted></video>
-              <div class="peg-camera-tag">Live camera check</div>
+            <div class="peg-camera-wrap ${this.capturedPhoto ? 'is-captured' : ''}">
+              ${this.capturedPhoto ? `
+                <img id="peg-photo" class="peg-photo" src="${this.capturedPhoto}" alt="Captured candidate photo">
+                <div class="peg-camera-tag peg-camera-tag-ok">Photo captured</div>
+              ` : `
+                <video id="peg-camera" class="peg-camera" autoplay playsinline muted></video>
+                <div class="peg-camera-tag">Live camera</div>
+              `}
             </div>
-            <p class="peg-hint">Keep your face clearly visible. Camera preview is local only.</p>
+            <div class="peg-photo-actions">
+              ${this.capturedPhoto ? `
+                <button type="button" class="peg-btn peg-btn-ghost peg-btn-sm" id="peg-retake-btn">Retake photo</button>
+              ` : `
+                <button type="button" class="peg-btn peg-btn-primary peg-btn-sm" id="peg-capture-btn">Capture photo</button>
+              `}
+            </div>
+            <p class="peg-hint">${this.capturedPhoto
+              ? 'Photo saved for this exam session. Retake if needed.'
+              : 'Centre your face in the frame, then capture a clear photo to continue.'}</p>
           ` : `
             <div class="peg-avatar">${esc(initial)}</div>
             <p class="peg-hint">Photo capture is not required for this exam.</p>
