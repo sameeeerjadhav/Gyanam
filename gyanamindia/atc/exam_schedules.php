@@ -1496,12 +1496,18 @@ try {
                         <label class="es-form-label">Select Exam <span style="color:#ef4444">*</span></label>
                         <select class="es-form-select" id="schedExam">
                             <option value="" data-id="0">— Select an exam —</option>
-                            <?php foreach ($portalExams as $pe): ?>
-                                <option value="<?= htmlspecialchars($pe['title'] ?? $pe['exam_id'] ?? '') ?>" data-id="<?= intval($pe['id'] ?? 0) ?>">
-                                    <?= htmlspecialchars(($pe['title'] ?? 'Untitled') . ' — ' . ($pe['subject'] ?? '') . ' (' . ($pe['duration'] ?? '?') . ' min)') ?>
+                            <?php foreach ($portalExams as $pe):
+                                $isProctored = !empty($pe['proctored']);
+                                $modeLabel = $isProctored ? 'Proctored' : 'Normal';
+                            ?>
+                                <option value="<?= htmlspecialchars($pe['title'] ?? $pe['exam_id'] ?? '') ?>"
+                                        data-id="<?= intval($pe['id'] ?? 0) ?>"
+                                        data-proctored="<?= $isProctored ? '1' : '0' ?>">
+                                    <?= htmlspecialchars(($pe['title'] ?? 'Untitled') . ' — ' . ($pe['subject'] ?? '') . ' (' . ($pe['duration'] ?? '?') . ' min) · ' . $modeLabel) ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                        <div id="schedExamModeHint" style="margin-top:.45rem;font-size:.78rem;color:#64748b;display:none"></div>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -1586,12 +1592,18 @@ try {
                         <label class="es-form-label">Select Exam <span style="color:#ef4444">*</span></label>
                         <select class="es-form-select" id="bulkExam">
                             <option value="" data-id="0">— Select an exam —</option>
-                            <?php foreach ($portalExams as $pe): ?>
-                                <option value="<?= htmlspecialchars($pe['title'] ?? $pe['exam_id'] ?? '') ?>" data-id="<?= intval($pe['id'] ?? 0) ?>">
-                                    <?= htmlspecialchars(($pe['title'] ?? 'Untitled') . ' — ' . ($pe['subject'] ?? '') . ' (' . ($pe['duration'] ?? '?') . ' min)') ?>
+                            <?php foreach ($portalExams as $pe):
+                                $isProctored = !empty($pe['proctored']);
+                                $modeLabel = $isProctored ? 'Proctored' : 'Normal';
+                            ?>
+                                <option value="<?= htmlspecialchars($pe['title'] ?? $pe['exam_id'] ?? '') ?>"
+                                        data-id="<?= intval($pe['id'] ?? 0) ?>"
+                                        data-proctored="<?= $isProctored ? '1' : '0' ?>">
+                                    <?= htmlspecialchars(($pe['title'] ?? 'Untitled') . ' — ' . ($pe['subject'] ?? '') . ' (' . ($pe['duration'] ?? '?') . ' min) · ' . $modeLabel) ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                        <div id="bulkExamModeHint" style="margin-top:.45rem;font-size:.78rem;color:#64748b;display:none"></div>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -1708,8 +1720,33 @@ try {
             } else if (examSel) {
                 examSel.selectedIndex = 0;
             }
+            updateExamModeHint(examSel, 'schedExamModeHint');
             document.getElementById('scheduleOverlay').classList.add('open');
         }
+
+        function updateExamModeHint(selectEl, hintId) {
+            const hint = document.getElementById(hintId);
+            if (!hint || !selectEl) return;
+            const opt = selectEl.options[selectEl.selectedIndex];
+            if (!opt || !opt.dataset.id || opt.dataset.id === '0') {
+                hint.style.display = 'none';
+                hint.textContent = '';
+                return;
+            }
+            const proctored = opt.dataset.proctored === '1';
+            hint.style.display = 'block';
+            hint.style.color = proctored ? '#991b1b' : '#166534';
+            hint.textContent = proctored
+                ? 'Mode: Proctored — anti-cheat monitoring applies for this exam (set by Admin on Exam Configuration).'
+                : 'Mode: Normal — standard exam without proctoring (set by Admin on Exam Configuration).';
+        }
+
+        document.getElementById('schedExam')?.addEventListener('change', function () {
+            updateExamModeHint(this, 'schedExamModeHint');
+        });
+        document.getElementById('bulkExam')?.addEventListener('change', function () {
+            updateExamModeHint(this, 'bulkExamModeHint');
+        });
 
         function closeScheduleModal() {
             document.getElementById('scheduleOverlay').classList.remove('open');
@@ -1776,6 +1813,7 @@ try {
                 return;
             }
             document.getElementById('bulkModalCount').textContent = ids.length + ' student(s) selected';
+            updateExamModeHint(document.getElementById('bulkExam'), 'bulkExamModeHint');
             document.getElementById('bulkOverlay').classList.add('open');
         }
 

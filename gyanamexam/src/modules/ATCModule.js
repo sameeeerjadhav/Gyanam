@@ -493,7 +493,7 @@ async function showAssignModal(ApiClient, studentId, studentName, availableExams
     : availableExams
         .map(e => {
           const already = alreadyAssignedIds.includes(String(e.id));
-          return `<option value="${e.id}" ${already ? 'disabled style="color:#94a3b8"' : ''}>${e.title} — ${e.subject} (${e.total_questions}Q, ${e.duration}min)${already ? ' ✓ Already assigned' : ''}</option>`;
+          return `<option value="${e.id}" ${already ? 'disabled style="color:#94a3b8"' : ''}>${e.title} — ${e.subject} (${e.total_questions}Q, ${e.duration}min)${e.proctored ? ' · 🛡️ Proctored' : ' · Normal'}${already ? ' ✓ Already assigned' : ''}</option>`;
         })
         .join('');
 
@@ -569,7 +569,7 @@ async function showBulkAssignModal(ApiClient, availableExams) {
   const selectedIds = [...document.querySelectorAll('.atc-stu-select:checked')].map(cb => cb.value);
   if (selectedIds.length === 0) { modalService.toast('No students selected', 'error'); return; }
 
-  const examOpts = availableExams.map(e => `<option value="${e.id}">${e.title} — ${e.subject} (${e.total_questions}Q, ${e.duration}min)</option>`).join('');
+  const examOpts = availableExams.map(e => `<option value="${e.id}">${e.title} — ${e.subject} (${e.total_questions}Q, ${e.duration}min)${e.proctored ? ' · 🛡️ Proctored' : ' · Normal'}</option>`).join('');
 
   getOverlay().style.display = 'flex';
   document.getElementById('modal-box').innerHTML = `
