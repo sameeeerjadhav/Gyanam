@@ -14,6 +14,9 @@ export class Router {
     this.handlePopState = this.handlePopState.bind(this);
     // Detect base path (useful if hosted in a subfolder like /gyanam/)
     this.basePath = this.detectBasePath();
+    /** @type {null | (() => boolean)} */
+    this.navigationGuard = null;
+    this._guardedUrl = null;
   }
 
   detectBasePath() {
@@ -43,6 +46,22 @@ export class Router {
     this.routes.set(path, handler);
   }
 
+  /**
+   * Lock SPA back-navigation while an exam (or similar) is in progress.
+   * Guard should return false to block and show a warning.
+   * @param {() => boolean} guard
+   * @param {string} [lockedUrl] full path+search to restore when blocked
+   */
+  setNavigationGuard(guard, lockedUrl = null) {
+    this.navigationGuard = typeof guard === 'function' ? guard : null;
+    this._guardedUrl = lockedUrl || (window.location.pathname + window.location.search);
+  }
+
+  clearNavigationGuard() {
+    this.navigationGuard = null;
+    this._guardedUrl = null;
+  }
+
   navigate(path, state = null) {
     if (typeof path !== 'string' || !path.startsWith('/')) throw new Error('Navigation path must start with "/"');
     const qIndex = path.indexOf('?');
@@ -59,6 +78,15 @@ export class Router {
   getCurrentRoute() { return this.currentPath; }
 
   handlePopState(event) {
+    if (typeof this.navigationGuard === 'function') {
+      const allow = this.navigationGuard({ path: window.location.pathname, event });
+      if (allow === false) {
+        const restore = this._guardedUrl || (this.basePath + '/exam' + window.location.search);
+        window.history.pushState({ examLock: true }, '', restore);
+        this.currentPath = new URL(restore, window.location.origin).pathname;
+        return;
+      }
+    }
     const path = window.location.pathname;
     this.currentPath = path;
     this.handleRoute(path, event.state);
