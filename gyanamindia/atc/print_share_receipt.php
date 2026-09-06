@@ -69,7 +69,11 @@ $txnId = $receipt['razorpay_payment_id'] ?: ($receipt['remarks'] ?? ('#' . $rece
 
 $receiptNo = 'GYANAM-' . date('Y', strtotime($receipt['created_at'])) . '-' . $receipt['id'];
 $printDate = date('d M Y, h:i A');
-$txnDate = date('d M Y, h:i A', strtotime($receipt['paid_at'] ? $receipt['paid_at'] : $receipt['created_at']));
+$txnSource = $receipt['created_at'];
+if (!empty($receipt['paid_at']) && !preg_match('/\s00:00:00$/', (string)$receipt['paid_at'])) {
+    $txnSource = $receipt['paid_at'];
+}
+$txnDate = date('d M Y, h:i A', strtotime($txnSource));
 ?>
 <!DOCTYPE html>
 <html lang="en">

@@ -3,6 +3,26 @@
  * Shared Utility Functions — Gyanam Portal
  */
 
+/** India Standard Time for all portal dates/times (PHP + MySQL session). */
+function ensureIndiaTimezone(?PDO $pdo = null): void {
+    static $phpDone = false;
+    static $pdoDone = false;
+    if (!$phpDone) {
+        date_default_timezone_set('Asia/Kolkata');
+        $phpDone = true;
+    }
+    if ($pdo !== null && !$pdoDone) {
+        try {
+            $pdo->exec("SET time_zone = '+05:30'");
+        } catch (Throwable $e) {
+            // Host may not allow SET time_zone; PHP timestamps still use IST
+        }
+        $pdoDone = true;
+    }
+}
+
+ensureIndiaTimezone();
+
 function sanitize(?string $str): string {
     return htmlspecialchars($str ?? '', ENT_QUOTES, 'UTF-8');
 }
@@ -1055,6 +1075,7 @@ function ensureHoShareSnapshotColumn(PDO $pdo): void {
  * Ensure share payment schema: Failed/Cancelled statuses + admissions.ho_share_paid flag.
  */
 function ensureSharePaymentSchema(PDO $pdo): void {
+    ensureIndiaTimezone($pdo);
     if (isSchemaFlagSet('schema_share_payment_flow_v2')) {
         return;
     }
@@ -1218,12 +1239,21 @@ function recordOfflineSharePayment(
     float $transactionFee = 0.0
 ): array {
     ensureSharePaymentSchema($pdo);
+    ensureIndiaTimezone($pdo);
 
     $allowedModes = ['Cash', 'Bank Transfer', 'UPI', 'Cheque', 'Razorpay'];
     if (!in_array($paymentMode, $allowedModes, true)) {
         $paymentMode = 'Cash';
     }
     $transactionFee = max(0, round($transactionFee, 2));
+
+    $nowIst = date('Y-m-d H:i:s');
+    // Form sends date only (Y-m-d). Keep that calendar day, attach current IST clock time
+    // so receipts don't show 12:00 AM and match when HO recorded the payment.
+    $paidAtSql = $nowIst;
+    if ($paidAt && preg_match('/^(\d{4}-\d{2}-\d{2})/', trim((string)$paidAt), $m)) {
+        $paidAtSql = $m[1] . ' ' . date('H:i:s');
+    }
 
     $admissionIds = array_values(array_unique(array_map('intval', $admissionIds)));
     $admissionIds = array_values(array_filter($admissionIds, fn($id) => $id > 0));
@@ -1300,17 +1330,12 @@ function recordOfflineSharePayment(
     ]);
     $combinedRemarks = implode(' · ', $parts);
 
-    $paidAtSql = null;
-    if ($paidAt && preg_match('/^\d{4}-\d{2}-\d{2}/', $paidAt)) {
-        $paidAtSql = date('Y-m-d H:i:s', strtotime($paidAt));
-    }
-
     try {
         $pdo->beginTransaction();
         $ins = $pdo->prepare("
             INSERT INTO share_payments
                 (atc_id, student_ids, total_share_amount, transaction_fee, total_amount, status, payment_mode, remarks, created_at)
-            VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, NOW())
+            VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, ?)
         ");
         $ins->execute([
             $atcId,
@@ -1320,6 +1345,7 @@ function recordOfflineSharePayment(
             $totalAmount,
             $paymentMode,
             $combinedRemarks !== '' ? $combinedRemarks : null,
+            $nowIst,
         ]);
         $paymentId = (int)$pdo->lastInsertId();
         $cashRef = ($paymentMode === 'Razorpay' ? 'RZP-' : 'CASH-') . $paymentId
@@ -1334,7 +1360,7 @@ function recordOfflineSharePayment(
             $ins = $pdo->prepare("
                 INSERT INTO share_payments
                     (atc_id, student_ids, total_share_amount, transaction_fee, total_amount, status, failure_reason, created_at)
-                VALUES (?, ?, ?, ?, ?, 'Pending', ?, NOW())
+                VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?)
             ");
             $ins->execute([
                 $atcId,
@@ -1343,6 +1369,7 @@ function recordOfflineSharePayment(
                 $transactionFee,
                 $totalAmount,
                 $combinedRemarks !== '' ? $combinedRemarks : null,
+                $nowIst,
             ]);
             $paymentId = (int)$pdo->lastInsertId();
             $cashRef = 'CASH-' . $paymentId;
@@ -1356,15 +1383,14 @@ function recordOfflineSharePayment(
         return ['success' => false, 'message' => $done['message'] ?? 'Could not complete payment.'];
     }
 
-    if ($paidAtSql) {
-        try {
-            $pdo->prepare("UPDATE share_payments SET paid_at = ? WHERE id = ?")->execute([$paidAtSql, $paymentId]);
-            $pdo->prepare("
-                UPDATE admissions SET share_payment_date = ?
-                WHERE atc_id = ? AND id IN ($placeholders)
-            ")->execute(array_merge([$paidAtSql, $atcId], $validIds));
-        } catch (Exception $e) {}
-    }
+    try {
+        $pdo->prepare("UPDATE share_payments SET paid_at = ?, created_at = COALESCE(created_at, ?) WHERE id = ?")
+            ->execute([$paidAtSql, $nowIst, $paymentId]);
+        $pdo->prepare("
+            UPDATE admissions SET share_payment_date = ?
+            WHERE atc_id = ? AND id IN ($placeholders)
+        ")->execute(array_merge([$paidAtSql, $atcId], $validIds));
+    } catch (Exception $e) {}
 
     return [
         'success' => true,
@@ -1391,6 +1417,8 @@ function completeSharePayment(
     ?string $razorpaySignature = null
 ): array {
     ensureSharePaymentSchema($pdo);
+    ensureIndiaTimezone($pdo);
+    $nowIst = date('Y-m-d H:i:s');
 
     $stmt = $pdo->prepare("SELECT * FROM share_payments WHERE id = ? LIMIT 1");
     $stmt->execute([$paymentId]);
@@ -1413,7 +1441,7 @@ function completeSharePayment(
                 razorpay_payment_id = COALESCE(?, razorpay_payment_id),
                 razorpay_order_id   = COALESCE(?, razorpay_order_id),
                 razorpay_signature  = COALESCE(?, razorpay_signature),
-                paid_at = COALESCE(paid_at, NOW()),
+                paid_at = COALESCE(paid_at, ?),
                 failure_reason = NULL
             WHERE id = ? AND status IN ('Pending','Failed','Cancelled')
         ");
@@ -1421,6 +1449,7 @@ function completeSharePayment(
             $razorpayPaymentId ?: null,
             $razorpayOrderId ?: null,
             $razorpaySignature ?: null,
+            $nowIst,
             $paymentId,
         ]);
 

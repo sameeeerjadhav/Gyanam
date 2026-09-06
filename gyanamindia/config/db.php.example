@@ -10,6 +10,11 @@ define('DB_USER', 'your_database_user');
 define('DB_PASS', 'your_database_password');
 define('DB_CHARSET', 'utf8mb4');
 
+// App timezone (India) — also set in includes/functions.php
+if (function_exists('date_default_timezone_set')) {
+    date_default_timezone_set('Asia/Kolkata');
+}
+
 // ─── Exam Portal API Integration ─────────────────────────────────────────────
 define('EXAM_API_URL', 'https://your-exam-domain/gyanam-backend/public/index.php/api/v1');
 define('EXAM_API_TOKEN', 'your_sanctum_token_here');
@@ -24,7 +29,9 @@ function getDBConnection(): PDO {
             PDO::ATTR_EMULATE_PREPARES   => false,
         ];
         try {
-            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+            $pdo = getDBConnection();
+            // Prefer IST for NOW()/CURDATE() on this connection
+            try { $pdo->exec("SET time_zone = '+05:30'"); } catch (PDOException $e) {}
         } catch (PDOException $e) {
             error_log('Database Connection Error: ' . $e->getMessage());
             die('A system error occurred. Please try again later.');

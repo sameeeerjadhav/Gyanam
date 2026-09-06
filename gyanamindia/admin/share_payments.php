@@ -1526,8 +1526,15 @@ $monthlyTrend = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <tr>
                                     <td><span class="cell-mono">#<?= $txn['id'] ?></span></td>
                                     <td>
-                                        <div class="cell-primary"><?= date('d M Y', strtotime($txn['created_at'])) ?></div>
-                                        <div class="cell-secondary"><?= date('h:i A', strtotime($txn['created_at'])) ?></div>
+                                        <?php
+                                        // Prefer paid_at when it has a real clock time (not midnight from date-only forms)
+                                        $txnWhen = $txn['created_at'] ?? '';
+                                        if (!empty($txn['paid_at']) && !preg_match('/\s00:00:00$/', (string)$txn['paid_at'])) {
+                                            $txnWhen = $txn['paid_at'];
+                                        }
+                                        ?>
+                                        <div class="cell-primary"><?= date('d M Y', strtotime($txnWhen)) ?></div>
+                                        <div class="cell-secondary"><?= date('h:i A', strtotime($txnWhen)) ?></div>
                                     </td>
                                     <td>
                                         <div class="cell-primary"><?= htmlspecialchars($txn['atc_name']) ?></div>
