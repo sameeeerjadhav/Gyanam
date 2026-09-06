@@ -2,133 +2,172 @@
  * DashboardModule.js — Admin dashboard with centre breakdown.
  */
 export async function renderDashboard(ApiClient, { currentUser, loadPage }) {
-    const data = await ApiClient.getDashboardStats();
-    const recent = data.recent;
-    const stats = data.stats;
-    const counts = data.counts;
-    const liveCount = counts.live_now;
-    const centreBreakdown = data.centre_breakdown || [];
-    const scopeLabel = currentUser.centre_id
-        ? `Centre: <strong>${currentUser.centre_id}</strong>`
-        : '<strong>All Centres</strong>';
+  const data = await ApiClient.getDashboardStats();
+  const recent = data.recent || [];
+  const stats = data.stats || {};
+  const counts = data.counts || {};
+  const liveCount = counts.live_now || 0;
+  const centreBreakdown = data.centre_breakdown || [];
+  const passRate = stats.total ? Math.round((stats.passed / stats.total) * 100) : 0;
+  const isScoped = !!currentUser.centre_id;
+  const nowLabel = new Date().toLocaleString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
+  });
 
-    document.getElementById('page-content').innerHTML = `
-  <div class="page-header"><div><h2>Overview</h2><p>Showing data for ${scopeLabel} &nbsp;&middot;&nbsp; ${new Date().toLocaleString('en-IN')}</p></div></div>
+  const kpi = (opts) => `
+    <div class="dash-kpi dash-kpi-${opts.tone || 'blue'}">
+      <div class="dash-kpi-top">
+        <span class="dash-kpi-label">${opts.label}</span>
+        <span class="dash-kpi-icon" aria-hidden="true">${opts.icon || ''}</span>
+      </div>
+      <div class="dash-kpi-value">${opts.value}</div>
+      ${opts.sub ? `<div class="dash-kpi-sub">${opts.sub}</div>` : ''}
+    </div>`;
 
-  <div class="stats-grid" style="margin-bottom:1.5rem">
-    <div class="stat-card stat-card-blue">
-      <div class="stat-label">Total Submissions</div>
-      <div class="stat-value">${stats.total}</div>
-      <div class="stat-sub">${currentUser.centre_id ? currentUser.centre_id : 'All centres'} · All time</div>
-    </div>
-    <div class="stat-card stat-card-green">
-      <div class="stat-label">Passed</div>
-      <div class="stat-value">${stats.passed}</div>
-      <div class="stat-sub">${stats.total ? Math.round(stats.passed / stats.total * 100) : 0}% pass rate</div>
-    </div>
-    <div class="stat-card stat-card-red">
-      <div class="stat-label">Failed</div>
-      <div class="stat-value">${stats.failed}</div>
-    </div>
-    <div class="stat-card stat-card-yellow">
-      <div class="stat-label">Avg Score</div>
-      <div class="stat-value">${stats.avg}%</div>
-    </div>
-    <div class="stat-card stat-card-blue">
-      <div class="stat-label">Students</div>
-      <div class="stat-value">${counts.students}</div>
-      <div class="stat-sub">Registered</div>
-    </div>
-    <div class="stat-card stat-card-green">
-      <div class="stat-label">Live Now</div>
-      <div class="stat-value">${counts.live_now}</div>
-      <div class="stat-sub"><span class="live-dot"></span> Active exam sessions</div>
-    </div>
-    <div class="stat-card stat-card-blue">
-      <div class="stat-label">Question Banks</div>
-      <div class="stat-value">${counts.question_banks}</div>
-    </div>
-    <div class="stat-card stat-card-blue">
-      <div class="stat-label">Exam Configs</div>
-      <div class="stat-value">${counts.exam_configs}</div>
-    </div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem">
-    <div class="card">
-      <div class="card-header"><h3>Recent Submissions</h3></div>
-      <div class="table-wrap">
-        ${recent.length === 0
-          ? '<div class="card-body" style="color:var(--text-muted);font-size:0.875rem">No submissions yet.</div>'
-          : `<table>
-              <thead><tr><th>Student</th><th>Exam</th><th>Score</th><th>Result</th><th>Time</th></tr></thead>
-              <tbody>
-                ${recent.map(s => `
-                <tr>
-                  <td style="font-weight:600">${s.student_name}</td>
-                  <td style="font-size:0.8rem;color:var(--text-muted)">${s.exam_title}</td>
-                  <td><strong>${s.score}%</strong></td>
-                  <td><span class="badge ${s.result === 'pass' ? 'badge-green' : 'badge-red'}">${s.result || '—'}</span></td>
-                  <td style="font-size:0.78rem;color:var(--text-muted)">${new Date(s.submitted_at).toLocaleTimeString('en-IN')}</td>
-                </tr>`).join('')}
-              </tbody>
-            </table>`}
+  document.getElementById('page-content').innerHTML = `
+  <div class="dash-page">
+    <div class="page-header dash-page-header">
+      <div>
+        <h2>Dashboard</h2>
+        <p class="dash-meta">
+          ${isScoped
+            ? `<span class="dash-chip dash-chip-blue">${currentUser.centre_id}</span>`
+            : `<span class="dash-chip">Organisation-wide</span>`}
+          <span class="dash-meta-sep">·</span>
+          <span>Updated ${nowLabel}</span>
+        </p>
+      </div>
+      <div class="dash-page-actions">
+        <button type="button" class="btn btn-outline btn-sm" onclick="loadPage('dashboard')" title="Refresh">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182"/></svg>
+          Refresh
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="loadPage('live')">Live Monitor</button>
       </div>
     </div>
-    <div class="card">
-      <div class="card-header"><h3>Live Sessions</h3><span class="badge badge-green">${liveCount} active</span></div>
-      <div class="card-body">
-        <div style="font-size:0.875rem;color:var(--text-muted);padding:1rem;text-align:center">
-          Currently <strong>${liveCount}</strong> students are appearing for exams.
-          <br><br>
-          <button class="btn btn-outline btn-sm" onclick="loadPage('live')">View Live Monitor</button>
+
+    <div class="dash-kpi-grid">
+      ${kpi({ label: 'Submissions', value: stats.total ?? 0, sub: 'All time', tone: 'blue', icon: '📄' })}
+      ${kpi({ label: 'Passed', value: stats.passed ?? 0, sub: `${passRate}% pass rate`, tone: 'green', icon: '✓' })}
+      ${kpi({ label: 'Failed', value: stats.failed ?? 0, sub: stats.total ? `${100 - passRate}% fail rate` : '—', tone: 'red', icon: '✕' })}
+      ${kpi({ label: 'Avg Score', value: `${stats.avg ?? 0}%`, tone: 'amber', icon: '◎' })}
+      ${kpi({ label: 'Students', value: counts.students ?? 0, sub: 'Registered', tone: 'blue', icon: '👥' })}
+      ${kpi({ label: 'Live Now', value: liveCount, sub: `<span class="live-dot"></span> Active sessions`, tone: 'green', icon: '●' })}
+      ${kpi({ label: 'Question Banks', value: counts.question_banks ?? 0, tone: 'slate', icon: '📚' })}
+      ${kpi({ label: 'Exam Configs', value: counts.exam_configs ?? 0, tone: 'slate', icon: '⚙' })}
+    </div>
+
+    <div class="dash-mid-grid">
+      <div class="card dash-panel">
+        <div class="card-header dash-panel-head">
+          <div>
+            <h3>Recent Submissions</h3>
+            <p class="dash-panel-sub">Latest exam attempts</p>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="loadPage('results')">View all</button>
+        </div>
+        ${recent.length === 0
+          ? `<div class="dash-empty">
+               <div class="dash-empty-icon">📭</div>
+               <div class="dash-empty-title">No submissions yet</div>
+               <div class="dash-empty-text">Results will appear here once students complete exams.</div>
+             </div>`
+          : `<div class="table-wrap dash-table-wrap">
+              <table class="dash-table">
+                <thead>
+                  <tr><th>Student</th><th>Exam</th><th>Score</th><th>Result</th><th>Time</th></tr>
+                </thead>
+                <tbody>
+                  ${recent.map(s => `
+                  <tr>
+                    <td><div class="dash-strong">${s.student_name || '—'}</div></td>
+                    <td><div class="dash-muted">${s.exam_title || '—'}</div></td>
+                    <td><span class="dash-score">${s.score ?? '—'}%</span></td>
+                    <td><span class="badge ${s.result === 'pass' ? 'badge-green' : 'badge-red'}">${s.result || '—'}</span></td>
+                    <td class="dash-muted">${s.submitted_at ? new Date(s.submitted_at).toLocaleString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }) : '—'}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>`}
+      </div>
+
+      <div class="card dash-panel">
+        <div class="card-header dash-panel-head">
+          <div>
+            <h3>Live Sessions</h3>
+            <p class="dash-panel-sub">Students currently in exam</p>
+          </div>
+          <span class="badge ${liveCount > 0 ? 'badge-green' : 'badge-gray'}">${liveCount} active</span>
+        </div>
+        <div class="dash-live-body">
+          <div class="dash-live-count ${liveCount > 0 ? 'is-live' : ''}">${liveCount}</div>
+          <div class="dash-live-label">${liveCount === 1 ? 'student appearing now' : 'students appearing now'}</div>
+          <button type="button" class="btn ${liveCount > 0 ? 'btn-primary' : 'btn-outline'} btn-sm" onclick="loadPage('live')">
+            Open Live Monitor
+          </button>
+        </div>
+        <div class="dash-quick-links">
+          <button type="button" class="dash-link" onclick="loadPage('questions')">Question Banks</button>
+          <button type="button" class="dash-link" onclick="loadPage('exams')">Exam Configs</button>
+          <button type="button" class="dash-link" onclick="loadPage('students')">Students</button>
         </div>
       </div>
     </div>
-  </div>
 
-  ${!currentUser.centre_id && centreBreakdown.length > 0 ? `
-  <div class="card">
-    <div class="card-header">
-      <h3>Centre Performance Breakdown</h3>
-      <span class="badge badge-gray">${centreBreakdown.length} centre(s)</span>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Centre</th><th>Students</th><th>Submissions</th>
-            <th>Pass Rate</th><th>Avg Score</th><th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${centreBreakdown.map(c => {
-            const pr = c.pass_rate;
-            const barColor = pr >= 70 ? '#22c55e' : pr >= 50 ? '#f59e0b' : '#ef4444';
-            return `<tr>
-              <td style="font-weight:600">${c.centre_name || '—'}</td>
-              <td>${c.student_count}</td>
-              <td>${c.submissions}</td>
-              <td>
-                <div style="display:flex;align-items:center;gap:0.5rem">
-                  <div style="flex:1;background:var(--gray-200);border-radius:999px;height:6px;min-width:60px">
-                    <div style="width:${pr}%;background:${barColor};height:6px;border-radius:999px"></div>
-                  </div>
-                  <span style="font-size:0.8rem;font-weight:600;color:${barColor}">${pr}%</span>
-                </div>
-              </td>
-              <td><strong>${c.avg_score}%</strong></td>
-              <td>
-                <span class="badge ${pr >= 70 ? 'badge-green' : pr >= 50 ? 'badge-yellow' : 'badge-red'}">
-                  ${pr >= 70 ? 'Good' : pr >= 50 ? 'Average' : 'Needs Attention'}
-                </span>
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-  </div>` : ''}
-`;
-    window.loadPage = loadPage;
+    ${!isScoped ? `
+    <div class="card dash-panel">
+      <div class="card-header dash-panel-head">
+        <div>
+          <h3>Centre Performance</h3>
+          <p class="dash-panel-sub">Breakdown across ATC centres</p>
+        </div>
+        <span class="badge badge-gray">${centreBreakdown.length} centre${centreBreakdown.length === 1 ? '' : 's'}</span>
+      </div>
+      ${centreBreakdown.length === 0
+        ? `<div class="dash-empty">
+             <div class="dash-empty-icon">🏛</div>
+             <div class="dash-empty-title">No centre data yet</div>
+             <div class="dash-empty-text">Centre stats appear after students are registered and exams are taken.</div>
+           </div>`
+        : `<div class="table-wrap dash-table-wrap">
+            <table class="dash-table">
+              <thead>
+                <tr>
+                  <th>Centre</th>
+                  <th>Students</th>
+                  <th>Submissions</th>
+                  <th>Pass Rate</th>
+                  <th>Avg Score</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${centreBreakdown.map(c => {
+                  const pr = Number(c.pass_rate) || 0;
+                  const tone = pr >= 70 ? 'good' : pr >= 50 ? 'avg' : 'bad';
+                  const barColor = tone === 'good' ? '#16a34a' : tone === 'avg' ? '#d97706' : '#dc2626';
+                  const label = tone === 'good' ? 'Good' : tone === 'avg' ? 'Average' : 'Needs attention';
+                  const badge = tone === 'good' ? 'badge-green' : tone === 'avg' ? 'badge-yellow' : 'badge-red';
+                  return `<tr>
+                    <td><div class="dash-strong">${c.centre_name || '—'}</div></td>
+                    <td>${c.student_count ?? 0}</td>
+                    <td>${c.submissions ?? 0}</td>
+                    <td>
+                      <div class="dash-passbar">
+                        <div class="dash-passbar-track"><div class="dash-passbar-fill" style="width:${Math.min(100, pr)}%;background:${barColor}"></div></div>
+                        <span style="color:${barColor}">${pr}%</span>
+                      </div>
+                    </td>
+                    <td><span class="dash-score">${c.avg_score ?? 0}%</span></td>
+                    <td><span class="badge ${badge}">${label}</span></td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>`}
+    </div>` : ''}
+  </div>`;
+
+  window.loadPage = loadPage;
 }
