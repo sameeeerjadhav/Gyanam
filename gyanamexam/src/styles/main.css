@@ -1160,6 +1160,176 @@ tbody tr:hover {
   color: #64748b !important;
 }
 
+/* ── Exam Configuration form page ───────────────────────────── */
+.exam-form-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 920px;
+}
+
+.exam-form-card {
+  padding: 1.25rem 1.35rem 1.1rem;
+}
+
+.exam-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.95rem 0.85rem;
+}
+
+.exam-form-grid .form-group {
+  margin: 0;
+}
+
+.exam-span-2 {
+  grid-column: 1 / -1;
+}
+
+.exam-mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.exam-mode-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.85rem 0.95rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.exam-mode-card input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.exam-mode-card.is-active-normal {
+  border-color: #16a34a;
+  background: #f0fdf4;
+}
+
+.exam-mode-card.is-active-proctored {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+
+.exam-mode-title {
+  display: block;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.exam-mode-desc {
+  display: block;
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+  line-height: 1.4;
+}
+
+.exam-proct-panel {
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.exam-proct-head {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.6rem;
+}
+
+.exam-proct-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.exam-proct-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.exam-proct-opt input {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  accent-color: #dc2626;
+  flex-shrink: 0;
+}
+
+.exam-proct-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: #1e293b;
+  line-height: 1.25;
+}
+
+.exam-proct-desc {
+  display: block;
+  font-size: 0.68rem;
+  color: #64748b;
+  margin-top: 0.12rem;
+  line-height: 1.35;
+}
+
+.exam-tab-limit {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.exam-tab-limit label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.exam-tab-limit .form-input {
+  width: 80px;
+}
+
+.exam-form-note {
+  font-size: 0.76rem;
+  color: #64748b;
+  margin: 1rem 0 0;
+  line-height: 1.45;
+}
+
+.field-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 720px) {
+  .exam-form-grid,
+  .exam-mode-grid,
+  .exam-proct-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .assign-bank-card {
   display: flex;
   align-items: center;
