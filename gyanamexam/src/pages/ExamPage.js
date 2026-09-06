@@ -83,6 +83,65 @@ class ExamPage {
     if (examConfig.proctored && examConfig.proctoring_settings) {
       await this._initializeProctoring(examConfig.proctoring_settings);
     }
+
+    this._setupNavigationLock();
+  }
+
+  _setupNavigationLock() {
+    this._teardownNavigationLock();
+
+    this._lockedUrl = window.location.pathname + window.location.search;
+    // Extra history entry so Back stays inside the exam trap
+    try {
+      window.history.pushState({ examLock: true }, '', this._lockedUrl);
+    } catch (_) { /* ignore */ }
+
+    this._leaveModalOpen = false;
+    this._onBeforeUnload = (e) => {
+      if (this.isSubmitting) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', this._onBeforeUnload);
+
+    if (this.router && typeof this.router.setNavigationGuard === 'function') {
+      this.router.setNavigationGuard(() => {
+        if (this.isSubmitting) return true;
+        this._warnNavigationBlocked();
+        return false;
+      }, this._lockedUrl);
+    }
+  }
+
+  _teardownNavigationLock() {
+    if (this._onBeforeUnload) {
+      window.removeEventListener('beforeunload', this._onBeforeUnload);
+      this._onBeforeUnload = null;
+    }
+    if (this.router && typeof this.router.clearNavigationGuard === 'function') {
+      this.router.clearNavigationGuard();
+    }
+    this._leaveModalOpen = false;
+  }
+
+  async _warnNavigationBlocked() {
+    if (this._leaveModalOpen || this.isSubmitting) return;
+    this._leaveModalOpen = true;
+    try {
+      const submit = await modalService.confirm(
+        'Going back or leaving this page during the exam is <strong>not allowed</strong>.<br><br>' +
+        'If you want to exit, please <strong>submit the test</strong> first. Your attempt will be recorded as submitted.',
+        {
+          title: 'Action not allowed',
+          confirmText: 'Submit test',
+          cancelText: 'Stay in exam',
+          type: 'warning',
+        }
+      );
+      if (submit) this._submitExam(false);
+    } finally {
+      this._leaveModalOpen = false;
+    }
   }
 
   _localDraftKey(attemptNumber = null) {
@@ -819,6 +878,7 @@ class ExamPage {
       this._clearLocalDraft();
 
       document.getElementById('proctoring-warning-overlay')?.remove();
+      this._teardownNavigationLock();
 
       if (this.router) {
         this.router.navigate(`/student/result/${submissionId}`);
@@ -841,6 +901,7 @@ class ExamPage {
   }
 
   destroy() {
+    this._teardownNavigationLock();
     this.timer.stop();
     if (this._timerInterval) clearInterval(this._timerInterval);
     if (this._heartbeatInterval) clearInterval(this._heartbeatInterval);
