@@ -56,6 +56,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
+// Sync Cancelled/Failed/Pending payment against Razorpay (admin recovery)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'reconcile_razorpay') {
+    header('Content-Type: application/json');
+    try {
+        ensureSharePaymentSchema($pdo);
+        $paymentId = (int)($_POST['payment_id'] ?? 0);
+        if ($paymentId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid payment id']);
+            exit;
+        }
+        if (!function_exists('reconcileSharePaymentFromRazorpay')) {
+            echo json_encode(['success' => false, 'message' => 'Reconcile helper not available']);
+            exit;
+        }
+        $result = reconcileSharePaymentFromRazorpay($pdo, $paymentId, null);
+        echo json_encode([
+            'success'   => (bool)($result['success'] ?? false),
+            'completed' => (bool)($result['completed'] ?? false),
+            'message'   => $result['message'] ?? 'Done',
+            'data'      => $result,
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
 // Filters
 $atcFilter = $_GET['atc'] ?? 'all';
 $statusFilter = $_GET['status'] ?? 'all';
@@ -1478,11 +1505,21 @@ $monthlyTrend = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <span class="badge-dot"></span>
                                             <?= $txn['status'] ?>
                                         </span>
+                                        <?php if (!empty($txn['failure_reason']) && in_array($txn['status'], ['Cancelled','Failed'], true)): ?>
+                                            <div class="cell-secondary" style="max-width:160px;margin-top:.2rem" title="<?= htmlspecialchars($txn['failure_reason']) ?>">
+                                                <?= htmlspecialchars(mb_strimwidth($txn['failure_reason'], 0, 42, '…')) ?>
+                                            </div>
+                                        <?php endif; ?>
                                     </td>
-                                    <td>
+                                    <td style="white-space:nowrap">
                                         <button class="btn-action" onclick="viewTransactionDetails(<?= $txn['id'] ?>)" title="View Details">
                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                         </button>
+                                        <?php if (in_array($txn['status'], ['Cancelled', 'Failed', 'Pending'], true) && !empty($txn['razorpay_order_id'])): ?>
+                                        <button type="button" class="btn-action" onclick="reconcileRazorpayPayment(<?= (int)$txn['id'] ?>, this)" title="Check Razorpay &amp; mark Completed if paid">
+                                            ↻
+                                        </button>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1686,6 +1723,24 @@ function viewTransactionDetails(txnId) {
 
 function closeModal() {
     document.getElementById('transactionModal').classList.remove('active');
+}
+
+async function reconcileRazorpayPayment(paymentId, btn) {
+    if (!confirm('Check Razorpay for payment #' + paymentId + ' and mark Completed if money was captured?')) return;
+    const prev = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+        const fd = new FormData();
+        fd.append('action', 'reconcile_razorpay');
+        fd.append('payment_id', paymentId);
+        const res = await (await fetch('share_payments.php', { method: 'POST', body: fd })).json();
+        alert(res.message || (res.completed ? 'Completed' : 'Not completed'));
+        if (res.completed) location.reload();
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = prev || '↻'; }
+    }
 }
 
 document.getElementById('transactionModal').addEventListener('click', function(e) {
