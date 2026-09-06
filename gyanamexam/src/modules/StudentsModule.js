@@ -20,12 +20,14 @@ export async function renderStudents(ApiClient, { currentUser }) {
   const allStudents = await ApiClient.getStudents();
   const el = document.getElementById('page-content');
 
-  // State for filtering
+  // State for filtering + pagination
   let filterText = '';
   let filterCentre = '';
   let filterSlot = '';
   let filterWindow = '';
   let filterExams = ''; // '' | 'assigned' | 'none'
+  let currentPage = 1;
+  let pageSize = 10;
 
   function updateBulkBar() {
     const selected = document.querySelectorAll('.student-select:checked');
@@ -61,6 +63,7 @@ export async function renderStudents(ApiClient, { currentUser }) {
     filterSlot = '';
     filterWindow = '';
     filterExams = '';
+    currentPage = 1;
     const search = document.getElementById('stu-search');
     const centre = document.getElementById('stu-centre-filter');
     const slot = document.getElementById('stu-slot-filter');
@@ -74,13 +77,8 @@ export async function renderStudents(ApiClient, { currentUser }) {
     renderTable();
   }
 
-  // Export to window for inline onclicks
-  window.updateBulkBar = updateBulkBar;
-  window.toggleAllStudents = toggleAllStudents;
-  window.clearStudentFilters = clearFilters;
-
-  function renderTable() {
-    const filtered = allStudents.filter(s => {
+  function getFilteredStudents() {
+    return allStudents.filter(s => {
       const q = filterText.trim().toLowerCase();
       const matchesText = !q ||
         (s.name || '').toLowerCase().includes(q) ||
@@ -98,6 +96,76 @@ export async function renderStudents(ApiClient, { currentUser }) {
 
       return matchesText && matchesCentre && matchesSlot && matchesWindow && matchesExams;
     });
+  }
+
+  function goToPage(page) {
+    currentPage = Math.max(1, page);
+    renderTable();
+  }
+
+  function changePageSize(size) {
+    pageSize = parseInt(size, 10) || 10;
+    currentPage = 1;
+    renderTable();
+  }
+
+  // Export to window for inline onclicks
+  window.updateBulkBar = updateBulkBar;
+  window.toggleAllStudents = toggleAllStudents;
+  window.clearStudentFilters = clearFilters;
+  window.stuGoToPage = goToPage;
+  window.stuChangePageSize = changePageSize;
+
+  function renderPagination(totalFiltered) {
+    const pager = document.getElementById('stu-pagination');
+    if (!pager) return;
+
+    const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize) || 1);
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const start = totalFiltered === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    const end = Math.min(currentPage * pageSize, totalFiltered);
+
+    let pageBtns = '';
+    const windowSize = 2;
+    const from = Math.max(1, currentPage - windowSize);
+    const to = Math.min(totalPages, currentPage + windowSize);
+    if (from > 1) {
+      pageBtns += `<button type="button" class="stu-page-btn" onclick="stuGoToPage(1)">1</button>`;
+      if (from > 2) pageBtns += `<span class="stu-page-ellipsis">…</span>`;
+    }
+    for (let p = from; p <= to; p++) {
+      pageBtns += `<button type="button" class="stu-page-btn ${p === currentPage ? 'is-active' : ''}" onclick="stuGoToPage(${p})">${p}</button>`;
+    }
+    if (to < totalPages) {
+      if (to < totalPages - 1) pageBtns += `<span class="stu-page-ellipsis">…</span>`;
+      pageBtns += `<button type="button" class="stu-page-btn" onclick="stuGoToPage(${totalPages})">${totalPages}</button>`;
+    }
+
+    pager.innerHTML = `
+      <div class="stu-pager-left">
+        <label class="stu-pager-size">
+          Rows
+          <select class="form-select" onchange="stuChangePageSize(this.value)" aria-label="Rows per page">
+            ${[10, 25, 50, 100].map(n => `<option value="${n}" ${pageSize === n ? 'selected' : ''}>${n}</option>`).join('')}
+          </select>
+        </label>
+        <span class="stu-pager-range">${totalFiltered === 0 ? '0 students' : `Showing ${start}–${end} of ${totalFiltered}`}</span>
+      </div>
+      <div class="stu-pager-right">
+        <button type="button" class="stu-page-btn" onclick="stuGoToPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''} aria-label="Previous page">‹</button>
+        ${pageBtns}
+        <button type="button" class="stu-page-btn" onclick="stuGoToPage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''} aria-label="Next page">›</button>
+      </div>`;
+  }
+
+  function renderTable() {
+    const filtered = getFilteredStudents();
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize) || 1);
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const startIdx = (currentPage - 1) * pageSize;
+    const pageRows = filtered.slice(startIdx, startIdx + pageSize);
 
     const tbody = document.querySelector('#students-table-body');
     if (!tbody) return;
@@ -112,7 +180,7 @@ export async function renderStudents(ApiClient, { currentUser }) {
               ${hasActiveFilters() ? '<button type="button" class="btn btn-outline btn-sm" style="margin-top:0.65rem" onclick="clearStudentFilters()">Clear filters</button>' : ''}
             </div>
          </td></tr>`
-      : filtered.map(s => {
+      : pageRows.map(s => {
           const examCount = (s.exams || []).length;
           const nameSafe = esc(s.name);
           return `<tr class="stu-row">
@@ -160,6 +228,7 @@ export async function renderStudents(ApiClient, { currentUser }) {
     if (master) master.checked = false;
     updateBulkBar();
     syncClearBtn();
+    renderPagination(filtered.length);
   }
 
   const centres = [...new Set(allStudents.map(s => s.centre_name))].sort().filter(Boolean);
@@ -255,6 +324,7 @@ export async function renderStudents(ApiClient, { currentUser }) {
           <tbody id="students-table-body"></tbody>
         </table>
       </div>
+      <div id="stu-pagination" class="stu-pagination"></div>
     </div>
   </div>`;
 
@@ -262,23 +332,28 @@ export async function renderStudents(ApiClient, { currentUser }) {
 
   document.getElementById('stu-search').addEventListener('input', e => {
     filterText = e.target.value;
+    currentPage = 1;
     renderTable();
   });
 
   document.getElementById('stu-centre-filter')?.addEventListener('change', e => {
     filterCentre = e.target.value;
+    currentPage = 1;
     renderTable();
   });
   document.getElementById('stu-slot-filter')?.addEventListener('change', e => {
     filterSlot = e.target.value;
+    currentPage = 1;
     renderTable();
   });
   document.getElementById('stu-window-filter')?.addEventListener('change', e => {
     filterWindow = e.target.value;
+    currentPage = 1;
     renderTable();
   });
   document.getElementById('stu-exams-filter')?.addEventListener('change', e => {
     filterExams = e.target.value;
+    currentPage = 1;
     renderTable();
   });
 
