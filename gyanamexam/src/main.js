@@ -11,8 +11,9 @@
 import router from './services/Router.js';
 import { getAuthModule } from './services/AuthenticationModule.js';
 import LoginPage from './pages/LoginPage.js?v=2';
-import { StudentDashboard } from './pages/StudentDashboard.js?v=2';
-import ExamPage from './pages/ExamPage.js?v=5';
+import { StudentDashboard } from './pages/StudentDashboard.js?v=3';
+import ExamPage from './pages/ExamPage.js?v=6';
+import PreExamGate from './pages/PreExamGate.js?v=1';
 import ApiClient from './services/APIClient.js';
 
 // Single shared auth module
@@ -21,12 +22,15 @@ const authModule = getAuthModule();
 let loginPage = null;
 let studentDashboard = null;
 let examPage = null;
+let preExamGate = null;
 
 /** Destroy the currently active page component before routing to a new one */
 function destroyCurrentPage() {
   if (loginPage && typeof loginPage.destroy === 'function') loginPage.destroy();
   if (studentDashboard && typeof studentDashboard.destroy === 'function') studentDashboard.destroy();
   if (examPage && typeof examPage.destroy === 'function') examPage.destroy();
+  if (preExamGate && typeof preExamGate.destroy === 'function') preExamGate.destroy();
+  preExamGate = null;
 }
 
 function initializeApp() {
@@ -94,24 +98,37 @@ function setupRoutes(appContainer) {
       return;
     }
 
-    // Show loading state
-    appContainer.innerHTML = _loadingHTML('Loading exam questions...');
+    const session = authModule.getCurrentSession?.() || {};
+    const user = session.user || ApiClient.getUser?.() || {};
 
     try {
+      // Pre-exam gate BEFORE getExamQuestions (timer/session must not start early)
+      preExamGate = new PreExamGate({
+        examId,
+        user,
+        onCancel: () => router.navigate('/student'),
+      });
+      const gateResult = await preExamGate.run(appContainer);
+      const cameraStream = gateResult?.cameraStream || null;
+      preExamGate = null;
+
+      appContainer.innerHTML = _loadingHTML('Starting your exam session...');
+
       const data = await ApiClient.getExamQuestions(examId);
       const { exam, questions, draft } = data;
 
       if (!questions || questions.length === 0) {
+        cameraStream?.getTracks?.().forEach(t => t.stop());
         appContainer.innerHTML = _errorHTML('No questions found.', 'This exam has no questions assigned yet.');
         return;
       }
 
-      // Always create a fresh ExamPage for a clean session
       examPage = new ExamPage();
-      await examPage.render(appContainer, exam, questions, examId, router, draft);
+      await examPage.render(appContainer, exam, questions, examId, router, draft, { cameraStream });
 
     } catch (error) {
       console.error('Failed to load exam:', error);
+      if (error?.message === 'Cancelled') return;
       appContainer.innerHTML = _errorHTML('Failed to Load Exam', error.message, true);
     }
   });
