@@ -100,9 +100,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $discountAmount = floatval($_POST['discount_amount'] ?? 0);
                 $netPayable     = max(0, $courseFees - $discountAmount);
 
-                // Generate sequential Roll No (per ATC) and global Registration ID
-                $rollNo         = generateNextRollNoSimple($pdo, $atcId);
-                $registrationId = generateRegistrationId($pdo, $centerType);
+                $courseName = trim((string)($_POST['course'] ?? ''));
+                $mobileNorm = preg_replace('/\D+/', '', trim((string)($_POST['cvt_mobile'] ?? $inquiry['mobile'] ?? ''))) ?? '';
+                $ident = resolveAdmissionIdentityForCourse($pdo, (int)$atcId, $mobileNorm, $courseName, $centerType);
+                if (empty($ident['ok'])) {
+                    echo json_encode(['success' => false, 'message' => $ident['message'] ?? 'Could not create admission for this course.']);
+                    exit;
+                }
+                $rollNo         = $ident['roll_no'];
+                $registrationId = $ident['registration_id'];
+                $isReEnroll     = !empty($ident['is_re_enrollment']);
 
                 // inquiry_id FK only references `inquiries` table (NOT `telephonic_inquiries`)
                 // For telephonic source we must pass NULL to avoid FK constraint violation
@@ -110,8 +117,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 // Snapshot HO + DLC shares at admission time
                 $matType1 = $_POST['material_type'] ?? 'Without Material';
-                $hoShareSnapshot1  = getHoShareForCourse($pdo, $_POST['course'] ?? '', $matType1);
-                $dlcShareSnapshot1 = getDlcShareForCourse($pdo, $_POST['course'] ?? '', $matType1);
+                $hoShareSnapshot1  = getHoShareForCourse($pdo, $courseName, $matType1);
+                $dlcShareSnapshot1 = getDlcShareForCourse($pdo, $courseName, $matType1);
 
                 $stmt = $pdo->prepare("
                     INSERT INTO admissions (
@@ -137,17 +144,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $_POST['cvt_gender']             ?? $inquiry['gender'],
                     $_POST['cvt_dob']                ?? $inquiry['dob'],
                     trim($_POST['cvt_qualification'] ?? $inquiry['qualification']),
-                    $_POST['course'],
+                    $courseName,
                     $_POST['uniform_size'] ?? null,
-                    null,
+                    ($isReEnroll && !empty($ident['source']['photo'])) ? $ident['source']['photo'] : null,
                     trim($_POST['cvt_address']  ?? $inquiry['address']),
                     trim($_POST['cvt_state']    ?? ''),
                     trim($_POST['cvt_pin_code'] ?? $inquiry['pin_code']),
                     trim($_POST['cvt_city']     ?? $inquiry['city']),
-                    trim($_POST['cvt_mobile']   ?? $inquiry['mobile']),
+                    $mobileNorm !== '' ? $mobileNorm : trim($_POST['cvt_mobile'] ?? $inquiry['mobile']),
                     $inquiry['phone'],
                     $inquiry['email'],
-                    $inquiry['referenced_by'],
+                    $isReEnroll ? ('Re-Admission: added course ' . $courseName) : ($inquiry['referenced_by'] ?? null),
                     $_POST['comment'] ?? $inquiry['comment'],
                     date('Y-m-d'),
                     $courseFees,
@@ -219,7 +226,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 echo json_encode([
                     'success' => true, 
-                    'message' => 'Student converted to admission successfully',
+                    'message' => $isReEnroll
+                        ? ('Added course "' . $courseName . '" for existing student (same Reg ID).')
+                        : 'Student converted to admission successfully',
                     'roll_no' => $rollNo,
                     'admission_id' => $admissionId,
                     'exam_sync_warning' => $examSyncWarning
@@ -246,10 +255,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $discountAmount = floatval($_POST['discount_amount'] ?? 0);
                 $netPayable    = $courseFees - $discountAmount;
 
-                $rollNo         = generateNextRollNoSimple($pdo, $atcId);
-                $registrationId = generateRegistrationId($pdo, $centerType2);
+                $cvtCourse2 = trim((string)($_POST['course'] ?: ($inquiry['interested_course'] ?? '')));
+                $mobile2 = preg_replace('/\D+/', '', trim((string)($_POST['cvt_mobile'] ?? $inquiry['mobile'] ?? ''))) ?? '';
+                $ident2 = resolveAdmissionIdentityForCourse($pdo, (int)$atcId, $mobile2, $cvtCourse2, $centerType2);
+                if (empty($ident2['ok'])) {
+                    echo json_encode(['success' => false, 'message' => $ident2['message'] ?? 'Could not create admission for this course.']);
+                    exit;
+                }
+                $rollNo         = $ident2['roll_no'];
+                $registrationId = $ident2['registration_id'];
+                $isReEnroll2    = !empty($ident2['is_re_enrollment']);
 
-                $cvtCourse2 = $_POST['course'] ?: $inquiry['interested_course'];
                 $matType2 = $_POST['material_type'] ?? 'Without Material';
                 $hoShareSnapshot2  = getHoShareForCourse($pdo, $cvtCourse2, $matType2);
                 $dlcShareSnapshot2 = getDlcShareForCourse($pdo, $cvtCourse2, $matType2);
@@ -273,7 +289,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     trim($_POST['cvt_first_name']    ?? $inquiry['first_name']),
                     $inquiry['middle_name'],
                     trim($_POST['cvt_last_name']     ?? $inquiry['last_name']),
-                    trim($_POST['cvt_mobile']        ?? $inquiry['mobile']),
+                    $mobile2 !== '' ? $mobile2 : trim($_POST['cvt_mobile'] ?? $inquiry['mobile']),
                     $cvtCourse2,
                     $_POST['uniform_size'] ?? null,
                     date('Y-m-d'),

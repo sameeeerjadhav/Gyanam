@@ -116,6 +116,271 @@ function generateNextRollNoSimple(PDO $pdo, int $atcId): string {
     return (string) ($maxRoll + 1);
 }
 
+/**
+ * Allow one student (same roll/registration) to hold multiple course admission rows.
+ */
+function ensureAdmissionsAllowMultiCourse(PDO $pdo): void {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    foreach (['uk_roll_no', 'uq_registration_id', 'uk_registration_id', 'registration_id'] as $idx) {
+        try {
+            $chk = $pdo->query("SHOW INDEX FROM admissions WHERE Key_name = " . $pdo->quote($idx))->fetch();
+            if ($chk && (int)($chk['Non_unique'] ?? 1) === 0) {
+                // Only drop unique indexes that would block multi-course rows
+                if (in_array($idx, ['uk_roll_no', 'uq_registration_id', 'uk_registration_id'], true)) {
+                    $pdo->exec("ALTER TABLE admissions DROP INDEX `{$idx}`");
+                }
+            }
+        } catch (Throwable $e) { /* ignore */ }
+    }
+}
+
+/**
+ * Resolve roll_no + registration_id when admitting a course.
+ * If the same mobile already has an Active admission at this ATC, reuse identity
+ * (re-enrollment / 2nd course). Otherwise mint new IDs.
+ *
+ * @return array{ok:bool,message?:string,roll_no?:string,registration_id?:string,is_re_enrollment?:bool,source?:?array}
+ */
+function resolveAdmissionIdentityForCourse(
+    PDO $pdo,
+    int $atcId,
+    string $mobile,
+    string $course,
+    string $centerType = 'Other'
+): array {
+    $mobile = preg_replace('/\D+/', '', trim($mobile)) ?? '';
+    $course = trim($course);
+    if ($atcId <= 0 || $course === '') {
+        return ['ok' => false, 'message' => 'ATC and course are required.'];
+    }
+
+    $source = null;
+    if ($mobile !== '') {
+        $st = $pdo->prepare("
+            SELECT * FROM admissions
+            WHERE atc_id = ? AND REPLACE(REPLACE(mobile,' ',''),'-','') = ?
+              AND status = 'Active'
+            ORDER BY id ASC
+            LIMIT 1
+        ");
+        $st->execute([$atcId, $mobile]);
+        $source = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    if ($source) {
+        $dup = $pdo->prepare("
+            SELECT id FROM admissions
+            WHERE atc_id = ? AND registration_id = ? AND course = ? AND status = 'Active'
+            LIMIT 1
+        ");
+        $dup->execute([$atcId, $source['registration_id'], $course]);
+        if ($dup->fetchColumn()) {
+            return [
+                'ok' => false,
+                'message' => 'This student is already enrolled in "' . $course . '". Use Re-Admission only for a different course.',
+            ];
+        }
+        ensureAdmissionsAllowMultiCourse($pdo);
+        return [
+            'ok' => true,
+            'roll_no' => (string)$source['roll_no'],
+            'registration_id' => (string)$source['registration_id'],
+            'is_re_enrollment' => true,
+            'source' => $source,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'roll_no' => generateNextRollNoSimple($pdo, $atcId),
+        'registration_id' => generateRegistrationId($pdo, $centerType),
+        'is_re_enrollment' => false,
+        'source' => null,
+    ];
+}
+
+/**
+ * Converted inquiries that have no matching Active admission (mobile + course).
+ * Used to repair cases where inquiry was marked Converted without a 2nd-course row.
+ *
+ * @return list<array{source:string,inquiry_id:int,first_name:string,last_name:string,mobile:string,course:string,created_at:?string}>
+ */
+function findConvertedInquiriesMissingAdmission(PDO $pdo, int $atcId): array {
+    $out = [];
+    $queries = [
+        ['walkin', "SELECT id, first_name, middle_name, last_name, mobile, interested_course AS course, created_at
+                    FROM inquiries WHERE atc_id = ? AND status = 'Converted'"],
+        ['telephonic', "SELECT id, first_name, middle_name, last_name, mobile, interested_course AS course, created_at
+                        FROM telephonic_inquiries WHERE atc_id = ? AND status = 'Converted'"],
+    ];
+    foreach ($queries as [$source, $sql]) {
+        try {
+            $st = $pdo->prepare($sql);
+            $st->execute([$atcId]);
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $mobile = preg_replace('/\D+/', '', (string)($row['mobile'] ?? '')) ?? '';
+                $course = trim((string)($row['course'] ?? ''));
+                if ($mobile === '' || $course === '') {
+                    continue;
+                }
+                $chk = $pdo->prepare("
+                    SELECT COUNT(*) FROM admissions
+                    WHERE atc_id = ?
+                      AND REPLACE(REPLACE(mobile,' ',''),'-','') = ?
+                      AND course = ?
+                      AND status = 'Active'
+                ");
+                $chk->execute([$atcId, $mobile, $course]);
+                if ((int)$chk->fetchColumn() > 0) {
+                    continue;
+                }
+                $out[] = [
+                    'source' => $source,
+                    'inquiry_id' => (int)$row['id'],
+                    'first_name' => (string)($row['first_name'] ?? ''),
+                    'middle_name' => (string)($row['middle_name'] ?? ''),
+                    'last_name' => (string)($row['last_name'] ?? ''),
+                    'mobile' => $mobile,
+                    'course' => $course,
+                    'created_at' => $row['created_at'] ?? null,
+                ];
+            }
+        } catch (Throwable $e) { /* table may not exist */ }
+    }
+    return $out;
+}
+
+/**
+ * Create the missing Active admission for a converted inquiry (2nd course repair).
+ *
+ * @return array{success:bool,message:string,admission_id?:int}
+ */
+function createMissingAdmissionFromConvertedInquiry(
+    PDO $pdo,
+    int $atcId,
+    int $inquiryId,
+    string $source = 'walkin'
+): array {
+    ensureDualMaterialCourseSchema($pdo);
+    $source = $source === 'telephonic' ? 'telephonic' : 'walkin';
+
+    if ($source === 'telephonic') {
+        $st = $pdo->prepare("SELECT * FROM telephonic_inquiries WHERE id = ? AND atc_id = ? AND status = 'Converted'");
+    } else {
+        $st = $pdo->prepare("SELECT * FROM inquiries WHERE id = ? AND atc_id = ? AND status = 'Converted'");
+    }
+    $st->execute([$inquiryId, $atcId]);
+    $inq = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$inq) {
+        return ['success' => false, 'message' => 'Converted inquiry not found.'];
+    }
+
+    $mobile = preg_replace('/\D+/', '', (string)($inq['mobile'] ?? '')) ?? '';
+    $course = trim((string)($inq['interested_course'] ?? ''));
+    if ($mobile === '' || $course === '') {
+        return ['success' => false, 'message' => 'Inquiry is missing mobile or course.'];
+    }
+
+    $atcStmt = $pdo->prepare("SELECT center_type FROM atc_centers WHERE id = ?");
+    $atcStmt->execute([$atcId]);
+    $centerType = (string)($atcStmt->fetchColumn() ?: 'Other');
+
+    $ident = resolveAdmissionIdentityForCourse($pdo, $atcId, $mobile, $course, $centerType);
+    if (empty($ident['ok'])) {
+        return ['success' => false, 'message' => $ident['message'] ?? 'Could not resolve student identity.'];
+    }
+
+    $src = $ident['source'] ?? null;
+    $matType = 'Without Material';
+    if ($src && !empty($src['material_type'])) {
+        $matType = (string)$src['material_type'];
+    }
+    $hoSnap = getHoShareForCourse($pdo, $course, $matType);
+    $dlcSnap = function_exists('getDlcShareForCourse') ? getDlcShareForCourse($pdo, $course, $matType) : null;
+
+    $fees = 0.0;
+    try {
+        // Prefer ATC fee for this course if configured
+        $feeSt = $pdo->prepare("
+            SELECT COALESCE(NULLIF(acf.fee_without_material,0), NULLIF(acf.final_fee,0), 0)
+            FROM courses c
+            INNER JOIN atc_course_fees acf ON acf.course_id = c.id AND acf.atc_id = ?
+            WHERE c.course_name = ? AND c.status = 'Active'
+            LIMIT 1
+        ");
+        $feeSt->execute([$atcId, $course]);
+        $fees = (float)$feeSt->fetchColumn();
+    } catch (Throwable $e) {}
+
+    $fkInquiryId = ($source === 'telephonic') ? null : $inquiryId;
+
+    $stmt = $pdo->prepare("
+        INSERT INTO admissions (
+            atc_id, inquiry_id, roll_no, registration_id,
+            first_name, middle_name, last_name,
+            gender, dob, qualification, course, photo, address, state, pin_code, city,
+            mobile, phone, email, referenced_by, comment, admission_date,
+            course_fees, discount_amount, installments, net_payable, fees_total, fees_pending,
+            father_name, mother_name, material_type, material_language,
+            ho_share_snapshot, dlc_share_snapshot, status
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'Active')
+    ");
+    $stmt->execute([
+        $atcId,
+        $fkInquiryId,
+        $ident['roll_no'],
+        $ident['registration_id'],
+        $src['first_name'] ?? $inq['first_name'],
+        $src['middle_name'] ?? ($inq['middle_name'] ?? null),
+        $src['last_name'] ?? $inq['last_name'],
+        $src['gender'] ?? ($inq['gender'] ?? null),
+        $src['dob'] ?? ($inq['dob'] ?? null),
+        $src['qualification'] ?? ($inq['qualification'] ?? null),
+        $course,
+        $src['photo'] ?? null,
+        $src['address'] ?? ($inq['address'] ?? null),
+        $src['state'] ?? ($inq['state'] ?? null),
+        $src['pin_code'] ?? ($inq['pin_code'] ?? null),
+        $src['city'] ?? ($inq['city'] ?? null),
+        $mobile,
+        $src['phone'] ?? ($inq['phone'] ?? null),
+        $src['email'] ?? ($inq['email'] ?? null),
+        !empty($ident['is_re_enrollment']) ? ('Re-Admission via converted inquiry #' . $inquiryId) : ($inq['referenced_by'] ?? null),
+        'Auto-created missing course admission from converted inquiry',
+        date('Y-m-d'),
+        $fees,
+        0,
+        1,
+        $fees,
+        $fees,
+        $fees,
+        $src['father_name'] ?? '',
+        $src['mother_name'] ?? '',
+        $matType,
+        $src['material_language'] ?? 'English',
+        $hoSnap,
+        $dlcSnap,
+    ]);
+
+    $admissionId = (int)$pdo->lastInsertId();
+    try {
+        $pdo->prepare("UPDATE atc_centers SET student_count = student_count + 1 WHERE id = ?")->execute([$atcId]);
+    } catch (Throwable $e) {}
+
+    return [
+        'success' => true,
+        'message' => (!empty($ident['is_re_enrollment']) ? 'Added 2nd course admission' : 'Created admission')
+            . ' for ' . $course . ' (#' . $admissionId . ').',
+        'admission_id' => $admissionId,
+        'roll_no' => $ident['roll_no'],
+        'registration_id' => $ident['registration_id'],
+    ];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DUAL MATERIAL COURSE FEES (With Material / Without Material)
 // ─────────────────────────────────────────────────────────────────────────────
