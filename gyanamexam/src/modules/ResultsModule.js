@@ -353,10 +353,6 @@ export async function renderResults(ApiClient, { currentUser }) {
         clearTimeout(t);
         t = setTimeout(() => { searchQ = e.target.value.trim(); tablePage = 1; renderView(); }, 160);
       });
-      // keep caret at end after re-render
-      searchEl.focus();
-      const len = searchEl.value.length;
-      searchEl.setSelectionRange(len, len);
     }
 
     document.getElementById('results-centre-filter')?.addEventListener('change', e => {
