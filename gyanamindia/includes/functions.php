@@ -2630,18 +2630,23 @@ function embedCertificateVerifyQr($pdf, string $url, float $x = 168.0, float $y 
 
 /**
  * Overlay layout + typography for GIIT blank course certificate (A4 mm).
- * Colors/weights match official sample: red name/course, navy ATC/duration/grade.
+ * Full body block matches official sample line order.
  *
  * @return array<string,float|string>
  */
 function courseCertificateOverlayLayout(): array
 {
     return [
+        // Body lines (top → bottom)
+        'certify_y' => 128.0,
         'name_y' => 140.0,
-        'course_y' => 156.0,
-        'atc_y' => 170.0,
-        'duration_y' => 180.0,
-        'grade_y' => 190.0,
+        'completed_y' => 152.0,
+        'course_y' => 164.0,
+        'conducted_label_y' => 176.0,
+        'atc_y' => 186.0,
+        'duration_y' => 198.0,
+        'grade_y' => 208.0,
+        // Footer
         'cert_x' => 32.0,
         'cert_y' => 248.0,
         'date_y' => 256.0,
@@ -2653,6 +2658,9 @@ function courseCertificateOverlayLayout(): array
         'qr_y' => 238.0,
         'qr_size' => 22.0,
         // Typography (Times) — match sample certificate
+        'label_size' => 12.0,
+        'label_style' => '',
+        'label_color' => '0,0,128',
         'name_size' => 20.0,
         'name_style' => 'B',
         'name_color' => '192,0,0',
@@ -2672,6 +2680,31 @@ function courseCertificateOverlayLayout(): array
 function courseCertificateGradeLine(string $grade): string
 {
     return 'and has passed the examination with "' . $grade . '" grade';
+}
+
+/**
+ * Paint the centered certificate body text (labels + dynamic values) onto an FPDI page.
+ *
+ * @param callable(string,float,float,string,string):void $put Centered text helper
+ */
+function paintCourseCertificateBodyText(
+    callable $put,
+    string $fullName,
+    string $courseName,
+    string $conductedAt,
+    string $durationLine,
+    string $gradeLine,
+    ?array $layout = null
+): void {
+    $L = $layout ?? courseCertificateOverlayLayout();
+    $put('This is to certify That', (float)$L['certify_y'], (float)$L['label_size'], (string)$L['label_style'], (string)$L['label_color']);
+    $put($fullName, (float)$L['name_y'], (float)$L['name_size'], (string)$L['name_style'], (string)$L['name_color']);
+    $put('Has Successfully completed', (float)$L['completed_y'], (float)$L['label_size'], (string)$L['label_style'], (string)$L['label_color']);
+    $put($courseName, (float)$L['course_y'], (float)$L['course_size'], (string)$L['course_style'], (string)$L['course_color']);
+    $put('Conducted at', (float)$L['conducted_label_y'], (float)$L['label_size'], (string)$L['label_style'], (string)$L['label_color']);
+    $put($conductedAt, (float)$L['atc_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
+    $put($durationLine, (float)$L['duration_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
+    $put($gradeLine, (float)$L['grade_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
 }
 
 /**
