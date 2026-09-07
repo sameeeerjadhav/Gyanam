@@ -2657,9 +2657,9 @@ function courseCertificateOverlayLayout(): array
         'qr_x' => 160.0,
         'qr_y' => 238.0,
         'qr_size' => 22.0,
-        // Typography (Times) — match sample certificate
-        'label_size' => 12.0,
-        'label_style' => '',
+        // Typography (Times) — labels match ATC/duration/grade (navy bold)
+        'label_size' => 13.0,
+        'label_style' => 'B',
         'label_color' => '0,0,128',
         'name_size' => 20.0,
         'name_style' => 'B',
