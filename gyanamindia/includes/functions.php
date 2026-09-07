@@ -2463,6 +2463,7 @@ function ensureIssuedCertificatesTable(PDO $pdo): void
         duration VARCHAR(80) NOT NULL DEFAULT '',
         issue_date DATE NOT NULL,
         brand VARCHAR(20) NOT NULL DEFAULT 'it',
+        photo_path VARCHAR(255) NULL,
         admission_id INT NULL,
         issued_by_atc_id INT NULL,
         source VARCHAR(20) NOT NULL DEFAULT 'exam',
@@ -2470,6 +2471,15 @@ function ensureIssuedCertificatesTable(PDO $pdo): void
         UNIQUE KEY uniq_verify_token (verify_token),
         KEY idx_cert_no (cert_no)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    try {
+        $cols = $pdo->query("SHOW COLUMNS FROM issued_certificates LIKE 'photo_path'")->fetch();
+        if (!$cols) {
+            $pdo->exec("ALTER TABLE issued_certificates ADD COLUMN photo_path VARCHAR(255) NULL AFTER brand");
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
 }
 
 /**
@@ -2478,7 +2488,7 @@ function ensureIssuedCertificatesTable(PDO $pdo): void
  * @param array{
  *   cert_no:string, student_name:string, reg_id?:string, course:string,
  *   atc_name?:string, atc_code?:string, score:int, grade:string,
- *   duration?:string, issue_date:string, brand?:string,
+ *   duration?:string, issue_date:string, brand?:string, photo_path?:string,
  *   admission_id?:?int, issued_by_atc_id?:?int, source?:string
  * } $data
  * @return array{token:string, verify_url:string, cert_no:string, id:int}
@@ -2498,10 +2508,21 @@ function issueCertificateRecord(PDO $pdo, array $data): array
         $issueDate = date('Y-m-d');
     }
 
+    $photoPath = trim((string)($data['photo_path'] ?? ''));
+    if ($photoPath === '' && !empty($data['admission_id'])) {
+        try {
+            $ps = $pdo->prepare('SELECT photo FROM admissions WHERE id = ? LIMIT 1');
+            $ps->execute([(int)$data['admission_id']]);
+            $photoPath = trim((string)($ps->fetchColumn() ?: ''));
+        } catch (Throwable $e) {
+            $photoPath = '';
+        }
+    }
+
     $stmt = $pdo->prepare("INSERT INTO issued_certificates
         (verify_token, cert_no, student_name, reg_id, course, atc_name, atc_code,
-         score, grade, duration, issue_date, brand, admission_id, issued_by_atc_id, source)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+         score, grade, duration, issue_date, brand, photo_path, admission_id, issued_by_atc_id, source)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     $stmt->execute([
         $token,
         $certNo,
@@ -2515,6 +2536,7 @@ function issueCertificateRecord(PDO $pdo, array $data): array
         trim((string)($data['duration'] ?? '')),
         $issueDate,
         trim((string)($data['brand'] ?? 'it')) ?: 'it',
+        $photoPath !== '' ? $photoPath : null,
         isset($data['admission_id']) && $data['admission_id'] ? (int)$data['admission_id'] : null,
         isset($data['issued_by_atc_id']) && $data['issued_by_atc_id'] ? (int)$data['issued_by_atc_id'] : null,
         trim((string)($data['source'] ?? 'exam')) ?: 'exam',
@@ -2527,6 +2549,35 @@ function issueCertificateRecord(PDO $pdo, array $data): array
         'cert_no' => $certNo,
         'id' => (int)$pdo->lastInsertId(),
     ];
+}
+
+/**
+ * Resolve a public web URL for an issued-certificate photo (relative uploads path).
+ */
+function issuedCertificatePhotoUrl(?array $record, PDO $pdo): string
+{
+    if (!$record) {
+        return '';
+    }
+    $rel = trim((string)($record['photo_path'] ?? ''));
+    if ($rel === '' && !empty($record['admission_id'])) {
+        try {
+            $st = $pdo->prepare('SELECT photo FROM admissions WHERE id = ? LIMIT 1');
+            $st->execute([(int)$record['admission_id']]);
+            $rel = trim((string)($st->fetchColumn() ?: ''));
+        } catch (Throwable $e) {
+            $rel = '';
+        }
+    }
+    if ($rel === '') {
+        return '';
+    }
+    $fs = __DIR__ . '/../' . ltrim(str_replace('\\', '/', $rel), '/');
+    if (!is_file($fs)) {
+        return '';
+    }
+    $ver = @filemtime($fs) ?: time();
+    return rtrim(certificatePublicBaseUrl(), '/') . '/' . ltrim(str_replace('\\', '/', $rel), '/') . '?v=' . $ver;
 }
 
 function findIssuedCertificateByToken(PDO $pdo, string $token): ?array
