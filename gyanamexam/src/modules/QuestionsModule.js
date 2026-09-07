@@ -53,7 +53,7 @@ function courseSubjectFieldHtml(courses, selectedValue = '', inputId = 'nb-subje
   return `
     <input type="search" id="${inputId}-filter" class="form-input" autocomplete="off"
       placeholder="Filter IT courses…" style="margin-bottom:0.4rem">
-    <select id="${inputId}" class="form-input" size="8" style="height:auto;min-height:10.5rem">
+    <select id="${inputId}" class="form-input" style="width:100%;max-width:100%">
       <option value="">— Select an Active IT course —</option>
       ${orphan}
       ${options}
@@ -386,7 +386,7 @@ function showNewBankModal(ApiClient, currentUser, bank = null, courses = []) {
 
   getOverlay().style.display = 'flex';
   document.getElementById('modal-box').innerHTML = `
-    <div class="modal-card" style="max-width:500px;width:95vw;padding:0">
+    <div class="modal-card" style="max-width:580px;width:95vw;padding:0">
       <div class="modal-header" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);padding:1.25rem 1.5rem">
         <div style="display:flex;align-items:center;gap:0.75rem">
           <div style="width:36px;height:36px;background:rgba(255,255,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center">
