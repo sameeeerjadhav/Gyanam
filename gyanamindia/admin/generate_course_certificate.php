@@ -236,6 +236,7 @@ try {
             'duration' => $duration,
             'issue_date' => $examDate ?: date('Y-m-d'),
             'brand' => $certBrand,
+            'photo_path' => trim((string)($student['photo'] ?? '')),
             'admission_id' => (int)($student['id'] ?? 0) ?: null,
             'issued_by_atc_id' => $sessionAtcId ?: (int)($student['atc_id'] ?? 0) ?: null,
             'source' => 'exam',

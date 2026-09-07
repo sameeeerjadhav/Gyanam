@@ -30,6 +30,7 @@ $courseName = '';
 $regId = '';
 $duration = '';
 $photoPath = null;
+$photoRel = '';
 $courseType = null;
 
 $atcStmt = $pdo->prepare('SELECT name, city, district, center_type, atc_code FROM atc_centers WHERE id = ? LIMIT 1');
@@ -72,7 +73,8 @@ if ($admissionId > 0) {
     $courseType = $student['course_type'] ?? null;
 
     if (!empty($student['photo'])) {
-        $p = __DIR__ . '/../' . ltrim((string)$student['photo'], '/');
+        $photoRel = trim((string)$student['photo']);
+        $p = __DIR__ . '/../' . ltrim($photoRel, '/');
         if (is_file($p)) {
             $photoPath = $p;
         }
@@ -211,6 +213,7 @@ try {
             'duration' => $duration,
             'issue_date' => date('Y-m-d', $issueTs),
             'brand' => $certBrand,
+            'photo_path' => $photoRel,
             'admission_id' => $admissionId > 0 ? $admissionId : null,
             'issued_by_atc_id' => $sessionAtcId ?: null,
             'source' => 'manual',
