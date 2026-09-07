@@ -1,9 +1,7 @@
 <?php
 /**
- * Temporary: Course Completion Certificate from manually entered details (no exam required).
- * Restricted to allowlisted ATC centers only.
- *
- * Accepts POST (preferred) or GET for preview after form submit.
+ * Temporary: Course Completion Certificate for allowlisted ATC.
+ * Prefer admission_id + score (details loaded from DB). Legacy POST fields still work.
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -23,22 +21,94 @@ if (!atcCanUseManualCourseCertificate($sessionAtcId, $sessionAtcCode)) {
 }
 
 $src = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' ? $_POST : $_GET;
-
-$fullName = strtoupper(trim((string)($src['student_name'] ?? '')));
-$courseName = trim((string)($src['course_name'] ?? ''));
-$regId = trim((string)($src['reg_id'] ?? ''));
-$score = (int)($src['score'] ?? 0);
-$issueDateRaw = trim((string)($src['issue_date'] ?? ''));
-$duration = trim((string)($src['duration'] ?? ''));
 $preview = isset($src['preview']) || isset($_GET['preview']);
+$score = (int)($src['score'] ?? 0);
+$admissionId = (int)($src['admission_id'] ?? 0);
+
+$fullName = '';
+$courseName = '';
+$regId = '';
+$duration = '';
+$photoPath = null;
+$courseType = null;
+
+$atcStmt = $pdo->prepare('SELECT name, city, district, center_type, atc_code FROM atc_centers WHERE id = ? LIMIT 1');
+$atcStmt->execute([$sessionAtcId]);
+$atc = $atcStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+$atcCity = trim((string)($atc['city'] ?? $atc['district'] ?? ''));
+$conductedAt = trim((string)($atc['name'] ?? 'N/A')) . ($atcCity !== '' ? ', ' . $atcCity : '');
+
+if ($admissionId > 0) {
+    $st = $pdo->prepare("
+        SELECT a.*,
+               COALESCE(NULLIF(TRIM(c.duration), ''), '') AS course_duration,
+               c.course_type AS course_type
+        FROM admissions a
+        LEFT JOIN courses c ON c.course_name = a.course AND c.status = 'Active'
+        WHERE a.id = ? AND a.atc_id = ?
+        LIMIT 1
+    ");
+    $st->execute([$admissionId, $sessionAtcId]);
+    $student = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$student) {
+        http_response_code(404);
+        die('<b>Error:</b> Student not found for your ATC.');
+    }
+
+    $fullName = strtoupper(trim(
+        ($student['first_name'] ?? '') . ' ' .
+        (!empty($student['middle_name']) ? $student['middle_name'] . ' ' : '') .
+        ($student['last_name'] ?? '')
+    ));
+    $courseName = trim((string)($student['course'] ?? ''));
+    $regId = trim((string)($student['registration_id'] ?? ''));
+    if ($regId === '') {
+        $regId = trim((string)($student['roll_no'] ?? ''));
+    }
+    if ($regId === '') {
+        $regId = 'ADM-' . $admissionId;
+    }
+    $duration = trim((string)($student['course_duration'] ?? ''));
+    $courseType = $student['course_type'] ?? null;
+
+    if (!empty($student['photo'])) {
+        $p = __DIR__ . '/../' . ltrim((string)$student['photo'], '/');
+        if (is_file($p)) {
+            $photoPath = $p;
+        }
+    }
+} else {
+    // Legacy manual fields
+    $fullName = strtoupper(trim((string)($src['student_name'] ?? '')));
+    $courseName = trim((string)($src['course_name'] ?? ''));
+    $regId = trim((string)($src['reg_id'] ?? ''));
+    $duration = trim((string)($src['duration'] ?? ''));
+    if ($regId === '') {
+        $regId = 'MANUAL-' . $sessionAtcId . '-' . date('YmdHis');
+    }
+    if (!empty($_FILES['photo']['tmp_name']) && is_uploaded_file($_FILES['photo']['tmp_name'])) {
+        $tmp = $_FILES['photo']['tmp_name'];
+        $info = @getimagesize($tmp);
+        if ($info && in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
+            $photoPath = $tmp;
+        }
+    }
+    try {
+        $cSt = $pdo->prepare("SELECT duration, course_type FROM courses WHERE status = 'Active' AND (course_name = ? OR ? LIKE CONCAT(course_name, '%')) LIMIT 1");
+        $cSt->execute([$courseName, $courseName]);
+        $cRow = $cSt->fetch(PDO::FETCH_ASSOC);
+        if ($cRow) {
+            if ($duration === '') {
+                $duration = trim((string)($cRow['duration'] ?? ''));
+            }
+            $courseType = $cRow['course_type'] ?? null;
+        }
+    } catch (Exception $e) {}
+}
 
 if ($fullName === '' || $courseName === '') {
     http_response_code(400);
-    die('<b>Error:</b> Student name and course are required.');
-}
-
-if ($regId === '') {
-    $regId = 'MANUAL-' . $sessionAtcId . '-' . date('YmdHis');
+    die('<b>Error:</b> Student name and course are required. Select a student from the list.');
 }
 
 if ($score < 40 || $score > 100) {
@@ -52,39 +122,19 @@ if ($grade === 'Fail') {
     die('<b>Error:</b> Certificate cannot be issued — score is below passing grade.');
 }
 
+$issueDateRaw = trim((string)($src['issue_date'] ?? ''));
 $issueTs = $issueDateRaw !== '' ? strtotime($issueDateRaw) : time();
 if ($issueTs === false) {
     $issueTs = time();
 }
 $dateOfIssue = date('d/m/Y', $issueTs);
 
-// ATC conducted-at line
-$atcStmt = $pdo->prepare('SELECT name, city, district, center_type, atc_code FROM atc_centers WHERE id = ? LIMIT 1');
-$atcStmt->execute([$sessionAtcId]);
-$atc = $atcStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-$atcCity = trim((string)($atc['city'] ?? $atc['district'] ?? ''));
-$conductedAt = trim((string)($atc['name'] ?? 'N/A')) . ($atcCity !== '' ? ', ' . $atcCity : '');
-
-// Course duration / type
-$courseType = null;
-try {
-    $cSt = $pdo->prepare("SELECT duration, course_type FROM courses WHERE status = 'Active' AND (course_name = ? OR ? LIKE CONCAT(course_name, '%')) LIMIT 1");
-    $cSt->execute([$courseName, $courseName]);
-    $cRow = $cSt->fetch(PDO::FETCH_ASSOC);
-    if ($cRow) {
-        if ($duration === '') {
-            $duration = trim((string)($cRow['duration'] ?? ''));
-        }
-        $courseType = $cRow['course_type'] ?? null;
-    }
-} catch (Exception $e) {}
 if ($duration === '') {
     $duration = '3 months';
 }
 $durationLine = 'The course duration is ' . $duration;
 $gradeLine = "and has passed the examination with '" . $grade . "' grade";
 
-// Cert number
 $courseAbv = strtoupper(preg_replace('/[^A-Z0-9]/i', '', substr($courseName, 0, 6)));
 $certBase = $courseAbv . '-' . strtoupper(preg_replace('/\s+/', '', $regId));
 $counter = 1;
@@ -117,21 +167,6 @@ $certBrand = courseCertificateBrand($courseType, $atc['center_type'] ?? null, $c
 $template = courseCertificateTemplateBackground($certBrand);
 if (!$template && $certBrand !== 'abacus') {
     die('<b>Template not found:</b> Upload <code>assets/templates/giit_course_certificate.pdf</code> (and optional PNG fallback).');
-}
-
-// Optional photo upload
-$photoPath = null;
-$tempPhoto = null;
-if (!empty($_FILES['photo']['tmp_name']) && is_uploaded_file($_FILES['photo']['tmp_name'])) {
-    $tmp = $_FILES['photo']['tmp_name'];
-    $info = @getimagesize($tmp);
-    if ($info && in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
-        $ext = $info[2] === IMAGETYPE_PNG ? 'png' : ($info[2] === IMAGETYPE_WEBP ? 'webp' : 'jpg');
-        $tempPhoto = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'manual_cert_' . uniqid('', true) . '.' . $ext;
-        if (@move_uploaded_file($tmp, $tempPhoto)) {
-            $photoPath = $tempPhoto;
-        }
-    }
 }
 
 try {
@@ -201,8 +236,4 @@ try {
     http_response_code(500);
     echo '<h2>Certificate Generation Error</h2>';
     echo '<p>' . htmlspecialchars($e->getMessage()) . '</p>';
-} finally {
-    if ($tempPhoto && is_file($tempPhoto)) {
-        @unlink($tempPhoto);
-    }
 }
