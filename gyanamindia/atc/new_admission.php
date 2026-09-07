@@ -177,6 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $inserted = true;
 
                 // Upload photo after roll_no is finalized
+                $photoPath = ($isReEnroll && !empty($ident['source']['photo'])) ? $ident['source']['photo'] : null;
                 $photoField = isset($_FILES['student_photo']) ? 'student_photo' : (isset($_FILES['photo']) ? 'photo' : null);
                 if ($photoField && $_FILES[$photoField]['error'] === UPLOAD_ERR_OK) {
                     $uploadDir = __DIR__ . '/../uploads/students/';
@@ -213,7 +214,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $atcCodeStmt->execute([$atcId]);
                         $syncAtcCode = $atcCodeStmt->fetchColumn() ?: 'ATC' . $atcId;
                         $syncName = trim(($_POST['cvt_first_name'] ?? $inquiry['first_name']) . ' ' . ($inquiry['middle_name'] ? $inquiry['middle_name'] . ' ' : '') . ($_POST['cvt_last_name'] ?? $inquiry['last_name']));
-                        $syncResult = syncStudentToExamPortal($registrationId, $syncName, $syncAtcCode);
+                        $photoForSync = $photoPath;
+                        $syncResult = syncStudentToExamPortal(
+                            $registrationId,
+                            $syncName,
+                            $syncAtcCode,
+                            'SLOT1',
+                            'MORNING',
+                            function_exists('examPortalAbsolutePhotoUrl') ? examPortalAbsolutePhotoUrl($photoForSync) : null,
+                            $courseName
+                        );
                         if (!$syncResult['success']) {
                             $examSyncWarning = 'Exam Portal sync failed: ' . ($syncResult['error'] ?? 'Unknown error');
                             error_log('[ExamSync] ' . $examSyncWarning . ' for ' . $registrationId);
@@ -320,6 +330,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $admissionId2 = (int)$pdo->lastInsertId();
 
                 // Handle photo upload
+                $photoPath2 = null;
                 if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
                     $uploadDir = __DIR__ . '/../uploads/students/';
                     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
@@ -327,8 +338,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if (in_array($fileExt, ['jpg','jpeg','png'])) {
                         $fileName = $rollNo . '.' . $fileExt;
                         if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $fileName)) {
+                            $photoPath2 = 'uploads/students/' . $fileName;
                             $pdo->prepare("UPDATE admissions SET photo = ? WHERE id = ? AND atc_id = ?")
-                                ->execute(['uploads/students/' . $fileName, $admissionId2, $atcId]);
+                                ->execute([$photoPath2, $admissionId2, $atcId]);
                         }
                     }
                 }
@@ -349,7 +361,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $atcCodeStmt2->execute([$atcId]);
                         $syncAtcCode2 = $atcCodeStmt2->fetchColumn() ?: 'ATC' . $atcId;
                         $syncName2 = trim(($_POST['cvt_first_name'] ?? $inquiry['first_name']) . ' ' . ($inquiry['middle_name'] ? $inquiry['middle_name'] . ' ' : '') . ($_POST['cvt_last_name'] ?? $inquiry['last_name']));
-                        $syncResult2 = syncStudentToExamPortal($registrationId, $syncName2, $syncAtcCode2);
+                        $syncResult2 = syncStudentToExamPortal(
+                            $registrationId,
+                            $syncName2,
+                            $syncAtcCode2,
+                            'SLOT1',
+                            'MORNING',
+                            function_exists('examPortalAbsolutePhotoUrl') ? examPortalAbsolutePhotoUrl($photoPath2) : null,
+                            $courseName ?? ($_POST['cvt_course'] ?? null)
+                        );
                         if (!$syncResult2['success']) {
                             $examSyncWarning2 = 'Exam Portal sync failed: ' . ($syncResult2['error'] ?? 'Unknown error');
                             error_log('[ExamSync] ' . $examSyncWarning2 . ' for ' . $registrationId);
@@ -452,7 +472,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $atcCodeStmt3->execute([$atcId]);
                         $syncAtcCode3 = $atcCodeStmt3->fetchColumn() ?: 'ATC' . $atcId;
                         $syncName3 = trim($_POST['first_name'] . ' ' . ($_POST['middle_name'] ? $_POST['middle_name'] . ' ' : '') . $_POST['last_name']);
-                        $syncResult3 = syncStudentToExamPortal($registrationId3, $syncName3, $syncAtcCode3);
+                        $syncResult3 = syncStudentToExamPortal(
+                            $registrationId3,
+                            $syncName3,
+                            $syncAtcCode3,
+                            'SLOT1',
+                            'MORNING',
+                            null,
+                            $_POST['course'] ?? null
+                        );
                         if (!$syncResult3['success']) {
                             $examSyncWarning3 = 'Exam Portal sync failed: ' . ($syncResult3['error'] ?? 'Unknown error');
                             error_log('[ExamSync] ' . $examSyncWarning3 . ' for ' . $registrationId3);

@@ -175,6 +175,7 @@ class ApiClient {
   static getStudentHistory(id) { return this.get(`/students/${id}/history`); }
   static bulkUpdateStudents(studentIds, fields) { return this.post('/students/bulk-update', { student_ids: studentIds, ...fields }); }
   static getStudentExams() { return this.get('/student/exams'); }
+  static getStudentMe() { return this.get('/student/me'); }
 
   // ─── Results ────────────────────────────────
   static getResults(params = {}) {

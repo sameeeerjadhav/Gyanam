@@ -149,13 +149,33 @@ function examApi_request(string $method, string $endpoint, array $data = [], boo
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Build absolute public URL for an admission photo path (uploads/…).
+ */
+function examPortalAbsolutePhotoUrl(?string $relativePhoto): ?string
+{
+    $rel = trim((string) $relativePhoto);
+    if ($rel === '') {
+        return null;
+    }
+    if (preg_match('#^https?://#i', $rel)) {
+        return $rel;
+    }
+    if (!function_exists('certificatePublicBaseUrl')) {
+        return null;
+    }
+    return rtrim(certificatePublicBaseUrl(), '/') . '/' . ltrim(str_replace('\\', '/', $rel), '/');
+}
+
+/**
  * Register (or update) a student in the Exam Portal.
  *
- * @param  string $registrationId  The globally unique GIES ID (e.g. "GIES15")
- * @param  string $fullName        Student full name
- * @param  string $atcCode         ATC centre code (e.g. "ATC1") → maps to centre_name
- * @param  string $examSlot        SLOT1 | SLOT2 | SLOT3
- * @param  string $timeWindow      MORNING | AFTERNOON | EVENING
+ * @param  string      $registrationId  The globally unique GIES ID (e.g. "GIES15")
+ * @param  string      $fullName        Student full name
+ * @param  string      $atcCode         ATC centre code (e.g. "ATC1") → maps to centre_name
+ * @param  string      $examSlot        SLOT1 | SLOT2 | SLOT3
+ * @param  string      $timeWindow      MORNING | AFTERNOON | EVENING
+ * @param  string|null $photoUrl       Absolute photo URL (optional)
+ * @param  string|null $course         Course name (optional)
  * @return array  API result
  */
 function syncStudentToExamPortal(
@@ -163,15 +183,24 @@ function syncStudentToExamPortal(
     string $fullName,
     string $atcCode,
     string $examSlot = 'SLOT1',
-    string $timeWindow = 'MORNING'
+    string $timeWindow = 'MORNING',
+    ?string $photoUrl = null,
+    ?string $course = null
 ): array {
-    return examApi_request('POST', '/students', [
+    $payload = [
         'identifier'  => $registrationId,
         'name'        => $fullName,
         'centre_name' => $atcCode,
         'exam_slot'   => $examSlot,
         'time_window' => $timeWindow,
-    ]);
+    ];
+    if ($photoUrl) {
+        $payload['photo_url'] = $photoUrl;
+    }
+    if ($course) {
+        $payload['course'] = $course;
+    }
+    return examApi_request('POST', '/students', $payload);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

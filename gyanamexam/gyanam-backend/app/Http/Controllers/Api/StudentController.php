@@ -23,11 +23,13 @@ class StudentController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'identifier'  => 'required|string|unique:students,identifier',
+            'identifier'  => 'required|string',
             'name'        => 'required|string',
             'centre_name' => 'required|string',
             'exam_slot'   => 'nullable|string',
             'time_window' => 'nullable|string',
+            'photo_url'   => 'nullable|string|max:500',
+            'course'      => 'nullable|string|max:255',
             'password'    => 'nullable|string|min:4',
             'exam_ids'    => 'nullable|array',
             'exam_ids.*'  => 'exists:exam_configs,id',
@@ -35,21 +37,35 @@ class StudentController extends Controller
             'exams.*'     => 'exists:exam_configs,id',
         ]);
 
-        $student = Student::create([
-            'identifier'  => $data['identifier'],
-            'name'        => $data['name'],
-            'centre_name' => $data['centre_name'],
-            'exam_slot'   => strtoupper($data['exam_slot']   ?? 'SLOT1'),
-            'time_window' => strtoupper($data['time_window']  ?? 'MORNING'),
-            'password'    => Hash::make($data['password'] ?? 'password'),
-        ]);
+        $student = Student::firstOrNew(['identifier' => $data['identifier']]);
+        $student->name        = $data['name'];
+        $student->centre_name = $data['centre_name'];
+        $student->exam_slot   = strtoupper($data['exam_slot']   ?? ($student->exam_slot ?: 'SLOT1'));
+        $student->time_window = strtoupper($data['time_window'] ?? ($student->time_window ?: 'MORNING'));
+
+        if (array_key_exists('photo_url', $data) && $data['photo_url'] !== null && $data['photo_url'] !== '') {
+            $student->photo_url = $data['photo_url'];
+        }
+        if (!empty($data['course'])) {
+            $student->course = $data['course'];
+        }
+
+        if (!$student->exists) {
+            $student->password = Hash::make($data['password'] ?? 'password');
+        } elseif (!empty($data['password'])) {
+            $student->password = Hash::make($data['password']);
+        }
+
+        $isNew = !$student->exists;
+        $student->save();
+        $status = $isNew ? 201 : 200;
 
         $examIds = $data['exam_ids'] ?? $data['exams'] ?? [];
         if (!empty($examIds)) {
-            $student->exams()->sync($examIds);
+            $student->exams()->syncWithoutDetaching($examIds);
         }
 
-        return response()->json($student->load('exams'), 201);
+        return response()->json($student->load('exams'), $status);
     }
 
     public function show($id)
@@ -65,6 +81,8 @@ class StudentController extends Controller
             'centre_name' => 'sometimes|string',
             'exam_slot'   => 'sometimes|in:SLOT1,SLOT2,SLOT3',
             'time_window' => 'sometimes|in:MORNING,AFTERNOON,EVENING',
+            'photo_url'   => 'nullable|string|max:500',
+            'course'      => 'nullable|string|max:255',
             'password'    => 'nullable|string|min:4',
         ]);
 

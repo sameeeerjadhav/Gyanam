@@ -11,7 +11,8 @@ class Student extends Model
     use HasFactory, HasApiTokens;
 
     protected $fillable = [
-        'identifier', 'name', 'centre_name', 'exam_slot', 'time_window', 'password',
+        'identifier', 'name', 'centre_name', 'exam_slot', 'time_window',
+        'photo_url', 'course', 'password',
     ];
 
     protected $hidden = ['password'];
