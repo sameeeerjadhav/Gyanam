@@ -200,6 +200,31 @@ try {
         }
     }
 
+    $qrTmp = null;
+    if (!$preview) {
+        try {
+            $issued = issueCertificateRecord($pdo, [
+                'cert_no' => $certNo,
+                'student_name' => $fullName,
+                'reg_id' => $regId,
+                'course' => $courseName,
+                'atc_name' => trim((string)($atc['name'] ?? '')),
+                'atc_code' => trim((string)($atc['atc_code'] ?? '')),
+                'score' => $score,
+                'grade' => $grade,
+                'duration' => $duration,
+                'issue_date' => date('Y-m-d', $issueTs),
+                'brand' => $certBrand,
+                'admission_id' => $admissionId > 0 ? $admissionId : null,
+                'issued_by_atc_id' => $sessionAtcId ?: null,
+                'source' => 'manual',
+            ]);
+            $qrTmp = embedCertificateVerifyQr($pdf, $issued['verify_url'], 168, 242, 26);
+        } catch (Throwable $qrE) {
+            // Non-fatal
+        }
+    }
+
     $dest = $preview ? 'I' : 'D';
     $safeReg = preg_replace('/[^A-Za-z0-9_-]/', '_', $regId);
     $filename = 'Certificate_' . $safeReg . '_' . $courseAbv . '.pdf';
@@ -208,6 +233,9 @@ try {
         ob_end_clean();
     }
     $pdf->Output($dest, $filename);
+    if ($qrTmp && is_file($qrTmp)) {
+        @unlink($qrTmp);
+    }
     exit;
 } catch (\setasign\Fpdi\PdfParser\CrossReference\CrossReferenceException $e) {
     http_response_code(500);

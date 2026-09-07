@@ -2427,6 +2427,181 @@ function buildCourseCertificateNumber(
     return $certBase . '-' . str_pad((string)$counter, 3, '0', STR_PAD_LEFT);
 }
 
+/** Public site base URL (parent of admin/atc/dlc) for certificate verify links. */
+function certificatePublicBaseUrl(): string
+{
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    // Honor reverse-proxy HTTPS
+    if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower((string)$_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https') {
+        $scheme = 'https';
+    }
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $script = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    $dir = rtrim(dirname($script), '/');
+    if (preg_match('#/(admin|atc|dlc)$#i', $dir)) {
+        $dir = dirname($dir);
+    }
+    if ($dir === '/' || $dir === '\\' || $dir === '.' || $dir === '') {
+        $dir = '';
+    }
+    return $scheme . '://' . $host . $dir;
+}
+
+function ensureIssuedCertificatesTable(PDO $pdo): void
+{
+    $pdo->exec("CREATE TABLE IF NOT EXISTS issued_certificates (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        verify_token VARCHAR(64) NOT NULL,
+        cert_no VARCHAR(80) NOT NULL,
+        student_name VARCHAR(200) NOT NULL,
+        reg_id VARCHAR(80) NOT NULL DEFAULT '',
+        course VARCHAR(200) NOT NULL,
+        atc_name VARCHAR(200) NOT NULL DEFAULT '',
+        atc_code VARCHAR(50) NOT NULL DEFAULT '',
+        score INT NOT NULL DEFAULT 0,
+        grade VARCHAR(20) NOT NULL DEFAULT '',
+        duration VARCHAR(80) NOT NULL DEFAULT '',
+        issue_date DATE NOT NULL,
+        brand VARCHAR(20) NOT NULL DEFAULT 'it',
+        admission_id INT NULL,
+        issued_by_atc_id INT NULL,
+        source VARCHAR(20) NOT NULL DEFAULT 'exam',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_verify_token (verify_token),
+        KEY idx_cert_no (cert_no)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+/**
+ * Persist a certificate issuance snapshot and return verify token + URL.
+ *
+ * @param array{
+ *   cert_no:string, student_name:string, reg_id?:string, course:string,
+ *   atc_name?:string, atc_code?:string, score:int, grade:string,
+ *   duration?:string, issue_date:string, brand?:string,
+ *   admission_id?:?int, issued_by_atc_id?:?int, source?:string
+ * } $data
+ * @return array{token:string, verify_url:string, cert_no:string, id:int}
+ */
+function issueCertificateRecord(PDO $pdo, array $data): array
+{
+    ensureIssuedCertificatesTable($pdo);
+    $token = bin2hex(random_bytes(16));
+    $certNo = trim((string)($data['cert_no'] ?? ''));
+    $issueDate = trim((string)($data['issue_date'] ?? date('Y-m-d')));
+    if (preg_match('#^\d{2}/\d{2}/\d{4}$#', $issueDate)) {
+        $ts = DateTime::createFromFormat('d/m/Y', $issueDate);
+        $issueDate = $ts ? $ts->format('Y-m-d') : date('Y-m-d');
+    } elseif (strtotime($issueDate) !== false) {
+        $issueDate = date('Y-m-d', strtotime($issueDate));
+    } else {
+        $issueDate = date('Y-m-d');
+    }
+
+    $stmt = $pdo->prepare("INSERT INTO issued_certificates
+        (verify_token, cert_no, student_name, reg_id, course, atc_name, atc_code,
+         score, grade, duration, issue_date, brand, admission_id, issued_by_atc_id, source)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    $stmt->execute([
+        $token,
+        $certNo,
+        trim((string)($data['student_name'] ?? '')),
+        trim((string)($data['reg_id'] ?? '')),
+        trim((string)($data['course'] ?? '')),
+        trim((string)($data['atc_name'] ?? '')),
+        trim((string)($data['atc_code'] ?? '')),
+        (int)($data['score'] ?? 0),
+        trim((string)($data['grade'] ?? '')),
+        trim((string)($data['duration'] ?? '')),
+        $issueDate,
+        trim((string)($data['brand'] ?? 'it')) ?: 'it',
+        isset($data['admission_id']) && $data['admission_id'] ? (int)$data['admission_id'] : null,
+        isset($data['issued_by_atc_id']) && $data['issued_by_atc_id'] ? (int)$data['issued_by_atc_id'] : null,
+        trim((string)($data['source'] ?? 'exam')) ?: 'exam',
+    ]);
+
+    $verifyUrl = rtrim(certificatePublicBaseUrl(), '/') . '/verify_certificate.php?t=' . urlencode($token);
+    return [
+        'token' => $token,
+        'verify_url' => $verifyUrl,
+        'cert_no' => $certNo,
+        'id' => (int)$pdo->lastInsertId(),
+    ];
+}
+
+function findIssuedCertificateByToken(PDO $pdo, string $token): ?array
+{
+    $token = trim($token);
+    if ($token === '' || !preg_match('/^[a-f0-9]{32}$/i', $token)) {
+        return null;
+    }
+    ensureIssuedCertificatesTable($pdo);
+    $st = $pdo->prepare('SELECT * FROM issued_certificates WHERE verify_token = ? LIMIT 1');
+    $st->execute([$token]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function findIssuedCertificateByCertNo(PDO $pdo, string $certNo): ?array
+{
+    $certNo = trim($certNo);
+    if ($certNo === '') {
+        return null;
+    }
+    ensureIssuedCertificatesTable($pdo);
+    $st = $pdo->prepare('SELECT * FROM issued_certificates WHERE cert_no = ? ORDER BY id DESC LIMIT 1');
+    $st->execute([$certNo]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/**
+ * Generate a QR PNG for $url and place it on the FPDI/FPDF page.
+ * Returns temp file path (caller may unlink) or null on failure.
+ */
+function embedCertificateVerifyQr($pdf, string $url, float $x = 168.0, float $y = 242.0, float $sizeMm = 26.0): ?string
+{
+    $url = trim($url);
+    if ($url === '' || !function_exists('imagepng')) {
+        return null;
+    }
+
+    $qrLib = __DIR__ . '/../assets/phpqrcode/qrcode.php';
+    if (!is_file($qrLib)) {
+        return null;
+    }
+    if (!class_exists('QRCode', false)) {
+        require_once $qrLib;
+    }
+
+    try {
+        $generator = new QRCode($url, [
+            's' => 'qrl',
+            'w' => 240,
+            'h' => 240,
+            'p' => 8,
+            'bc' => 'FFFFFF',
+            'fc' => '000000',
+        ]);
+        $image = $generator->render_image();
+        $tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'cert_qr_' . bin2hex(random_bytes(8)) . '.png';
+        if (!imagepng($image, $tmp)) {
+            imagedestroy($image);
+            return null;
+        }
+        imagedestroy($image);
+        $pdf->Image($tmp, $x, $y, $sizeMm, $sizeMm, 'PNG');
+        // Tiny label under QR
+        $pdf->SetTextColor(60, 60, 60);
+        $pdf->SetFont('Helvetica', '', 6);
+        $pdf->SetXY($x, $y + $sizeMm + 0.5);
+        $pdf->Cell($sizeMm, 3, 'Scan to verify', 0, 0, 'C');
+        return $tmp;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
 /**
  * Drawn Gyanam Abacus completion certificate frame (used when no official PDF/PNG is uploaded).
  * Field positions match GIIT overlay coordinates in generate_course_certificate.php.
