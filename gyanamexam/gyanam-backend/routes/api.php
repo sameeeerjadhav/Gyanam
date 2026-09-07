@@ -88,6 +88,7 @@ Route::prefix('v1')->group(function () {
     // ─── Student Portal Routes ────────────────────────────────────────────────
     Route::middleware(['auth:sanctum', 'student'])->prefix('student')->group(function () {
         Route::post('/logout',                          [AuthController::class, 'logout']);
+        Route::get ('/me',                              [AuthController::class, 'studentMe']);
         Route::get ('/exams',                           [StudentExamController::class, 'myExams']);
         Route::get ('/history',                         [StudentExamController::class, 'myHistory']);
         Route::get ('/exam/{examId}/questions',         [StudentExamController::class, 'getQuestions']);

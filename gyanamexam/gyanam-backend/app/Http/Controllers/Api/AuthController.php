@@ -95,16 +95,16 @@ class AuthController extends Controller
 
         return response()->json([
             'token'   => $token,
-            'user'    => [
-                'id'          => $student->id,
-                'identifier'  => $student->identifier,
-                'name'        => $student->name,
-                'centre_name' => $student->centre_name,
-                'exam_slot'   => $student->exam_slot,
-                'time_window' => $student->time_window,
-                'role'        => 'student',
-            ],
+            'user'    => $this->studentProfilePayload($student),
         ]);
+    }
+
+    /**
+     * Current authenticated student profile (fresh from DB).
+     */
+    public function studentMe(Request $request)
+    {
+        return response()->json($this->studentProfilePayload($request->user()));
     }
 
     /**
@@ -114,5 +114,20 @@ class AuthController extends Controller
     {
         $request->user()->currentAccessToken()->delete();
         return response()->json(['message' => 'Logged out']);
+    }
+
+    private function studentProfilePayload($student): array
+    {
+        return [
+            'id'          => $student->id,
+            'identifier'  => $student->identifier,
+            'name'        => $student->name,
+            'centre_name' => $student->centre_name,
+            'exam_slot'   => $student->exam_slot,
+            'time_window' => $student->time_window,
+            'photo_url'   => $student->photo_url,
+            'course'      => $student->course,
+            'role'        => 'student',
+        ];
     }
 }

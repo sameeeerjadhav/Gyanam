@@ -64,6 +64,15 @@ export class AuthenticationModule {
     return this._session;
   }
 
+  /** Merge fresh profile fields into the stored session user */
+  updateSessionUser(userPatch = {}) {
+    if (!this._session) return;
+    this._session.user = { ...(this._session.user || {}), ...userPatch };
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(this._session));
+    } catch (_) { /* ignore quota */ }
+  }
+
   /** Logout — clear tokens and session */
   async logout() {
     try {

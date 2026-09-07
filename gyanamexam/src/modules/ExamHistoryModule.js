@@ -33,13 +33,13 @@ export class ExamHistoryModule {
     if (this.examHistory.length === 0) {
       this.container.innerHTML = `
         <div class="dash-section-header" style="margin-bottom:1rem">
-          <h2 class="dash-section-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;color:#1d4ed8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
+          <h2 class="dash-section-title" style="color:#0f2744">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;color:#c41e3a"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
             Previous Exams
           </h2>
         </div>
         <div class="card" style="text-align:center;padding:3rem 1.5rem;color:var(--text-muted)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;margin:0 auto 1rem"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;margin:0 auto 1rem;color:#94a3b8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
           <p style="font-size:0.95rem">No exam attempts yet. Complete an exam to see your results here.</p>
         </div>
       `;
@@ -77,11 +77,11 @@ export class ExamHistoryModule {
 
     this.container.innerHTML = `
       <div class="dash-section-header" style="margin-bottom:1rem">
-        <h2 class="dash-section-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;color:#1d4ed8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
+        <h2 class="dash-section-title" style="color:#0f2744">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;color:#c41e3a"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
           Previous Exams
         </h2>
-        <span class="dash-badge">${this.examHistory.length} attempt${this.examHistory.length !== 1 ? 's' : ''}</span>
+        <span class="dash-badge" style="background:#fff5f5;border-color:#fecaca;color:#c41e3a">${this.examHistory.length} attempt${this.examHistory.length !== 1 ? 's' : ''}</span>
       </div>
       <div class="card" style="overflow:hidden">
         <div class="table-wrap">

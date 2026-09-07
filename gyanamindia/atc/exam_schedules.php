@@ -120,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     exit;
                 }
                 // Verify student belongs to this ATC
-                $chk = $pdo->prepare("SELECT id, registration_id FROM admissions WHERE id = ? AND atc_id = ?");
+                $chk = $pdo->prepare("SELECT id, registration_id, first_name, middle_name, last_name, course, photo FROM admissions WHERE id = ? AND atc_id = ?");
                 $chk->execute([$admId, $atcId]);
                 $admRow = $chk->fetch(PDO::FETCH_ASSOC);
                 if (!$admRow) {
@@ -137,10 +137,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $pdo->prepare("INSERT INTO exam_schedules(admission_id,atc_id,exam_date,exam_time,exam_slot,exam_hall,exam_name,exam_portal_id,allowed_attempts) VALUES(?,?,?,?,?,?,?,?,?)")
                         ->execute([$admId, $atcId, $date, $time, $slot, $hall, $examName, $examPortalId, $allowedAttempts]);
                 }
-                // Sync to Exam Portal: assign exam to student
+                // Sync to Exam Portal: upsert profile + assign exam
                 if ($examPortalId && !empty($admRow['registration_id'])) {
                     try {
                         if (function_exists('fetchExamStudents') && defined('EXAM_API_TOKEN') && EXAM_API_TOKEN !== 'PASTE_YOUR_TOKEN_HERE') {
+                            $atcCodeStmt = $pdo->prepare("SELECT atc_code FROM atc_centers WHERE id = ?");
+                            $atcCodeStmt->execute([$atcId]);
+                            $syncAtcCode = $atcCodeStmt->fetchColumn() ?: 'ATC' . $atcId;
+                            $syncName = trim(($admRow['first_name'] ?? '') . ' ' . (($admRow['middle_name'] ?? '') ? $admRow['middle_name'] . ' ' : '') . ($admRow['last_name'] ?? ''));
+                            $portalSlot = (stripos($slot, 'afternoon') !== false || stripos($slot, 'slot2') !== false) ? 'SLOT2'
+                                : ((stripos($slot, 'evening') !== false || stripos($slot, 'slot3') !== false) ? 'SLOT3' : 'SLOT1');
+                            if (function_exists('syncStudentToExamPortal')) {
+                                syncStudentToExamPortal(
+                                    $admRow['registration_id'],
+                                    $syncName,
+                                    $syncAtcCode,
+                                    $portalSlot,
+                                    'MORNING',
+                                    function_exists('examPortalAbsolutePhotoUrl') ? examPortalAbsolutePhotoUrl($admRow['photo'] ?? null) : null,
+                                    $admRow['course'] ?? null
+                                );
+                            }
                             $esRes = fetchExamStudents();
                             if ($esRes['success'] && !empty($esRes['data'])) {
                                 foreach ($esRes['data'] as $es) {
@@ -185,9 +202,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
                 $count = 0;
                 $syncIds = []; // collect registration IDs for portal sync
+                $atcCodeStmt = $pdo->prepare("SELECT atc_code FROM atc_centers WHERE id = ?");
+                $atcCodeStmt->execute([$atcId]);
+                $syncAtcCodeBulk = $atcCodeStmt->fetchColumn() ?: 'ATC' . $atcId;
+                $portalSlotBulk = (stripos($slot, 'afternoon') !== false || stripos($slot, 'slot2') !== false) ? 'SLOT2'
+                    : ((stripos($slot, 'evening') !== false || stripos($slot, 'slot3') !== false) ? 'SLOT3' : 'SLOT1');
                 foreach ($ids as $admId) {
                     $admId = intval($admId);
-                    $chk = $pdo->prepare("SELECT id, registration_id FROM admissions WHERE id = ? AND atc_id = ?");
+                    $chk = $pdo->prepare("SELECT id, registration_id, first_name, middle_name, last_name, course, photo FROM admissions WHERE id = ? AND atc_id = ?");
                     $chk->execute([$admId, $atcId]);
                     $admRow = $chk->fetch(PDO::FETCH_ASSOC);
                     if (!$admRow)
@@ -203,6 +225,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     }
                     if (!empty($admRow['registration_id'])) {
                         $syncIds[$admRow['registration_id']] = true;
+                        if ($examPortalId && function_exists('syncStudentToExamPortal') && defined('EXAM_API_TOKEN') && EXAM_API_TOKEN !== 'PASTE_YOUR_TOKEN_HERE') {
+                            $syncName = trim(($admRow['first_name'] ?? '') . ' ' . (($admRow['middle_name'] ?? '') ? $admRow['middle_name'] . ' ' : '') . ($admRow['last_name'] ?? ''));
+                            try {
+                                syncStudentToExamPortal(
+                                    $admRow['registration_id'],
+                                    $syncName,
+                                    $syncAtcCodeBulk,
+                                    $portalSlotBulk,
+                                    'MORNING',
+                                    function_exists('examPortalAbsolutePhotoUrl') ? examPortalAbsolutePhotoUrl($admRow['photo'] ?? null) : null,
+                                    $admRow['course'] ?? null
+                                );
+                            } catch (Exception $e) { /* ignore */ }
+                        }
                     }
                     $count++;
                 }
