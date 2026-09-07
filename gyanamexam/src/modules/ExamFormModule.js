@@ -104,7 +104,7 @@ export async function renderExamForm(ApiClient, { loadPage }) {
     subjectField = `
       <input type="search" id="ex-subj-filter" class="form-input" autocomplete="off"
         placeholder="Filter IT courses…" style="margin-bottom:0.4rem">
-      <select id="ex-subj" class="form-input" size="8" style="height:auto;min-height:10.5rem">
+      <select id="ex-subj" class="form-input" style="width:100%;max-width:100%">
         <option value="">— Select an Active IT course —</option>
         ${orphan}
         ${opts}
