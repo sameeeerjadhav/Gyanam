@@ -110,17 +110,27 @@ export class Router {
   }
 
   matchRoute(path) {
-    if (this.routes.has(path)) return { matchedPath: path, params: {} };
+    // Normalize: drop trailing slash (except root) and ignore query leftovers
+    let normalized = (path || '/').split('?')[0];
+    if (normalized.length > 1 && normalized.endsWith('/')) {
+      normalized = normalized.slice(0, -1);
+    }
+
+    if (this.routes.has(normalized)) return { matchedPath: normalized, params: {} };
 
     for (const [routePath] of this.routes) {
-      // Check absolute match first
-      if (routePath === path) return { matchedPath: routePath, params: {} };
+      if (routePath === normalized) return { matchedPath: routePath, params: {} };
 
-      // Check match relative to basePath
-      const relativePath = path.startsWith(this.basePath) ? path.slice(this.basePath.length) : path;
-      if (routePath === relativePath) return { matchedPath: routePath, params: {} };
+      const relativePath = this.basePath && normalized.startsWith(this.basePath)
+        ? (normalized.slice(this.basePath.length) || '/')
+        : normalized;
+      const relative = relativePath.length > 1 && relativePath.endsWith('/')
+        ? relativePath.slice(0, -1)
+        : relativePath;
 
-      const params = this.extractParams(routePath, relativePath);
+      if (routePath === relative) return { matchedPath: routePath, params: {} };
+
+      const params = this.extractParams(routePath, relative);
       if (params !== null) return { matchedPath: routePath, params };
     }
 
@@ -155,7 +165,7 @@ export class Router {
             <div style="position:relative;z-index:1;">
               <h2 style="font-size:2rem;font-weight:800;margin-bottom:0.75rem;letter-spacing:-0.02em;">Oops! Page Not Found</h2>
               <p style="color:#64748b;margin-bottom:2.5rem;font-size:1.125rem;font-weight:500;">The page <code style="background:#f1f5f9;padding:0.2em 0.5em;border-radius:4px;color:#1d4ed8;font-weight:700;">${path}</code> doesn't exist.</p>
-              <a href="/login" onclick="event.preventDefault();window.history.pushState(null,'','/login');window.dispatchEvent(new PopStateEvent('popstate'));"
+              <a href="${this.basePath || ''}/login" id="nf-go-login"
                  style="background:#1d4ed8;color:white;padding:0.875rem 2.5rem;border-radius:0.75rem;text-decoration:none;font-weight:700;display:inline-block;transition:all 0.2s;box-shadow:0 4px 12px rgba(29,78,216,0.15);"
                  onmouseover="this.style.background='#1e40af'"
                  onmouseout="this.style.background='#1d4ed8'">
@@ -165,6 +175,13 @@ export class Router {
           </div>
         </div>
       `;
+      const goLogin = document.getElementById('nf-go-login');
+      if (goLogin) {
+        goLogin.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.navigate('/login');
+        });
+      }
     } else if (this.routes.has('/login')) {
       this.navigate('/login');
     }
