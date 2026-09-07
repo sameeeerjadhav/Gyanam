@@ -210,11 +210,7 @@ try {
     // ── Coordinate map — blank GIIT course certificate (A4) ──
     $L = courseCertificateOverlayLayout();
 
-    $put($fullName, $L['name_y'], (float)$L['name_size'], (string)$L['name_style'], (string)$L['name_color']);
-    $put($courseName, $L['course_y'], (float)$L['course_size'], (string)$L['course_style'], (string)$L['course_color']);
-    $put($conductedAt, $L['atc_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
-    $put($durationLine, $L['duration_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
-    $put($gradeLine, $L['grade_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
+    paintCourseCertificateBodyText($put, $fullName, $courseName, $conductedAt, $durationLine, $gradeLine, $L);
     $putLeft($certNo, $L['cert_x'], $L['cert_y'], (float)$L['footer_size'], (string)$L['footer_style'], (string)$L['footer_color']);
     $putLeft($dateOfIssue, $L['cert_x'], $L['date_y'], (float)$L['footer_size'], (string)$L['footer_style'], (string)$L['footer_color']);
 
