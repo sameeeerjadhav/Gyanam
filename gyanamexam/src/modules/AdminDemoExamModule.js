@@ -458,6 +458,8 @@ export async function renderAdminDemoExam(ApiClient, { currentUser, loadPage }) 
     const st = document.createElement('style');
     st.id = 'demo-exam-styles';
     st.textContent = `
+      .peg-h{margin:0 0 .5rem;font-size:1.1rem;font-weight:800}
+      .peg-p{margin:0;color:var(--text-muted);font-size:.9rem;line-height:1.5}
       .peg-check{display:flex;align-items:flex-start;gap:.55rem;margin-top:1rem;font-size:.9rem;font-weight:600;cursor:pointer}
       .peg-check input{margin-top:.2rem}
       .peg-id-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin:1rem 0}
