@@ -153,12 +153,6 @@ if ($_sidebarInitials === '') {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
                 <span>Completion Certificate</span>
             </a>
-            <?php if (function_exists('atcCanUseManualCourseCertificate') && atcCanUseManualCourseCertificate((int)($_sidebarAtcId ?? 0), (string)$_sidebarAtcCode)): ?>
-            <a href="manual_certificate.php" class="nav-link <?= $currentPage === 'manual_certificate.php' ? 'active' : '' ?>" data-tooltip="Manual Certificate">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg>
-                <span>Manual Certificate</span>
-            </a>
-            <?php endif; ?>
             <a href="my_auth_certificate.php" class="nav-link <?= $currentPage === 'my_auth_certificate.php' ? 'active' : '' ?>" data-tooltip="Auth Certificate">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
                 <span>Auth Certificate</span>
