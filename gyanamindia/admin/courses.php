@@ -693,10 +693,16 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                     </form>
                     <?php
                     $examSyncTotal = 0;
-                    try { $examSyncTotal = (int)$pdo->query('SELECT COUNT(*) FROM courses')->fetchColumn(); } catch (Exception $e) {}
+                    try {
+                        $examSyncTotal = (int)$pdo->query("
+                            SELECT COUNT(*) FROM courses
+                            WHERE status = 'Active'
+                              AND UPPER(TRIM(COALESCE(course_type, ''))) = 'IT'
+                        ")->fetchColumn();
+                    } catch (Exception $e) {}
                     ?>
-                    <button type="button" class="btn-primary" id="sync-exam-courses-btn" style="padding:0 1rem;background:#0f766e" title="Push all courses to Gyanam Exam Portal dropdowns">
-                        ↻ Sync to Exam Portal<?= $examSyncTotal ? ' (' . $examSyncTotal . ')' : '' ?>
+                    <button type="button" class="btn-primary" id="sync-exam-courses-btn" style="padding:0 1rem;background:#0f766e" title="Push all Active IT courses to Exam Portal QB/Exam dropdowns">
+                        ↻ Sync IT Courses to Exam<?= $examSyncTotal ? ' (' . $examSyncTotal . ')' : '' ?>
                     </button>
                     <button class="btn-add" onclick="location.href='course_form.php?action=add'">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
