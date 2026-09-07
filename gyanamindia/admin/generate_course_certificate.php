@@ -136,7 +136,7 @@ if ($grade === 'Fail') {
     die('<b>Error:</b> Certificate cannot be issued — exam score is below passing grade (40%).');
 }
 
-$gradeLine = "and has passed the examination with '" . $grade . "' grade";
+$gradeLine = courseCertificateGradeLine($grade);
 
 // 6. Certificate number — IT: GIIT2026-1; Abacus: legacy course-reg-###
 $dateOfIssue = date('d/m/Y', strtotime($examDate ?: date('Y-m-d')));
@@ -210,13 +210,13 @@ try {
     // ── Coordinate map — blank GIIT course certificate (A4) ──
     $L = courseCertificateOverlayLayout();
 
-    $put($fullName, $L['name_y'], 18, 'BI', '180,0,0');
-    $put($courseName, $L['course_y'], 14, 'B', '180,0,0');
-    $put($conductedAt, $L['atc_y'], 13, 'B', '0,0,128');
-    $put($durationLine, $L['duration_y'], 13, 'B', '30,30,30');
-    $put($gradeLine, $L['grade_y'], 13, 'B', '0,0,128');
-    $putLeft($certNo, $L['cert_x'], $L['cert_y'], 11, 'B', '30,30,30');
-    $putLeft($dateOfIssue, $L['cert_x'], $L['date_y'], 11, 'B', '30,30,30');
+    $put($fullName, $L['name_y'], (float)$L['name_size'], (string)$L['name_style'], (string)$L['name_color']);
+    $put($courseName, $L['course_y'], (float)$L['course_size'], (string)$L['course_style'], (string)$L['course_color']);
+    $put($conductedAt, $L['atc_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
+    $put($durationLine, $L['duration_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
+    $put($gradeLine, $L['grade_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
+    $putLeft($certNo, $L['cert_x'], $L['cert_y'], (float)$L['footer_size'], (string)$L['footer_style'], (string)$L['footer_color']);
+    $putLeft($dateOfIssue, $L['cert_x'], $L['date_y'], (float)$L['footer_size'], (string)$L['footer_style'], (string)$L['footer_color']);
 
     if ($photoPath) {
         try {

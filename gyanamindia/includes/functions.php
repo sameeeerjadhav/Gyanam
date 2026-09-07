@@ -2629,10 +2629,10 @@ function embedCertificateVerifyQr($pdf, string $url, float $x = 168.0, float $y 
 }
 
 /**
- * Overlay layout for GIIT blank course certificate (A4 mm).
- * Tuned so name sits below the Certificate ribbon and photo stays clear of course text.
+ * Overlay layout + typography for GIIT blank course certificate (A4 mm).
+ * Colors/weights match official sample: red name/course, navy ATC/duration/grade.
  *
- * @return array{name_y:float,course_y:float,atc_y:float,duration_y:float,grade_y:float,cert_x:float,cert_y:float,date_y:float,photo_x:float,photo_y:float,photo_w:float,photo_h:float,qr_x:float,qr_y:float,qr_size:float}
+ * @return array<string,float|string>
  */
 function courseCertificateOverlayLayout(): array
 {
@@ -2652,7 +2652,26 @@ function courseCertificateOverlayLayout(): array
         'qr_x' => 160.0,
         'qr_y' => 238.0,
         'qr_size' => 22.0,
+        // Typography (Times) — match sample certificate
+        'name_size' => 20.0,
+        'name_style' => 'B',
+        'name_color' => '192,0,0',
+        'course_size' => 15.0,
+        'course_style' => 'B',
+        'course_color' => '192,0,0',
+        'meta_size' => 13.0,
+        'meta_style' => 'B',
+        'meta_color' => '0,0,128',
+        'footer_size' => 11.0,
+        'footer_style' => 'B',
+        'footer_color' => '30,30,30',
     ];
+}
+
+/** Grade line text matching GIIT sample wording/quotes. */
+function courseCertificateGradeLine(string $grade): string
+{
+    return 'and has passed the examination with "' . $grade . '" grade';
 }
 
 /**
