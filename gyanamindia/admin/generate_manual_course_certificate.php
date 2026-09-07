@@ -184,45 +184,44 @@ try {
         $pdf->Write(0, $text);
     };
 
-    $put($fullName, 128, 20, 'BI', '180,0,0');
-    $put($courseName, 146, 16, 'B', '180,0,0');
-    $put($conductedAt, 161, 14, 'B', '0,0,128');
-    $put($durationLine, 171, 14, 'B', '30,30,30');
-    $put($gradeLine, 181, 14, 'B', '0,0,128');
-    $putLeft($certNo, 38, 248, 11, 'B', '30,30,30');
-    $putLeft($dateOfIssue, 38, 256, 11, 'B', '30,30,30');
+    $L = courseCertificateOverlayLayout();
+
+    $put($fullName, $L['name_y'], 18, 'BI', '180,0,0');
+    $put($courseName, $L['course_y'], 14, 'B', '180,0,0');
+    $put($conductedAt, $L['atc_y'], 13, 'B', '0,0,128');
+    $put($durationLine, $L['duration_y'], 13, 'B', '30,30,30');
+    $put($gradeLine, $L['grade_y'], 13, 'B', '0,0,128');
+    $putLeft($certNo, $L['cert_x'], $L['cert_y'], 11, 'B', '30,30,30');
+    $putLeft($dateOfIssue, $L['cert_x'], $L['date_y'], 11, 'B', '30,30,30');
 
     if ($photoPath) {
         try {
-            $pdf->Image($photoPath, 148, 118, 32, 38, '', '', '', true, 72);
+            $pdf->Image($photoPath, $L['photo_x'], $L['photo_y'], $L['photo_w'], $L['photo_h'], '', '', '', true, 72);
         } catch (Exception $imgE) {
             // skip photo
         }
     }
 
-    $qrTmp = null;
-    if (!$preview) {
-        try {
-            $issued = issueCertificateRecord($pdo, [
-                'cert_no' => $certNo,
-                'student_name' => $fullName,
-                'reg_id' => $regId,
-                'course' => $courseName,
-                'atc_name' => trim((string)($atc['name'] ?? '')),
-                'atc_code' => trim((string)($atc['atc_code'] ?? '')),
-                'score' => $score,
-                'grade' => $grade,
-                'duration' => $duration,
-                'issue_date' => date('Y-m-d', $issueTs),
-                'brand' => $certBrand,
-                'admission_id' => $admissionId > 0 ? $admissionId : null,
-                'issued_by_atc_id' => $sessionAtcId ?: null,
-                'source' => 'manual',
-            ]);
-            $qrTmp = embedCertificateVerifyQr($pdf, $issued['verify_url'], 168, 242, 26);
-        } catch (Throwable $qrE) {
-            // Non-fatal
-        }
+    try {
+        $issued = issueCertificateRecord($pdo, [
+            'cert_no' => $certNo,
+            'student_name' => $fullName,
+            'reg_id' => $regId,
+            'course' => $courseName,
+            'atc_name' => trim((string)($atc['name'] ?? '')),
+            'atc_code' => trim((string)($atc['atc_code'] ?? '')),
+            'score' => $score,
+            'grade' => $grade,
+            'duration' => $duration,
+            'issue_date' => date('Y-m-d', $issueTs),
+            'brand' => $certBrand,
+            'admission_id' => $admissionId > 0 ? $admissionId : null,
+            'issued_by_atc_id' => $sessionAtcId ?: null,
+            'source' => 'manual',
+        ]);
+        embedCertificateVerifyQr($pdf, $issued['verify_url'], $L['qr_x'], $L['qr_y'], $L['qr_size']);
+    } catch (Throwable $qrE) {
+        // Non-fatal
     }
 
     $dest = $preview ? 'I' : 'D';
@@ -233,9 +232,6 @@ try {
         ob_end_clean();
     }
     $pdf->Output($dest, $filename);
-    if ($qrTmp && is_file($qrTmp)) {
-        @unlink($qrTmp);
-    }
     exit;
 } catch (\setasign\Fpdi\PdfParser\CrossReference\CrossReferenceException $e) {
     http_response_code(500);

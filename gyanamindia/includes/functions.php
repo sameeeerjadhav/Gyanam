@@ -2556,13 +2556,13 @@ function findIssuedCertificateByCertNo(PDO $pdo, string $certNo): ?array
 }
 
 /**
- * Generate a QR PNG for $url and place it on the FPDI/FPDF page.
- * Returns temp file path (caller may unlink) or null on failure.
+ * Generate a QR for $url and draw it on the PDF as black modules only
+ * (no white background card). Returns null (no temp file to clean).
  */
-function embedCertificateVerifyQr($pdf, string $url, float $x = 168.0, float $y = 242.0, float $sizeMm = 26.0): ?string
+function embedCertificateVerifyQr($pdf, string $url, float $x = 168.0, float $y = 242.0, float $sizeMm = 24.0): ?string
 {
     $url = trim($url);
-    if ($url === '' || !function_exists('imagepng')) {
+    if ($url === '') {
         return null;
     }
 
@@ -2575,31 +2575,84 @@ function embedCertificateVerifyQr($pdf, string $url, float $x = 168.0, float $y 
     }
 
     try {
-        $generator = new QRCode($url, [
-            's' => 'qrl',
-            'w' => 240,
-            'h' => 240,
-            'p' => 8,
-            'bc' => 'FFFFFF',
-            'fc' => '000000',
-        ]);
-        $image = $generator->render_image();
-        $tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'cert_qr_' . bin2hex(random_bytes(8)) . '.png';
-        if (!imagepng($image, $tmp)) {
-            imagedestroy($image);
+        $generator = new QRCode($url, ['s' => 'qrl']);
+        $ref = new ReflectionClass($generator);
+        $method = $ref->getMethod('dispatch_encode');
+        $method->setAccessible(true);
+        $code = $method->invoke($generator, $url, ['s' => 'qrl']);
+        $matrix = $code['b'] ?? null;
+        if (!is_array($matrix) || $matrix === []) {
             return null;
         }
-        imagedestroy($image);
-        $pdf->Image($tmp, $x, $y, $sizeMm, $sizeMm, 'PNG');
-        // Tiny label under QR
-        $pdf->SetTextColor(60, 60, 60);
-        $pdf->SetFont('Helvetica', '', 6);
-        $pdf->SetXY($x, $y + $sizeMm + 0.5);
-        $pdf->Cell($sizeMm, 3, 'Scan to verify', 0, 0, 'C');
-        return $tmp;
+
+        $rows = count($matrix);
+        $cols = count($matrix[0]);
+        if ($rows < 1 || $cols < 1) {
+            return null;
+        }
+
+        $module = $sizeMm / max($rows, $cols);
+        $drawW = $cols * $module;
+        $drawH = $rows * $module;
+        $ox = $x + ($sizeMm - $drawW) / 2;
+        $oy = $y + ($sizeMm - $drawH) / 2;
+
+        $pdf->SetFillColor(15, 15, 15);
+        $pdf->SetDrawColor(15, 15, 15);
+        $pdf->SetLineWidth(0);
+        foreach ($matrix as $ry => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            foreach ($row as $rx => $dark) {
+                if (!$dark) {
+                    continue;
+                }
+                $pdf->Rect(
+                    $ox + ((int)$rx) * $module,
+                    $oy + ((int)$ry) * $module,
+                    $module + 0.02,
+                    $module + 0.02,
+                    'F'
+                );
+            }
+        }
+
+        $pdf->SetTextColor(50, 50, 50);
+        $pdf->SetFont('Helvetica', '', 5.5);
+        $pdf->SetXY($x, $y + $sizeMm + 0.3);
+        $pdf->Cell($sizeMm, 2.8, 'Scan to verify', 0, 0, 'C');
+        return null;
     } catch (Throwable $e) {
         return null;
     }
+}
+
+/**
+ * Overlay layout for GIIT blank course certificate (A4 mm).
+ * Tuned so name sits below the Certificate ribbon and photo stays clear of course text.
+ *
+ * @return array{name_y:float,course_y:float,atc_y:float,duration_y:float,grade_y:float,cert_x:float,cert_y:float,date_y:float,photo_x:float,photo_y:float,photo_w:float,photo_h:float,qr_x:float,qr_y:float,qr_size:float}
+ */
+function courseCertificateOverlayLayout(): array
+{
+    return [
+        'name_y' => 140.0,
+        'course_y' => 156.0,
+        'atc_y' => 170.0,
+        'duration_y' => 180.0,
+        'grade_y' => 190.0,
+        'cert_x' => 38.0,
+        'cert_y' => 248.0,
+        'date_y' => 256.0,
+        'photo_x' => 162.0,
+        'photo_y' => 102.0,
+        'photo_w' => 28.0,
+        'photo_h' => 34.0,
+        'qr_x' => 170.0,
+        'qr_y' => 238.0,
+        'qr_size' => 22.0,
+    ];
 }
 
 /**
