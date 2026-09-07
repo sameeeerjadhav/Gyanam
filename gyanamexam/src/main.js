@@ -8,13 +8,13 @@
  * - All routes guarded
  */
 
-import router from './services/Router.js?v=2';
+import router from './services/Router.js';
 import { getAuthModule } from './services/AuthenticationModule.js';
-import LoginPage from './pages/LoginPage.js?v=2';
-import { StudentDashboard } from './pages/StudentDashboard.js?v=3';
+import LoginPage from './pages/LoginPage.js?v=3';
+import { StudentDashboard } from './pages/StudentDashboard.js?v=10';
 import ExamPage from './pages/ExamPage.js?v=8';
 import PreExamGate from './pages/PreExamGate.js?v=2';
-import ApiClient from './services/APIClient.js?v=5';
+import ApiClient from './services/APIClient.js?v=6';
 
 // Single shared auth module
 const authModule = getAuthModule();
