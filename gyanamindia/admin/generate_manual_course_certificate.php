@@ -135,35 +135,17 @@ if ($duration === '') {
 $durationLine = 'The course duration is ' . $duration;
 $gradeLine = "and has passed the examination with '" . $grade . "' grade";
 
-$courseAbv = strtoupper(preg_replace('/[^A-Z0-9]/i', '', substr($courseName, 0, 6)));
-$certBase = $courseAbv . '-' . strtoupper(preg_replace('/\s+/', '', $regId));
-$counter = 1;
-try {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS cert_counters (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        reg_id VARCHAR(50) NOT NULL,
-        course VARCHAR(200) NOT NULL,
-        counter INT NOT NULL DEFAULT 1,
-        issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uniq_reg_course (reg_id, course)
-    )");
-    if (!$preview) {
-        $pdo->prepare("INSERT INTO cert_counters (reg_id, course, counter)
-                       VALUES (?, ?, 1)
-                       ON DUPLICATE KEY UPDATE counter = counter + 1")->execute([$regId, $courseName]);
-    } else {
-        $pdo->prepare("INSERT IGNORE INTO cert_counters (reg_id, course, counter) VALUES (?, ?, 1)")
-            ->execute([$regId, $courseName]);
-    }
-    $cRow = $pdo->prepare('SELECT counter FROM cert_counters WHERE reg_id=? AND course=?');
-    $cRow->execute([$regId, $courseName]);
-    $counter = (int)($cRow->fetchColumn() ?: 1);
-} catch (Exception $e) {
-    $counter = 1;
-}
-$certNo = $certBase . '-' . str_pad((string)$counter, 3, '0', STR_PAD_LEFT);
-
 $certBrand = courseCertificateBrand($courseType, $atc['center_type'] ?? null, $courseName);
+$courseAbv = strtoupper(preg_replace('/[^A-Z0-9]/i', '', substr($courseName, 0, 6)));
+$certNo = buildCourseCertificateNumber(
+    $pdo,
+    $certBrand,
+    $regId,
+    $courseName,
+    (int)date('Y', $issueTs),
+    !$preview
+);
+
 $template = courseCertificateTemplateBackground($certBrand);
 if (!$template && $certBrand !== 'abacus') {
     die('<b>Template not found:</b> Upload <code>assets/templates/giit_course_certificate.pdf</code> (and optional PNG fallback).');

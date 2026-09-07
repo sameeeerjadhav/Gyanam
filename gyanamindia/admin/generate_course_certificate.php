@@ -138,43 +138,27 @@ if ($grade === 'Fail') {
 
 $gradeLine = "and has passed the examination with '" . $grade . "' grade";
 
-// 6. Certificate number: CourseName(abbrev) + RegId + counter
-//    e.g. MSCIT-GYANAM1-001
-$courseAbv  = strtoupper(preg_replace('/[^A-Z0-9]/i', '', substr($courseName, 0, 6)));
-$certBase   = $courseAbv . '-' . strtoupper($regId);
-
-// Counter: how many certs have been issued to this student for this course
-try {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS cert_counters (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        reg_id VARCHAR(50) NOT NULL,
-        course VARCHAR(200) NOT NULL,
-        counter INT NOT NULL DEFAULT 1,
-        issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uniq_reg_course (reg_id, course)
-    )");
-    $pdo->prepare("INSERT INTO cert_counters (reg_id, course, counter)
-                   VALUES (?, ?, 1)
-                   ON DUPLICATE KEY UPDATE counter = counter")->execute([$regId, $courseName]);
-    $counter = (int)$pdo->prepare("SELECT counter FROM cert_counters WHERE reg_id=? AND course=?")
-                         ->execute([$regId, $courseName]) ? 1 : 1;
-    $cRow = $pdo->prepare("SELECT counter FROM cert_counters WHERE reg_id=? AND course=?");
-    $cRow->execute([$regId, $courseName]);
-    $counter = (int)($cRow->fetchColumn() ?: 1);
-} catch (\Exception $e) {
-    $counter = 1;
-}
-$certNo = $certBase . '-' . str_pad($counter, 3, '0', STR_PAD_LEFT);
-
-// 7. Date of issue — the day student passed (from exam portal)
+// 6. Certificate number — IT: GIIT2026-1; Abacus: legacy course-reg-###
 $dateOfIssue = date('d/m/Y', strtotime($examDate ?: date('Y-m-d')));
+$issueYear = (int)date('Y', strtotime($examDate ?: date('Y-m-d')));
 
-// ── Template (GIIT for IT courses, Gyanam Abacus for Abacus/Vedic) ───────────
 $certBrand = courseCertificateBrand(
     $student['course_type'] ?? null,
     $student['center_type'] ?? null,
     $courseName
 );
+$courseAbv = strtoupper(preg_replace('/[^A-Z0-9]/i', '', substr($courseName, 0, 6)));
+$preview = isset($_GET['preview']);
+$certNo = buildCourseCertificateNumber(
+    $pdo,
+    $certBrand,
+    $regId,
+    $courseName,
+    $issueYear,
+    !$preview
+);
+
+// ── Template (GIIT for IT courses, Gyanam Abacus for Abacus/Vedic) ───────────
 $template = courseCertificateTemplateBackground($certBrand);
 if (!$template && $certBrand !== 'abacus') {
     die('<b>Template not found:</b> Upload <code>assets/templates/giit_course_certificate.pdf</code> (and optional PNG fallback).');

@@ -2340,6 +2340,94 @@ function atcCanUseManualCourseCertificate(?int $atcId, ?string $atcCode = null):
 }
 
 /**
+ * Allocate / peek IT (GIIT) certificate numbers: GIIT2026-1, GIIT2026-2, …
+ * When $allocate is false (preview), returns the next number without consuming it.
+ */
+function nextGiitCertificateNumber(PDO $pdo, ?int $year = null, bool $allocate = true): string
+{
+    $year = $year ?: (int)date('Y');
+    if ($year < 2000 || $year > 2100) {
+        $year = (int)date('Y');
+    }
+
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS giit_cert_series (
+            series_year INT NOT NULL PRIMARY KEY,
+            last_no INT NOT NULL DEFAULT 0,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )");
+
+        if ($allocate) {
+            $pdo->beginTransaction();
+            $pdo->prepare('INSERT INTO giit_cert_series (series_year, last_no) VALUES (?, 0)
+                           ON DUPLICATE KEY UPDATE series_year = series_year')->execute([$year]);
+            $st = $pdo->prepare('SELECT last_no FROM giit_cert_series WHERE series_year = ? FOR UPDATE');
+            $st->execute([$year]);
+            $next = (int)$st->fetchColumn() + 1;
+            $pdo->prepare('UPDATE giit_cert_series SET last_no = ? WHERE series_year = ?')->execute([$next, $year]);
+            $pdo->commit();
+            return 'GIIT' . $year . '-' . $next;
+        }
+
+        $pdo->prepare('INSERT IGNORE INTO giit_cert_series (series_year, last_no) VALUES (?, 0)')->execute([$year]);
+        $st = $pdo->prepare('SELECT last_no FROM giit_cert_series WHERE series_year = ?');
+        $st->execute([$year]);
+        $next = (int)$st->fetchColumn() + 1;
+        return 'GIIT' . $year . '-' . $next;
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return 'GIIT' . $year . '-1';
+    }
+}
+
+/**
+ * Build certificate number for a course brand.
+ * IT → GIIT{year}-{n}; Abacus/other → courseAbbrev-regId-### (legacy).
+ */
+function buildCourseCertificateNumber(
+    PDO $pdo,
+    string $brand,
+    string $regId,
+    string $courseName,
+    ?int $issueYear = null,
+    bool $allocate = true
+): string {
+    if ($brand === 'it' || $brand === '') {
+        return nextGiitCertificateNumber($pdo, $issueYear, $allocate);
+    }
+
+    $courseAbv = strtoupper(preg_replace('/[^A-Z0-9]/i', '', substr($courseName, 0, 6)));
+    $certBase = $courseAbv . '-' . strtoupper(preg_replace('/\s+/', '', $regId));
+    $counter = 1;
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS cert_counters (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            reg_id VARCHAR(50) NOT NULL,
+            course VARCHAR(200) NOT NULL,
+            counter INT NOT NULL DEFAULT 1,
+            issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_reg_course (reg_id, course)
+        )");
+        if ($allocate) {
+            $pdo->prepare("INSERT INTO cert_counters (reg_id, course, counter)
+                           VALUES (?, ?, 1)
+                           ON DUPLICATE KEY UPDATE counter = counter + 1")->execute([$regId, $courseName]);
+        } else {
+            $pdo->prepare("INSERT IGNORE INTO cert_counters (reg_id, course, counter) VALUES (?, ?, 1)")
+                ->execute([$regId, $courseName]);
+        }
+        $cRow = $pdo->prepare('SELECT counter FROM cert_counters WHERE reg_id=? AND course=?');
+        $cRow->execute([$regId, $courseName]);
+        $counter = (int)($cRow->fetchColumn() ?: 1);
+    } catch (Exception $e) {
+        $counter = 1;
+    }
+    return $certBase . '-' . str_pad((string)$counter, 3, '0', STR_PAD_LEFT);
+}
+
+/**
  * Drawn Gyanam Abacus completion certificate frame (used when no official PDF/PNG is uploaded).
  * Field positions match GIIT overlay coordinates in generate_course_certificate.php.
  */
