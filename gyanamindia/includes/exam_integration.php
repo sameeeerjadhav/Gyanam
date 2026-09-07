@@ -492,34 +492,64 @@ function deletePortalUserFromExam(string $username): array
  */
 function syncCoursesToExamPortal(PDO $pdo): array
 {
-    // Prefer all courses; fall back if status column missing on older DBs
+    // Exam portal QB/exams use IT courses only — push all Active IT courses
     try {
         $stmt = $pdo->query("
             SELECT id, course_name, course_type, duration, status
             FROM courses
-            ORDER BY
-              CASE WHEN status = 'Active' THEN 0 ELSE 1 END,
-              course_name ASC
+            WHERE status = 'Active'
+              AND UPPER(TRIM(COALESCE(course_type, ''))) = 'IT'
+            ORDER BY course_name ASC
         ");
     } catch (Throwable $e) {
-        $stmt = $pdo->query("SELECT id, course_name, course_type, duration FROM courses ORDER BY course_name ASC");
+        // Older DBs may lack status / course_type
+        try {
+            $stmt = $pdo->query("
+                SELECT id, course_name, course_type, duration, 'Active' AS status
+                FROM courses
+                WHERE UPPER(TRIM(COALESCE(course_type, ''))) = 'IT'
+                ORDER BY course_name ASC
+            ");
+        } catch (Throwable $e2) {
+            $stmt = $pdo->query("SELECT id, course_name, course_type, duration FROM courses ORDER BY course_name ASC");
+        }
     }
     $courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Normalize status for older rows
-    foreach ($courses as &$c) {
-        if (!isset($c['status']) || $c['status'] === '' || $c['status'] === null) {
-            $c['status'] = 'Active';
+    // Normalize + keep only IT Active (in case of fallback query)
+    $normalized = [];
+    foreach ($courses as $c) {
+        $status = trim((string)($c['status'] ?? 'Active'));
+        if ($status === '') {
+            $status = 'Active';
         }
+        $type = strtoupper(trim((string)($c['course_type'] ?? '')));
+        if ($type !== 'IT') {
+            continue;
+        }
+        if (strcasecmp($status, 'Active') !== 0) {
+            continue;
+        }
+        $name = trim((string)($c['course_name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+        $normalized[] = [
+            'id'          => $c['id'] ?? null,
+            'course_name' => $name,
+            'course_type' => $c['course_type'] ?? 'IT',
+            'duration'    => $c['duration'] ?? null,
+            'status'      => 'Active',
+        ];
     }
-    unset($c);
+    $courses = $normalized;
 
     $sourceCount = count($courses);
     if ($sourceCount === 0) {
         return [
             'success'   => false,
             'data'      => ['source_count' => 0, 'count' => 0],
-            'error'     => 'No courses found in the main portal database to sync.',
+            'error'     => 'No Active IT courses found in the main portal database to sync.',
             'http_code' => 0,
         ];
     }
@@ -531,7 +561,7 @@ function syncCoursesToExamPortal(PDO $pdo): array
 
     if (empty($result['success'])) {
         $err = $result['error'] ?? 'Sync failed';
-        $result['error'] = $err . " (tried to push {$sourceCount} course(s) from main portal DB)";
+        $result['error'] = $err . " (tried to push {$sourceCount} Active IT course(s) from main portal DB)";
         $result['data'] = array_merge(is_array($result['data'] ?? null) ? $result['data'] : [], [
             'source_count' => $sourceCount,
         ]);
@@ -539,7 +569,7 @@ function syncCoursesToExamPortal(PDO $pdo): array
     }
 
     // Confirm the exam API actually stored the full list (catches silent write failures)
-    $verify = examApi_request('GET', '/portal-courses', [], false, 20);
+    $verify = examApi_request('GET', '/portal-courses?fresh=1', [], false, 20);
     $verifiedCount = null;
     if (!empty($verify['success']) && is_array($verify['data']['courses'] ?? null)) {
         $verifiedCount = count($verify['data']['courses']);
@@ -549,24 +579,24 @@ function syncCoursesToExamPortal(PDO $pdo): array
     $data['source_count'] = $sourceCount;
     $data['count'] = $sourceCount;
     $data['verified_count'] = $verifiedCount;
-    $data['message'] = "{$sourceCount} course(s) pushed to Exam Portal.";
+    $data['message'] = "{$sourceCount} Active IT course(s) pushed to Exam Portal.";
 
     if ($verifiedCount === null) {
         $result['success'] = false;
-        $result['error'] = "Pushed {$sourceCount} course(s), but could not verify exam portal storage. Check EXAM_API_URL / token.";
+        $result['error'] = "Pushed {$sourceCount} Active IT course(s), but could not verify exam portal storage. Check EXAM_API_URL / token.";
         $result['data'] = $data;
         return $result;
     }
 
     if ($verifiedCount < $sourceCount) {
         $result['success'] = false;
-        $result['error'] = "Pushed {$sourceCount} course(s), but exam portal still has only {$verifiedCount}. "
+        $result['error'] = "Pushed {$sourceCount} Active IT course(s), but exam portal still has only {$verifiedCount}. "
             . 'Check write permissions on gyanam-backend/storage/app (portal_courses.json).';
         $result['data'] = $data;
         return $result;
     }
 
-    $data['message'] = "{$verifiedCount} course(s) synced and verified on Exam Portal.";
+    $data['message'] = "{$verifiedCount} Active IT course(s) synced and verified on Exam Portal.";
     $result['data'] = $data;
     return $result;
 }

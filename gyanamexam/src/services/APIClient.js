@@ -241,7 +241,10 @@ class ApiClient {
   /** Returns { centres: [{code, name}] } — real ATC centres from users table */
   static getPortalCentres() { return this.get('/portal-centres'); }
   /** Returns { courses: [{id, course_name, course_type}] } — synced courses */
-  static getPortalCourses() { return this.get('/portal-courses'); }
+  static getPortalCourses({ fresh = false } = {}) {
+    const q = fresh ? '?fresh=1' : '';
+    return this.get('/portal-courses' + q);
+  }
   /** Returns { centres: [{code, name, centre_type, district, state}], types: [...] } */
   static getPortalATCCentres() { return this.get('/portal-atc-centres'); }
 

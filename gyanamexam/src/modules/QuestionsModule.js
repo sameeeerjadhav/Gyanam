@@ -16,16 +16,17 @@ let _atcDataCache    = null; // { centres: [{code,name,centre_type,...}], types:
 async function getPortalCourses(ApiClient, { force = false } = {}) {
   if (!force && _coursesCache) return _coursesCache;
   try {
-    const res = await ApiClient.getPortalCourses();
+    const res = await ApiClient.getPortalCourses({ fresh: !!force });
     const list = Array.isArray(res.courses) ? res.courses : [];
     _coursesSyncedAt = res.synced_at || null;
-    // Active first, then name — keep Inactive available for QBs
-    _coursesCache = [...list].sort((a, b) => {
-      const aInactive = String(a.status || 'Active').toLowerCase() === 'inactive' ? 1 : 0;
-      const bInactive = String(b.status || 'Active').toLowerCase() === 'inactive' ? 1 : 0;
-      if (aInactive !== bInactive) return aInactive - bInactive;
-      return String(a.course_name || '').localeCompare(String(b.course_name || ''));
-    });
+    // Exam portal: Active IT only (API already filters; keep a client safeguard)
+    _coursesCache = list
+      .filter(c => {
+        const type = String(c.course_type || '').trim().toUpperCase();
+        const status = String(c.status || 'Active').trim().toLowerCase();
+        return type === 'IT' && status !== 'inactive';
+      })
+      .sort((a, b) => String(a.course_name || '').localeCompare(String(b.course_name || '')));
   } catch (e) {
     _coursesCache = [];
     _coursesSyncedAt = null;
@@ -34,23 +35,31 @@ async function getPortalCourses(ApiClient, { force = false } = {}) {
 }
 
 function courseSubjectFieldHtml(courses, selectedValue = '', inputId = 'nb-subject') {
-  const selected = selectedValue || '';
+  const selected = String(selectedValue || '');
   const options = (courses || []).map(c => {
     const val = String(c.course_name || '');
-    const inactive = String(c.status || 'Active').toLowerCase() === 'inactive';
-    const typePart = c.course_type ? ` (${c.course_type})` : '';
-    const label = inactive ? `${val}${typePart} — Inactive` : `${val}${typePart}`;
-    return `<option value="${val.replace(/"/g, '&quot;')}">${label.replace(/</g, '&lt;')}</option>`;
+    const sel = val === selected ? ' selected' : '';
+    const dur = c.duration ? ` · ${String(c.duration).replace(/</g, '&lt;')}` : '';
+    return `<option value="${val.replace(/"/g, '&quot;')}"${sel}>${val.replace(/</g, '&lt;')}${dur}</option>`;
   }).join('');
   const syncHint = _coursesSyncedAt
     ? ` Last sync: ${String(_coursesSyncedAt).replace('T', ' ').slice(0, 19)}.`
     : '';
+  const selectedAttr = selected.replace(/"/g, '&quot;');
+  // Keep selected value even if not in synced list (legacy banks)
+  const orphan = selected && !(courses || []).some(c => String(c.course_name || '') === selected)
+    ? `<option value="${selectedAttr}" selected>${selected.replace(/</g, '&lt;')} (current)</option>`
+    : '';
   return `
-    <input id="${inputId}" class="form-input" list="${inputId}-list" autocomplete="off"
-      placeholder="Type or pick a course…" value="${String(selected).replace(/"/g, '&quot;')}">
-    <datalist id="${inputId}-list">${options}</datalist>
+    <input type="search" id="${inputId}-filter" class="form-input" autocomplete="off"
+      placeholder="Filter IT courses…" style="margin-bottom:0.4rem">
+    <select id="${inputId}" class="form-input" size="8" style="height:auto;min-height:10.5rem">
+      <option value="">— Select an Active IT course —</option>
+      ${orphan}
+      ${options}
+    </select>
     <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.35rem">
-      ${(courses || []).length} course(s) from main portal — you can also type any course name.${syncHint}
+      ${(courses || []).length} Active IT course(s) from main portal.${syncHint}
       <button type="button" id="nb-refresh-courses" class="btn btn-ghost btn-sm" style="padding:0 0.35rem;font-size:0.75rem">Refresh list</button>
     </p>`;
 }
@@ -410,12 +419,25 @@ function showNewBankModal(ApiClient, currentUser, bank = null, courses = []) {
     try {
       const fresh = await getPortalCourses(ApiClient, { force: true });
       showNewBankModal(ApiClient, currentUser, bank, fresh);
-      modalService.toast(fresh.length ? `${fresh.length} course(s) loaded` : 'Still no courses — sync from main portal Admin › Courses', fresh.length ? 'success' : 'error');
+      modalService.toast(fresh.length ? `${fresh.length} Active IT course(s) loaded` : 'Still no Active IT courses — sync from main portal Admin › Courses', fresh.length ? 'success' : 'error');
     } catch (e) {
       modalService.toast('Refresh failed: ' + e.message, 'error');
       if (btn) { btn.disabled = false; btn.textContent = 'Refresh list'; }
     }
   });
+
+  const filterEl = document.getElementById('nb-subject-filter');
+  const selectEl = document.getElementById('nb-subject');
+  if (filterEl && selectEl) {
+    filterEl.addEventListener('input', () => {
+      const q = filterEl.value.trim().toLowerCase();
+      Array.from(selectEl.options).forEach((opt, i) => {
+        if (i === 0 && !opt.value) { opt.hidden = false; return; }
+        const hay = String(opt.textContent || opt.value || '').toLowerCase();
+        opt.hidden = q !== '' && !hay.includes(q);
+      });
+    });
+  }
 
   window.saveBank = async (bankId) => {
     const title = document.getElementById('nb-title').value.trim();

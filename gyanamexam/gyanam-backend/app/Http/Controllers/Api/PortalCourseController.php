@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Log;
  * Receives course data synced from the Gyanam India main portal.
  * Stores courses in JSON + Laravel cache so the exam portal admin frontend
  * can populate QB / exam subject dropdowns with real course names.
+ *
+ * Exam portal lists Active IT courses only.
  */
 class PortalCourseController extends Controller
 {
@@ -24,32 +26,81 @@ class PortalCourseController extends Controller
     }
 
     /**
-     * @return array{synced_at:?string,courses:array}
+     * Keep Active IT courses only (case-insensitive).
+     *
+     * @param  array<int,mixed>  $courses
+     * @return array<int,array<string,mixed>>
      */
-    private function readPayload(): array
+    private function filterExamCourses(array $courses): array
     {
-        $cached = Cache::get(self::CACHE_KEY);
-        if (is_array($cached) && isset($cached['courses']) && is_array($cached['courses'])) {
-            return [
-                'synced_at' => $cached['synced_at'] ?? null,
-                'courses'   => $cached['courses'],
+        $out = [];
+        foreach ($courses as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $name = trim((string) ($row['course_name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $type = strtoupper(trim((string) ($row['course_type'] ?? '')));
+            $status = strtoupper(trim((string) ($row['status'] ?? 'Active')));
+            if ($status === '') {
+                $status = 'Active';
+            }
+            if ($type !== 'IT' || $status !== 'ACTIVE') {
+                continue;
+            }
+            $out[] = [
+                'id'          => $row['id'] ?? null,
+                'course_name' => $name,
+                'course_type' => $row['course_type'] ?? 'IT',
+                'duration'    => $row['duration'] ?? null,
+                'status'      => 'Active',
             ];
         }
 
+        usort($out, static function ($a, $b) {
+            return strcasecmp((string) $a['course_name'], (string) $b['course_name']);
+        });
+
+        return array_values($out);
+    }
+
+    /**
+     * Prefer on-disk JSON (source of truth after sync), then refresh cache.
+     *
+     * @return array{synced_at:?string,courses:array}
+     */
+    private function readPayload(bool $bypassCache = false): array
+    {
         $path = $this->cachePath();
-        if (!file_exists($path)) {
-            return ['synced_at' => null, 'courses' => []];
+        if (file_exists($path)) {
+            $data = json_decode((string) file_get_contents($path), true);
+            if (is_array($data) && isset($data['courses']) && is_array($data['courses'])) {
+                $payload = [
+                    'synced_at' => $data['synced_at'] ?? null,
+                    'courses'   => $data['courses'],
+                ];
+                try {
+                    Cache::forever(self::CACHE_KEY, $payload);
+                } catch (\Throwable $e) {
+                    // non-fatal
+                }
+                return $payload;
+            }
         }
 
-        $data = json_decode((string) file_get_contents($path), true);
-        if (!is_array($data)) {
-            return ['synced_at' => null, 'courses' => []];
+        if (!$bypassCache) {
+            $cached = Cache::get(self::CACHE_KEY);
+            if (is_array($cached) && isset($cached['courses']) && is_array($cached['courses'])) {
+                return [
+                    'synced_at' => $cached['synced_at'] ?? null,
+                    'courses'   => $cached['courses'],
+                ];
+            }
         }
 
-        return [
-            'synced_at' => $data['synced_at'] ?? null,
-            'courses'   => is_array($data['courses'] ?? null) ? $data['courses'] : [],
-        ];
+        return ['synced_at' => null, 'courses' => []];
     }
 
     /**
@@ -69,28 +120,11 @@ class PortalCourseController extends Controller
             return response()->json(['message' => 'Invalid courses payload.'], 422);
         }
 
-        // Re-index and drop empty names
-        $normalized = [];
-        foreach ($courses as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            $name = trim((string) ($row['course_name'] ?? ''));
-            if ($name === '') {
-                continue;
-            }
-            $normalized[] = [
-                'id'          => $row['id'] ?? null,
-                'course_name' => $name,
-                'course_type' => $row['course_type'] ?? null,
-                'duration'    => $row['duration'] ?? null,
-                'status'      => $row['status'] ?? 'Active',
-            ];
-        }
+        $normalized = $this->filterExamCourses($courses);
 
         $payload = [
             'synced_at' => now()->toISOString(),
-            'courses'   => array_values($normalized),
+            'courses'   => $normalized,
         ];
 
         $dir = dirname($this->cachePath());
@@ -104,6 +138,13 @@ class PortalCourseController extends Controller
         $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         if ($json === false) {
             return response()->json(['message' => 'Failed to encode courses JSON.'], 500);
+        }
+
+        // Drop stale cache before write so readers never see the old short list
+        try {
+            Cache::forget(self::CACHE_KEY);
+        } catch (\Throwable $e) {
+            // ignore
         }
 
         $written = @file_put_contents($this->cachePath(), $json, LOCK_EX);
@@ -120,9 +161,8 @@ class PortalCourseController extends Controller
             Log::warning('portal_courses: cache write failed: ' . $e->getMessage());
         }
 
-        // Re-read to confirm persistence before acknowledging success
-        $stored = $this->readPayload();
-        $storedCount = count($stored['courses']);
+        $stored = $this->readPayload(true);
+        $storedCount = count($this->filterExamCourses($stored['courses']));
         if ($storedCount < count($payload['courses'])) {
             return response()->json([
                 'message' => 'Course cache write did not persist (got ' . $storedCount . ' of ' . count($payload['courses']) . ').',
@@ -131,7 +171,7 @@ class PortalCourseController extends Controller
         }
 
         return response()->json([
-            'message'   => $storedCount . ' courses synced successfully.',
+            'message'   => $storedCount . ' Active IT courses synced successfully.',
             'count'     => $storedCount,
             'synced_at' => $payload['synced_at'],
         ]);
@@ -140,24 +180,34 @@ class PortalCourseController extends Controller
     /**
      * Get the list of synced courses (for exam portal frontend dropdowns).
      * GET /api/v1/portal-courses
+     * Optional: ?fresh=1 to ignore stale in-memory assumptions and re-read file.
      */
     public function index(Request $request)
     {
-        $data = $this->readPayload();
+        if ($request->boolean('fresh')) {
+            try {
+                Cache::forget(self::CACHE_KEY);
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
 
-        if (empty($data['courses'])) {
+        $data = $this->readPayload((bool) $request->boolean('fresh'));
+        $courses = $this->filterExamCourses($data['courses'] ?? []);
+
+        if (empty($courses)) {
             return response()->json([
                 'courses'   => [],
                 'synced_at' => $data['synced_at'],
                 'count'     => 0,
-                'message'   => 'No courses synced yet. Please sync from the main portal.',
+                'message'   => 'No Active IT courses synced yet. Sync from Gyanam India Admin › Courses.',
             ]);
         }
 
         return response()->json([
-            'courses'   => $data['courses'],
+            'courses'   => $courses,
             'synced_at' => $data['synced_at'],
-            'count'     => count($data['courses']),
+            'count'     => count($courses),
         ]);
     }
 }
