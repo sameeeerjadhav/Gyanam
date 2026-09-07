@@ -130,13 +130,13 @@ $conductedPreview = trim((string)$atc['name']) . ($atcCity !== '' ? ', ' . $atcC
         .form-hint { font-size: .75rem; color: #64748b; margin-top: .25rem; font-weight: 500; }
         .form-actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.25rem; }
         .btn-gen {
-            height: 44px; padding: 0 1.25rem; border: none; border-radius: 10px;
-            font-weight: 800; font-size: .9rem; cursor: pointer; color: #fff;
+            height: 44px; padding: 0 1.1rem; border: none; border-radius: 10px;
+            font-weight: 800; font-size: .85rem; cursor: pointer; color: #fff;
             background: linear-gradient(135deg, #4361ee, #7c3aed);
         }
         .btn-preview {
-            height: 44px; padding: 0 1.15rem; border-radius: 10px; font-weight: 800;
-            font-size: .9rem; cursor: pointer; background: #fff; color: #334155;
+            height: 44px; padding: 0 1rem; border-radius: 10px; font-weight: 800;
+            font-size: .85rem; cursor: pointer; background: #fff; color: #334155;
             border: 1.5px solid #e2e8f0;
         }
         .btn-gen:disabled, .btn-preview:disabled { opacity: .45; cursor: not-allowed; }
@@ -198,8 +198,8 @@ $conductedPreview = trim((string)$atc['name']) . ($atcCity !== '' ? ', ' . $atcC
         <div class="page-content">
             <div class="manual-wrap">
                 <div class="manual-note">
-                    Select a student — name, course, registration ID, duration and photo load automatically.
-                    Enter only the marks, then generate the certificate (exam not required).
+                    Select a student — details load automatically. Enter only the marks, then generate
+                    <strong>Certificate</strong> and <strong>Marksheet</strong> (exam not required).
                 </div>
 
                 <span class="meta-chip">Conducted at: <?= htmlspecialchars($conductedPreview) ?></span>
@@ -271,8 +271,18 @@ $conductedPreview = trim((string)$atc['name']) . ($atcCity !== '' ? ', ' . $atcC
                             </div>
 
                             <div class="form-actions">
-                                <button type="submit" name="preview" value="1" class="btn-preview" id="btnPreview" disabled>Preview PDF</button>
-                                <button type="submit" class="btn-gen" id="btnGenerate" disabled>Generate &amp; Download</button>
+                                <button type="submit" name="preview" value="1"
+                                        formaction="../admin/generate_manual_course_certificate.php"
+                                        class="btn-preview" id="btnPreviewCert" disabled>Preview Certificate</button>
+                                <button type="submit"
+                                        formaction="../admin/generate_manual_course_certificate.php"
+                                        class="btn-gen" id="btnDownloadCert" disabled>Download Certificate</button>
+                                <button type="submit" name="preview" value="1"
+                                        formaction="../admin/generate_manual_marksheet.php"
+                                        class="btn-preview" id="btnPreviewMarks" disabled>Preview Marksheet</button>
+                                <button type="submit"
+                                        formaction="../admin/generate_manual_marksheet.php"
+                                        class="btn-gen" id="btnDownloadMarks" disabled>Download Marksheet</button>
                             </div>
                         </div>
                     </form>
@@ -292,15 +302,18 @@ const select = document.getElementById('studentSelect');
 const panel = document.getElementById('detailsPanel');
 const admissionId = document.getElementById('admissionId');
 const scoreInput = document.getElementById('scoreInput');
-const btnPreview = document.getElementById('btnPreview');
-const btnGenerate = document.getElementById('btnGenerate');
+const actionBtns = [
+    document.getElementById('btnPreviewCert'),
+    document.getElementById('btnDownloadCert'),
+    document.getElementById('btnPreviewMarks'),
+    document.getElementById('btnDownloadMarks'),
+];
 const photoPreview = document.getElementById('photoPreview');
 const photoPlaceholder = document.getElementById('photoPlaceholder');
 
 function setEnabled(on) {
     scoreInput.disabled = !on;
-    btnPreview.disabled = !on;
-    btnGenerate.disabled = !on;
+    actionBtns.forEach(btn => { if (btn) btn.disabled = !on; });
 }
 
 if (select) {
