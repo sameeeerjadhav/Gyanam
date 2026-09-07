@@ -2300,6 +2300,46 @@ function courseCertificateTemplateBackground(string $variant = 'it'): ?array {
 }
 
 /**
+ * Temporary: ATC codes allowed to issue course certificates without an exam result.
+ * Edit this list to enable/disable centers. Empty = nobody.
+ */
+function manualCourseCertificateAllowedAtcCodes(): array
+{
+    return [
+        '202600002', // Netview EduNxt — temp manual certificate (no exam)
+    ];
+}
+
+function atcCanUseManualCourseCertificate(?int $atcId, ?string $atcCode = null): bool
+{
+    $codes = manualCourseCertificateAllowedAtcCodes();
+    if (empty($codes)) {
+        return false;
+    }
+    $code = trim((string)$atcCode);
+    if ($code !== '' && in_array($code, $codes, true)) {
+        return true;
+    }
+    // Resolve code from id when session code is missing
+    if ($atcId && $atcId > 0) {
+        try {
+            $pdo = function_exists('getDBConnection') ? getDBConnection() : null;
+            if ($pdo) {
+                $st = $pdo->prepare('SELECT atc_code FROM atc_centers WHERE id = ? LIMIT 1');
+                $st->execute([$atcId]);
+                $dbCode = trim((string)($st->fetchColumn() ?: ''));
+                if ($dbCode !== '' && in_array($dbCode, $codes, true)) {
+                    return true;
+                }
+            }
+        } catch (Exception $e) {
+            // ignore
+        }
+    }
+    return false;
+}
+
+/**
  * Drawn Gyanam Abacus completion certificate frame (used when no official PDF/PNG is uploaded).
  * Field positions match GIIT overlay coordinates in generate_course_certificate.php.
  */
