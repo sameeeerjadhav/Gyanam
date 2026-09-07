@@ -78,36 +78,42 @@ export async function renderExamForm(ApiClient, { loadPage }) {
       }).join('')
     : '<option value="">No question banks created yet</option>';
 
-  // Prefer Active courses first; still list Inactive for completeness
-  if (Array.isArray(courses) && courses.length > 1) {
-    courses.sort((a, b) => {
-      const aInactive = String(a.status || 'Active').toLowerCase() === 'inactive' ? 1 : 0;
-      const bInactive = String(b.status || 'Active').toLowerCase() === 'inactive' ? 1 : 0;
-      if (aInactive !== bInactive) return aInactive - bInactive;
-      return String(a.course_name || '').localeCompare(String(b.course_name || ''));
-    });
+  // Active IT courses only for exam subject
+  if (Array.isArray(courses) && courses.length) {
+    courses = courses
+      .filter(c => {
+        const type = String(c.course_type || '').trim().toUpperCase();
+        const status = String(c.status || 'Active').trim().toLowerCase();
+        return type === 'IT' && status !== 'inactive';
+      })
+      .sort((a, b) => String(a.course_name || '').localeCompare(String(b.course_name || '')));
   }
 
   let subjectField;
   if (courses.length > 0) {
+    const cur = String(exam?.subject || '');
     const opts = courses.map(c => {
       const val = String(c.course_name || '');
-      const inactive = String(c.status || 'Active').toLowerCase() === 'inactive';
-      const label = c.course_type
-        ? `${val} (${c.course_type})${inactive ? ' — Inactive' : ''}`
-        : `${val}${inactive ? ' — Inactive' : ''}`;
-      return `<option value="${val.replace(/"/g, '&quot;')}">${label.replace(/</g, '&lt;')}</option>`;
+      const sel = val === cur ? ' selected' : '';
+      const dur = c.duration ? ` · ${String(c.duration).replace(/</g, '&lt;')}` : '';
+      return `<option value="${val.replace(/"/g, '&quot;')}"${sel}>${val.replace(/</g, '&lt;')}${dur}</option>`;
     }).join('');
-    const cur = String(exam?.subject || '').replace(/"/g, '&quot;');
+    const orphan = cur && !courses.some(c => String(c.course_name || '') === cur)
+      ? `<option value="${cur.replace(/"/g, '&quot;')}" selected>${cur.replace(/</g, '&lt;')} (current)</option>`
+      : '';
     subjectField = `
-      <input id="ex-subj" class="form-input" list="ex-subj-list" autocomplete="off"
-        value="${cur}" placeholder="Type or pick a course…">
-      <datalist id="ex-subj-list">${opts}</datalist>
-      <p class="field-hint">${courses.length} course(s) from main portal — type any name if missing. Sync from Gyanam India Admin › Courses.</p>`;
+      <input type="search" id="ex-subj-filter" class="form-input" autocomplete="off"
+        placeholder="Filter IT courses…" style="margin-bottom:0.4rem">
+      <select id="ex-subj" class="form-input" size="8" style="height:auto;min-height:10.5rem">
+        <option value="">— Select an Active IT course —</option>
+        ${orphan}
+        ${opts}
+      </select>
+      <p class="field-hint">${courses.length} Active IT course(s) from main portal. Sync from Gyanam India Admin › Courses.</p>`;
   } else {
     subjectField = `
-      <input id="ex-subj" class="form-input" value="${exam?.subject || ''}" placeholder="e.g. Abacus Level 1, DCA…">
-      <p class="field-hint">No synced list yet — type a course name, or sync from Gyanam India Admin › Courses → Sync to Exam Portal.</p>`;
+      <input id="ex-subj" class="form-input" value="${exam?.subject || ''}" placeholder="No Active IT courses synced yet">
+      <p class="field-hint">Sync Active IT courses from Gyanam India Admin › Courses → Sync to Exam Portal.</p>`;
   }
 
   el.innerHTML = `
@@ -235,6 +241,19 @@ export async function renderExamForm(ApiClient, { loadPage }) {
   };
   document.getElementById('exam-form-back')?.addEventListener('click', goBack);
   document.getElementById('exam-form-cancel')?.addEventListener('click', goBack);
+
+  const exFilter = document.getElementById('ex-subj-filter');
+  const exSelect = document.getElementById('ex-subj');
+  if (exFilter && exSelect && exSelect.tagName === 'SELECT') {
+    exFilter.addEventListener('input', () => {
+      const q = exFilter.value.trim().toLowerCase();
+      Array.from(exSelect.options).forEach((opt, i) => {
+        if (i === 0 && !opt.value) { opt.hidden = false; return; }
+        const hay = String(opt.textContent || opt.value || '').toLowerCase();
+        opt.hidden = q !== '' && !hay.includes(q);
+      });
+    });
+  }
 
   document.getElementById('exam-form-save')?.addEventListener('click', async () => {
     const title = document.getElementById('ex-title').value.trim();
