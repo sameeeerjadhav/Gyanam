@@ -2680,6 +2680,42 @@ function embedCertificateVerifyQr($pdf, string $url, float $x = 168.0, float $y 
 }
 
 /**
+ * Start a one-page A4 FPDI document for course certificates.
+ * Forces A4 + disables auto page-break so Corel blanks (~185×275mm MediaBox)
+ * cannot spill photo/QR/footer onto extra pages.
+ *
+ * @param array{type?:string,path?:string}|null $template
+ * @return array{0:\setasign\Fpdi\Fpdi,1:float,2:float}
+ */
+function beginCourseCertificatePdf(?array $template): array
+{
+    if (!class_exists(\setasign\Fpdi\Fpdi::class, false)) {
+        $autoload = __DIR__ . '/../assets/fpdi/fpdi_autoload.php';
+        if (is_file($autoload)) {
+            require_once $autoload;
+        }
+    }
+
+    $pdf = new \setasign\Fpdi\Fpdi();
+    $W = 210.0;
+    $H = 297.0;
+    $pdf->SetAutoPageBreak(false);
+    $pdf->SetMargins(0, 0, 0);
+    $pdf->AddPage('P', [$W, $H]);
+
+    if ($template && ($template['type'] ?? '') === 'pdf' && !empty($template['path']) && is_file($template['path'])) {
+        $pdf->setSourceFile($template['path']);
+        $tplId = $pdf->importPage(1);
+        // Stretch blank to A4 so overlay coords stay consistent
+        $pdf->useTemplate($tplId, 0, 0, $W, $H);
+    } elseif ($template && ($template['type'] ?? '') === 'png' && !empty($template['path']) && is_file($template['path'])) {
+        $pdf->Image($template['path'], 0, 0, $W, $H, 'PNG');
+    }
+
+    return [$pdf, $W, $H];
+}
+
+/**
  * Overlay layout + typography for GIIT blank course certificate (A4 mm).
  * Full body block matches official sample line order.
  *

@@ -154,19 +154,8 @@ if (!$template && $certBrand !== 'abacus') {
 }
 
 try {
-    $pdf = new Fpdi();
-    $W = (is_array($template) && !empty($template['width'])) ? (float)$template['width'] : 210.0;
-    $H = (is_array($template) && !empty($template['height'])) ? (float)$template['height'] : 297.0;
-
-    $pdf->AddPage($W > $H ? 'L' : 'P', [$W, $H]);
-
-    if ($template && $template['type'] === 'pdf') {
-        $pdf->setSourceFile($template['path']);
-        $tplId = $pdf->importPage(1);
-        $pdf->useTemplate($tplId, 0, 0, $W, $H);
-    } elseif ($template && $template['type'] === 'png') {
-        $pdf->Image($template['path'], 0, 0, $W, $H, 'PNG');
-    } else {
+    [$pdf, $W, $H] = beginCourseCertificatePdf($template);
+    if (!$template || (($template['type'] ?? '') !== 'pdf' && ($template['type'] ?? '') !== 'png')) {
         gyanamAbacusCourseCertificateDrawFrame($pdf, $W, $H);
     }
 
