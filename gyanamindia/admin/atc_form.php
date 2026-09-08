@@ -14,10 +14,13 @@ requireLogin(['Admin']);
 $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 ensureAtcFranchisePaymentSchema($pdo);
+ensureAtcOnboardingEnquirySchema($pdo);
 
 $editId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$enquiryId = isset($_GET['enquiry_id']) ? (int)$_GET['enquiry_id'] : 0;
 $isEdit = $editId > 0;
 $atc = null;
+$enquiry = null;
 $trainingUser = null;
 $error = '';
 $flash = '';
@@ -35,6 +38,35 @@ if ($isEdit) {
         $tStmt->execute([$editId]);
         $trainingUser = $tStmt->fetch(PDO::FETCH_ASSOC) ?: null;
     } catch (Exception $e) {}
+} elseif ($enquiryId > 0) {
+    $eStmt = $pdo->prepare("SELECT * FROM atc_onboarding_enquiries WHERE id = ? LIMIT 1");
+    $eStmt->execute([$enquiryId]);
+    $enquiry = $eStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$enquiry) {
+        header('Location: atc_enquiries.php?err=' . urlencode('Enquiry not found'));
+        exit;
+    }
+    if (($enquiry['status'] ?? '') === 'Converted') {
+        header('Location: atc_enquiries.php?status=Converted&err=' . urlencode('This enquiry is already converted'));
+        exit;
+    }
+    // Prefill ATC form from enquiry (same shape as atc_centers row keys)
+    $atc = [
+        'name'            => $enquiry['center_name'] ?? '',
+        'center_type'     => $enquiry['interested_center_type'] ?? '',
+        'dlc_id'          => $enquiry['preferred_dlc_id'] ?? '',
+        'address'         => $enquiry['address'] ?? '',
+        'district'        => $enquiry['district'] ?? '',
+        'taluka'          => $enquiry['taluka'] ?? '',
+        'city'            => $enquiry['city'] ?? '',
+        'state'           => $enquiry['state'] ?? 'Maharashtra',
+        'pin_code'        => $enquiry['pin_code'] ?? '',
+        'contact_person'  => $enquiry['contact_person'] ?? '',
+        'mobile'          => $enquiry['mobile'] ?? '',
+        'alternate_mobile'=> $enquiry['alternate_mobile'] ?? '',
+        'email'           => $enquiry['email'] ?? '',
+        'status'          => 'Active',
+    ];
 }
 
 $dlcOffices = $pdo->query("SELECT id, name FROM dlc_offices WHERE status = 'Active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
@@ -56,7 +88,8 @@ $v = function ($key, $default = '') use ($atc) {
     return (string)$default;
 };
 
-$pageTitle = $isEdit ? 'Edit ATC Center' : 'Add New ATC Center';
+$isConvert = !$isEdit && $enquiryId > 0 && $enquiry;
+$pageTitle = $isEdit ? 'Edit ATC Center' : ($isConvert ? 'Convert Enquiry → ATC Center' : 'Add New ATC Center');
 $today = date('Y-m-d');
 $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
 ?>
@@ -161,7 +194,7 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
             </button>
             <div class="header-greeting">
                 <h2><?= htmlspecialchars($pageTitle) ?></h2>
-                <p><?= $isEdit ? 'Update center details, fees & login' : 'Create a new Authorized Training Center' ?></p>
+                <p><?= $isEdit ? 'Update center details, fees & login' : ($isConvert ? 'Complete details and create ATC from enquiry' : 'Create a new Authorized Training Center') ?></p>
             </div>
         </div>
         <div class="header-right">
@@ -172,12 +205,20 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
 
     <div class="page-content">
         <div class="page-wrap">
-            <a class="back-link" href="atc_centers.php">
+            <a class="back-link" href="<?= $isConvert ? 'atc_enquiries.php' : 'atc_centers.php' ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-                Back to ATC Logins
+                <?= $isConvert ? 'Back to ATC Enquiries' : 'Back to ATC Logins' ?>
             </a>
 
             <div id="formAlert" class="alert" style="display:none"></div>
+
+            <?php if ($isConvert): ?>
+            <div class="hint-box" style="margin-bottom:1rem">
+                Converting enquiry <strong>#<?= (int)$enquiryId ?></strong>
+                (<?= htmlspecialchars($enquiry['center_name'] ?? '') ?> · <?= htmlspecialchars($enquiry['mobile'] ?? '') ?>).
+                Review / complete franchise &amp; login details, then save to create the ATC.
+            </div>
+            <?php endif; ?>
 
             <div class="form-card">
                 <div class="form-card-head">
@@ -185,7 +226,9 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
                         <h3><?= htmlspecialchars($pageTitle) ?></h3>
                         <p><?= $isEdit
                             ? 'ATC Code: <strong style="font-family:ui-monospace,monospace">' . htmlspecialchars($v('atc_code') ?: (date('Y') . str_pad((string)$editId, 5, '0', STR_PAD_LEFT))) . '</strong>'
-                            : 'Fill in center, location, contact and franchise payment details' ?></p>
+                            : ($isConvert
+                                ? 'Enquiry details prefilled — complete remaining fields to create the ATC login'
+                                : 'Fill in center, location, contact and franchise payment details') ?></p>
                     </div>
                 </div>
 
@@ -193,6 +236,9 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
                     <input type="hidden" name="action" value="<?= $isEdit ? 'edit' : 'add' ?>">
                     <?php if ($isEdit): ?>
                     <input type="hidden" name="id" value="<?= (int)$editId ?>">
+                    <?php endif; ?>
+                    <?php if ($isConvert): ?>
+                    <input type="hidden" name="enquiry_id" value="<?= (int)$enquiryId ?>">
                     <?php endif; ?>
 
                     <div class="form-body">
@@ -451,10 +497,10 @@ $defaultExpiry = date('Y-m-d', strtotime('+1 year'));
                     </div>
 
                     <div class="form-actions">
-                        <a href="atc_centers.php" class="btn-cancel">Cancel</a>
+                        <a href="<?= $isConvert ? 'atc_enquiries.php' : 'atc_centers.php' ?>" class="btn-cancel">Cancel</a>
                         <button type="submit" class="btn-save" id="atcSaveBtn">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                            <span id="atcSaveBtnText"><?= $isEdit ? 'Update ATC Center' : 'Save ATC Center' ?></span>
+                            <span id="atcSaveBtnText"><?= $isEdit ? 'Update ATC Center' : ($isConvert ? 'Convert & Create ATC' : 'Save ATC Center') ?></span>
                         </button>
                     </div>
                 </form>
@@ -506,7 +552,8 @@ document.getElementById('atcForm').addEventListener('submit', async function (e)
         const data = await res.json();
         if (data.success) {
             showAlert(data.message || 'Saved successfully', 'success');
-            setTimeout(() => { location.href = 'atc_centers.php?ok=1'; }, 700);
+            const redirectTo = <?= $isConvert ? "'atc_enquiries.php?status=Converted&converted=1'" : "'atc_centers.php?ok=1'" ?>;
+            setTimeout(() => { location.href = redirectTo; }, 700);
         } else {
             showAlert(data.message || 'Could not save ATC', 'error');
             btn.disabled = false;

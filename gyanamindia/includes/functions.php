@@ -1369,6 +1369,53 @@ function ensureAtcFranchisePaymentSchema(PDO $pdo): void {
 }
 
 /**
+ * Admin ATC onboarding enquiries (convert → ATC center), similar to student inquiries.
+ */
+function ensureAtcOnboardingEnquirySchema(PDO $pdo): void {
+    if (isSchemaFlagSet('schema_atc_onboarding_enq_v1')) {
+        return;
+    }
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS atc_onboarding_enquiries (
+                id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                center_name VARCHAR(150) NOT NULL,
+                contact_person VARCHAR(100) DEFAULT NULL,
+                mobile VARCHAR(15) DEFAULT NULL,
+                alternate_mobile VARCHAR(15) DEFAULT NULL,
+                email VARCHAR(100) DEFAULT NULL,
+                interested_center_type VARCHAR(80) DEFAULT NULL,
+                preferred_dlc_id INT DEFAULT NULL,
+                address TEXT DEFAULT NULL,
+                district VARCHAR(100) DEFAULT NULL,
+                taluka VARCHAR(100) DEFAULT NULL,
+                city VARCHAR(100) DEFAULT NULL,
+                state VARCHAR(80) DEFAULT 'Maharashtra',
+                pin_code VARCHAR(10) DEFAULT NULL,
+                enquiry_source VARCHAR(40) DEFAULT 'Phone',
+                enquiry_date DATE DEFAULT NULL,
+                next_followup_date DATE DEFAULT NULL,
+                next_followup_time VARCHAR(20) DEFAULT NULL,
+                referenced_by VARCHAR(120) DEFAULT NULL,
+                comment TEXT DEFAULT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'New',
+                converted_atc_id INT DEFAULT NULL,
+                converted_at DATETIME DEFAULT NULL,
+                created_by VARCHAR(100) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_atc_enq_status (status),
+                INDEX idx_atc_enq_mobile (mobile),
+                INDEX idx_atc_enq_followup (next_followup_date)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+        markSchemaFlag('schema_atc_onboarding_enq_v1');
+    } catch (Exception $e) {
+        error_log('[ATC onboarding enquiry schema] ' . $e->getMessage());
+    }
+}
+
+/**
  * Resize/compress an uploaded image in place (or to $destPath).
  * Max edge 1600px; JPEG quality 75. Returns final path on success.
  */

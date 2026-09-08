@@ -17,6 +17,7 @@ $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 ensureAtcFranchisePaymentSchema($pdo);
 ensureAtcWelcomeMailSchema($pdo);
+ensureAtcOnboardingEnquirySchema($pdo);
 
 // Handle AJAX requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -141,6 +142,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $mailNote = ' Welcome email not sent: ' . ($mailResult['message'] ?? 'mail error');
                 }
 
+                // Mark onboarding enquiry as Converted (student-enquiry → admission parallel)
+                $enquiryId = (int)($_POST['enquiry_id'] ?? 0);
+                if ($enquiryId > 0) {
+                    try {
+                        $pdo->prepare("
+                            UPDATE atc_onboarding_enquiries
+                            SET status = 'Converted', converted_atc_id = ?, converted_at = NOW()
+                            WHERE id = ? AND status != 'Converted'
+                        ")->execute([(int)$newId, $enquiryId]);
+                    } catch (Exception $e) { /* non-fatal */ }
+                }
+
                 echo json_encode([
                     'success'  => true,
                     'message'  => 'ATC Center added — Username: ' . $loginUser . ' | Temp password: password.' . $mailNote,
@@ -148,6 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     'username' => $loginUser,
                     'password' => $loginPass,
                     'welcome_email' => $mailResult,
+                    'enquiry_id' => $enquiryId ?: null,
                 ]);
                 // 🔄 Sync ATC centres to Exam Portal
                 if (function_exists('syncATCCentresToExamPortal')) {
@@ -2117,14 +2131,19 @@ try {
                             <div class="page-header-subtitle">Manage and monitor Authorized Training Centers</div>
                         </div>
                     </div>
-                    <a class="btn-add-atc" href="atc_form.php">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19" />
-                            <line x1="5" y1="12" x2="19" y2="12" />
-                        </svg>
-                        Add ATC Center
-                    </a>
+                    <div style="display:flex;gap:.55rem;flex-wrap:wrap;align-items:center">
+                        <a class="btn-add-atc" href="atc_enquiries.php" style="background:#fff;color:#334155;border:1.5px solid #e5e7eb;box-shadow:none">
+                            ATC Enquiries
+                        </a>
+                        <a class="btn-add-atc" href="atc_form.php">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            Add ATC Center
+                        </a>
+                    </div>
                 </div>
 
                 <!-- Overall Statistics Cards -->
