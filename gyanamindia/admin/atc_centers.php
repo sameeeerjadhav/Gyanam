@@ -6,6 +6,7 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/notifications.php';
+require_once __DIR__ . '/../includes/atc_welcome_mail.php';
 if (file_exists(__DIR__ . '/../includes/exam_integration.php')) {
     require_once __DIR__ . '/../includes/exam_integration.php';
 }
@@ -15,6 +16,7 @@ requireLogin(['Admin']);
 $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 ensureAtcFranchisePaymentSchema($pdo);
+ensureAtcWelcomeMailSchema($pdo);
 
 // Handle AJAX requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -128,12 +130,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $pdo->prepare("UPDATE dlc_offices SET atc_count = (SELECT COUNT(*) FROM atc_centers WHERE dlc_id = ?) WHERE id = ?")
                         ->execute([$_POST['dlc_id'], $_POST['dlc_id']]);
                 }
+
+                $mailResult = sendAtcWelcomeEmail($pdo, (int)$newId);
+                $mailNote = '';
+                if (!empty($mailResult['success'])) {
+                    $mailNote = ' Welcome email sent.';
+                } elseif (!empty($mailResult['skipped'])) {
+                    $mailNote = ' Welcome email skipped (no email on file).';
+                } else {
+                    $mailNote = ' Welcome email not sent: ' . ($mailResult['message'] ?? 'mail error');
+                }
+
                 echo json_encode([
                     'success'  => true,
-                    'message'  => 'ATC Center added — Username: ' . $loginUser . ' | Temp password: password',
+                    'message'  => 'ATC Center added — Username: ' . $loginUser . ' | Temp password: password.' . $mailNote,
                     'atc_code' => $atcCode,
                     'username' => $loginUser,
                     'password' => $loginPass,
+                    'welcome_email' => $mailResult,
                 ]);
                 // 🔄 Sync ATC centres to Exam Portal
                 if (function_exists('syncATCCentresToExamPortal')) {
@@ -298,6 +312,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if (function_exists('syncATCCentresToExamPortal')) {
                     syncATCCentresToExamPortal($pdo);
                 }
+                exit;
+
+            case 'resend_welcome_email':
+                $atcId = (int)($_POST['id'] ?? 0);
+                $mailResult = sendAtcWelcomeEmail($pdo, $atcId);
+                echo json_encode([
+                    'success' => !empty($mailResult['success']),
+                    'message' => !empty($mailResult['success'])
+                        ? ($mailResult['message'] ?? 'Welcome email sent')
+                        : ($mailResult['message'] ?? 'Failed to send welcome email'),
+                ]);
                 exit;
 
             case 'delete':
@@ -2557,6 +2582,17 @@ try {
                                                         </svg>
                                                     </button>
                                                 <?php endif; ?>
+                                                <button class="btn-act"
+                                                    onclick="resendWelcomeEmail(<?= (int)$atc['id'] ?>, '<?= htmlspecialchars($atc['name'], ENT_QUOTES) ?>', '<?= htmlspecialchars((string)($atc['email'] ?? ''), ENT_QUOTES) ?>')"
+                                                    title="<?= !empty($atc['email']) ? 'Resend welcome email' : 'No email on file' ?>"
+                                                    <?= empty($atc['email']) ? 'disabled style="opacity:.4;cursor:not-allowed"' : '' ?>>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                        stroke-linejoin="round">
+                                                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                                        <polyline points="22,6 12,13 2,6"/>
+                                                    </svg>
+                                                </button>
                                                 <?php if ($daysLeft !== null && $daysLeft <= 30): ?>
                                                     <button class="btn-act renew"
                                                         onclick="renewATC(<?= $atc['id'] ?>, '<?= htmlspecialchars($atc['name'], ENT_QUOTES) ?>')"
@@ -3059,6 +3095,25 @@ try {
                         setTimeout(() => location.reload(), 1200);
                     } else {
                         showToast(data.message || 'Renewal failed', 'error');
+                    }
+                })
+                .catch(() => showToast('Network error', 'error'));
+        }
+
+        function resendWelcomeEmail(id, name, email) {
+            if (!email) {
+                showToast('No email on file for this ATC', 'error');
+                return;
+            }
+            if (!confirm(`Resend welcome email to "${name}" at ${email}?`)) return;
+            const fd = new URLSearchParams({ action: 'resend_welcome_email', id: String(id) });
+            fetch('', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(data.message || 'Welcome email sent', 'success');
+                    } else {
+                        showToast(data.message || 'Failed to send email', 'error');
                     }
                 })
                 .catch(() => showToast('Network error', 'error'));
