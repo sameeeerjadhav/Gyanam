@@ -37,9 +37,13 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><path d="M9 8h1"/><path d="M9 12h1"/><path d="M14 8h1"/><path d="M14 12h1"/></svg>
                 <span>DLC Logins</span>
             </a>
-            <a href="atc_centers.php" class="nav-link <?= in_array($currentPage, ['atc_centers.php', 'atc_form.php'], true) ? 'active' : '' ?>" data-tooltip="ATC Logins">
+            <a href="atc_centers.php" class="nav-link <?= in_array($currentPage, ['atc_centers.php', 'atc_form.php'], true) && empty($_GET['enquiry_id']) ? 'active' : '' ?>" data-tooltip="ATC Logins">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
                 <span>ATC Logins</span>
+            </a>
+            <a href="atc_enquiries.php" class="nav-link <?= ($currentPage === 'atc_enquiries.php' || ($currentPage === 'atc_form.php' && !empty($_GET['enquiry_id']))) ? 'active' : '' ?>" data-tooltip="ATC Enquiries">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/><path d="M14 2h6v6"/><path d="M10 14L20 4"/></svg>
+                <span>ATC Enquiries</span>
             </a>
             <a href="courses.php" class="nav-link <?= $currentPage === 'courses.php' ? 'active' : '' ?>" data-tooltip="Master Courses">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
