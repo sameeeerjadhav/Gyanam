@@ -1,8 +1,8 @@
 <?php
 /**
  * Mail / SMTP Configuration — Gyanam India
- * Copy to mail.php and fill Hostinger mailbox credentials.
- * Never commit mail.php (it is gitignored).
+ * Preferred: save SMTP in Admin → My Profile → Email (SMTP) Settings.
+ * Optional fallback file (gitignored): copy to mail.php only if needed.
  *
  * Hostinger typical values:
  *   Host: smtp.hostinger.com

@@ -5,6 +5,7 @@
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/app_settings.php';
 
 requireLogin(['Admin']);
 
@@ -15,6 +16,9 @@ $userId = getUserId();
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$userId]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+$mailSettings = getMailSettings($pdo);
+$mailConfigured = trim($mailSettings['mail_username'] ?? '') !== '' && trim($mailSettings['mail_password'] ?? '') !== '';
 
 $success = $_SESSION['profile_success'] ?? '';
 $error   = $_SESSION['profile_error'] ?? '';
@@ -156,6 +160,77 @@ $_userInitial = strtoupper(substr($_userName, 0, 1));
                     <button type="submit" class="btn-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                         Update Password
+                    </button>
+                </div>
+            </form>
+
+            <!-- SMTP / Email Settings (Admin only) -->
+            <form action="../update_profile.php" method="POST" class="profile-form-card">
+                <h3>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    Email (SMTP) Settings
+                </h3>
+                <input type="hidden" name="action" value="update_mail_settings">
+                <p style="margin:0 0 1rem;font-size:.82rem;color:#64748b;line-height:1.5">
+                    Used for ATC welcome / onboarding emails. Create a Hostinger mailbox (e.g. <strong>gyanamindia@labxco.in</strong>) and save it here.
+                    Status:
+                    <?php if ($mailConfigured): ?>
+                        <span style="color:#059669;font-weight:700">Configured</span>
+                    <?php else: ?>
+                        <span style="color:#d97706;font-weight:700">Not configured</span>
+                    <?php endif; ?>
+                </p>
+
+                <div class="profile-form-grid">
+                    <div class="form-field">
+                        <label>Enable outbound email</label>
+                        <select name="mail_enabled">
+                            <option value="1" <?= ($mailSettings['mail_enabled'] ?? '1') !== '0' ? 'selected' : '' ?>>Enabled</option>
+                            <option value="0" <?= ($mailSettings['mail_enabled'] ?? '') === '0' ? 'selected' : '' ?>>Disabled</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label>SMTP Host</label>
+                        <input type="text" name="mail_host" value="<?= sanitize($mailSettings['mail_host'] ?? 'smtp.hostinger.com') ?>" placeholder="smtp.hostinger.com">
+                    </div>
+                    <div class="form-field">
+                        <label>SMTP Port</label>
+                        <input type="number" name="mail_port" value="<?= sanitize($mailSettings['mail_port'] ?? '465') ?>" placeholder="465">
+                    </div>
+                    <div class="form-field">
+                        <label>Encryption</label>
+                        <select name="mail_encryption">
+                            <?php $enc = $mailSettings['mail_encryption'] ?? 'ssl'; ?>
+                            <option value="ssl" <?= $enc === 'ssl' ? 'selected' : '' ?>>SSL (port 465)</option>
+                            <option value="tls" <?= $enc === 'tls' ? 'selected' : '' ?>>TLS (port 587)</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label>Mailbox Email (SMTP Username) *</label>
+                        <input type="email" name="mail_username" value="<?= sanitize($mailSettings['mail_username'] ?? '') ?>" placeholder="gyanamindia@labxco.in" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Mailbox Password <?= $mailConfigured ? '' : '*' ?></label>
+                        <input type="password" name="mail_password" value="" placeholder="<?= $mailConfigured ? 'Leave blank to keep saved password' : 'Hostinger mailbox password' ?>" <?= $mailConfigured ? '' : 'required' ?> autocomplete="new-password">
+                    </div>
+                    <div class="form-field">
+                        <label>From Email *</label>
+                        <input type="email" name="mail_from_email" value="<?= sanitize($mailSettings['mail_from_email'] ?: ($mailSettings['mail_username'] ?? '')) ?>" placeholder="gyanamindia@labxco.in" required>
+                    </div>
+                    <div class="form-field">
+                        <label>From Name</label>
+                        <input type="text" name="mail_from_name" value="<?= sanitize($mailSettings['mail_from_name'] ?? 'Gyanam India Educational Services') ?>" placeholder="Gyanam India Educational Services">
+                    </div>
+                    <div class="form-field full-width">
+                        <label>Reply-To Email</label>
+                        <input type="email" name="mail_reply_to" value="<?= sanitize($mailSettings['mail_reply_to'] ?: ($mailSettings['mail_from_email'] ?? '')) ?>" placeholder="gyanamindia@labxco.in">
+                    </div>
+                </div>
+
+                <div class="profile-form-actions">
+                    <button type="submit" class="btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        Save Email Settings
                     </button>
                 </div>
             </form>

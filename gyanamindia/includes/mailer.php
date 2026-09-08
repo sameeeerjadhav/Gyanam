@@ -1,26 +1,90 @@
 <?php
 /**
  * Lightweight SMTP mailer (no Composer dependency).
- * Uses Hostinger-compatible SMTP over SSL/TLS.
+ * Prefers Admin Profile mail settings (DB), then config/mail.php fallback.
  */
+
+require_once __DIR__ . '/app_settings.php';
+
+/**
+ * @return array{
+ *   enabled:bool,host:string,port:int,encryption:string,
+ *   username:string,password:string,from_email:string,from_name:string,reply_to:string
+ * }|null
+ */
+function resolveMailRuntimeConfig(?PDO $pdo = null): ?array
+{
+    static $cached = false;
+    static $cfg = null;
+    if ($cached) {
+        return $cfg;
+    }
+    $cached = true;
+
+    // 1) Admin Profile / DB settings
+    try {
+        if (!$pdo instanceof PDO && function_exists('getDBConnection')) {
+            $pdo = getDBConnection();
+        }
+        if ($pdo instanceof PDO) {
+            $s = getMailSettings($pdo);
+            $user = trim((string)($s['mail_username'] ?? ''));
+            $pass = (string)($s['mail_password'] ?? '');
+            $from = trim((string)($s['mail_from_email'] ?? ''));
+            if ($from === '') {
+                $from = $user;
+            }
+            $enabled = ((string)($s['mail_enabled'] ?? '1')) !== '0';
+            if ($enabled && $user !== '' && $pass !== '' && $from !== '') {
+                $cfg = [
+                    'enabled'     => true,
+                    'host'        => trim((string)($s['mail_host'] ?? 'smtp.hostinger.com')) ?: 'smtp.hostinger.com',
+                    'port'        => (int)($s['mail_port'] ?? 465) ?: 465,
+                    'encryption'  => strtolower(trim((string)($s['mail_encryption'] ?? 'ssl'))) ?: 'ssl',
+                    'username'    => $user,
+                    'password'    => $pass,
+                    'from_email'  => $from,
+                    'from_name'   => trim((string)($s['mail_from_name'] ?? 'Gyanam India Educational Services')) ?: 'Gyanam India Educational Services',
+                    'reply_to'    => trim((string)($s['mail_reply_to'] ?? '')) ?: $from,
+                ];
+                return $cfg;
+            }
+        }
+    } catch (Throwable $e) {
+        // fall through to file config
+    }
+
+    // 2) Optional file config fallback
+    $file = __DIR__ . '/../config/mail.php';
+    if (is_file($file)) {
+        require_once $file;
+        if (defined('MAIL_ENABLED') && MAIL_ENABLED
+            && defined('MAIL_HOST') && defined('MAIL_USERNAME') && defined('MAIL_PASSWORD')
+            && defined('MAIL_FROM_EMAIL')
+            && MAIL_USERNAME !== '' && MAIL_PASSWORD !== '' && MAIL_PASSWORD !== 'CHANGE_ME'
+            && MAIL_FROM_EMAIL !== '') {
+            $cfg = [
+                'enabled'     => true,
+                'host'        => (string)MAIL_HOST,
+                'port'        => (int)(defined('MAIL_PORT') ? MAIL_PORT : 465),
+                'encryption'  => strtolower((string)(defined('MAIL_ENCRYPTION') ? MAIL_ENCRYPTION : 'ssl')),
+                'username'    => (string)MAIL_USERNAME,
+                'password'    => (string)MAIL_PASSWORD,
+                'from_email'  => (string)MAIL_FROM_EMAIL,
+                'from_name'   => defined('MAIL_FROM_NAME') ? (string)MAIL_FROM_NAME : 'Gyanam India',
+                'reply_to'    => (defined('MAIL_REPLY_TO') && MAIL_REPLY_TO) ? (string)MAIL_REPLY_TO : (string)MAIL_FROM_EMAIL,
+            ];
+            return $cfg;
+        }
+    }
+
+    $cfg = null;
+    return null;
+}
 
 function loadMailConfig(): bool
 {
-    static $loaded = null;
-    if ($loaded !== null) {
-        return $loaded;
-    }
-    $file = __DIR__ . '/../config/mail.php';
-    if (!is_file($file)) {
-        $loaded = false;
-        return false;
-    }
-    require_once $file;
-    $loaded = defined('MAIL_ENABLED') && MAIL_ENABLED
-        && defined('MAIL_HOST') && defined('MAIL_USERNAME') && defined('MAIL_PASSWORD')
-        && defined('MAIL_FROM_EMAIL')
-        && MAIL_USERNAME !== '' && MAIL_PASSWORD !== '' && MAIL_PASSWORD !== 'CHANGE_ME';
-    return $loaded;
+    return resolveMailRuntimeConfig() !== null;
 }
 
 /**
@@ -32,22 +96,24 @@ function sendAppMail(string $toEmail, string $toName, string $subject, string $h
     if ($toEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
         return ['success' => false, 'message' => 'Invalid recipient email address'];
     }
-    if (!loadMailConfig()) {
-        return ['success' => false, 'message' => 'Mail is not configured. Create config/mail.php from mail.php.example'];
+
+    $cfg = resolveMailRuntimeConfig();
+    if ($cfg === null) {
+        return ['success' => false, 'message' => 'Mail is not configured. Set SMTP details in Admin → My Profile → Email (SMTP) Settings.'];
     }
 
     if ($textBody === '') {
         $textBody = trim(html_entity_decode(strip_tags(str_replace(['<br>', '<br/>', '<br />', '</p>'], ["\n", "\n", "\n", "\n\n"], $htmlBody)), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
     }
 
-    $fromEmail = (string)MAIL_FROM_EMAIL;
-    $fromName  = defined('MAIL_FROM_NAME') ? (string)MAIL_FROM_NAME : 'Gyanam India';
-    $replyTo   = defined('MAIL_REPLY_TO') && MAIL_REPLY_TO ? (string)MAIL_REPLY_TO : $fromEmail;
-    $host      = (string)MAIL_HOST;
-    $port      = (int)(defined('MAIL_PORT') ? MAIL_PORT : 465);
-    $enc       = strtolower((string)(defined('MAIL_ENCRYPTION') ? MAIL_ENCRYPTION : 'ssl'));
-    $user      = (string)MAIL_USERNAME;
-    $pass      = (string)MAIL_PASSWORD;
+    $fromEmail = $cfg['from_email'];
+    $fromName  = $cfg['from_name'];
+    $replyTo   = $cfg['reply_to'];
+    $host      = $cfg['host'];
+    $port      = $cfg['port'];
+    $enc       = $cfg['encryption'];
+    $user      = $cfg['username'];
+    $pass      = $cfg['password'];
 
     try {
         $transport = ($enc === 'ssl') ? 'ssl://' . $host : $host;
@@ -127,7 +193,6 @@ function sendAppMail(string $toEmail, string $toName, string $subject, string $h
         $body .= '--' . $boundary . "--\r\n";
 
         $payload = implode("\r\n", $headers) . "\r\n\r\n" . $body;
-        // Dot-stuffing
         $payload = preg_replace('/^\./m', '..', $payload) ?? $payload;
         fwrite($fp, $payload . "\r\n.\r\n");
         $dataResp = $read();

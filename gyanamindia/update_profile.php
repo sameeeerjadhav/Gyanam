@@ -5,6 +5,7 @@
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/includes/app_settings.php';
 
 requireLogin(['Admin', 'DLC Office', 'ATC CENTER']);
 
@@ -129,6 +130,72 @@ try {
         }
 
         $_SESSION['profile_success'] = 'Password updated successfully.';
+        redirect($redirectUrl);
+    }
+
+    if ($action === 'update_mail_settings') {
+        if (strtoupper(trim((string)$userRole)) !== 'ADMIN') {
+            $_SESSION['profile_error'] = 'Only Head Office can update email settings.';
+            redirect($redirectUrl);
+        }
+
+        $enabled = (($_POST['mail_enabled'] ?? '1') === '0') ? '0' : '1';
+        $host = trim((string)($_POST['mail_host'] ?? 'smtp.hostinger.com')) ?: 'smtp.hostinger.com';
+        $port = trim((string)($_POST['mail_port'] ?? '465')) ?: '465';
+        $enc  = strtolower(trim((string)($_POST['mail_encryption'] ?? 'ssl')));
+        if (!in_array($enc, ['ssl', 'tls', 'none'], true)) {
+            $enc = 'ssl';
+        }
+        $username = trim((string)($_POST['mail_username'] ?? ''));
+        $password = (string)($_POST['mail_password'] ?? '');
+        $fromEmail = trim((string)($_POST['mail_from_email'] ?? ''));
+        $fromName = trim((string)($_POST['mail_from_name'] ?? 'Gyanam India Educational Services'));
+        $replyTo = trim((string)($_POST['mail_reply_to'] ?? ''));
+
+        if ($username === '' || !filter_var($username, FILTER_VALIDATE_EMAIL)) {
+            $_SESSION['profile_error'] = 'Enter a valid mailbox email (SMTP username).';
+            redirect($redirectUrl);
+        }
+        if ($fromEmail === '') {
+            $fromEmail = $username;
+        }
+        if (!filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+            $_SESSION['profile_error'] = 'Enter a valid From email address.';
+            redirect($redirectUrl);
+        }
+        if ($replyTo !== '' && !filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
+            $_SESSION['profile_error'] = 'Enter a valid Reply-To email address.';
+            redirect($redirectUrl);
+        }
+
+        $existing = getMailSettings($pdo);
+        if ($password === '') {
+            $password = (string)($existing['mail_password'] ?? '');
+        }
+        if ($password === '') {
+            $_SESSION['profile_error'] = 'Mailbox password is required the first time.';
+            redirect($redirectUrl);
+        }
+        if ($replyTo === '') {
+            $replyTo = $fromEmail;
+        }
+        if ($fromName === '') {
+            $fromName = 'Gyanam India Educational Services';
+        }
+
+        setAppSettings($pdo, [
+            'mail_enabled'    => $enabled,
+            'mail_host'       => $host,
+            'mail_port'       => $port,
+            'mail_encryption' => $enc,
+            'mail_username'   => $username,
+            'mail_password'   => $password,
+            'mail_from_email' => $fromEmail,
+            'mail_from_name'  => $fromName,
+            'mail_reply_to'   => $replyTo,
+        ]);
+
+        $_SESSION['profile_success'] = 'Email (SMTP) settings saved. You can resend ATC welcome emails now.';
         redirect($redirectUrl);
     }
 
