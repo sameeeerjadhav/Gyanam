@@ -30,6 +30,12 @@ $filterAtc    = isset($_GET['atc_id'])   && $_GET['atc_id']   !== '' ? (int)$_GE
 $filterCourse = isset($_GET['course'])   ? trim((string)$_GET['course']) : '';
 $filterSearch = isset($_GET['search'])   ? trim($_GET['search'])    : '';
 
+// Form was submitted (even with "All" empties) — show the list
+$formSubmitted = array_key_exists('dlc_id', $_GET)
+    || array_key_exists('atc_id', $_GET)
+    || array_key_exists('course', $_GET)
+    || array_key_exists('search', $_GET);
+
 // If ATC is selected under a DLC, keep only ATCs that belong to that DLC
 if ($filterAtc !== null && $filterDlc !== null) {
     $atcBelongs = false;
@@ -44,9 +50,10 @@ if ($filterAtc !== null && $filterDlc !== null) {
     }
 }
 
-$filtered = $filterDlc !== null || $filterAtc !== null || $filterCourse !== '' || $filterSearch !== '';
+$hasSpecificFilter = $filterDlc !== null || $filterAtc !== null || $filterCourse !== '' || $filterSearch !== '';
+$filtered = $formSubmitted; // "All DLC / All ATC / All Course" still loads every student
 
-// ── Fetch students (only when a filter is applied) ──────────────────────────
+// ── Fetch students (after Filter is clicked, including All/All) ─────────────
 $students   = [];
 $totalCount = 0;
 
@@ -614,6 +621,9 @@ if ($filtered) {
                     <div class="active-filters">
                         <span class="active-filters-label">Active Filters:</span>
                         <?php
+                        if (!$hasSpecificFilter) {
+                            echo "<span class='filter-chip'>All students</span>";
+                        }
                         if ($filterDlc) {
                             $dlcName = '';
                             foreach ($dlcOffices as $d) if ((int)$d['id'] === $filterDlc) { $dlcName = $d['name']; break; }
@@ -643,7 +653,7 @@ if ($filtered) {
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
                     </div>
                     <div class="empty-title">Select a filter to view students</div>
-                    <div class="empty-sub">Choose a DLC, ATC, Course, or enter a search term above,<br>then click <strong>Filter Students</strong> to load the list.</div>
+                    <div class="empty-sub">Leave filters on <strong>All</strong> and click <strong>Filter Students</strong> to see everyone,<br>or narrow by DLC, ATC, Course, or search.</div>
                 </div>
             </div>
 
