@@ -283,7 +283,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="toolbar-right">
                 <div class="search-wrap">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <input type="text" class="search-input" id="search-input" placeholder="Search users...">
+                    <input type="search" class="search-input" id="search-input" name="exam_portal_user_filter"
+                        placeholder="Search users..." value="" autocomplete="off" autocorrect="off"
+                        autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">
                 </div>
                 <select class="select-sm" id="role-filter">
                     <option value="">All Roles</option>
@@ -521,11 +523,24 @@ function showToast(msg, type = 'success') {
 }
 
 // Filters
-document.getElementById('search-input').addEventListener('input', renderTable);
+const searchInput = document.getElementById('search-input');
+searchInput.addEventListener('input', renderTable);
 document.getElementById('role-filter').addEventListener('change', renderTable);
 
+// Browser autofill often injects "admin" into this box — keep it empty on open
+function clearSearchAutofill() {
+    if (searchInput.value) {
+        searchInput.value = '';
+        if (allUsers.length) renderTable();
+    }
+}
+clearSearchAutofill();
+window.addEventListener('load', clearSearchAutofill);
+setTimeout(clearSearchAutofill, 100);
+setTimeout(clearSearchAutofill, 500);
+
 // Load on page ready
-loadUsers();
+loadUsers().then(clearSearchAutofill);
 </script>
 </body>
 </html>
