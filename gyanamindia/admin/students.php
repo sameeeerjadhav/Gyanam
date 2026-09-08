@@ -3,6 +3,9 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/notifications.php';
+if (file_exists(__DIR__ . '/../includes/exam_integration.php')) {
+    require_once __DIR__ . '/../includes/exam_integration.php';
+}
 
 requireLogin(['Admin']);
 
@@ -53,12 +56,14 @@ if ($filtered) {
 
     // Try with ho_share_paid column; fall back if it doesn't exist
     try {
-        $sql = "SELECT a.id, a.roll_no,
+        $sql = "SELECT a.id, a.roll_no, a.registration_id,
                        CONCAT(a.first_name,' ',COALESCE(NULLIF(TRIM(a.middle_name),''),''),' ',a.last_name) AS student_name,
                        a.course, a.admission_date, a.mobile, a.photo,
+                       COALESCE(a.material_type, '') AS material_type,
                        COALESCE(a.ho_share_paid,0) AS ho_share_paid,
                        atc.id  AS atc_id,
                        atc.name AS atc_name,
+                       atc.atc_code AS atc_code,
                        dlc.name AS dlc_name
                 FROM admissions a
                 LEFT JOIN atc_centers atc ON atc.id = a.atc_id
@@ -70,13 +75,15 @@ if ($filtered) {
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Exception $e) {
-        // ho_share_paid column may not exist — retry without it
-        $sql = "SELECT a.id, a.roll_no,
+        // ho_share_paid / material_type may not exist — retry without them
+        $sql = "SELECT a.id, a.roll_no, a.registration_id,
                        CONCAT(a.first_name,' ',COALESCE(NULLIF(TRIM(a.middle_name),''),''),' ',a.last_name) AS student_name,
                        a.course, a.admission_date, a.mobile, a.photo,
+                       '' AS material_type,
                        0 AS ho_share_paid,
                        atc.id  AS atc_id,
                        atc.name AS atc_name,
+                       atc.atc_code AS atc_code,
                        dlc.name AS dlc_name
                 FROM admissions a
                 LEFT JOIN atc_centers atc ON atc.id = a.atc_id
@@ -90,7 +97,7 @@ if ($filtered) {
     }
 
     // ── Resolve share paid status via share_payments JSON ──────────────────
-    $atcIds  = array_values(array_unique(array_column($rows, 'atc_id')));
+    $atcIds  = array_values(array_unique(array_filter(array_map('intval', array_column($rows, 'atc_id')))));
     $paidMap = [];
 
     if (!empty($atcIds)) {
@@ -108,9 +115,76 @@ if ($filtered) {
         }
     }
 
-    // Merge share status into each row
+    // ── Exam pass map (portal + exam_schedules) per ATC on this page ───────
+    $examPassMap = [];
+    $atcCodes = [];
+    foreach ($rows as $r) {
+        $aid = (int)($r['atc_id'] ?? 0);
+        if ($aid > 0 && !isset($atcCodes[$aid])) {
+            $atcCodes[$aid] = trim((string)($r['atc_code'] ?? ''));
+        }
+    }
+    foreach ($atcCodes as $atcId => $atcCode) {
+        foreach (atcMainExamPassAdmissionMap($pdo, $atcId, $atcCode) as $admId => $ok) {
+            if ($ok) {
+                $examPassMap[(int)$admId] = true;
+            }
+        }
+    }
+
+    // ── Kit material dispatch status (Book / T-Shirt) ──────────────────────
+    $kitDispatched = [];
+    $admIds = array_values(array_unique(array_map(static fn($r) => (int)$r['id'], $rows)));
+    if (!empty($admIds)) {
+        ensureDispatchTables($pdo);
+        $ph = implode(',', array_fill(0, count($admIds), '?'));
+        try {
+            $diStmt = $pdo->prepare("
+                SELECT DISTINCT admission_id
+                FROM dispatch_items
+                WHERE admission_id IN ($ph)
+                  AND item_type IN ('Book', 'T-Shirt')
+                  AND status = 'Dispatched'
+            ");
+            $diStmt->execute($admIds);
+            foreach ($diStmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
+                $kitDispatched[(int)$id] = true;
+            }
+        } catch (Exception $e) {}
+        try {
+            $legStmt = $pdo->prepare("
+                SELECT DISTINCT admission_id
+                FROM material_dispatch_students
+                WHERE admission_id IN ($ph)
+            ");
+            $legStmt->execute($admIds);
+            foreach ($legStmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
+                $kitDispatched[(int)$id] = true;
+            }
+        } catch (Exception $e) {}
+    }
+
+    // Merge enrichment into each row
     foreach ($rows as &$r) {
-        $r['share_paid'] = isset($paidMap[$r['id']]) || !empty($r['ho_share_paid']);
+        $admId = (int)$r['id'];
+        $r['share_paid'] = isset($paidMap[$admId]) || !empty($r['ho_share_paid']);
+        $r['exam_passed'] = !empty($examPassMap[$admId]);
+        $reg = trim((string)($r['registration_id'] ?? ''));
+        if ($reg === '') {
+            $reg = trim((string)($r['roll_no'] ?? ''));
+        }
+        if ($reg === '') {
+            $reg = 'GYANAM' . $admId;
+        }
+        $r['cert_reg_id'] = $reg;
+        $matType = trim((string)($r['material_type'] ?? ''));
+        if ($matType !== '' && strcasecmp($matType, 'With Material') !== 0) {
+            $r['materials_status'] = 'n_a';
+        } elseif (!empty($kitDispatched[$admId])) {
+            $r['materials_status'] = 'dispatched';
+        } else {
+            $r['materials_status'] = 'not_dispatched';
+        }
     }
     unset($r);
     $students = $rows;
@@ -312,6 +386,28 @@ if ($filtered) {
     .share-paid    .share-badge-dot { background: var(--emerald); }
     .share-pending { background: var(--amber-soft); color: #92400e; border: 1px solid #fde68a; }
     .share-pending .share-badge-dot { background: var(--amber); }
+    .exam-done     { background: var(--emerald-soft); color: var(--emerald-dark); border: 1px solid #b3f0de; }
+    .exam-done     .share-badge-dot { background: var(--emerald); }
+    .exam-pending  { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+    .exam-pending  .share-badge-dot { background: #94a3b8; }
+    .mat-done      { background: var(--emerald-soft); color: var(--emerald-dark); border: 1px solid #b3f0de; }
+    .mat-done      .share-badge-dot { background: var(--emerald); }
+    .mat-pending   { background: var(--amber-soft); color: #92400e; border: 1px solid #fde68a; }
+    .mat-pending   .share-badge-dot { background: var(--amber); }
+    .mat-na        { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
+    .mat-na        .share-badge-dot { background: #cbd5e1; }
+    .btn-cert-dl {
+        display: inline-flex; align-items: center; gap: .35rem;
+        padding: .35rem .7rem; border-radius: var(--r-md);
+        background: linear-gradient(135deg, var(--indigo), var(--indigo-dark));
+        color: #fff; font-size: .72rem; font-weight: 700; font-family: var(--font);
+        text-decoration: none; white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(79,110,247,.25);
+        transition: transform .15s, box-shadow .15s;
+    }
+    .btn-cert-dl:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79,110,247,.35); color: #fff; }
+    .btn-cert-dl svg { width: 12px; height: 12px; flex-shrink: 0; }
+    .cert-wait { font-size: .74rem; font-weight: 600; color: var(--text-3); }
 
     /* ── ATC/DLC cell ── */
     .org-badge {
@@ -526,6 +622,9 @@ if ($filtered) {
                             <th>ATC / DLC</th>
                             <th>Contact</th>
                             <th>Share Paid</th>
+                            <th>Exam</th>
+                            <th>Certificate</th>
+                            <th>Materials</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -600,6 +699,54 @@ if ($filtered) {
                                 </span>
                             <?php endif; ?>
                         </td>
+
+                        <!-- Exam Status -->
+                        <td>
+                            <?php if (!empty($s['exam_passed'])): ?>
+                                <span class="share-badge exam-done">
+                                    <span class="share-badge-dot"></span>Exam Done
+                                </span>
+                            <?php else: ?>
+                                <span class="share-badge exam-pending">
+                                    <span class="share-badge-dot"></span>Not Done
+                                </span>
+                            <?php endif; ?>
+                        </td>
+
+                        <!-- Certificate download (Admin soft-copy when exam passed) -->
+                        <td>
+                            <?php if (!empty($s['exam_passed'])): ?>
+                                <a class="btn-cert-dl"
+                                   href="generate_course_certificate.php?reg_id=<?= urlencode($s['cert_reg_id']) ?>&preview=1"
+                                   target="_blank" rel="noopener"
+                                   title="Download / print certificate">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Download
+                                </a>
+                            <?php else: ?>
+                                <span class="cert-wait">—</span>
+                            <?php endif; ?>
+                        </td>
+
+                        <!-- Materials dispatch -->
+                        <td>
+                            <?php
+                            $matStatus = $s['materials_status'] ?? 'not_dispatched';
+                            if ($matStatus === 'dispatched'):
+                            ?>
+                                <span class="share-badge mat-done">
+                                    <span class="share-badge-dot"></span>Dispatched
+                                </span>
+                            <?php elseif ($matStatus === 'n_a'): ?>
+                                <span class="share-badge mat-na">
+                                    <span class="share-badge-dot"></span>No Kit
+                                </span>
+                            <?php else: ?>
+                                <span class="share-badge mat-pending">
+                                    <span class="share-badge-dot"></span>Not Dispatched
+                                </span>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -639,11 +786,13 @@ function filterATCByDLC() {
 
 // ── Export helpers ─────────────────────────────────────────────────────────
 function getTableData() {
-    const headers = ['Student Name','Reg ID','Course','Admission Date','ATC','DLC','Mobile','Share Paid'];
+    const headers = ['Student Name','Reg ID','Course','Admission Date','ATC','DLC','Mobile','Share Paid','Exam','Certificate','Materials'];
     const rows = [];
     document.querySelectorAll('.data-table tbody tr').forEach(tr => {
         const tds = tr.querySelectorAll('td');
         if (!tds.length) return;
+        const certCell = tds[8];
+        const certText = certCell?.querySelector('a') ? 'Available' : (certCell?.textContent?.trim() || '—');
         rows.push([
             tds[0]?.querySelector('.student-name')?.textContent?.trim() || '',
             tds[1]?.textContent?.trim() || '',
@@ -652,7 +801,10 @@ function getTableData() {
             tds[4]?.querySelector('.cell-main')?.textContent?.trim() || '',
             tds[4]?.querySelector('.cell-sub')?.textContent?.trim()  || '',
             tds[5]?.textContent?.trim() || '',
-            tds[6]?.textContent?.trim() || ''
+            tds[6]?.textContent?.trim() || '',
+            tds[7]?.textContent?.trim() || '',
+            certText,
+            tds[9]?.textContent?.trim() || ''
         ]);
     });
     return { headers, rows };
