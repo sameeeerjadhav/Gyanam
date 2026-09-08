@@ -760,13 +760,100 @@ function courseTypesForCenter(?string $centerType): array {
  *
  * @return array{0:string,1:list<string>}
  */
-function courseVisibilitySql(?string $centerType, string $column = 'c.course_type'): array {
+function courseVisibilitySql(?string $centerType, string $column = 'c.course_type', ?int $atcId = null, ?PDO $pdo = null): array {
     $types = courseTypesForCenter($centerType);
     if ($types === []) {
         return [' AND 1=0', []];
     }
     $ph = implode(',', array_fill(0, count($types), '?'));
-    return [" AND {$column} IN ($ph)", $types];
+    $sql = " AND {$column} IN ($ph)";
+    $params = $types;
+
+    if ($atcId !== null && $atcId > 0) {
+        if ($pdo instanceof PDO) {
+            ensureCourseAtcVisibilitySchema($pdo);
+        }
+        // all (default) = every ATC of that center type; specific = only mapped ATCs
+        $sql .= " AND (
+            COALESCE(c.visibility_scope, 'all') <> 'specific'
+            OR EXISTS (
+                SELECT 1 FROM course_atc_visibility cav
+                WHERE cav.course_id = c.id AND cav.atc_id = ?
+            )
+        )";
+        $params[] = $atcId;
+    }
+
+    return [$sql, $params];
+}
+
+/**
+ * Ensure courses.visibility_scope + course_atc_visibility mapping table.
+ */
+function ensureCourseAtcVisibilitySchema(PDO $pdo): void {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    try {
+        $cols = $pdo->query('SHOW COLUMNS FROM courses')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('visibility_scope', $cols, true)) {
+            $pdo->exec("ALTER TABLE courses ADD COLUMN visibility_scope VARCHAR(20) NOT NULL DEFAULT 'all' COMMENT 'all=all centers of type; specific=only mapped ATCs'");
+        }
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS course_atc_visibility (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                course_id INT NOT NULL,
+                atc_id INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_course_atc (course_id, atc_id),
+                KEY idx_cav_atc (atc_id),
+                KEY idx_cav_course (course_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+    } catch (Exception $e) {
+        error_log('[CourseAtcVis] ' . $e->getMessage());
+    }
+}
+
+/**
+ * Whether a course row is visible to a given ATC (center type + optional specific list).
+ */
+function courseIsVisibleToAtc(PDO $pdo, array $course, int $atcId, ?string $centerType = null): bool {
+    ensureCourseAtcVisibilitySchema($pdo);
+    if ($atcId <= 0) {
+        return false;
+    }
+    if ($centerType === null) {
+        $centerType = getAtcCenterType($pdo, $atcId);
+    }
+    if (!courseIsVisibleToCenter($course['course_type'] ?? '', $centerType)) {
+        return false;
+    }
+    $scope = strtolower(trim((string)($course['visibility_scope'] ?? '')));
+    $courseId = (int)($course['id'] ?? 0);
+    if ($scope === '' && $courseId > 0) {
+        try {
+            $st = $pdo->prepare('SELECT visibility_scope FROM courses WHERE id = ? LIMIT 1');
+            $st->execute([$courseId]);
+            $scope = strtolower(trim((string)($st->fetchColumn() ?: 'all')));
+        } catch (Exception $e) {
+            $scope = 'all';
+        }
+    }
+    if ($scope === '') {
+        $scope = 'all';
+    }
+    if ($scope !== 'specific') {
+        return true;
+    }
+    if ($courseId <= 0) {
+        return false;
+    }
+    $st = $pdo->prepare('SELECT 1 FROM course_atc_visibility WHERE course_id = ? AND atc_id = ? LIMIT 1');
+    $st->execute([$courseId, $atcId]);
+    return (bool)$st->fetchColumn();
 }
 
 function courseIsVisibleToCenter(?string $courseType, ?string $centerType): bool {

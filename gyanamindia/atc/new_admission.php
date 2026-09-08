@@ -670,7 +670,7 @@ usort($pendingInquiries, fn($a, $b) => strtotime($b['created_at']) - strtotime($
 
 // Fetch Active master courses for this ATC (only matching center type + fee set)
 $centerType = getAtcCenterType($pdo, $atcId ? (int)$atcId : null);
-[$visSql, $visParams] = courseVisibilitySql($centerType);
+[$visSql, $visParams] = courseVisibilitySql($centerType, 'c.course_type', (int)$atcId, $pdo);
 $coursesStmt = $pdo->prepare("
     SELECT c.id, c.course_name, c.course_type, c.duration,
            c.material_type, c.material_language,

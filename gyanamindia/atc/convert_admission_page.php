@@ -44,7 +44,7 @@ if (!$inquiry) {
 
 // Fetch active courses with dual material fees (matching center type)
 $centerType = getAtcCenterType($pdo, $atcId ? (int)$atcId : null);
-[$visSql, $visParams] = courseVisibilitySql($centerType);
+[$visSql, $visParams] = courseVisibilitySql($centerType, 'c.course_type', (int)$atcId, $pdo);
 $courseStmt = $pdo->prepare("
     SELECT c.course_name, c.course_type, c.material_type, c.material_language, c.duration,
            c.ho_share, c.ho_share_with_material, c.ho_share_without_material,

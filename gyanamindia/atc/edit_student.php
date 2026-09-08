@@ -28,7 +28,7 @@ if (!$stu) { header('Location: students.php'); exit; }
 
 // Load ATC courses matching this center type (keep current course in the list)
 $centerType = getAtcCenterType($pdo, $atcId ? (int)$atcId : null);
-[$visSql, $visParams] = courseVisibilitySql($centerType);
+[$visSql, $visParams] = courseVisibilitySql($centerType, 'c.course_type', (int)$atcId, $pdo);
 $currentCourse = trim((string)($stu['course'] ?? ''));
 $extraSql = '';
 $extraParams = [];

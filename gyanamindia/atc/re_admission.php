@@ -185,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // ── Load courses for dropdown (matching center type) ────────────────────────
 $centerType = getAtcCenterType($pdo, $atcId ? (int)$atcId : null);
-[$visSql, $visParams] = courseVisibilitySql($centerType);
+[$visSql, $visParams] = courseVisibilitySql($centerType, 'c.course_type', (int)$atcId, $pdo);
 $coursesStmt = $pdo->prepare("
     SELECT c.id, c.course_name, c.course_type, c.duration,
            c.material_type, c.material_language,
