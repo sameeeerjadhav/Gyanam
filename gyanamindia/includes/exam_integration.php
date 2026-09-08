@@ -1,6 +1,6 @@
-<?php
+﻿<?php
 /**
- * Exam Portal Integration — Gyanam India
+ * Exam Portal Integration â€” Gyanam India
  *
  * Helper functions for communicating with the Laravel-based Exam Portal API
  * at gyanamexam.labxco.in via server-to-server cURL requests.
@@ -144,12 +144,12 @@ function examApi_request(string $method, string $endpoint, array $data = [], boo
     return ['success' => false, 'data' => $decoded, 'error' => $errMsg, 'http_code' => $httpCode];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // STUDENT SYNC
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
- * Build absolute public URL for an admission photo path (uploads/…).
+ * Build absolute public URL for an admission photo path (uploads/â€¦).
  */
 function examPortalAbsolutePhotoUrl(?string $relativePhoto): ?string
 {
@@ -171,7 +171,7 @@ function examPortalAbsolutePhotoUrl(?string $relativePhoto): ?string
  *
  * @param  string      $registrationId  The globally unique GIES ID (e.g. "GIES15")
  * @param  string      $fullName        Student full name
- * @param  string      $atcCode         ATC centre code (e.g. "ATC1") → maps to centre_name
+ * @param  string      $atcCode         ATC centre code (e.g. "ATC1") â†’ maps to centre_name
  * @param  string      $examSlot        SLOT1 | SLOT2 | SLOT3
  * @param  string      $timeWindow      MORNING | AFTERNOON | EVENING
  * @param  string|null $photoUrl       Absolute photo URL (optional)
@@ -203,15 +203,15 @@ function syncStudentToExamPortal(
     return examApi_request('POST', '/students', $payload);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // RESULTS
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Fetch exam results for a specific student from the Exam Portal.
  *
  * @param  string $registrationId  The GIES identifier
- * @return array  API result — ['success' => bool, 'data' => [...submissions...]]
+ * @return array  API result â€” ['success' => bool, 'data' => [...submissions...]]
  */
 function fetchStudentExamResults(string $registrationId): array
 {
@@ -224,7 +224,7 @@ function fetchStudentExamResults(string $registrationId): array
  * Fetch ALL exam results from the Exam Portal (admin sees all, ATC sees own centre).
  * The Exam Portal scopes results automatically based on the authenticated user's centre_id.
  *
- * @return array  API result — ['success' => bool, 'data' => ['submissions' => [...], 'stats' => [...]]]
+ * @return array  API result â€” ['success' => bool, 'data' => ['submissions' => [...], 'stats' => [...]]]
  */
 function fetchAllExamResults(int $page = 1, int $perPage = 100): array
 {
@@ -282,7 +282,7 @@ function examSubmissionPassRecord(array $sub): ?array
 /**
  * Fetch all exam results across paginated API pages (for certificates / dashboards).
  *
- * @return array Same shape as examApi_request — data.submissions holds every page merged.
+ * @return array Same shape as examApi_request â€” data.submissions holds every page merged.
  */
 function fetchAllExamResultsComplete(int $perPage = 100): array
 {
@@ -395,14 +395,14 @@ function fetchStudentPassingExamResult(string $registrationId): ?array
     return $best;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // EXAM ASSIGNMENTS
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Fetch all active exams available from the Exam Portal.
  *
- * @return array API result — list of exam configs
+ * @return array API result â€” list of exam configs
  */
 function fetchAvailableExams(): array
 {
@@ -412,7 +412,7 @@ function fetchAvailableExams(): array
 /**
  * Fetch all students synced in the Exam Portal along with their assignments.
  *
- * @return array API result — list of students with assignments
+ * @return array API result â€” list of students with assignments
  */
 function fetchExamStudents(): array
 {
@@ -448,9 +448,9 @@ function unassignExamFromStudent(int $examPortalStudentId, int $examId): array
     return examApi_request('DELETE', "/assignments/{$examPortalStudentId}/exams/{$examId}");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // PORTAL USER SYNC (ATC / DLC login accounts)
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Create or update an ATC/DLC user account in the Exam Portal.
@@ -473,7 +473,7 @@ function syncPortalUserToExam(
     string  $role,
     ?string $centreId = null
 ): array {
-    // Map main portal roles → exam portal roles
+    // Map main portal roles â†’ exam portal roles
     $examRole = match ($role) {
         'ATC CENTER' => 'atc',
         'DLC Office' => 'dlc',
@@ -508,9 +508,9 @@ function deletePortalUserFromExam(string $username): array
     return examApi_request('DELETE', '/portal-users/' . urlencode($username));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // COURSE SYNC
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Push courses from the main portal to the Exam Portal.
@@ -521,7 +521,7 @@ function deletePortalUserFromExam(string $username): array
  */
 function syncCoursesToExamPortal(PDO $pdo): array
 {
-    // Exam portal QB/exams use IT courses only — push all Active IT courses
+    // Exam portal QB/exams use IT courses only â€” push all Active IT courses
     try {
         $stmt = $pdo->query("
             SELECT id, course_name, course_type, duration, status
@@ -633,16 +633,16 @@ function syncCoursesToExamPortal(PDO $pdo): array
 /**
  * Fetch the list of courses synced in the Exam Portal.
  *
- * @return array  API result — ['success' => bool, 'data' => ['courses' => [...]]]
+ * @return array  API result â€” ['success' => bool, 'data' => ['courses' => [...]]]
  */
 function fetchPortalCourses(): array
 {
     return examApi_request('GET', '/portal-courses');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // ATC CENTRE METADATA SYNC
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Push all active ATC centre metadata (code, name, center_type, district, state)
@@ -667,9 +667,9 @@ function syncATCCentresToExamPortal(PDO $pdo): array
     ]);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // QUESTION BANKS (ATC PDF downloads)
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Resolve ATC code for the logged-in ATC session.
@@ -779,7 +779,43 @@ function questionBankPdfText(string $text): string
 }
 
 /**
- * Stream a question bank PDF to the browser (FPDF).
+ * Resolve GIIT letterhead + logo paths for question-bank PDFs.
+ *
+ * @return array{letterhead:?string,logo:?string}
+ */
+function questionBankPdfBrandPaths(): array
+{
+    $candidatesLetterhead = [
+        __DIR__ . '/../assets/branding/giit_letterhead.png',
+        __DIR__ . '/../assets/templates/giit_marksheet_header.png',
+        __DIR__ . '/../../image.png',
+    ];
+    $candidatesLogo = [
+        __DIR__ . '/../assets/giit_logo.png',
+        __DIR__ . '/../assets/giit_brand_logo.png',
+        __DIR__ . '/../assets/templates/giit_marksheet_logo.png',
+    ];
+
+    $letterhead = null;
+    foreach ($candidatesLetterhead as $path) {
+        if (is_file($path)) {
+            $letterhead = $path;
+            break;
+        }
+    }
+    $logo = null;
+    foreach ($candidatesLogo as $path) {
+        if (is_file($path)) {
+            $logo = $path;
+            break;
+        }
+    }
+    return ['letterhead' => $letterhead, 'logo' => $logo];
+}
+
+/**
+ * Stream a branded tabular question bank PDF (FPDF).
+ * Page 1: full GIIT letterhead. Every page: GIIT logo + question table.
  *
  * @param array $export Data from fetchQuestionBankExport()['data']
  */
@@ -790,82 +826,95 @@ function streamQuestionBankPdf(array $export, string $atcCode): void
         throw new RuntimeException('PDF library not found');
     }
     require_once $autoload;
+    require_once __DIR__ . '/QuestionBankBrandedPdf.php';
 
     $title = (string)($export['title'] ?? 'Question Bank');
     $subject = (string)($export['subject'] ?? '');
     $includeAnswers = !empty($export['include_answers']);
     $questions = is_array($export['questions'] ?? null) ? $export['questions'] : [];
+    $brand = questionBankPdfBrandPaths();
 
-    $pdf = new FPDF('P', 'mm', 'A4');
-    $pdf->SetAutoPageBreak(true, 18);
-    $pdf->SetMargins(14, 14, 14);
+    $pdf = new QuestionBankBrandedPdf('L', 'mm', 'A4');
+    $pdf->letterheadPath = $brand['letterhead'];
+    $pdf->logoPath = $brand['logo'];
+    $pdf->docTitle = $title;
+    $pdf->atcCode = $atcCode;
+    $pdf->subject = $subject;
+    $pdf->includeAnswers = $includeAnswers;
+    $pdf->AliasNbPages();
+    $pdf->SetMargins(10, 10, 10);
+    $pdf->SetAutoPageBreak(true, 14);
+
+    if ($includeAnswers) {
+        $pdf->colWidths = [12, 78, 42, 42, 42, 42, 14];
+    } else {
+        $pdf->colWidths = [12, 84, 44, 44, 44, 44];
+    }
+
     $pdf->AddPage();
 
-    $pdf->SetFont('Arial', 'B', 16);
-    $pdf->MultiCell(0, 8, questionBankPdfText($title), 0, 'L');
-    $pdf->Ln(1);
-
-    $pdf->SetFont('Arial', '', 10);
-    $meta = [];
-    if ($subject !== '') {
-        $meta[] = 'Course / Subject: ' . $subject;
-    }
-    $meta[] = 'ATC: ' . $atcCode;
-    $meta[] = 'Questions: ' . count($questions);
-    $meta[] = 'Generated: ' . date('d M Y H:i');
-    if ($includeAnswers) {
-        $meta[] = 'Answer key included (ATC staff copy)';
-    }
-    $pdf->SetTextColor(80, 80, 80);
-    $pdf->MultiCell(0, 5, questionBankPdfText(implode('  |  ', $meta)), 0, 'L');
+    $pdf->SetFont('Arial', 'B', 13);
+    $pdf->SetTextColor(197, 32, 38);
+    $pdf->Cell(0, 6, questionBankPdfText($title), 0, 1, 'L');
     $pdf->SetTextColor(0, 0, 0);
-    $pdf->Ln(3);
-    $pdf->SetDrawColor(200, 200, 200);
-    $pdf->Line(14, $pdf->GetY(), 196, $pdf->GetY());
-    $pdf->Ln(6);
+    $pdf->SetFont('Arial', '', 8);
+    $metaBits = [];
+    if ($subject !== '') {
+        $metaBits[] = 'Course: ' . $subject;
+    }
+    $metaBits[] = 'ATC: ' . $atcCode;
+    $metaBits[] = 'Total Questions: ' . count($questions);
+    $metaBits[] = 'Generated: ' . date('d M Y H:i');
+    $metaBits[] = $includeAnswers ? 'Copy: ATC staff (with answers)' : 'Copy: Practice (no answers)';
+    $pdf->SetTextColor(70, 70, 70);
+    $pdf->MultiCell(0, 4, questionBankPdfText(implode('   |   ', $metaBits)), 0, 'L');
+    $pdf->SetTextColor(0, 0, 0);
+    $pdf->Ln(2);
+
+    $pdf->renderTableHeader();
+    $pdf->drawTableHeaderNext = true;
 
     if (empty($questions)) {
-        $pdf->SetFont('Arial', 'I', 11);
-        $pdf->MultiCell(0, 6, 'No questions in this bank yet.');
+        $pdf->SetFont('Arial', 'I', 10);
+        $pdf->Cell(array_sum($pdf->colWidths), 10, 'No questions in this bank yet.', 1, 1, 'C');
     }
 
-    foreach ($questions as $q) {
-        $num = (int)($q['number'] ?? 0);
-        $text = (string)($q['text'] ?? '');
+    foreach ($questions as $idx => $q) {
+        $num = (int)($q['number'] ?? ($idx + 1));
+        $text = questionBankPdfText((string)($q['text'] ?? ''));
         $options = is_array($q['options'] ?? null) ? $q['options'] : [];
-        $correct = strtolower(trim((string)($q['correct_answer'] ?? '')));
+        $correct = strtoupper(trim((string)($q['correct_answer'] ?? '')));
 
-        if ($pdf->GetY() > 260) {
-            $pdf->AddPage();
-        }
-
-        $pdf->SetFont('Arial', 'B', 11);
-        $pdf->MultiCell(0, 6, questionBankPdfText('Q' . $num . '. ' . $text), 0, 'L');
-        $pdf->Ln(1);
-
-        $pdf->SetFont('Arial', '', 10);
+        $byId = ['A' => '', 'B' => '', 'C' => '', 'D' => ''];
         foreach ($options as $opt) {
-            $oid = strtolower(trim((string)($opt['id'] ?? '')));
-            $olabel = strtoupper($oid !== '' ? $oid : '?');
-            $otext = (string)($opt['text'] ?? '');
-            $mark = '';
-            if ($includeAnswers && $correct !== '' && $oid === $correct) {
-                $mark = '  *';
-                $pdf->SetFont('Arial', 'B', 10);
-            } else {
-                $pdf->SetFont('Arial', '', 10);
+            $oid = strtoupper(trim((string)($opt['id'] ?? '')));
+            if ($oid !== '' && array_key_exists($oid, $byId)) {
+                $byId[$oid] = questionBankPdfText((string)($opt['text'] ?? ''));
             }
-            $pdf->MultiCell(0, 5, questionBankPdfText('   (' . $olabel . ')  ' . $otext . $mark), 0, 'L');
+        }
+        if ($byId['A'] === '' && $byId['B'] === '' && count($options) >= 1) {
+            $labels = ['A', 'B', 'C', 'D'];
+            foreach ($options as $i => $opt) {
+                if (!isset($labels[$i])) {
+                    break;
+                }
+                $byId[$labels[$i]] = questionBankPdfText((string)($opt['text'] ?? ''));
+            }
         }
 
-        if ($includeAnswers && $correct !== '') {
-            $pdf->SetFont('Arial', 'I', 9);
-            $pdf->SetTextColor(0, 100, 60);
-            $pdf->MultiCell(0, 5, questionBankPdfText('   Correct: ' . strtoupper($correct)), 0, 'L');
-            $pdf->SetTextColor(0, 0, 0);
+        $cells = [
+            (string)$num,
+            $text,
+            $byId['A'],
+            $byId['B'],
+            $byId['C'],
+            $byId['D'],
+        ];
+        if ($includeAnswers) {
+            $cells[] = $correct !== '' ? $correct : '-';
         }
 
-        $pdf->Ln(4);
+        $pdf->drawDataRow($cells, $idx % 2 === 1);
     }
 
     $safeName = preg_replace('/[^A-Za-z0-9_-]+/', '_', $title) ?: 'question_bank';
