@@ -1,9 +1,13 @@
 <?php
 /**
  * Shared font preload — include once in <head> after charset/viewport.
- * Replaces blocking CSS @import for faster first paint.
+ * Admin UI standard: Sora (matches ATC Logins). Never @import in CSS (blocks render).
  */
 ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+:root { --font: 'Sora', sans-serif; --mono: 'JetBrains Mono', monospace; }
+body, button, input, select, textarea { font-family: var(--font); -webkit-font-smoothing: antialiased; }
+</style>

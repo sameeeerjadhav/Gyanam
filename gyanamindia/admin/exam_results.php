@@ -46,7 +46,8 @@ $filterSearch = trim($_GET['search'] ?? '');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Exam Results — Head Office | Gyanam India</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+        <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
+<link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/global.css">

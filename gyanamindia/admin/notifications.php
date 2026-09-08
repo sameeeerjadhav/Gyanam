@@ -65,7 +65,8 @@ $atcUsers = $pdo->query("SELECT id, name, username FROM users WHERE role = 'ATC 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Notifications — Super Admin | Gyanam India</title>
-    <link rel="stylesheet" href="../assets/css/global.css">
+        <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
+<link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/profile.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
