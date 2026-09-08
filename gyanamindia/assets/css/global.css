@@ -1,6 +1,6 @@
 /* ============================================================
    Gyanam Portal — Global Design System v2.0
-   Premium Light Theme | Inter Font | Elegant Design Tokens
+   Premium Light Theme | Sora Font | Elegant Design Tokens
    ============================================================ */
 
 /* Fonts: load via <link> (includes/head_fonts.php) — never @import (blocks render) */
@@ -22,7 +22,7 @@ html {
 }
 
 body {
-    font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     color: var(--text-primary);
     background: var(--bg-body);
     line-height: 1.6;

@@ -98,6 +98,7 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= htmlspecialchars($certPageTitle) ?> — Admin | Gyanam India Educational Services</title>
