@@ -5,6 +5,22 @@
 
 /* Playfair only needed on certificate pages — load there, not globally */
 
+/* Force Sora on dashboard chrome (ATC Logins look) */
+body,
+.dashboard-layout,
+.sidebar,
+.main-content,
+.top-header,
+.page-content,
+.header-greeting h2,
+.header-greeting p,
+.nav-link,
+.nav-section-title,
+button, input, select, textarea, table {
+    font-family: 'Sora', sans-serif !important;
+    -webkit-font-smoothing: antialiased;
+}
+
 /* ---------- Layout ---------- */
 .dashboard-layout {
     display: flex;
@@ -72,7 +88,7 @@
 }
 
 .sidebar-brand .brand-info h2 {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Sora', sans-serif !important;
     font-size: 1.1rem;
     font-weight: 800;
     background: linear-gradient(135deg, var(--primary-700), var(--accent-600));

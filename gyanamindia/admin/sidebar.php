@@ -3,6 +3,18 @@
  * Admin Sidebar Partial
  */
 $currentPage = basename($_SERVER['PHP_SELF']);
+
+// Ensure Sora is loaded + forced on every admin page that includes this sidebar
+if (empty($GLOBALS['_gyanam_sora_injected'])) {
+    $GLOBALS['_gyanam_sora_injected'] = true;
+    echo '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n";
+    echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
+    echo '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">' . "\n";
+    $soraCss = '../assets/css/admin-sora.css';
+    $soraFs  = __DIR__ . '/../assets/css/admin-sora.css';
+    $ver     = is_file($soraFs) ? (string)filemtime($soraFs) : '1';
+    echo '<link rel="stylesheet" href="' . htmlspecialchars($soraCss, ENT_QUOTES, 'UTF-8') . '?v=' . rawurlencode($ver) . '">' . "\n";
+}
 ?>
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">

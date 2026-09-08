@@ -7,7 +7,3 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
-<style>
-:root { --font: 'Sora', sans-serif; --mono: 'JetBrains Mono', monospace; }
-body, button, input, select, textarea { font-family: var(--font); -webkit-font-smoothing: antialiased; }
-</style>
