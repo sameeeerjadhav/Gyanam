@@ -16,7 +16,7 @@ require_once __DIR__ . '/../includes/functions.php';
 if (file_exists(__DIR__ . '/../includes/exam_integration.php')) {
     require_once __DIR__ . '/../includes/exam_integration.php';
 }
-requireLogin(['Admin', 'DLC', 'ATC CENTER']);
+requireLogin(['Admin', 'DLC']);
 
 // ── Load FPDI ─────────────────────────────────────────────────────────────────
 require_once __DIR__ . '/../assets/fpdi/fpdi_autoload.php';

@@ -84,6 +84,18 @@ foreach ($students as &$_s) {
 }
 unset($_s);
 
+$examPassByAdm = [];
+foreach ($students as $s) {
+    if (!empty($s['exam_passed'])) {
+        $examPassByAdm[(int)$s['id']] = true;
+    }
+}
+$physCertStatus = admissionPhysicalCertificateStatusMap(
+    $pdo,
+    array_map(fn($s) => (int)$s['id'], $students),
+    $examPassByAdm
+);
+
 // Stats
 $totalStudents    = count($students);
 $readyCount       = count(array_filter($students, fn($s) => $s['has_photo'] && $s['share_paid'] && $s['exam_passed']));
@@ -91,6 +103,8 @@ $noPhotoCount     = count(array_filter($students, fn($s) => !$s['has_photo']));
 $unpaidCount      = count(array_filter($students, fn($s) => !$s['share_paid']));
 $examPassedCount  = count(array_filter($students, fn($s) => $s['exam_passed']));
 $examNotPassed    = $totalStudents - $examPassedCount;
+$certReceivedCount = count(array_filter($physCertStatus, fn($st) => $st === 'received'));
+$certPendingCount  = count(array_filter($physCertStatus, fn($st) => $st === 'not_received'));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -214,7 +228,7 @@ a.btn-generate { text-decoration:none; }
             </button>
             <div class="header-greeting">
                 <h2>Completion Certificates</h2>
-                <p>Print official course completion PDFs — GIIT for IT, Gyanam Abacus for Abacus/Vedic (exam pass + share paid + photo)</p>
+                <p>Physical certificate status — Head Office prints and dispatches after main exam pass</p>
             </div>
         </div>
         <div class="header-right">
@@ -232,8 +246,8 @@ a.btn-generate { text-decoration:none; }
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
                 </div>
                 <div>
-                    <div class="cc-page-title">Course Completion Certificates</div>
-                    <div class="cc-page-sub">GIIT or Gyanam Abacus PDF after exam pass, HO share paid &amp; photo uploaded</div>
+                    <div class="cc-page-title">Physical Certificate Status</div>
+                    <div class="cc-page-sub">Soft copies are Admin-only. Track Received / Not Received after HO dispatch.</div>
                 </div>
             </div>
         </div>
@@ -248,18 +262,24 @@ a.btn-generate { text-decoration:none; }
                 <div class="cc-kpi-label">Ready for Certificate</div>
                 <div class="cc-kpi-value"><?= $readyCount ?></div>
             </div>
-            <div class="cc-kpi amber">
-                <div class="cc-kpi-label">No Photo</div>
-                <div class="cc-kpi-value"><?= $noPhotoCount ?></div>
+            <div class="cc-kpi emerald">
+                <div class="cc-kpi-label">Cert Received</div>
+                <div class="cc-kpi-value"><?= $certReceivedCount ?></div>
             </div>
-            <div class="cc-kpi rose">
-                <div class="cc-kpi-label">Share Unpaid</div>
-                <div class="cc-kpi-value"><?= $unpaidCount ?></div>
+            <div class="cc-kpi amber">
+                <div class="cc-kpi-label">Cert Not Received</div>
+                <div class="cc-kpi-value"><?= $certPendingCount ?></div>
             </div>
             <div class="cc-kpi" style="border-left-color:#4361ee">
                 <div class="cc-kpi-label">Exam Passed</div>
                 <div class="cc-kpi-value"><?= $examPassedCount ?></div>
             </div>
+        </div>
+
+        <div class="manual-note" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:12px;padding:.85rem 1rem;font-size:.88rem;font-weight:600;margin-bottom:1.15rem;line-height:1.45">
+            Soft-copy certificates are issued by Head Office only. After a student passes the main exam,
+            HO prints and dispatches the physical certificate. Track status below as
+            <strong>Received</strong> or <strong>Not Received</strong>.
         </div>
 
         <!-- Toolbar -->
@@ -282,36 +302,44 @@ a.btn-generate { text-decoration:none; }
                         <th>Student</th>
                         <th>Course</th>
                         <th>Photo</th>
-                        <th>Share Paid</th>
                         <th>Exam</th>
-                        <th>Status</th>
-                        <th>Action</th>
+                        <th>Certificate</th>
+                        <th>Marksheet</th>
                     </tr>
                 </thead>
                 <tbody>
                 <?php if (empty($students)): ?>
-                    <tr><td colspan="7">
+                    <tr><td colspan="6">
                         <div class="cc-empty">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
                             <div class="cc-empty-title">No active students found</div>
-                            <div class="cc-empty-sub">Add students via New Admission to generate certificates.</div>
+                            <div class="cc-empty-sub">Add students via New Admission.</div>
                         </div>
                     </td></tr>
                 <?php else: ?>
                     <?php foreach ($students as $s):
                         $fullName   = trim($s['first_name'] . ' ' . ($s['middle_name'] ? $s['middle_name'].' ' : '') . $s['last_name']);
                         $hasPhoto   = (bool)$s['has_photo'];
-                        $sharePaid  = (bool)$s['share_paid'];
                         $examPassed = (bool)$s['exam_passed'];
-                        $ready      = $hasPhoto && $sharePaid && $examPassed;
                         $initial    = strtoupper(substr($s['first_name'], 0, 1));
                         $photoUrl   = $hasPhoto ? '../' . htmlspecialchars($s['photo']) : '';
+                        $physStatus = $physCertStatus[(int)$s['id']] ?? ($examPassed ? 'not_received' : 'awaiting_exam');
 
-                        if ($ready)              { $statusClass = 'chip-ready';   $statusText = '✓ Ready';        }
-                        elseif (!$hasPhoto && !$sharePaid && !$examPassed) { $statusClass = 'chip-blocked'; $statusText = 'Multiple Missing'; }
-                        elseif (!$examPassed)    { $statusClass = 'chip-blocked'; $statusText = 'Exam Not Passed'; }
-                        elseif (!$hasPhoto)      { $statusClass = 'chip-nophoto'; $statusText = 'No Photo';       }
-                        else                     { $statusClass = 'chip-unpaid';  $statusText = 'Share Unpaid';   }
+                        if ($physStatus === 'received') {
+                            $certClass = 'chip-ready';
+                            $certText = 'Received';
+                        } elseif ($physStatus === 'not_received') {
+                            $certClass = 'chip-unpaid';
+                            $certText = 'Not Received';
+                        } else {
+                            $certClass = 'chip-blocked';
+                            $certText = 'Awaiting Exam';
+                        }
+
+                        $regIdForCert = trim((string)($s['registration_id'] ?? ''));
+                        if ($regIdForCert === '') {
+                            $regIdForCert = trim((string)($s['roll_no'] ?? ''));
+                        }
                     ?>
                     <tr>
                         <td>
@@ -336,13 +364,6 @@ a.btn-generate { text-decoration:none; }
                             <?php endif; ?>
                         </td>
                         <td>
-                            <?php if ($sharePaid): ?>
-                                <span class="cc-chip chip-ready"><span class="cc-chip-dot"></span>Paid</span>
-                            <?php else: ?>
-                                <span class="cc-chip chip-unpaid"><span class="cc-chip-dot"></span>Unpaid</span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
                             <?php if ($examPassed): ?>
                                 <span class="cc-chip chip-ready"><span class="cc-chip-dot"></span>Passed</span>
                             <?php elseif (($s['exam_status'] ?? '') === 'Failed'): ?>
@@ -354,43 +375,18 @@ a.btn-generate { text-decoration:none; }
                             <?php endif; ?>
                         </td>
                         <td>
-                            <span class="cc-chip <?= $statusClass ?>">
-                                <span class="cc-chip-dot"></span><?= $statusText ?>
+                            <span class="cc-chip <?= $certClass ?>">
+                                <span class="cc-chip-dot"></span><?= $certText ?>
                             </span>
                         </td>
                         <td>
-                            <?php
-                            $regIdForCert = trim((string)($s['registration_id'] ?? ''));
-                            if ($regIdForCert === '') {
-                                $regIdForCert = trim((string)($s['roll_no'] ?? ''));
-                            }
-                            $certUrl = '../admin/generate_course_certificate.php?reg_id=' . urlencode($regIdForCert) . '&preview=1';
-                            if (!$ready):
-                                if (!$examPassed && !$hasPhoto && !$sharePaid) $reason = 'Pass exam, upload photo & pay share first';
-                                elseif (!$examPassed) $reason = 'Student must pass exam first';
-                                elseif (!$hasPhoto && !$sharePaid) $reason = 'Upload photo and pay HO share first';
-                                elseif (!$hasPhoto) $reason = 'Upload student photo first';
-                                else $reason = 'Pay HO share first';
-                            endif;
-                            ?>
-                            <div style="display:flex;flex-direction:column;gap:.35rem;align-items:flex-start">
                             <?php if ($examPassed || ($s['exam_status'] ?? '') === 'Failed'): ?>
                             <a class="btn-generate" href="../admin/generate_marksheet.php?reg_id=<?= urlencode($regIdForCert) ?>&preview=1" target="_blank" rel="noopener">
                                 Marksheet
                             </a>
-                            <?php endif; ?>
-                            <?php if ($ready): ?>
-                            <a class="btn-generate" href="<?= htmlspecialchars($certUrl) ?>" target="_blank" rel="noopener">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
-                                View Certificate
-                            </a>
                             <?php else: ?>
-                            <span class="btn-generate disabled" title="<?= htmlspecialchars($reason) ?>">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
-                                View Certificate
-                            </span>
+                            <span class="btn-generate disabled" title="Available after exam">Marksheet</span>
                             <?php endif; ?>
-                            </div>
                         </td>
                     </tr>
                     <?php endforeach; ?>

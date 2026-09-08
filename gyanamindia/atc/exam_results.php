@@ -544,17 +544,16 @@ $passRate = $stats['total'] > 0 ? round(($stats['passed'] / $stats['total']) * 1
                             Marksheet
                         </a>
                         <?php endif; ?>
-                        <?php if ($canCert): ?>
-                        <a class="er-card-btn cert"
-                           href="../admin/generate_course_certificate.php?reg_id=<?= urlencode($studentId) ?>&preview=1"
-                           target="_blank">
-                            <svg viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
-                            Certificate
-                        </a>
-                        <?php elseif ($result === 'pass' && !$isDemo): ?>
-                        <span class="er-card-btn" style="opacity:.55;cursor:not-allowed" title="Upload photo and pay HO share to unlock certificate">
-                            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                            Cert Locked
+                        <?php if ($result === 'pass' && !$isDemo && $studentId): ?>
+                        <?php
+                            $admRow = $admByReg[$studentId] ?? null;
+                            $admIdForCert = (int)($admRow['id'] ?? 0);
+                            $phys = $admIdForCert > 0
+                                ? admissionPhysicalCertificateStatus($pdo, $admIdForCert, true)
+                                : 'not_received';
+                        ?>
+                        <span class="er-card-btn" style="<?= $phys === 'received' ? 'background:#ecfdf5;color:#047857;border:1px solid #a7f3d0' : 'background:#fff7ed;color:#c2410c;border:1px solid #fed7aa' ?>;cursor:default;opacity:1">
+                            <?= $phys === 'received' ? 'Cert Received' : 'Cert Not Received' ?>
                         </span>
                         <?php endif; ?>
                     </div>
