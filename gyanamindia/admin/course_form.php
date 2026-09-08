@@ -20,6 +20,7 @@ $userName = sanitize(getUserName());
 ensureDualMaterialCourseSchema($pdo);
 ensureCourseMaterialItemsSchema($pdo);
 ensureInventoryTables($pdo);
+ensureCourseAtcVisibilitySchema($pdo);
 $globalTshirtId = ensureGlobalTshirtCourseMarkerItem($pdo);
 
 $mode = $_GET['action'] ?? 'add'; // add | edit
@@ -29,6 +30,16 @@ $isEdit = $mode === 'edit' && $courseId > 0;
 // ── Load dropdown data ───────────────────────────────────────────────────────
 $centerTypes = masterCourseTypes();
 $durations = ['1 Month', '2 Months', '3 Months', '6 Months', '1 Year', '2 Years'];
+
+$atcCentersForVis = [];
+try {
+    $atcCentersForVis = $pdo->query("
+        SELECT id, name, center_type
+        FROM atc_centers
+        WHERE status = 'Active'
+        ORDER BY name ASC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {}
 
 // Inventory items (for With Material selection), grouped by category.
 // Default list stays T-Shirts + Books; other categories are available via the filter.
@@ -73,6 +84,8 @@ $materialCatSlug = static function (string $name): string {
 $course = [];
 $selectedItemIds = [];
 $materialOption = 'without';
+$visibilityScope = 'all';
+$selectedAtcIds = [];
 
 if ($isEdit) {
     $stmt = $pdo->prepare("SELECT * FROM courses WHERE id = ?");
@@ -82,6 +95,18 @@ if ($isEdit) {
     if (!$course) {
         header('Location: courses.php');
         exit;
+    }
+
+    $visibilityScope = strtolower(trim((string)($course['visibility_scope'] ?? 'all')));
+    if ($visibilityScope !== 'specific') {
+        $visibilityScope = 'all';
+    }
+    try {
+        $vst = $pdo->prepare("SELECT atc_id FROM course_atc_visibility WHERE course_id = ?");
+        $vst->execute([$courseId]);
+        $selectedAtcIds = array_map('intval', $vst->fetchAll(PDO::FETCH_COLUMN));
+    } catch (Exception $e) {
+        $selectedAtcIds = [];
     }
 
     $withW = (float)($course['ho_share_with_material'] ?? 0);
@@ -134,6 +159,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             throw new Exception('Select which center type can see this course (Abacus, Vedic Maths, or IT).');
         }
 
+        $visibilityScope = strtolower(trim((string)($_POST['visibility_scope'] ?? 'all')));
+        if ($visibilityScope !== 'specific') {
+            $visibilityScope = 'all';
+        }
+        $selectedAtcPost = $_POST['visible_atc_ids'] ?? [];
+        if (!is_array($selectedAtcPost)) {
+            $selectedAtcPost = [];
+        }
+        $selectedAtcPost = array_values(array_unique(array_filter(array_map('intval', $selectedAtcPost), static fn($x) => $x > 0)));
+        if ($visibilityScope === 'specific') {
+            if ($selectedAtcPost === []) {
+                throw new Exception('Select at least one ATC center, or choose All Centers.');
+            }
+            // Keep only ATCs that match the selected center type
+            $allowedAtcIds = [];
+            foreach ($atcCentersForVis as $a) {
+                if (courseIsVisibleToCenter($courseType, $a['center_type'] ?? '')) {
+                    $allowedAtcIds[(int)$a['id']] = true;
+                }
+            }
+            $selectedAtcPost = array_values(array_filter($selectedAtcPost, static fn($id) => isset($allowedAtcIds[$id])));
+            if ($selectedAtcPost === []) {
+                throw new Exception('Selected centers do not match the chosen center type.');
+            }
+        } else {
+            $selectedAtcPost = [];
+        }
+
         $courseName = trim($_POST['course_name'] ?? '');
         if (!$courseName) throw new Exception('Course name is required');
 
@@ -184,6 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
                     material_type              = ?,
                     material_language          = ?,
                     with_material_configured  = ?,
+                    visibility_scope           = ?,
                     status                     = ?
                 WHERE id = ?
             ");
@@ -200,6 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
                 $materialTypeDb,
                 $materialLanguage,
                 $withConfigured,
+                $visibilityScope,
                 $status,
                 $courseId
             ]);
@@ -209,9 +264,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
                     (course_name, course_type, duration, course_content,
                      ho_share, ho_share_with_material, ho_share_without_material,
                      dlc_share_with_material, dlc_share_without_material,
-                     material_type, material_language, with_material_configured, status)
+                     material_type, material_language, with_material_configured,
+                     visibility_scope, status)
                 VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([
                 $courseName,
@@ -226,10 +282,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
                 $materialTypeDb,
                 $materialLanguage,
                 $withConfigured,
+                $visibilityScope,
                 $status
             ]);
             $courseId = (int)$pdo->lastInsertId();
             $isEdit = true;
+        }
+
+        // Persist ATC visibility mapping
+        $pdo->prepare("DELETE FROM course_atc_visibility WHERE course_id = ?")->execute([$courseId]);
+        if ($visibilityScope === 'specific' && $selectedAtcPost !== []) {
+            $insVis = $pdo->prepare("INSERT INTO course_atc_visibility (course_id, atc_id) VALUES (?, ?)");
+            foreach ($selectedAtcPost as $aid) {
+                $insVis->execute([$courseId, $aid]);
+            }
         }
 
         // Save mapping rows (only meaningful when With is configured)
@@ -350,6 +416,14 @@ $materialOption = $isEdit
         .items-list { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .5rem; max-height: 360px; overflow:auto; padding-right:.25rem; }
         .item-check { display:flex; align-items:flex-start; gap:.6rem; padding:.55rem .65rem; border:1.5px solid var(--border-color); border-radius:12px; background:#fff; }
         .item-check.is-hidden, .cat-block.is-hidden { display: none !important; }
+        .atc-vis-box { border:1.5px solid var(--border-color); border-radius:14px; padding:.85rem 1rem; background:#fafafa; }
+        .atc-vis-list { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .5rem; max-height: 280px; overflow:auto; padding-right:.25rem; }
+        .atc-vis-item { display:flex; align-items:flex-start; gap:.6rem; padding:.55rem .65rem; border:1.5px solid var(--border-color); border-radius:12px; background:#fff; cursor:pointer; }
+        .atc-vis-item.is-hidden { display: none !important; }
+        .atc-vis-item input { margin-top: .15rem; }
+        .atc-vis-item .meta { display:flex; flex-direction:column; gap:.2rem; }
+        .atc-vis-item .nm { font-weight:850; font-size:.86rem; color:#111827; }
+        .atc-vis-item .st { font-size:.74rem; color:var(--text-secondary); }
         .filter-empty { display:none; font-size:.8rem; color:var(--text-secondary); padding:.35rem .1rem; }
         .filter-empty.show { display:block; }
         .item-check input { margin-top: .15rem; }
@@ -460,7 +534,7 @@ $materialOption = $isEdit
 
                         <div>
                             <label for="course_type">Visible to center type <span class="field-req">*</span></label>
-                            <select class="field-select" id="course_type" name="course_type" required>
+                            <select class="field-select" id="course_type" name="course_type" required onchange="onCourseTypeChange()">
                                 <option value="">— Select center type —</option>
                                 <?php foreach ($centerTypes as $ct): ?>
                                     <option value="<?= htmlspecialchars($ct) ?>" <?= ($courseTypeVal === htmlspecialchars($ct) ? 'selected' : '') ?>>
@@ -469,6 +543,44 @@ $materialOption = $isEdit
                                 <?php endforeach; ?>
                             </select>
                             <div class="field-hint">Only ATCs of this type will see the course.</div>
+                        </div>
+
+                        <div>
+                            <label for="visibility_scope">Visible to centers <span class="field-req">*</span></label>
+                            <select class="field-select" id="visibility_scope" name="visibility_scope" required onchange="onVisibilityScopeChange()">
+                                <option value="all" <?= $visibilityScope === 'all' ? 'selected' : '' ?>>All Centers</option>
+                                <option value="specific" <?= $visibilityScope === 'specific' ? 'selected' : '' ?>>Specific Centers</option>
+                            </select>
+                            <div class="field-hint">All = every ATC of the selected type. Specific = only chosen ATCs.</div>
+                        </div>
+
+                        <div class="full" id="specificAtcWrap" style="<?= $visibilityScope === 'specific' ? '' : 'display:none' ?>">
+                            <label>Select ATC Centers <span class="field-req">*</span></label>
+                            <div class="atc-vis-box">
+                                <input type="text" id="atcVisSearch" class="field-input" placeholder="Search ATC by name…" oninput="filterAtcVisibilityList()" style="margin-bottom:.65rem">
+                                <div class="atc-vis-list" id="atcVisList">
+                                    <?php
+                                    $selectedAtcLookup = array_fill_keys($selectedAtcIds, true);
+                                    $courseTypeRaw = (string)($course['course_type'] ?? '');
+                                    foreach ($atcCentersForVis as $a):
+                                        $aid = (int)$a['id'];
+                                        $matchesType = $courseTypeRaw !== '' && courseIsVisibleToCenter($courseTypeRaw, $a['center_type'] ?? '');
+                                        $show = $matchesType;
+                                    ?>
+                                    <label class="atc-vis-item<?= $show ? '' : ' is-hidden' ?>"
+                                           data-name="<?= htmlspecialchars(strtolower($a['name']), ENT_QUOTES) ?>"
+                                           data-center-type="<?= htmlspecialchars((string)($a['center_type'] ?? ''), ENT_QUOTES) ?>">
+                                        <input type="checkbox" name="visible_atc_ids[]" value="<?= $aid ?>"
+                                               <?= !empty($selectedAtcLookup[$aid]) ? 'checked' : '' ?>>
+                                        <span class="meta">
+                                            <span class="nm"><?= htmlspecialchars($a['name']) ?></span>
+                                            <span class="st"><?= htmlspecialchars((string)($a['center_type'] ?? '—')) ?></span>
+                                        </span>
+                                    </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <div class="field-hint" id="atcVisEmptyHint" style="display:none;margin-top:.5rem">No ATCs match this center type.</div>
+                            </div>
                         </div>
 
                         <div>
@@ -828,6 +940,18 @@ $materialOption = $isEdit
             if (!cd) { e.preventDefault(); alert('Please enter custom duration'); return; }
         }
 
+        const scope = document.getElementById('visibility_scope')?.value || 'all';
+        if (scope === 'specific') {
+            const type = document.getElementById('course_type')?.value || '';
+            if (!type) { e.preventDefault(); alert('Select center type first'); return; }
+            const checked = [...document.querySelectorAll('#atcVisList .atc-vis-item:not(.is-hidden) input[name="visible_atc_ids[]"]:checked')];
+            if (!checked.length) {
+                e.preventDefault();
+                alert('Select at least one ATC center, or choose All Centers.');
+                return;
+            }
+        }
+
         // If "with" is selected and admin filled shares for with-material, we store mapping.
         if (optWith) {
             const hoWith = parseFloat(document.getElementById('ho_share_with_material')?.value || '0');
@@ -843,6 +967,56 @@ $materialOption = $isEdit
 
         // Server side handles `duration=custom` using `custom_dur`.
     });
+
+    function centerMatchesCourseType(centerType, courseType) {
+        const raw = String(centerType || '').toLowerCase();
+        if (!raw || !courseType) return false;
+        if (courseType === 'Abacus') return raw.includes('abacus');
+        if (courseType === 'Vedic Maths') return raw.includes('vedic');
+        if (courseType === 'IT') return /(^|[^a-z])it([^a-z]|$)/.test(raw) || raw.includes('all three');
+        return false;
+    }
+
+    function onVisibilityScopeChange() {
+        const scope = document.getElementById('visibility_scope').value;
+        const wrap = document.getElementById('specificAtcWrap');
+        if (wrap) wrap.style.display = scope === 'specific' ? '' : 'none';
+        if (scope === 'specific') filterAtcVisibilityList(true);
+    }
+
+    function onCourseTypeChange() {
+        // Uncheck ATCs that no longer match the new type
+        const courseType = document.getElementById('course_type').value;
+        document.querySelectorAll('#atcVisList .atc-vis-item').forEach(el => {
+            const match = centerMatchesCourseType(el.dataset.centerType || '', courseType);
+            if (!match) {
+                const cb = el.querySelector('input[type="checkbox"]');
+                if (cb) cb.checked = false;
+            }
+        });
+        filterAtcVisibilityList(true);
+    }
+
+    function filterAtcVisibilityList(resetSearch) {
+        const courseType = document.getElementById('course_type')?.value || '';
+        const searchEl = document.getElementById('atcVisSearch');
+        if (resetSearch && searchEl) searchEl.value = '';
+        const q = (searchEl?.value || '').trim().toLowerCase();
+        let visible = 0;
+        document.querySelectorAll('#atcVisList .atc-vis-item').forEach(el => {
+            const matchType = centerMatchesCourseType(el.dataset.centerType || '', courseType);
+            const matchSearch = !q || (el.dataset.name || '').includes(q);
+            const show = !!courseType && matchType && matchSearch;
+            el.classList.toggle('is-hidden', !show);
+            if (show) visible++;
+        });
+        const hint = document.getElementById('atcVisEmptyHint');
+        if (hint) hint.style.display = (courseType && visible === 0) ? 'block' : 'none';
+    }
+
+    // Init ATC visibility list on load
+    onVisibilityScopeChange();
+    filterAtcVisibilityList();
 
 </script>
 <script src="../assets/js/dashboard.js"></script>

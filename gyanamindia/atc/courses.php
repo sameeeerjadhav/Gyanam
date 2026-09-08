@@ -41,15 +41,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $finalFee = max($feeWith, $feeWithout);
 
                 // Verify course exists, is active, and matches this ATC's center type
-                $chk = $pdo->prepare("SELECT id, course_name, course_type FROM courses WHERE id = ? AND status = 'Active'");
+                $chk = $pdo->prepare("SELECT id, course_name, course_type, visibility_scope FROM courses WHERE id = ? AND status = 'Active'");
                 $chk->execute([$courseId]);
                 $row = $chk->fetch(PDO::FETCH_ASSOC);
+                if (!$row) {
+                    // Fallback if visibility_scope column not yet migrated on this host
+                    $chk = $pdo->prepare("SELECT id, course_name, course_type FROM courses WHERE id = ? AND status = 'Active'");
+                    $chk->execute([$courseId]);
+                    $row = $chk->fetch(PDO::FETCH_ASSOC);
+                }
                 if (!$row) {
                     echo json_encode(['success' => false, 'message' => 'Course not found or inactive']);
                     exit;
                 }
-                if (!courseIsVisibleToCenter($row['course_type'] ?? '', $centerType)) {
-                    echo json_encode(['success' => false, 'message' => 'This course is not available for your center type.']);
+                if (!courseIsVisibleToAtc($pdo, $row, (int)$atcId, $centerType)) {
+                    echo json_encode(['success' => false, 'message' => 'This course is not available for your centre.']);
                     exit;
                 }
 
@@ -85,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $searchTerm  = trim($_GET['search'] ?? '');
 $typeFilter  = $_GET['type'] ?? 'all';   // 'all' | 'active' | 'inactive'
 
-[$visSql, $visParams] = courseVisibilitySql($centerType);
+[$visSql, $visParams] = courseVisibilitySql($centerType, 'c.course_type', (int)$atcId, $pdo);
 
 $sql = "
     SELECT c.id, c.course_name, c.course_type, c.duration,

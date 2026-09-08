@@ -220,7 +220,7 @@ $inquiries = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 /* ── Fetch active courses for Dropdown (matching center type + fee set) ── */
 $centerType = getAtcCenterType($pdo, $atcId ? (int)$atcId : null);
-[$visSql, $visParams] = courseVisibilitySql($centerType);
+[$visSql, $visParams] = courseVisibilitySql($centerType, 'c.course_type', (int)$atcId, $pdo);
 $courseStmt = $pdo->prepare("
     SELECT c.course_name, acf.final_fee AS fees,
            acf.fee_with_material, acf.fee_without_material
