@@ -1,0 +1,30 @@
+/* Admin / dashboard UI — force Sora everywhere (same as ATC Logins) */
+html,
+body,
+.dashboard-layout,
+.sidebar,
+.main-content,
+.top-header,
+.page-content,
+.header-greeting,
+.header-greeting h2,
+.header-greeting p,
+.nav-link,
+.nav-section-title,
+button,
+input,
+select,
+textarea,
+table,
+th,
+td,
+a,
+label,
+span,
+p,
+h1, h2, h3, h4, h5, h6,
+.btn, .btn-primary, .btn-add, .btn-secondary,
+.data-table, .table-card {
+    font-family: 'Sora', sans-serif !important;
+    -webkit-font-smoothing: antialiased;
+}
