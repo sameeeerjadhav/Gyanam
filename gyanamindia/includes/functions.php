@@ -72,48 +72,92 @@ function baseURL(): string {
  * @param string $centerType  Ignored — kept for backward compatibility
  * @return string e.g. "GYANAM15"
  */
-function generateRegistrationId(PDO $pdo, string $centerType = ''): string {
-    // Find the highest global sequence across old (gi..., GIES...) and new (GYANAM...) formats
-    $stmt = $pdo->prepare(
-        "SELECT COALESCE(MAX(
-            CAST(
-                CASE
-                    WHEN registration_id REGEXP '^GYANAM[0-9]+$' THEN REGEXP_REPLACE(registration_id, '^GYANAM', '')
-                    WHEN registration_id REGEXP '^GIES[0-9]+$'   THEN REGEXP_REPLACE(registration_id, '^GIES', '')
-                    WHEN registration_id REGEXP '^gi[a-z]+[0-9]+$' THEN REGEXP_REPLACE(registration_id, '^gi[a-z]+', '')
-                    ELSE '0'
-                END
-            AS UNSIGNED)
-        ), 0)
-        FROM admissions
-        WHERE registration_id IS NOT NULL AND registration_id != ''"
-    );
-    $stmt->execute();
-    $maxSeq  = (int) $stmt->fetchColumn();
-    $nextSeq = $maxSeq + 1;
-
-    return 'GYANAM' . $nextSeq;
+/**
+ * Look up courses.course_type by course name.
+ */
+function lookupCourseTypeByName(PDO $pdo, string $courseName): string {
+    $courseName = trim($courseName);
+    if ($courseName === '') {
+        return '';
+    }
+    try {
+        $st = $pdo->prepare("SELECT course_type FROM courses WHERE course_name = ? LIMIT 1");
+        $st->execute([$courseName]);
+        return trim((string)($st->fetchColumn() ?: ''));
+    } catch (Throwable $e) {
+        return '';
+    }
 }
 
 /**
- * Generate the next Roll No for a student within a specific ATC.
- * Roll No is a simple integer: 1, 2, 3...
- * Unique within one ATC; may repeat across ATCs.
- *
- * @param PDO $pdo    Active PDO connection
- * @param int $atcId  The ATC center ID
- * @return string     e.g. "1", "2", "15"
+ * Student ID prefix by course brand:
+ * - Abacus / Vedic Maths → GYANAM
+ * - IT → GIIT
  */
-function generateNextRollNoSimple(PDO $pdo, int $atcId): string {
-    $stmt = $pdo->prepare(
-        "SELECT COALESCE(MAX(CAST(roll_no AS UNSIGNED)), 0)
-         FROM admissions
-         WHERE atc_id = ?
-           AND roll_no REGEXP '^[0-9]+$'"
-    );
-    $stmt->execute([$atcId]);
-    $maxRoll = (int) $stmt->fetchColumn();
-    return (string) ($maxRoll + 1);
+function studentIdPrefixForCourse(?string $courseType = null, ?string $courseName = null, ?string $centerType = null): string {
+    $brand = admissionFormBrandVariant($centerType, $courseName, $courseType);
+    return $brand === 'it' ? 'GIIT' : 'GYANAM';
+}
+
+/**
+ * Next global registration / roll ID for a course brand.
+ * Abacus/Vedic → GYANAM1, GYANAM2, …
+ * IT → GIIT1, GIIT2, …
+ *
+ * Sequences are separate per prefix. GYANAM continues from legacy GIES/gi* IDs.
+ */
+function generateRegistrationId(
+    PDO $pdo,
+    string $centerType = '',
+    string $courseName = '',
+    string $courseType = ''
+): string {
+    if ($courseType === '' && $courseName !== '') {
+        $courseType = lookupCourseTypeByName($pdo, $courseName);
+    }
+    $prefix = studentIdPrefixForCourse($courseType, $courseName, $centerType);
+
+    if ($prefix === 'GIIT') {
+        $stmt = $pdo->query(
+            "SELECT COALESCE(MAX(
+                CAST(REGEXP_REPLACE(registration_id, '^GIIT', '') AS UNSIGNED)
+            ), 0)
+            FROM admissions
+            WHERE registration_id REGEXP '^GIIT[0-9]+$'"
+        );
+    } else {
+        // GYANAM series (includes legacy GIES / gi* so numbering stays continuous)
+        $stmt = $pdo->query(
+            "SELECT COALESCE(MAX(
+                CAST(
+                    CASE
+                        WHEN registration_id REGEXP '^GYANAM[0-9]+$' THEN REGEXP_REPLACE(registration_id, '^GYANAM', '')
+                        WHEN registration_id REGEXP '^GIES[0-9]+$'   THEN REGEXP_REPLACE(registration_id, '^GIES', '')
+                        WHEN registration_id REGEXP '^gi[a-z]+[0-9]+$' THEN REGEXP_REPLACE(registration_id, '^gi[a-z]+', '')
+                        ELSE '0'
+                    END
+                AS UNSIGNED)
+            ), 0)
+            FROM admissions
+            WHERE registration_id REGEXP '^(GYANAM|GIES|gi[a-z]+)[0-9]+$'"
+        );
+    }
+    $maxSeq = (int)($stmt ? $stmt->fetchColumn() : 0);
+    return $prefix . ($maxSeq + 1);
+}
+
+/**
+ * Next roll number — same branded series as registration_id (GYANAM# / GIIT#).
+ * $atcId kept for backward-compatible call signatures.
+ */
+function generateNextRollNoSimple(
+    PDO $pdo,
+    int $atcId,
+    string $centerType = '',
+    string $courseName = '',
+    string $courseType = ''
+): string {
+    return generateRegistrationId($pdo, $centerType, $courseName, $courseType);
 }
 
 /**
@@ -194,10 +238,14 @@ function resolveAdmissionIdentityForCourse(
         ];
     }
 
+    $courseType = lookupCourseTypeByName($pdo, $course);
+    $registrationId = generateRegistrationId($pdo, $centerType, $course, $courseType);
+
     return [
         'ok' => true,
-        'roll_no' => generateNextRollNoSimple($pdo, $atcId),
-        'registration_id' => generateRegistrationId($pdo, $centerType),
+        // Roll No uses the same branded series as Registration ID (GYANAM# / GIIT#)
+        'roll_no' => $registrationId,
+        'registration_id' => $registrationId,
         'is_re_enrollment' => false,
         'source' => null,
     ];

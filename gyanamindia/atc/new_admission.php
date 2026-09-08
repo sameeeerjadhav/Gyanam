@@ -399,8 +399,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $discountAmount = floatval($_POST['discount_amount'] ?? 0);
                 $netPayable     = $courseFees - $discountAmount;
 
-                $rollNo3         = generateNextRollNoSimple($pdo, $atcId);
-                $registrationId3 = generateRegistrationId($pdo, $centerType3);
+                $courseName3     = (string)($_POST['course'] ?? '');
+                $registrationId3 = generateRegistrationId($pdo, (string)$centerType3, $courseName3);
+                $rollNo3         = $registrationId3;
 
                 $matType3 = $_POST['material_type'] ?? 'Without Material';
                 $hoShareSnapshot3  = getHoShareForCourse($pdo, $_POST['course'] ?? '', $matType3);

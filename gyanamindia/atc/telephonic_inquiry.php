@@ -141,8 +141,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $atcStmt->execute([$atcId]);
                 $centerType = $atcStmt->fetchColumn() ?: 'Other';
 
-                $rollNo = generateNextRollNoSimple($pdo, (int)$atcId);
-                $registrationId = generateRegistrationId($pdo, (string)$centerType);
+                $courseNameTel = (string)($inq['interested_course'] ?? '');
+                $registrationId = generateRegistrationId($pdo, (string)$centerType, $courseNameTel);
+                $rollNo = $registrationId;
 
                 $courseFees  = floatval($_POST['course_fees']    ?? 0);
                 $discount    = floatval($_POST['discount_amount'] ?? 0);
