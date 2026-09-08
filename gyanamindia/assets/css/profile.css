@@ -10,6 +10,11 @@
     gap: 1.25rem;
 }
 
+.profile-page--admin {
+    max-width: 1080px;
+    gap: 1.35rem;
+}
+
 /* ---- Profile Header Card — spans full width ---- */
 .profile-header-card {
     grid-column: 1 / -1;
@@ -53,6 +58,7 @@
 
 .profile-header-info {
     min-width: 0;
+    flex: 1;
 }
 
 .profile-header-info h2 {
@@ -62,6 +68,34 @@
     margin: 0 0 0.25rem;
     line-height: 1.2;
 }
+
+.profile-header-aside {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.profile-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .4rem .75rem;
+    border-radius: 999px;
+    font-size: .74rem;
+    font-weight: 700;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.profile-stat-chip .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+}
+.profile-stat-chip.is-ok {
+    background: #ecfdf5; color: #047857; border-color: #a7f3d0;
+}
+.profile-stat-chip.is-ok .dot { background: #10b981; }
+.profile-stat-chip.is-warn {
+    background: #fffbeb; color: #b45309; border-color: #fde68a;
+}
+.profile-stat-chip.is-warn .dot { background: #f59e0b; }
 
 .profile-role-badge {
     display: inline-flex;
@@ -120,6 +154,16 @@
     animation-delay: 0.12s;
 }
 
+.profile-form-card .card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
 .profile-form-card h3 {
     font-size: 0.92rem;
     font-weight: 800;
@@ -132,10 +176,84 @@
     gap: 0.5rem;
 }
 
+.profile-form-card .card-head h3 {
+    margin: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.card-sub {
+    margin: .35rem 0 0;
+    font-size: .78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    line-height: 1.45;
+}
+
 .profile-form-card h3 svg {
     width: 17px;
     height: 17px;
     color: var(--primary-500);
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .3rem .7rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 800;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    flex-shrink: 0;
+}
+.status-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+}
+.status-pill.ok {
+    background: #ecfdf5; color: #047857; border-color: #a7f3d0;
+}
+.status-pill.ok .dot { background: #10b981; }
+.status-pill.warn {
+    background: #fffbeb; color: #b45309; border-color: #fde68a;
+}
+.status-pill.warn .dot { background: #f59e0b; }
+
+.info-note {
+    display: flex;
+    gap: .7rem;
+    align-items: flex-start;
+    padding: .85rem 1rem;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #eff6ff, #f5f3ff);
+    border: 1px solid #c7d2fe;
+    color: #3730a3;
+    font-size: .8rem;
+    font-weight: 500;
+    line-height: 1.5;
+    margin-bottom: 1.15rem;
+}
+.info-note svg {
+    width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; opacity: .85;
+}
+
+.mail-settings-card {
+    grid-column: 1 / -1;
+    animation-delay: 0.16s;
+}
+
+.mail-section-label {
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin: .35rem 0 .65rem;
+}
+
+.mail-grid {
+    margin-bottom: 1rem;
 }
 
 /* ---- Form Fields ---- */
@@ -179,6 +297,7 @@
     outline: none;
     width: 100%;
     box-sizing: border-box;
+    min-height: 40px;
 }
 
 .form-field input:focus,
@@ -299,6 +418,10 @@
 }
 
 /* ---- Responsive ---- */
+@media (max-width: 900px) {
+    .profile-header-aside { display: none; }
+}
+
 @media (max-width: 768px) {
     .profile-page {
         grid-template-columns: 1fr;
@@ -331,5 +454,10 @@
     .profile-form-actions .btn-primary {
         width: 100%;
         justify-content: center;
+    }
+
+    .profile-form-card .card-head {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
