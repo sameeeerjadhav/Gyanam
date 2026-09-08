@@ -3136,20 +3136,152 @@ function gyanamAbacusCourseCertificateDrawFrame($pdf, float $W, float $H): void 
 }
 
 /** Active dashboard banners — lean columns, capped. $audience = ATC|DLC */
-function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8): array {
+function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8, ?int $atcId = null): array {
     $audience = strtoupper($audience) === 'DLC' ? 'DLC' : 'ATC';
+    ensureAnnouncementAtcVisibilitySchema($pdo);
     try {
-        $stmt = $pdo->prepare("
-            SELECT id, title, image_path, orientation, target_audience
+        $sql = "
+            SELECT id, title, image_path, orientation, target_audience, visibility_scope, created_at
             FROM announcements
             WHERE status = 'Active' AND target_audience IN ('All', ?)
-            ORDER BY created_at DESC
-            LIMIT ?
-        ");
-        $stmt->bindValue(1, $audience);
-        $stmt->bindValue(2, $limit, PDO::PARAM_INT);
+        ";
+        $params = [$audience];
+
+        // ATC-specific assignment (All Centers vs Specific Centers)
+        if ($audience === 'ATC' && $atcId !== null && $atcId > 0) {
+            $sql .= "
+                AND (
+                    COALESCE(visibility_scope, 'all') <> 'specific'
+                    OR EXISTS (
+                        SELECT 1 FROM announcement_atc_visibility aav
+                        WHERE aav.announcement_id = announcements.id AND aav.atc_id = ?
+                    )
+                )
+            ";
+            $params[] = $atcId;
+        }
+
+        $sql .= ' ORDER BY created_at DESC LIMIT ?';
+        $stmt = $pdo->prepare($sql);
+        foreach ($params as $i => $val) {
+            $stmt->bindValue($i + 1, $val);
+        }
+        $stmt->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+/**
+ * Ensure announcements.visibility_scope + announcement_atc_visibility mapping.
+ */
+function ensureAnnouncementAtcVisibilitySchema(PDO $pdo): void {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    try {
+        $cols = $pdo->query('SHOW COLUMNS FROM announcements')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('visibility_scope', $cols, true)) {
+            $pdo->exec("ALTER TABLE announcements ADD COLUMN visibility_scope VARCHAR(20) NOT NULL DEFAULT 'all' COMMENT 'all=all ATCs (when audience includes ATC); specific=mapped ATCs only'");
+        }
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS announcement_atc_visibility (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                announcement_id INT NOT NULL,
+                atc_id INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_ann_atc (announcement_id, atc_id),
+                KEY idx_aav_atc (atc_id),
+                KEY idx_aav_ann (announcement_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+    } catch (Exception $e) {
+        error_log('[AnnAtcVis] ' . $e->getMessage());
+    }
+}
+
+/**
+ * Save ATC assignment for a banner. Ignored when audience is DLC-only.
+ *
+ * @param list<int> $atcIds
+ */
+function saveAnnouncementAtcVisibility(PDO $pdo, int $announcementId, string $scope, array $atcIds, string $targetAudience = 'All'): void {
+    ensureAnnouncementAtcVisibilitySchema($pdo);
+    if ($announcementId <= 0) {
+        return;
+    }
+    $audience = strtoupper(trim($targetAudience));
+    $scope = strtolower(trim($scope)) === 'specific' ? 'specific' : 'all';
+
+    // DLC-only banners do not use ATC mapping
+    if ($audience === 'DLC') {
+        $scope = 'all';
+        $atcIds = [];
+    }
+
+    $pdo->prepare('UPDATE announcements SET visibility_scope = ? WHERE id = ?')->execute([$scope, $announcementId]);
+    $pdo->prepare('DELETE FROM announcement_atc_visibility WHERE announcement_id = ?')->execute([$announcementId]);
+
+    if ($scope !== 'specific') {
+        return;
+    }
+    $ins = $pdo->prepare('INSERT IGNORE INTO announcement_atc_visibility (announcement_id, atc_id) VALUES (?, ?)');
+    foreach ($atcIds as $atcId) {
+        $atcId = (int)$atcId;
+        if ($atcId > 0) {
+            $ins->execute([$announcementId, $atcId]);
+        }
+    }
+}
+
+/**
+ * @return list<int>
+ */
+function getAnnouncementAssignedAtcIds(PDO $pdo, int $announcementId): array {
+    ensureAnnouncementAtcVisibilitySchema($pdo);
+    if ($announcementId <= 0) {
+        return [];
+    }
+    try {
+        $st = $pdo->prepare('SELECT atc_id FROM announcement_atc_visibility WHERE announcement_id = ?');
+        $st->execute([$announcementId]);
+        return array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN) ?: []);
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+/**
+ * Active banners an ATC may download from Downloads.
+ *
+ * @return list<array>
+ */
+function getDownloadableBannersForAtc(PDO $pdo, int $atcId): array {
+    if ($atcId <= 0) {
+        return [];
+    }
+    ensureAnnouncementAtcVisibilitySchema($pdo);
+    try {
+        $stmt = $pdo->prepare("
+            SELECT id, title, image_path, orientation, target_audience, visibility_scope, created_at, status
+            FROM announcements
+            WHERE status = 'Active'
+              AND target_audience IN ('All', 'ATC')
+              AND (
+                  COALESCE(visibility_scope, 'all') <> 'specific'
+                  OR EXISTS (
+                      SELECT 1 FROM announcement_atc_visibility aav
+                      WHERE aav.announcement_id = announcements.id AND aav.atc_id = ?
+                  )
+              )
+            ORDER BY created_at DESC
+        ");
+        $stmt->execute([$atcId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     } catch (Exception $e) {
         return [];
     }

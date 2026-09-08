@@ -13,11 +13,31 @@ requireLogin(['Admin']);
 $pdo = getDBConnection();
 $message = '';
 $error = '';
+ensureAnnouncementAtcVisibilitySchema($pdo);
+
+$atcCentersForVis = [];
+try {
+    $atcCentersForVis = $pdo->query("
+        SELECT id, name, center_type, city, district
+        FROM atc_centers
+        WHERE status = 'Active'
+        ORDER BY name ASC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {}
 
 $uploadDir = __DIR__ . '/../uploads/announcements/';
 if (!is_dir($uploadDir)) {
     @mkdir($uploadDir, 0777, true);
 }
+
+/** @return list<int> */
+$parseAtcIds = static function (): array {
+    $raw = $_POST['visible_atc_ids'] ?? [];
+    if (!is_array($raw)) {
+        return [];
+    }
+    return array_values(array_unique(array_filter(array_map('intval', $raw), static fn($x) => $x > 0)));
+};
 
 // Handle Forms
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -28,11 +48,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $targetAudience = sanitize($_POST['target_audience'] ?? 'All');
         $status         = sanitize($_POST['status'] ?? 'Active');
         $orientation    = sanitize($_POST['orientation'] ?? 'horizontal');
+        $visibilityScope = strtolower(trim((string)($_POST['visibility_scope'] ?? 'all'))) === 'specific' ? 'specific' : 'all';
+        $selectedAtcIds = $parseAtcIds();
+        if (!in_array($targetAudience, ['All', 'ATC', 'DLC'], true)) {
+            $targetAudience = 'All';
+        }
+        if ($targetAudience === 'DLC') {
+            $visibilityScope = 'all';
+            $selectedAtcIds = [];
+        } elseif ($visibilityScope === 'specific' && empty($selectedAtcIds)) {
+            $error = 'Select at least one ATC center, or choose All Centers.';
+        }
 
         $allowedImg   = ['jpg','jpeg','png','gif','webp'];
         $allowedVideo = ['mp4','webm','ogg'];
 
-        if (empty($title)) {
+        if ($error) {
+            // keep error
+        } elseif (empty($title)) {
             $error = 'Title is required.';
         } elseif (!isset($_FILES['banner_image']) || $_FILES['banner_image']['error'] !== UPLOAD_ERR_OK) {
             $error = 'Please select a valid file (image or video).';
@@ -72,8 +105,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $error = 'Video must be under 15 MB.';
                     }
                     if (!$error) {
-                        $stmt = $pdo->prepare("INSERT INTO announcements (title, image_path, target_audience, status, orientation) VALUES (?, ?, ?, ?, ?)");
-                        if ($stmt->execute([$title, $finalName, $targetAudience, $status, $orientation])) {
+                        $stmt = $pdo->prepare("INSERT INTO announcements (title, image_path, target_audience, status, orientation, visibility_scope) VALUES (?, ?, ?, ?, ?, ?)");
+                        if ($stmt->execute([$title, $finalName, $targetAudience, $status, $orientation, $visibilityScope])) {
+                            $newId = (int)$pdo->lastInsertId();
+                            saveAnnouncementAtcVisibility($pdo, $newId, $visibilityScope, $selectedAtcIds, $targetAudience);
                             $message = 'Banner uploaded successfully!';
                         } else {
                             $error = 'Database error while saving banner info.';
@@ -101,6 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($file && file_exists($uploadDir . $file)) {
             @unlink($uploadDir . $file);
         }
+        $pdo->prepare("DELETE FROM announcement_atc_visibility WHERE announcement_id=?")->execute([$id]);
         $pdo->prepare("DELETE FROM announcements WHERE id=?")->execute([$id]);
         $message = 'Banner deleted successfully.';
     } elseif ($action === 'edit') {
@@ -108,7 +144,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newTitle       = trim(sanitize($_POST['title'] ?? ''));
         $newAudience    = sanitize($_POST['target_audience'] ?? 'All');
         $newStatus      = sanitize($_POST['status'] ?? 'Active');
-        if (empty($newTitle)) {
+        $visibilityScope = strtolower(trim((string)($_POST['visibility_scope'] ?? $_POST['edit_visibility_scope'] ?? 'all'))) === 'specific' ? 'specific' : 'all';
+        $selectedAtcIds = $parseAtcIds();
+        if (!in_array($newAudience, ['All', 'ATC', 'DLC'], true)) {
+            $newAudience = 'All';
+        }
+        if ($newAudience === 'DLC') {
+            $visibilityScope = 'all';
+            $selectedAtcIds = [];
+        } elseif ($visibilityScope === 'specific' && empty($selectedAtcIds)) {
+            $error = 'Select at least one ATC center, or choose All Centers.';
+        }
+        if ($error) {
+            // keep
+        } elseif (empty($newTitle)) {
             $error = 'Title is required.';
         } else {
             $allowedImg   = ['jpg','jpeg','png','gif','webp'];
@@ -146,12 +195,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (!$error) {
                 if ($newImagePath) {
-                    $stmt = $pdo->prepare("UPDATE announcements SET title=?, target_audience=?, status=?, image_path=?, orientation=? WHERE id=?");
-                    $stmt->execute([$newTitle, $newAudience, $newStatus, $newImagePath, $newOrientation ?: 'horizontal', $id]);
+                    $stmt = $pdo->prepare("UPDATE announcements SET title=?, target_audience=?, status=?, image_path=?, orientation=?, visibility_scope=? WHERE id=?");
+                    $stmt->execute([$newTitle, $newAudience, $newStatus, $newImagePath, $newOrientation ?: 'horizontal', $visibilityScope, $id]);
                 } else {
-                    $stmt = $pdo->prepare("UPDATE announcements SET title=?, target_audience=?, status=?, orientation=? WHERE id=?");
-                    $stmt->execute([$newTitle, $newAudience, $newStatus, $newOrientation ?: 'horizontal', $id]);
+                    $stmt = $pdo->prepare("UPDATE announcements SET title=?, target_audience=?, status=?, orientation=?, visibility_scope=? WHERE id=?");
+                    $stmt->execute([$newTitle, $newAudience, $newStatus, $newOrientation ?: 'horizontal', $visibilityScope, $id]);
                 }
+                saveAnnouncementAtcVisibility($pdo, $id, $visibilityScope, $selectedAtcIds, $newAudience);
                 $message = 'Banner updated successfully!';
             }
         }
@@ -161,6 +211,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Fetch all banners
 $stmt = $pdo->query("SELECT * FROM announcements ORDER BY created_at DESC");
 $banners = $stmt->fetchAll(PDO::FETCH_ASSOC);
+foreach ($banners as &$bRow) {
+    $bRow['_atc_ids'] = getAnnouncementAssignedAtcIds($pdo, (int)$bRow['id']);
+    $bRow['_atc_count'] = count($bRow['_atc_ids']);
+}
+unset($bRow);
 
 // Count active slides per audience
 $activeAtc = 0; $activeDlc = 0;
@@ -170,6 +225,14 @@ foreach ($banners as $b) {
         elseif ($b['target_audience'] === 'ATC') { $activeAtc++; }
         elseif ($b['target_audience'] === 'DLC') { $activeDlc++; }
     }
+}
+
+$atcAssignJson = [];
+foreach ($banners as $b) {
+    $atcAssignJson[(int)$b['id']] = [
+        'scope' => strtolower((string)($b['visibility_scope'] ?? 'all')) === 'specific' ? 'specific' : 'all',
+        'ids'   => array_map('intval', $b['_atc_ids'] ?? []),
+    ];
 }
 ?>
 <!DOCTYPE html>
@@ -411,6 +474,30 @@ foreach ($banners as $b) {
     .empty-state svg { width:52px;height:52px;margin-bottom:1rem;opacity:.4; }
     .empty-state h3 { font-size:1rem;font-weight:700;color:var(--text-secondary,#64748b);margin-bottom:.35rem; }
     .empty-state p { font-size:.83rem; }
+
+    .atc-assign-box {
+        border:1.5px solid #e2e8f0; border-radius:12px; padding:.75rem; background:#f8fafc;
+    }
+    .atc-assign-box .scope-row { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:.55rem; }
+    .atc-assign-box label.scope-opt {
+        display:inline-flex; align-items:center; gap:.35rem; font-size:.78rem; font-weight:700;
+        padding:.35rem .65rem; border:1.5px solid #e2e8f0; border-radius:999px; background:#fff; cursor:pointer;
+    }
+    .atc-assign-box label.scope-opt:has(input:checked) { border-color:#6366f1; background:#eef2ff; color:#3730a3; }
+    .atc-filter-row { display:flex; gap:.4rem; margin-bottom:.45rem; }
+    .atc-filter-row select, .atc-filter-row input {
+        flex:1; height:34px; border:1.5px solid #e2e8f0; border-radius:8px; padding:0 .55rem; font-size:.78rem;
+    }
+    .atc-check-list {
+        max-height:180px; overflow:auto; border:1px solid #e2e8f0; border-radius:8px; background:#fff; padding:.35rem;
+    }
+    .atc-check-list label {
+        display:flex; gap:.45rem; align-items:flex-start; padding:.35rem .4rem; border-radius:6px;
+        font-size:.76rem; cursor:pointer;
+    }
+    .atc-check-list label:hover { background:#f1f5f9; }
+    .atc-check-list .meta { color:#94a3b8; font-size:.7rem; }
+    .banner-assign-meta { font-size:.72rem; color:#64748b; margin-top:.2rem; font-weight:600; }
     </style>
 </head>
 <body>
@@ -425,7 +512,7 @@ foreach ($banners as $b) {
                 </button>
                 <div class="header-greeting">
                     <h2>Dashboard Banners</h2>
-                    <p>Manage sliding announcements shown on ATC &amp; DLC dashboards</p>
+                    <p>Shown on dashboards &amp; downloadable by assigned ATCs in Downloads</p>
                 </div>
             </div>
             <div class="header-right">
@@ -509,11 +596,51 @@ foreach ($banners as $b) {
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Show To</label>
-                                <select name="target_audience" class="form-control">
+                                <select name="target_audience" id="uploadAudience" class="form-control" onchange="syncAtcAssignPanels()">
                                     <option value="All">All — ATC &amp; DLC</option>
                                     <option value="ATC">ATC Centers Only</option>
                                     <option value="DLC">DLC Offices Only</option>
                                 </select>
+                            </div>
+                            <div class="form-group" id="uploadAtcAssignWrap">
+                                <label class="form-label">Assign to ATC Centers</label>
+                                <div class="atc-assign-box">
+                                    <div class="scope-row">
+                                        <label class="scope-opt"><input type="radio" name="visibility_scope" value="all" checked onchange="syncAtcAssignPanels()"> All Centers</label>
+                                        <label class="scope-opt"><input type="radio" name="visibility_scope" value="specific" onchange="syncAtcAssignPanels()"> Specific Centers</label>
+                                    </div>
+                                    <div id="uploadAtcSpecific" hidden>
+                                        <div class="atc-filter-row">
+                                            <select id="uploadAtcTypeFilter" onchange="filterAtcChecks('upload')">
+                                                <option value="">All Types</option>
+                                                <?php foreach (masterCourseTypes() as $t): ?>
+                                                <option value="<?= htmlspecialchars($t) ?>"><?= htmlspecialchars($t) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <input type="search" id="uploadAtcSearch" placeholder="Search ATC…" oninput="filterAtcChecks('upload')">
+                                        </div>
+                                        <div style="display:flex;gap:.4rem;margin-bottom:.4rem">
+                                            <button type="button" class="btn-act" style="flex:1" onclick="selectFilteredAtcs('upload', true)">Select filtered</button>
+                                            <button type="button" class="btn-act" style="flex:1" onclick="selectFilteredAtcs('upload', false)">Clear filtered</button>
+                                        </div>
+                                        <div class="atc-check-list" id="uploadAtcList">
+                                            <?php foreach ($atcCentersForVis as $c):
+                                                $ctype = (string)($c['center_type'] ?? '');
+                                            ?>
+                                            <label data-name="<?= htmlspecialchars(strtolower($c['name'])) ?>" data-type="<?= htmlspecialchars($ctype) ?>">
+                                                <input type="checkbox" name="visible_atc_ids[]" value="<?= (int)$c['id'] ?>">
+                                                <span>
+                                                    <strong><?= htmlspecialchars($c['name']) ?></strong>
+                                                    <div class="meta"><?= htmlspecialchars(trim($ctype . ' · ' . ($c['district'] ?? ''), ' ·')) ?></div>
+                                                </span>
+                                            </label>
+                                            <?php endforeach; ?>
+                                            <?php if (empty($atcCentersForVis)): ?>
+                                            <div style="padding:.6rem;color:#94a3b8;font-size:.78rem">No active ATC centres found.</div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="form-group" id="orientationGroup">
                                 <label class="form-label">Orientation</label>
@@ -591,6 +718,15 @@ foreach ($banners as $b) {
                             <div class="banner-body">
                                 <div class="banner-name" title="<?= htmlspecialchars($b['title']) ?>"><?= htmlspecialchars($b['title']) ?></div>
                                 <div class="banner-date">Uploaded <?= date('d M Y', strtotime($b['created_at'])) ?></div>
+                                <?php
+                                    $scope = strtolower((string)($b['visibility_scope'] ?? 'all'));
+                                    $assignLabel = ($b['target_audience'] === 'DLC')
+                                        ? 'DLC only'
+                                        : ($scope === 'specific'
+                                            ? ((int)($b['_atc_count'] ?? 0) . ' ATC(s) assigned')
+                                            : 'All ATCs');
+                                ?>
+                                <div class="banner-assign-meta"><?= htmlspecialchars($assignLabel) ?> · also in ATC Downloads</div>
                             </div>
                             <div class="banner-actions">
                                 <!-- Edit Button -->
@@ -600,6 +736,7 @@ foreach ($banners as $b) {
                                     data-audience="<?= htmlspecialchars($b['target_audience']) ?>"
                                     data-status="<?= htmlspecialchars($b['status']) ?>"
                                     data-orientation="<?= htmlspecialchars($b['orientation'] ?? 'horizontal') ?>"
+                                    data-scope="<?= htmlspecialchars($scope === 'specific' ? 'specific' : 'all') ?>"
                                     data-img="<?= $isVideo ? '' : $imgUrl ?>"
                                     data-is-video="<?= $isVideo ? '1' : '0' ?>"
                                     onclick="openEditModal(this)">
@@ -669,11 +806,48 @@ foreach ($banners as $b) {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Show To</label>
-                    <select name="target_audience" id="editAudience" class="form-control">
+                    <select name="target_audience" id="editAudience" class="form-control" onchange="syncAtcAssignPanels()">
                         <option value="All">All — ATC &amp; DLC</option>
                         <option value="ATC">ATC Centers Only</option>
                         <option value="DLC">DLC Offices Only</option>
                     </select>
+                </div>
+                <div class="form-group" id="editAtcAssignWrap">
+                    <label class="form-label">Assign to ATC Centers</label>
+                    <div class="atc-assign-box">
+                        <div class="scope-row">
+                            <label class="scope-opt"><input type="radio" name="edit_visibility_scope" id="editScopeAll" value="all" checked onchange="syncAtcAssignPanels()"> All Centers</label>
+                            <label class="scope-opt"><input type="radio" name="edit_visibility_scope" id="editScopeSpecific" value="specific" onchange="syncAtcAssignPanels()"> Specific Centers</label>
+                        </div>
+                        <div id="editAtcSpecific" hidden>
+                            <div class="atc-filter-row">
+                                <select id="editAtcTypeFilter" onchange="filterAtcChecks('edit')">
+                                    <option value="">All Types</option>
+                                    <?php foreach (masterCourseTypes() as $t): ?>
+                                    <option value="<?= htmlspecialchars($t) ?>"><?= htmlspecialchars($t) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <input type="search" id="editAtcSearch" placeholder="Search ATC…" oninput="filterAtcChecks('edit')">
+                            </div>
+                            <div style="display:flex;gap:.4rem;margin-bottom:.4rem">
+                                <button type="button" class="btn-act" style="flex:1" onclick="selectFilteredAtcs('edit', true)">Select filtered</button>
+                                <button type="button" class="btn-act" style="flex:1" onclick="selectFilteredAtcs('edit', false)">Clear filtered</button>
+                            </div>
+                            <div class="atc-check-list" id="editAtcList">
+                                <?php foreach ($atcCentersForVis as $c):
+                                    $ctype = (string)($c['center_type'] ?? '');
+                                ?>
+                                <label data-name="<?= htmlspecialchars(strtolower($c['name'])) ?>" data-type="<?= htmlspecialchars($ctype) ?>">
+                                    <input type="checkbox" name="visible_atc_ids[]" value="<?= (int)$c['id'] ?>" class="edit-atc-check">
+                                    <span>
+                                        <strong><?= htmlspecialchars($c['name']) ?></strong>
+                                        <div class="meta"><?= htmlspecialchars(trim($ctype . ' · ' . ($c['district'] ?? ''), ' ·')) ?></div>
+                                    </span>
+                                </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Orientation</label>
@@ -701,6 +875,58 @@ foreach ($banners as $b) {
 
 <script src="../assets/js/dashboard.js"></script>
 <script>
+const BANNER_ATC_ASSIGN = <?= json_encode($atcAssignJson, JSON_UNESCAPED_UNICODE) ?>;
+
+function centreTypeMatches(centreType, filterType) {
+    if (!filterType) return true;
+    if (centreType === filterType) return true;
+    const raw = String(centreType || '').toLowerCase();
+    const ft = String(filterType).toLowerCase();
+    if (ft === 'abacus') return raw.includes('abacus');
+    if (ft === 'vedic maths' || ft === 'vedic') return raw.includes('vedic');
+    if (ft === 'it') return /(^|[^a-z])it([^a-z]|$)/.test(raw) || raw.includes('all three');
+    return raw.includes(ft);
+}
+
+function syncAtcAssignPanels() {
+    const uploadAud = document.getElementById('uploadAudience')?.value || 'All';
+    const editAud = document.getElementById('editAudience')?.value || 'All';
+    const uploadWrap = document.getElementById('uploadAtcAssignWrap');
+    const editWrap = document.getElementById('editAtcAssignWrap');
+    if (uploadWrap) uploadWrap.style.display = uploadAud === 'DLC' ? 'none' : '';
+    if (editWrap) editWrap.style.display = editAud === 'DLC' ? 'none' : '';
+
+    const uploadSpecific = document.querySelector('#uploadForm input[name="visibility_scope"][value="specific"]')?.checked;
+    const uploadBox = document.getElementById('uploadAtcSpecific');
+    if (uploadBox) uploadBox.hidden = !uploadSpecific || uploadAud === 'DLC';
+
+    const editSpecific = document.getElementById('editScopeSpecific')?.checked;
+    const editBox = document.getElementById('editAtcSpecific');
+    if (editBox) editBox.hidden = !editSpecific || editAud === 'DLC';
+}
+
+function filterAtcChecks(which) {
+    const list = document.getElementById(which === 'edit' ? 'editAtcList' : 'uploadAtcList');
+    const type = document.getElementById(which === 'edit' ? 'editAtcTypeFilter' : 'uploadAtcTypeFilter')?.value || '';
+    const q = (document.getElementById(which === 'edit' ? 'editAtcSearch' : 'uploadAtcSearch')?.value || '').trim().toLowerCase();
+    if (!list) return;
+    list.querySelectorAll('label[data-name]').forEach(lab => {
+        const nameOk = !q || (lab.dataset.name || '').includes(q);
+        const typeOk = centreTypeMatches(lab.dataset.type || '', type);
+        lab.style.display = (nameOk && typeOk) ? '' : 'none';
+    });
+}
+
+function selectFilteredAtcs(which, checked) {
+    const list = document.getElementById(which === 'edit' ? 'editAtcList' : 'uploadAtcList');
+    if (!list) return;
+    list.querySelectorAll('label[data-name]').forEach(lab => {
+        if (lab.style.display === 'none') return;
+        const cb = lab.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = !!checked;
+    });
+}
+
 // ── Upload Form Preview (image + video) ──
 const bannerFile  = document.getElementById('bannerFile');
 const dropZone    = document.getElementById('dropZone');
@@ -759,12 +985,22 @@ function openEditModal(btn) {
     document.getElementById('editOrientation').value = btn.dataset.orientation || 'horizontal';
     document.getElementById('editBannerFile').value  = '';
 
+    const assign = BANNER_ATC_ASSIGN[String(btn.dataset.id)] || { scope: btn.dataset.scope || 'all', ids: [] };
+    const scope = assign.scope === 'specific' ? 'specific' : 'all';
+    document.getElementById('editScopeAll').checked = scope === 'all';
+    document.getElementById('editScopeSpecific').checked = scope === 'specific';
+    const selected = new Set((assign.ids || []).map(String));
+    document.querySelectorAll('#editAtcList .edit-atc-check').forEach(cb => {
+        cb.checked = selected.has(String(cb.value));
+    });
+    syncAtcAssignPanels();
+    filterAtcChecks('edit');
+
     var isVideo = btn.dataset.isVideo === '1';
     var editImgPrev = document.getElementById('editImgPreview');
     if (isVideo) {
         editImgPrev.src = '';
         editImgPrev.style.display = 'none';
-        // Show a notice instead
         var vNote = document.getElementById('editVideoNote');
         if (!vNote) {
             vNote = document.createElement('div');
@@ -794,7 +1030,6 @@ editOverlay.addEventListener('click', function(e) {
     if (e.target === this) closeEditModal();
 });
 
-// New media preview inside edit modal
 document.getElementById('editBannerFile').addEventListener('change', function() {
     const file = this.files[0];
     if (!file) return;
@@ -804,11 +1039,10 @@ document.getElementById('editBannerFile').addEventListener('change', function() 
         reader.onload = function(e) { editImgPrev.src = e.target.result; editImgPrev.style.display = 'block'; };
         reader.readAsDataURL(file);
     } else if (file.type.startsWith('video/')) {
-        editImgPrev.style.display = 'none'; // can't preview video in img
+        editImgPrev.style.display = 'none';
     }
 });
 
-// Edit drop zone
 const editDropZone  = document.getElementById('editDropZone');
 const editFileInput = document.getElementById('editBannerFile');
 editDropZone.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('drag-over'); });
@@ -818,6 +1052,8 @@ editDropZone.addEventListener('drop', function(e) {
     const file = e.dataTransfer.files[0];
     if (file) { editFileInput.files = e.dataTransfer.files; editFileInput.dispatchEvent(new Event('change')); }
 });
+
+syncAtcAssignPanels();
 </script>
 </body>
 </html>

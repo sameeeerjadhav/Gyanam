@@ -301,7 +301,7 @@ try {
 
 $activeBanners = [];
 try {
-    $activeBanners = getActiveAnnouncements($pdo, 'ATC', 8);
+    $activeBanners = getActiveAnnouncements($pdo, 'ATC', 8, (int)$atcId);
 } catch (Exception $e) {
 }
 
