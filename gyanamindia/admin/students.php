@@ -15,12 +15,36 @@ $userName = sanitize(getUserName());
 // ── Load filter options ─────────────────────────────────────────────────────
 $dlcOffices = $pdo->query("SELECT id, name FROM dlc_offices WHERE status='Active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 $atcCenters = $pdo->query("SELECT id, name, dlc_id FROM atc_centers WHERE status='Active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+$courseList = [];
+try {
+    $courseList = $pdo->query("
+        SELECT DISTINCT course FROM admissions
+        WHERE course IS NOT NULL AND TRIM(course) != ''
+        ORDER BY course ASC
+    ")->fetchAll(PDO::FETCH_COLUMN);
+} catch (Exception $e) {}
 
 // ── Read filters ────────────────────────────────────────────────────────────
 $filterDlc    = isset($_GET['dlc_id'])   && $_GET['dlc_id']   !== '' ? (int)$_GET['dlc_id']   : null;
 $filterAtc    = isset($_GET['atc_id'])   && $_GET['atc_id']   !== '' ? (int)$_GET['atc_id']   : null;
+$filterCourse = isset($_GET['course'])   ? trim((string)$_GET['course']) : '';
 $filterSearch = isset($_GET['search'])   ? trim($_GET['search'])    : '';
-$filtered     = $filterDlc !== null || $filterAtc !== null || $filterSearch !== '';
+
+// If ATC is selected under a DLC, keep only ATCs that belong to that DLC
+if ($filterAtc !== null && $filterDlc !== null) {
+    $atcBelongs = false;
+    foreach ($atcCenters as $a) {
+        if ((int)$a['id'] === $filterAtc && (int)$a['dlc_id'] === $filterDlc) {
+            $atcBelongs = true;
+            break;
+        }
+    }
+    if (!$atcBelongs) {
+        $filterAtc = null; // drop mismatched ATC so DLC filter stays truthful
+    }
+}
+
+$filtered = $filterDlc !== null || $filterAtc !== null || $filterCourse !== '' || $filterSearch !== '';
 
 // ── Fetch students (only when a filter is applied) ──────────────────────────
 $students   = [];
@@ -30,18 +54,41 @@ if ($filtered) {
     $where  = ['a.status = ?'];
     $params = ['Active'];
 
-    if ($filterAtc !== null) {
-        $where[]  = 'a.atc_id = ?';
-        $params[] = $filterAtc;
-    } elseif ($filterDlc !== null) {
+    // Apply DLC and ATC together (AND) so both constraints are respected
+    if ($filterDlc !== null) {
         $where[]  = 'atc.dlc_id = ?';
         $params[] = $filterDlc;
     }
+    if ($filterAtc !== null) {
+        $where[]  = 'a.atc_id = ?';
+        $params[] = $filterAtc;
+    }
+    if ($filterCourse !== '') {
+        $where[]  = 'a.course = ?';
+        $params[] = $filterCourse;
+    }
 
     if ($filterSearch !== '') {
-        $where[]  = "(CONCAT(a.first_name,' ',COALESCE(a.middle_name,''),' ',a.last_name) LIKE ? OR a.roll_no LIKE ? OR a.mobile LIKE ?)";
-        $s = '%' . $filterSearch . '%';
-        $params = array_merge($params, [$s, $s, $s]);
+        $like = '%' . $filterSearch . '%';
+        $searchSql = "(CONCAT(a.first_name,' ',COALESCE(a.middle_name,''),' ',a.last_name) LIKE ?
+                       OR a.roll_no LIKE ?
+                       OR a.registration_id LIKE ?
+                       OR a.mobile LIKE ?
+                       OR CONCAT('GYANAM', a.id) LIKE ?)";
+        $params = array_merge($params, [$like, $like, $like, $like, $like]);
+
+        // Also match bare numeric id / GYANAM123
+        $idMatch = null;
+        if (preg_match('/^GYANAM\s*(\d+)$/i', $filterSearch, $m)) {
+            $idMatch = (int)$m[1];
+        } elseif (ctype_digit($filterSearch)) {
+            $idMatch = (int)$filterSearch;
+        }
+        if ($idMatch !== null && $idMatch > 0) {
+            $searchSql = '(' . $searchSql . ' OR a.id = ?)';
+            $params[] = $idMatch;
+        }
+        $where[] = $searchSql;
     }
 
     // Count + paginate
@@ -518,18 +565,32 @@ if ($filtered) {
                             <label class="filter-label" for="atc_id">ATC Center</label>
                             <select name="atc_id" id="atc_id" class="filter-select">
                                 <option value="">— All ATCs —</option>
-                                <?php foreach ($atcCenters as $a): ?>
+                                <?php foreach ($atcCenters as $a):
+                                    $hideAtc = $filterDlc !== null && (int)$a['dlc_id'] !== $filterDlc;
+                                ?>
                                     <option value="<?= $a['id'] ?>"
-                                            data-dlc="<?= $a['dlc_id'] ?>"
+                                            data-dlc="<?= (int)$a['dlc_id'] ?>"
                                             <?= $filterAtc === (int)$a['id'] ? 'selected' : '' ?>
-                                            <?= ($filterDlc && (int)$a['dlc_id'] !== $filterDlc) ? 'style="display:none"' : '' ?>>
+                                            <?= $hideAtc ? 'hidden disabled' : '' ?>>
                                         <?= htmlspecialchars($a['name']) ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
 
-                        <div class="filter-group" style="flex:1.5">
+                        <div class="filter-group" style="flex:1.4">
+                            <label class="filter-label" for="course">Course</label>
+                            <select name="course" id="course" class="filter-select">
+                                <option value="">— All Courses —</option>
+                                <?php foreach ($courseList as $c): ?>
+                                    <option value="<?= htmlspecialchars($c) ?>" <?= $filterCourse === $c ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($c) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="filter-group" style="flex:1.3">
                             <label class="filter-label" for="search">Search</label>
                             <input type="text" name="search" id="search" class="filter-input"
                                    placeholder="Name, Reg ID or Mobile…"
@@ -563,6 +624,9 @@ if ($filtered) {
                             foreach ($atcCenters as $a) if ((int)$a['id'] === $filterAtc) { $atcName = $a['name']; break; }
                             echo "<span class='filter-chip'>ATC: " . htmlspecialchars($atcName) . "</span>";
                         }
+                        if ($filterCourse !== '') {
+                            echo "<span class='filter-chip'>Course: " . htmlspecialchars($filterCourse) . "</span>";
+                        }
                         if ($filterSearch) echo "<span class='filter-chip'>Search: " . htmlspecialchars($filterSearch) . "</span>";
                         ?>
                     </div>
@@ -579,7 +643,7 @@ if ($filtered) {
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
                     </div>
                     <div class="empty-title">Select a filter to view students</div>
-                    <div class="empty-sub">Choose a DLC Office, ATC Center, or enter a search term above,<br>then click <strong>Filter Students</strong> to load the list.</div>
+                    <div class="empty-sub">Choose a DLC, ATC, Course, or enter a search term above,<br>then click <strong>Filter Students</strong> to load the list.</div>
                 </div>
             </div>
 
@@ -633,6 +697,10 @@ if ($filtered) {
                         $parts  = array_filter(explode(' ', $name));
                         $initials = substr(implode('', array_map(function($w){ return strtoupper($w[0]); }, $parts)), 0, 2);
                         $admDate  = $s['admission_date'] ? date('d M Y', strtotime($s['admission_date'])) : '—';
+                        $displayReg = trim((string)($s['cert_reg_id'] ?? ''));
+                        if ($displayReg === '') {
+                            $displayReg = 'GYANAM' . (int)$s['id'];
+                        }
                     ?>
                     <tr>
                         <!-- Photo + Name -->
@@ -656,7 +724,7 @@ if ($filtered) {
                         <!-- Reg ID -->
                         <td>
                             <span style="font-family:var(--mono);font-size:.82rem;font-weight:600;color:var(--indigo)">
-                                <?= 'GYANAM' . $s['id'] ?>
+                                <?= htmlspecialchars($displayReg) ?>
                             </span>
                         </td>
 
@@ -767,13 +835,19 @@ function filterATCByDLC() {
     const atcSel = document.getElementById('atc_id');
 
     Array.from(atcSel.options).forEach(opt => {
-        if (!opt.value) { opt.style.display = ''; return; }
-        opt.style.display = (!dlcId || opt.dataset.dlc === dlcId) ? '' : 'none';
+        if (!opt.value) {
+            opt.hidden = false;
+            opt.disabled = false;
+            return;
+        }
+        const match = !dlcId || String(opt.dataset.dlc) === String(dlcId);
+        opt.hidden = !match;
+        opt.disabled = !match;
     });
 
-    // If the currently selected ATC doesn't match the new DLC, reset it
+    // Only clear ATC when a specific DLC is chosen and ATC does not belong to it
     const sel = atcSel.options[atcSel.selectedIndex];
-    if (sel && sel.dataset.dlc && sel.dataset.dlc !== dlcId) {
+    if (dlcId && sel && sel.value && String(sel.dataset.dlc) !== String(dlcId)) {
         atcSel.value = '';
     }
 }
@@ -846,12 +920,13 @@ function printStudents() {
     if (!rows.length) { alert('No student data to print.'); return; }
 
     const filterInfo = <?= json_encode(
-        ($filterDlc || $filterAtc || $filterSearch)
-            ? array_filter([
-                $filterDlc  ? ('DLC: ' . ($dlcOffices[array_search($filterDlc, array_column($dlcOffices,'id'))]['name'] ?? '')) : null,
-                $filterAtc  ? ('ATC: ' . ($atcCenters[array_search($filterAtc, array_column($atcCenters,'id'))]['name'] ?? '')) : null,
+        ($filterDlc || $filterAtc || $filterCourse || $filterSearch)
+            ? array_values(array_filter([
+                $filterDlc  ? ('DLC: ' . (($dlcOffices[array_search($filterDlc, array_column($dlcOffices,'id'))]['name'] ?? '') ?: (string)$filterDlc)) : null,
+                $filterAtc  ? ('ATC: ' . (($atcCenters[array_search($filterAtc, array_column($atcCenters,'id'))]['name'] ?? '') ?: (string)$filterAtc)) : null,
+                $filterCourse !== '' ? ('Course: ' . $filterCourse) : null,
                 $filterSearch ? ('Search: "' . $filterSearch . '"') : null,
-            ])
+            ]))
             : []
     ) ?>;
 
