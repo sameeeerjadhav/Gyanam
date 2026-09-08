@@ -276,6 +276,9 @@ $pageTitle = $pageMode === 'edit' ? 'Edit ATC Enquiry' : ($pageMode === 'add' ? 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= htmlspecialchars($pageTitle) ?> — Admin | Gyanam India</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/global.css">
 <link rel="stylesheet" href="../assets/css/dashboard.css">
 <link rel="stylesheet" href="../assets/css/management.css">
@@ -283,6 +286,14 @@ $pageTitle = $pageMode === 'edit' ? 'Edit ATC Enquiry' : ($pageMode === 'add' ? 
 <link rel="stylesheet" href="../assets/css/notifications.css">
 <?php endif; ?>
 <style>
+:root {
+    --font: 'Sora', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+}
+body {
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+}
 .page-header-block { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem; }
 .page-header-left { display:flex; align-items:center; gap:.9rem; }
 .page-header-icon {
