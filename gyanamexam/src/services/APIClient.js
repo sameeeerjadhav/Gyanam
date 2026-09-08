@@ -151,7 +151,13 @@ class ApiClient {
   static async createQuestionBank(data) { return this.post('/question-banks', data); }
   static updateQuestionBank(id, data) { return this.put(`/question-banks/${id}`, data); }
   static deleteQuestionBank(id) { return this.delete(`/question-banks/${id}`); }
-  static assignQuestionBank(id, centres) { return this.post(`/question-banks/${id}/assign`, { centres }); }
+  static assignQuestionBank(id, centres, opts = {}) {
+    return this.post(`/question-banks/${id}/assign`, {
+      centres: centres || [],
+      mode: opts.mode || 'specific',
+      centre_type: opts.centre_type || null,
+    });
+  }
 
   // ─── Questions ─────────────────────────────
   static addQuestion(bankId, data) { return this.post(`/question-banks/${bankId}/questions`, data); }

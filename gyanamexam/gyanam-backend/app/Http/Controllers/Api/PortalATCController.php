@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\PortalAtcCentres;
 use Illuminate\Http\Request;
 
 /**
@@ -68,18 +69,21 @@ class PortalATCController extends Controller
         $data     = json_decode(file_get_contents($path), true);
         $centres  = $data['centres'] ?? [];
 
-        // Optional ?type= filter
+        // Optional ?type= filter (matches master types against combo centre_type)
         $typeFilter = $request->query('type');
         if ($typeFilter) {
             $centres = array_values(array_filter($centres, function ($c) use ($typeFilter) {
-                return isset($c['centre_type']) && $c['centre_type'] === $typeFilter;
+                return PortalAtcCentres::matchesType($c['centre_type'] ?? '', (string) $typeFilter);
             }));
         }
 
-        // Build distinct types list for dropdown
-        $allTypes = collect($data['centres'] ?? [])
+        // Master types + any synced combo values for dropdowns
+        $syncedTypes = collect($data['centres'] ?? [])
             ->pluck('centre_type')
             ->filter()
+            ->unique();
+        $allTypes = collect(['Abacus', 'Vedic Maths', 'IT'])
+            ->merge($syncedTypes)
             ->unique()
             ->sort()
             ->values();

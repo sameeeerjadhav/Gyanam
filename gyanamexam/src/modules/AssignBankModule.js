@@ -1,10 +1,12 @@
 /**
  * AssignBankModule.js — Full-page ATC assignment for a question bank.
+ * Scopes: selected centres | all centres | all of a centre type.
  * Filters: search, type, district, assignment status.
  */
 import modalService from '../services/ModalService.js';
 
 const ASSIGN_BANK_KEY = 'gyanam_assign_bank_id';
+const MASTER_TYPES = ['Abacus', 'Vedic Maths', 'IT'];
 
 export function setAssignBankId(bankId) {
   sessionStorage.setItem(ASSIGN_BANK_KEY, String(bankId));
@@ -12,6 +14,18 @@ export function setAssignBankId(bankId) {
 
 export function getAssignBankId() {
   return sessionStorage.getItem(ASSIGN_BANK_KEY) || '';
+}
+
+function centreMatchesType(centreType, filterType) {
+  if (!filterType) return true;
+  const type = String(centreType || '');
+  if (type === filterType) return true;
+  const raw = type.toLowerCase();
+  const ft = String(filterType).toLowerCase();
+  if (ft === 'abacus') return raw.includes('abacus');
+  if (ft === 'vedic maths' || ft === 'vedic') return raw.includes('vedic');
+  if (ft === 'it') return /(^|[^a-z])it([^a-z]|$)/.test(raw) || raw.includes('all three');
+  return raw.includes(ft);
 }
 
 export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
@@ -63,11 +77,15 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
     return;
   }
 
+  const typeOptions = [...new Set([...MASTER_TYPES, ...types])].filter(Boolean);
+
   const initiallyAssigned = new Set(
     (bank.assignedTo || bank.assigned_to || []).map(String)
   );
   const selected = new Set(initiallyAssigned);
 
+  let assignScope = 'specific'; // specific | all | all_of_type
+  let scopeType = MASTER_TYPES[0];
   let filterText = '';
   let filterType = '';
   let filterDistrict = '';
@@ -76,6 +94,25 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
   const pageSize = 25;
 
   const districts = [...new Set(centres.map(c => c.district).filter(Boolean))].sort();
+
+  function codesForScope() {
+    if (assignScope === 'all') {
+      return centres.map(c => String(c.code || '')).filter(Boolean);
+    }
+    if (assignScope === 'all_of_type') {
+      return centres
+        .filter(c => centreMatchesType(c.centre_type, scopeType))
+        .map(c => String(c.code || ''))
+        .filter(Boolean);
+    }
+    return [...selected];
+  }
+
+  function syncSelectedFromScope() {
+    if (assignScope === 'specific') return;
+    selected.clear();
+    codesForScope().forEach(code => selected.add(code));
+  }
 
   function getFiltered() {
     const q = filterText.trim().toLowerCase();
@@ -92,7 +129,7 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
         || district.toLowerCase().includes(q)
         || state.toLowerCase().includes(q);
 
-      const matchesType = !filterType || type === filterType;
+      const matchesType = centreMatchesType(type, filterType);
       const matchesDistrict = !filterDistrict || district === filterDistrict;
       const isAssigned = selected.has(code);
       const matchesStatus =
@@ -133,19 +170,35 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
     const someChecked = visibleCodes.some(code => selected.has(code));
     master.checked = allChecked;
     master.indeterminate = !allChecked && someChecked;
+    master.disabled = assignScope !== 'specific';
   }
 
   function updateSelectionBar(filteredCount) {
     const countEl = document.getElementById('assign-selected-count');
     const dirtyEl = document.getElementById('assign-dirty');
     const visibleEl = document.getElementById('assign-visible-count');
+    const scopeHint = document.getElementById('assign-scope-hint');
     if (countEl) countEl.textContent = String(selected.size);
     if (visibleEl) visibleEl.textContent = String(filteredCount);
+    if (scopeHint) {
+      if (assignScope === 'all') {
+        scopeHint.textContent = `All ${centres.length} synced ATC centre(s) will be assigned.`;
+      } else if (assignScope === 'all_of_type') {
+        scopeHint.textContent = `All centres matching type “${scopeType}” (${selected.size}) will be assigned. Combos like “Abacus + IT” are included when the type matches.`;
+      } else {
+        scopeHint.textContent = 'Use the checklist below to pick individual centres. Filter by type, then Select filtered.';
+      }
+    }
     if (dirtyEl) {
       const dirty = selected.size !== initiallyAssigned.size
         || [...selected].some(c => !initiallyAssigned.has(c))
         || [...initiallyAssigned].some(c => !selected.has(c));
       dirtyEl.hidden = !dirty;
+    }
+
+    const listCard = document.getElementById('assign-list-card');
+    if (listCard) {
+      listCard.classList.toggle('is-scope-locked', assignScope !== 'specific');
     }
   }
 
@@ -172,6 +225,7 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
         </div>`;
       document.getElementById('assign-empty-clear')?.addEventListener('click', clearFilters);
     } else {
+      const locked = assignScope !== 'specific';
       list.innerHTML = slice.map(c => {
         const code = String(c.code || '');
         const checked = selected.has(code) ? 'checked' : '';
@@ -180,8 +234,8 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
           : '';
         const locParts = [c.district, c.state].filter(Boolean).join(', ');
         return `
-          <label class="assign-row ${selected.has(code) ? 'is-selected' : ''}">
-            <input type="checkbox" class="assign-check" value="${code}" ${checked}>
+          <label class="assign-row ${selected.has(code) ? 'is-selected' : ''} ${locked ? 'is-locked' : ''}">
+            <input type="checkbox" class="assign-check" value="${code}" ${checked} ${locked ? 'disabled' : ''}>
             <span class="assign-row-body">
               <span class="assign-row-top">
                 <strong class="assign-code">${code}</strong>
@@ -193,17 +247,18 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
           </label>`;
       }).join('');
 
-      list.querySelectorAll('.assign-check').forEach(cb => {
-        cb.addEventListener('change', () => {
-          const code = cb.value;
-          if (cb.checked) selected.add(code);
-          else selected.delete(code);
-          renderList();
+      if (!locked) {
+        list.querySelectorAll('.assign-check').forEach(cb => {
+          cb.addEventListener('change', () => {
+            const code = cb.value;
+            if (cb.checked) selected.add(code);
+            else selected.delete(code);
+            renderList();
+          });
         });
-      });
+      }
     }
 
-    // pagination footer
     const pager = document.getElementById('assign-pagination');
     if (pager) {
       const start = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -233,6 +288,8 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
           <span class="dash-chip dash-chip-blue">${bank.subject || 'Bank'}</span>
           <span class="dash-meta-sep">·</span>
           <span>${bank.questions_count ?? 0} questions</span>
+          <span class="dash-meta-sep">·</span>
+          <span>Assigned banks appear as PDF downloads on the ATC portal</span>
         </p>
       </div>
       <div class="dash-page-actions">
@@ -250,6 +307,37 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
       </div>
     </div>
 
+    <div class="card assign-scope-card">
+      <div class="assign-scope-title">Assignment scope</div>
+      <div class="assign-scope-grid">
+        <label class="assign-scope-opt">
+          <input type="radio" name="assign-scope" value="specific" checked>
+          <span>
+            <strong>Selected centres</strong>
+            <small>Pick individual ATCs from the list (filter by type first if needed)</small>
+          </span>
+        </label>
+        <label class="assign-scope-opt">
+          <input type="radio" name="assign-scope" value="all_of_type">
+          <span>
+            <strong>All centres of a type</strong>
+            <small>Every synced ATC whose center type matches (including combos)</small>
+            <select id="assign-scope-type" class="form-select" style="margin-top:0.45rem;max-width:220px">
+              ${typeOptions.map(t => `<option value="${t}">${t}</option>`).join('')}
+            </select>
+          </span>
+        </label>
+        <label class="assign-scope-opt">
+          <input type="radio" name="assign-scope" value="all">
+          <span>
+            <strong>All ATC centres</strong>
+            <small>Assign to every synced Active centre from the main portal</small>
+          </span>
+        </label>
+      </div>
+      <p class="assign-scope-hint" id="assign-scope-hint"></p>
+    </div>
+
     <div class="stu-toolbar card">
       <div class="stu-search-wrap">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -260,7 +348,7 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
       <div class="stu-filters">
         <select id="assign-type" class="form-select" title="Centre type">
           <option value="">All Types</option>
-          ${types.map(t => `<option value="${t}">${t}</option>`).join('')}
+          ${typeOptions.map(t => `<option value="${t}">${t}</option>`).join('')}
         </select>
         <select id="assign-district" class="form-select" title="District">
           <option value="">All Districts</option>
@@ -275,7 +363,7 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
       </div>
     </div>
 
-    <div class="card assign-list-card">
+    <div class="card assign-list-card" id="assign-list-card">
       <div class="assign-list-head">
         <label class="assign-select-all">
           <input type="checkbox" id="assign-select-all">
@@ -294,6 +382,21 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
 
   document.getElementById('assign-back')?.addEventListener('click', () => loadPage('questions'));
   document.getElementById('assign-cancel')?.addEventListener('click', () => loadPage('questions'));
+
+  document.querySelectorAll('input[name="assign-scope"]').forEach(radio => {
+    radio.addEventListener('change', e => {
+      assignScope = e.target.value;
+      syncSelectedFromScope();
+      renderList();
+    });
+  });
+  document.getElementById('assign-scope-type')?.addEventListener('change', e => {
+    scopeType = e.target.value;
+    if (assignScope === 'all_of_type') {
+      syncSelectedFromScope();
+      renderList();
+    }
+  });
 
   document.getElementById('assign-search')?.addEventListener('input', e => {
     filterText = e.target.value;
@@ -318,6 +421,7 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
   document.getElementById('assign-clear')?.addEventListener('click', clearFilters);
 
   document.getElementById('assign-select-all')?.addEventListener('change', e => {
+    if (assignScope !== 'specific') return;
     const filtered = getFiltered();
     const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
     visible.forEach(c => {
@@ -329,27 +433,49 @@ export async function renderAssignBank(ApiClient, { currentUser, loadPage }) {
   });
 
   document.getElementById('assign-all-filtered')?.addEventListener('click', () => {
+    if (assignScope !== 'specific') {
+      modalService.toast('Switch to “Selected centres” to edit the checklist', 'info');
+      return;
+    }
     getFiltered().forEach(c => selected.add(String(c.code || '')));
     renderList();
   });
   document.getElementById('assign-none-filtered')?.addEventListener('click', () => {
+    if (assignScope !== 'specific') {
+      modalService.toast('Switch to “Selected centres” to edit the checklist', 'info');
+      return;
+    }
     getFiltered().forEach(c => selected.delete(String(c.code || '')));
     renderList();
   });
   document.getElementById('assign-none-all')?.addEventListener('click', () => {
+    if (assignScope !== 'specific') {
+      modalService.toast('Switch to “Selected centres” to clear selection', 'info');
+      return;
+    }
     selected.clear();
     renderList();
   });
 
   document.getElementById('assign-save')?.addEventListener('click', async () => {
-    const codes = [...selected];
     const btn = document.getElementById('assign-save');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     try {
-      await ApiClient.assignQuestionBank(bankId, codes);
+      let res;
+      if (assignScope === 'all') {
+        res = await ApiClient.assignQuestionBank(bankId, [], { mode: 'all' });
+      } else if (assignScope === 'all_of_type') {
+        res = await ApiClient.assignQuestionBank(bankId, [], {
+          mode: 'all_of_type',
+          centre_type: scopeType,
+        });
+      } else {
+        res = await ApiClient.assignQuestionBank(bankId, [...selected], { mode: 'specific' });
+      }
+      const count = res?.count ?? codesForScope().length;
       modalService.toast(
-        codes.length
-          ? `Assigned to ${codes.length} centre(s)`
+        count
+          ? `Assigned to ${count} centre(s)`
           : 'Bank unassigned (admin-only)',
         'success'
       );

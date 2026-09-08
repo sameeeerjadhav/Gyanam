@@ -397,7 +397,7 @@ function showNewBankModal(ApiClient, currentUser, bank = null, courses = []) {
         <button onclick="closeModal()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:0.35rem 0.7rem;cursor:pointer;font-size:1.1rem;line-height:1">×</button>
       </div>
       <div style="padding:1.25rem 1.5rem">
-        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem">Fill in details below. You can assign this bank to ATC centres after creation using the <strong>🔗 Assign</strong> button.</p>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem">Fill in details below. After creation, use <strong>🔗 Assign</strong> to give ATC centres PDF access (selected / all / by centre type).</p>
         <div class="form-group">
           <label class="form-label">Bank Title *</label>
           <input id="nb-title" class="form-input" placeholder="e.g. Abacus Level 1 — Term 1 Exam" value="${bank?.title || ''}">
