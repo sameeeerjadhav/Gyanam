@@ -666,3 +666,211 @@ function syncATCCentresToExamPortal(PDO $pdo): array
         'centres' => $centres,
     ]);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QUESTION BANKS (ATC PDF downloads)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve ATC code for the logged-in ATC session.
+ */
+function examPortalAtcCodeFromSession(?PDO $pdo = null): string
+{
+    $code = trim((string)($_SESSION['atc_code'] ?? ''));
+    if ($code !== '') {
+        return $code;
+    }
+    $atcId = (int)($_SESSION['atc_id'] ?? 0);
+    if ($atcId <= 0) {
+        return '';
+    }
+    try {
+        $db = $pdo ?? (function_exists('getDBConnection') ? getDBConnection() : null);
+        if (!$db) {
+            return '';
+        }
+        $st = $db->prepare('SELECT atc_code FROM atc_centers WHERE id = ? LIMIT 1');
+        $st->execute([$atcId]);
+        $code = trim((string)($st->fetchColumn() ?: ''));
+        if ($code !== '') {
+            $_SESSION['atc_code'] = $code;
+        }
+        return $code;
+    } catch (Throwable $e) {
+        return '';
+    }
+}
+
+/**
+ * List question banks assigned to an ATC centre code.
+ *
+ * @return array{success:bool,banks:list<array>,error:?string}
+ */
+function fetchAssignedQuestionBanks(string $atcCode): array
+{
+    $atcCode = trim($atcCode);
+    if ($atcCode === '') {
+        return ['success' => false, 'banks' => [], 'error' => 'ATC code missing'];
+    }
+    if (!examIntegrationReady()) {
+        return ['success' => false, 'banks' => [], 'error' => 'Exam portal API is not configured'];
+    }
+
+    $res = examApi_request('GET', '/question-banks/for-centre', [
+        'centre_id' => $atcCode,
+    ], true, 15);
+
+    if (!$res['success']) {
+        return [
+            'success' => false,
+            'banks'   => [],
+            'error'   => $res['error'] ?? 'Failed to load question banks',
+        ];
+    }
+
+    $banks = $res['data']['banks'] ?? [];
+    if (!is_array($banks)) {
+        $banks = [];
+    }
+
+    return ['success' => true, 'banks' => $banks, 'error' => null];
+}
+
+/**
+ * Fetch full question bank export for PDF generation.
+ *
+ * @return array{success:bool,data:?array,error:?string}
+ */
+function fetchQuestionBankExport(string $atcCode, int $bankId, bool $includeAnswers = true): array
+{
+    $atcCode = trim($atcCode);
+    if ($atcCode === '' || $bankId <= 0) {
+        return ['success' => false, 'data' => null, 'error' => 'Invalid request'];
+    }
+    if (!examIntegrationReady()) {
+        return ['success' => false, 'data' => null, 'error' => 'Exam portal API is not configured'];
+    }
+
+    $res = examApi_request('GET', '/question-banks/' . $bankId . '/export', [
+        'centre_id'        => $atcCode,
+        'include_answers'  => $includeAnswers ? '1' : '0',
+    ], false, 30);
+
+    if (!$res['success'] || !is_array($res['data'] ?? null)) {
+        return [
+            'success' => false,
+            'data'    => null,
+            'error'   => $res['error'] ?? 'Failed to export question bank',
+        ];
+    }
+
+    return ['success' => true, 'data' => $res['data'], 'error' => null];
+}
+
+/**
+ * Sanitize text for FPDF (Latin-1).
+ */
+function questionBankPdfText(string $text): string
+{
+    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = preg_replace("/\r\n|\r|\n/", ' ', $text) ?? $text;
+    $converted = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT//IGNORE', $text);
+    return $converted !== false ? $converted : $text;
+}
+
+/**
+ * Stream a question bank PDF to the browser (FPDF).
+ *
+ * @param array $export Data from fetchQuestionBankExport()['data']
+ */
+function streamQuestionBankPdf(array $export, string $atcCode): void
+{
+    $autoload = __DIR__ . '/../assets/fpdi/fpdi_autoload.php';
+    if (!file_exists($autoload)) {
+        throw new RuntimeException('PDF library not found');
+    }
+    require_once $autoload;
+
+    $title = (string)($export['title'] ?? 'Question Bank');
+    $subject = (string)($export['subject'] ?? '');
+    $includeAnswers = !empty($export['include_answers']);
+    $questions = is_array($export['questions'] ?? null) ? $export['questions'] : [];
+
+    $pdf = new FPDF('P', 'mm', 'A4');
+    $pdf->SetAutoPageBreak(true, 18);
+    $pdf->SetMargins(14, 14, 14);
+    $pdf->AddPage();
+
+    $pdf->SetFont('Arial', 'B', 16);
+    $pdf->MultiCell(0, 8, questionBankPdfText($title), 0, 'L');
+    $pdf->Ln(1);
+
+    $pdf->SetFont('Arial', '', 10);
+    $meta = [];
+    if ($subject !== '') {
+        $meta[] = 'Course / Subject: ' . $subject;
+    }
+    $meta[] = 'ATC: ' . $atcCode;
+    $meta[] = 'Questions: ' . count($questions);
+    $meta[] = 'Generated: ' . date('d M Y H:i');
+    if ($includeAnswers) {
+        $meta[] = 'Answer key included (ATC staff copy)';
+    }
+    $pdf->SetTextColor(80, 80, 80);
+    $pdf->MultiCell(0, 5, questionBankPdfText(implode('  |  ', $meta)), 0, 'L');
+    $pdf->SetTextColor(0, 0, 0);
+    $pdf->Ln(3);
+    $pdf->SetDrawColor(200, 200, 200);
+    $pdf->Line(14, $pdf->GetY(), 196, $pdf->GetY());
+    $pdf->Ln(6);
+
+    if (empty($questions)) {
+        $pdf->SetFont('Arial', 'I', 11);
+        $pdf->MultiCell(0, 6, 'No questions in this bank yet.');
+    }
+
+    foreach ($questions as $q) {
+        $num = (int)($q['number'] ?? 0);
+        $text = (string)($q['text'] ?? '');
+        $options = is_array($q['options'] ?? null) ? $q['options'] : [];
+        $correct = strtolower(trim((string)($q['correct_answer'] ?? '')));
+
+        if ($pdf->GetY() > 260) {
+            $pdf->AddPage();
+        }
+
+        $pdf->SetFont('Arial', 'B', 11);
+        $pdf->MultiCell(0, 6, questionBankPdfText('Q' . $num . '. ' . $text), 0, 'L');
+        $pdf->Ln(1);
+
+        $pdf->SetFont('Arial', '', 10);
+        foreach ($options as $opt) {
+            $oid = strtolower(trim((string)($opt['id'] ?? '')));
+            $olabel = strtoupper($oid !== '' ? $oid : '?');
+            $otext = (string)($opt['text'] ?? '');
+            $mark = '';
+            if ($includeAnswers && $correct !== '' && $oid === $correct) {
+                $mark = '  *';
+                $pdf->SetFont('Arial', 'B', 10);
+            } else {
+                $pdf->SetFont('Arial', '', 10);
+            }
+            $pdf->MultiCell(0, 5, questionBankPdfText('   (' . $olabel . ')  ' . $otext . $mark), 0, 'L');
+        }
+
+        if ($includeAnswers && $correct !== '') {
+            $pdf->SetFont('Arial', 'I', 9);
+            $pdf->SetTextColor(0, 100, 60);
+            $pdf->MultiCell(0, 5, questionBankPdfText('   Correct: ' . strtoupper($correct)), 0, 'L');
+            $pdf->SetTextColor(0, 0, 0);
+        }
+
+        $pdf->Ln(4);
+    }
+
+    $safeName = preg_replace('/[^A-Za-z0-9_-]+/', '_', $title) ?: 'question_bank';
+    $filename = $safeName . '_' . $atcCode . '.pdf';
+
+    $pdf->Output('D', $filename);
+    exit;
+}

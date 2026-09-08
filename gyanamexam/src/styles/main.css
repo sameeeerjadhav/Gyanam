@@ -1376,6 +1376,76 @@ tbody tr:hover {
   background: #fafbfc;
 }
 
+.assign-scope-card {
+  padding: 1rem 1.15rem 1.05rem;
+}
+
+.assign-scope-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+}
+
+.assign-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.assign-scope-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.75rem 0.85rem;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.assign-scope-opt:has(input:checked) {
+  border-color: #4361ee;
+  background: #eef2ff;
+}
+
+.assign-scope-opt strong {
+  display: block;
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+
+.assign-scope-opt small {
+  display: block;
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+  line-height: 1.35;
+}
+
+.assign-scope-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.assign-list-card.is-scope-locked {
+  opacity: 0.92;
+}
+
+.assign-row.is-locked {
+  cursor: default;
+  opacity: 0.85;
+}
+
+@media (max-width: 960px) {
+  .assign-scope-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .assign-select-all {
   display: inline-flex;
   align-items: center;
