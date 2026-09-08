@@ -1,6 +1,7 @@
 <?php
 /**
- * Gyanam Portal — ATC: Downloads (Documents + Question Banks)
+ * Gyanam Portal — ATC: Downloads hub
+ * Tabs: Documents | Banners | Question Banks
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -12,17 +13,18 @@ requireLogin(['ATC CENTER']);
 
 $pdo = getDBConnection();
 $userName = sanitize(getUserName());
+$atcId = (int)($_SESSION['atc_id'] ?? 0);
+$atcCode = examPortalAtcCodeFromSession($pdo);
 
 $type = strtolower(trim((string)($_GET['type'] ?? 'documents')));
-if (!in_array($type, ['documents', 'question_banks'], true)) {
+if (!in_array($type, ['documents', 'banners', 'question_banks'], true)) {
     $type = 'documents';
 }
 
 $searchTerm = trim((string)($_GET['search'] ?? ''));
 $error = isset($_GET['err']) ? sanitize((string)$_GET['err']) : '';
-$atcCode = examPortalAtcCodeFromSession($pdo);
 
-// Question bank PDF download (same page)
+// Question bank PDF download
 if ($type === 'question_banks' && isset($_GET['download'])) {
     $bankId = (int)$_GET['download'];
     $withAnswers = !isset($_GET['answers']) || $_GET['answers'] !== '0';
@@ -48,8 +50,23 @@ if ($type === 'question_banks' && isset($_GET['download'])) {
 }
 
 $documents = [];
+$banners = [];
 $banks = [];
-$docTotal = 0;
+$counts = ['documents' => 0, 'banners' => 0, 'question_banks' => 0];
+
+// Always load counts for tabs
+try {
+    $counts['documents'] = (int)$pdo->query("SELECT COUNT(*) FROM documents WHERE status = 'Active'")->fetchColumn();
+} catch (Exception $e) {}
+try {
+    $counts['banners'] = count(getDownloadableBannersForAtc($pdo, $atcId));
+} catch (Exception $e) {}
+if ($atcCode !== '' && examIntegrationReady()) {
+    $qbRes = fetchAssignedQuestionBanks($atcCode);
+    if ($qbRes['success']) {
+        $counts['question_banks'] = count($qbRes['banks']);
+    }
+}
 
 if ($type === 'documents') {
     $sql = "SELECT d.*, u.username as uploaded_by_name
@@ -59,14 +76,23 @@ if ($type === 'documents') {
     $params = [];
     if ($searchTerm !== '') {
         $sql .= ' AND (d.original_name LIKE ? OR d.description LIKE ?)';
-        $searchParam = '%' . $searchTerm . '%';
-        $params = [$searchParam, $searchParam];
+        $sp = '%' . $searchTerm . '%';
+        $params = [$sp, $sp];
     }
     $sql .= ' ORDER BY d.upload_date DESC';
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $docTotal = (int)$pdo->query("SELECT COUNT(*) FROM documents WHERE status = 'Active'")->fetchColumn();
+    $counts['documents'] = count($documents);
+} elseif ($type === 'banners') {
+    $banners = getDownloadableBannersForAtc($pdo, $atcId);
+    if ($searchTerm !== '') {
+        $q = strtolower($searchTerm);
+        $banners = array_values(array_filter($banners, static function ($b) use ($q) {
+            return str_contains(strtolower((string)($b['title'] ?? '')), $q);
+        }));
+    }
+    $counts['banners'] = count($banners);
 } else {
     if ($atcCode === '') {
         $error = $error !== '' ? $error : 'ATC code missing. Please re-login.';
@@ -85,22 +111,28 @@ if ($type === 'documents') {
                         || str_contains(strtolower((string)($b['subject'] ?? '')), $q);
                 }));
             }
+            $counts['question_banks'] = count($banks);
         }
     }
 }
 
 function formatFileSize($bytes) {
-    if ($bytes >= 1073741824) {
-        return number_format($bytes / 1073741824, 2) . ' GB';
-    }
-    if ($bytes >= 1048576) {
-        return number_format($bytes / 1048576, 2) . ' MB';
-    }
-    if ($bytes >= 1024) {
-        return number_format($bytes / 1024, 2) . ' KB';
-    }
+    $bytes = (int)$bytes;
+    if ($bytes >= 1073741824) return number_format($bytes / 1073741824, 2) . ' GB';
+    if ($bytes >= 1048576) return number_format($bytes / 1048576, 2) . ' MB';
+    if ($bytes >= 1024) return number_format($bytes / 1024, 2) . ' KB';
     return $bytes . ' bytes';
 }
+
+function bannerIsVideo(string $path): bool {
+    return in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), ['mp4', 'webm', 'ogg'], true);
+}
+
+$tabMeta = [
+    'documents' => ['label' => 'Documents', 'hint' => 'HO files & resources'],
+    'banners' => ['label' => 'Banners', 'hint' => 'Assigned promotional banners'],
+    'question_banks' => ['label' => 'Question Banks', 'hint' => 'Assigned exam practice PDFs'],
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -112,90 +144,113 @@ function formatFileSize($bytes) {
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
     <style>
-        .dl-tabs {
-            display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem;
+        .dl-hero {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 55%, #312e81 100%);
+            border-radius: 18px; padding: 1.25rem 1.4rem 1.15rem; color: #fff;
+            margin-bottom: 1.15rem; box-shadow: 0 12px 28px rgba(15,23,42,.18);
         }
+        .dl-hero h3 { margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -.02em; }
+        .dl-hero p { margin: .35rem 0 0; font-size: .84rem; opacity: .85; }
+        .dl-tabs { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .65rem; margin-top: 1rem; }
+        @media (max-width:720px){ .dl-tabs { grid-template-columns: 1fr; } }
         .dl-tab {
-            display: inline-flex; align-items: center; gap: .4rem;
-            padding: .55rem 1rem; border-radius: 999px; font-size: .82rem; font-weight: 700;
-            text-decoration: none; border: 1.5px solid #e5e7eb; background: #fff; color: #475569;
+            display: block; text-decoration: none; color: #e2e8f0;
+            background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+            border-radius: 14px; padding: .85rem 1rem; transition: .15s ease;
         }
-        .dl-tab.active {
-            background: linear-gradient(135deg, #4361ee, #3730a3); color: #fff; border-color: transparent;
-            box-shadow: 0 3px 12px rgba(67, 97, 238, .25);
-        }
+        .dl-tab:hover { background: rgba(255,255,255,.14); }
+        .dl-tab.active { background: #fff; color: #0f172a; border-color: #fff; }
+        .dl-tab .t-label { display:flex; align-items:center; justify-content:space-between; gap:.5rem; font-weight:800; font-size:.9rem; }
+        .dl-tab .t-hint { margin-top:.25rem; font-size:.72rem; opacity:.75; font-weight:500; }
+        .dl-tab.active .t-hint { color:#64748b; opacity:1; }
         .dl-tab .count {
-            min-width: 1.35rem; height: 1.35rem; padding: 0 .35rem; border-radius: 999px;
-            display: inline-flex; align-items: center; justify-content: center;
-            font-size: .72rem; background: rgba(15,23,42,.08);
+            min-width: 1.5rem; height: 1.5rem; border-radius: 999px; padding: 0 .4rem;
+            display:inline-flex; align-items:center; justify-content:center;
+            font-size:.72rem; font-weight:800; background: rgba(255,255,255,.18);
         }
-        .dl-tab.active .count { background: rgba(255,255,255,.22); }
-        .qb-hint {
+        .dl-tab.active .count { background:#eef2ff; color:#3730a3; }
+        .dl-note {
+            border-radius: 12px; padding: .85rem 1rem; font-size: .84rem; margin-bottom: 1rem;
             background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af;
-            border-radius: 12px; padding: .85rem 1rem; font-size: .84rem; margin-bottom: 1rem;
         }
-        .qb-err {
+        .dl-err {
+            border-radius: 12px; padding: .85rem 1rem; font-size: .84rem; margin-bottom: 1rem;
             background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c;
-            border-radius: 12px; padding: .85rem 1rem; font-size: .84rem; margin-bottom: 1rem;
         }
+        .banner-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem;
+        }
+        .banner-dl-card {
+            background:#fff; border:1.5px solid #e5e7eb; border-radius:16px; overflow:hidden;
+            box-shadow:0 4px 14px rgba(15,23,42,.04); display:flex; flex-direction:column;
+        }
+        .banner-dl-media {
+            aspect-ratio: 16/10; background:#0f172a; position:relative; overflow:hidden;
+        }
+        .banner-dl-media img, .banner-dl-media video {
+            width:100%; height:100%; object-fit:cover; display:block;
+        }
+        .banner-dl-body { padding: .9rem 1rem 1rem; flex:1; display:flex; flex-direction:column; gap:.55rem; }
+        .banner-dl-title { font-weight:800; font-size:.92rem; color:#0f172a; line-height:1.3; }
+        .banner-dl-meta { font-size:.75rem; color:#64748b; font-weight:600; }
+        .banner-dl-actions { display:flex; gap:.45rem; flex-wrap:wrap; margin-top:auto; }
+        .btn-dl {
+            display:inline-flex; align-items:center; gap:.35rem; height:34px; padding:0 .85rem;
+            border-radius:10px; font-size:.78rem; font-weight:750; text-decoration:none;
+        }
+        .btn-dl-primary { background:linear-gradient(135deg,#10b981,#059669); color:#fff; }
+        .btn-dl-ghost { background:#fff; color:#334155; border:1.5px solid #e2e8f0; }
         .qb-subject {
-            display: inline-block; margin-top: .2rem; font-size: .75rem; font-weight: 650;
-            color: #4361ee; background: #eef2ff; padding: .15rem .5rem; border-radius: 999px;
+            display:inline-block; margin-top:.2rem; font-size:.75rem; font-weight:650;
+            color:#4361ee; background:#eef2ff; padding:.15rem .5rem; border-radius:999px;
         }
-        .qb-actions { display: flex; gap: .45rem; flex-wrap: wrap; }
-        .qb-actions a {
-            display: inline-flex; align-items: center; gap: .35rem;
-            font-size: .8rem; font-weight: 700; text-decoration: none;
-        }
-        .qb-actions .with-ans { color: #059669; }
-        .qb-actions .practice { color: #6366f1; }
-        .documents-table thead th {
-            text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px;
-            font-weight: 700; color: var(--text-secondary); padding: 1rem;
-        }
-        .doc-file-info { display: flex; align-items: center; gap: 1rem; }
+        .qb-actions { display:flex; gap:.45rem; flex-wrap:wrap; }
+        .qb-actions a { font-size:.8rem; font-weight:700; text-decoration:none; }
+        .qb-actions .with-ans { color:#059669; }
+        .qb-actions .practice { color:#6366f1; }
+        .doc-file-info { display:flex; align-items:center; gap:1rem; }
         .doc-file-icon {
-            width: 40px; height: 40px;
-            background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
-            border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            width:40px; height:40px; border-radius:10px; flex-shrink:0;
+            background:linear-gradient(135deg,#eff6ff,#dbeafe);
+            display:flex; align-items:center; justify-content:center;
         }
-        .doc-file-icon svg { width: 20px; height: 20px; stroke: var(--primary-600); }
-        .doc-file-details { flex: 1; min-width: 0; }
+        .doc-file-icon svg { width:18px; height:18px; stroke:#2563eb; }
         .file-size-badge {
-            display: inline-block; padding: 0.4rem 0.75rem; background: var(--gray-100);
-            color: var(--text-primary); border-radius: var(--radius-md); font-size: 0.85rem;
-            font-weight: 600; font-family: 'Courier New', monospace;
+            display:inline-block; padding:.35rem .65rem; background:#f1f5f9; border-radius:8px;
+            font-size:.8rem; font-weight:700; font-family:ui-monospace,monospace;
         }
         .btn-download-compact {
-            display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem;
-            background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;
-            border-radius: var(--radius-md); font-weight: 600; font-size: 0.85rem; text-decoration: none;
-            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+            display:inline-flex; align-items:center; gap:.4rem; padding:.55rem .9rem;
+            background:linear-gradient(135deg,#10b981,#059669); color:#fff; border-radius:10px;
+            font-weight:700; font-size:.82rem; text-decoration:none;
         }
-        .btn-download-compact:hover {
-            background: linear-gradient(135deg, #059669, #047857); transform: translateY(-1px);
+        .documents-table thead th {
+            text-transform:uppercase; font-size:.72rem; letter-spacing:.04em;
+            font-weight:800; color:#64748b; padding:.85rem 1rem;
         }
-        .btn-download-compact svg { width: 16px; height: 16px; flex-shrink: 0; }
-        .documents-table tbody tr:hover { background: var(--primary-50); }
-        .documents-table tbody td { vertical-align: middle; }
+        .documents-table tbody td { vertical-align:middle; }
+        .documents-table tbody tr:hover { background:#f8fafc; }
+        .empty-panel {
+            text-align:center; padding:2.5rem 1rem; color:#94a3b8;
+            border:1.5px dashed #e2e8f0; border-radius:16px; background:#fff;
+        }
+        .empty-panel svg { width:44px; height:44px; margin-bottom:.75rem; opacity:.45; }
     </style>
 </head>
 <body>
 <div class="dashboard-layout">
-
     <?php include __DIR__ . '/sidebar.php'; ?>
 
     <main class="main-content">
         <header class="top-header">
             <div class="header-left">
                 <button class="hamburger" id="hamburgerBtn" aria-label="Toggle sidebar">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                 </button>
                 <div class="header-greeting">
                     <h2>Downloads</h2>
-                    <p>Documents and assigned question bank PDFs</p>
+                    <p>Documents, banners &amp; question banks assigned to your centre</p>
                 </div>
             </div>
             <div class="header-right">
@@ -205,155 +260,172 @@ function formatFileSize($bytes) {
         </header>
 
         <div class="page-content">
-
-            <div class="dl-tabs">
-                <a class="dl-tab <?= $type === 'documents' ? 'active' : '' ?>" href="documents.php?type=documents<?= $searchTerm !== '' && $type === 'documents' ? '&search=' . urlencode($searchTerm) : '' ?>">
-                    Documents
-                    <?php if ($type === 'documents'): ?><span class="count"><?= count($documents) ?></span><?php endif; ?>
-                </a>
-                <a class="dl-tab <?= $type === 'question_banks' ? 'active' : '' ?>" href="documents.php?type=question_banks">
-                    Question Banks
-                    <?php if ($type === 'question_banks'): ?><span class="count"><?= count($banks) ?></span><?php endif; ?>
-                </a>
+            <div class="dl-hero">
+                <h3>Resource Library</h3>
+                <p>Everything Head Office shared with your ATC — files, campaign banners, and practice banks.</p>
+                <div class="dl-tabs">
+                    <?php foreach ($tabMeta as $key => $meta): ?>
+                    <a class="dl-tab <?= $type === $key ? 'active' : '' ?>" href="documents.php?type=<?= urlencode($key) ?>">
+                        <div class="t-label">
+                            <span><?= htmlspecialchars($meta['label']) ?></span>
+                            <span class="count"><?= (int)$counts[$key] ?></span>
+                        </div>
+                        <div class="t-hint"><?= htmlspecialchars($meta['hint']) ?></div>
+                    </a>
+                    <?php endforeach; ?>
+                </div>
             </div>
 
-            <?php if ($type === 'question_banks'): ?>
-                <div class="qb-hint">
-                    Question banks are created and assigned by Head Office from the Exam Portal.
-                    Only banks assigned to your ATC code<?= $atcCode !== '' ? ' (<strong>' . htmlspecialchars($atcCode) . '</strong>)' : '' ?> appear here.
-                </div>
+            <?php if ($type === 'banners'): ?>
+                <div class="dl-note">Banners assigned to your ATC appear here for download (and on your dashboard carousel when Active).</div>
+            <?php elseif ($type === 'question_banks'): ?>
+                <div class="dl-note">Question banks are created in the Exam Portal and assigned to your ATC code<?= $atcCode !== '' ? ' (<strong>' . htmlspecialchars($atcCode) . '</strong>)' : '' ?>.</div>
             <?php endif; ?>
 
             <?php if ($error !== ''): ?>
-                <div class="qb-err"><?= htmlspecialchars($error) ?></div>
+                <div class="dl-err"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
             <div class="page-toolbar">
                 <h3>
-                    <?= $type === 'question_banks' ? 'Assigned Question Banks' : 'Available Downloads' ?>
-                    <span class="badge-count"><?= $type === 'question_banks' ? count($banks) : count($documents) ?></span>
+                    <?= htmlspecialchars($tabMeta[$type]['label']) ?>
+                    <span class="badge-count"><?= (int)$counts[$type] ?></span>
                 </h3>
-                <form method="GET" style="display: flex; gap: 0.75rem;">
+                <form method="GET" style="display:flex;gap:.75rem;">
                     <input type="hidden" name="type" value="<?= htmlspecialchars($type) ?>">
                     <div class="search-bar">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                        <input type="text" name="search" placeholder="<?= $type === 'question_banks' ? 'Search title or course…' : 'Search documents...' ?>" value="<?= htmlspecialchars($searchTerm) ?>">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        <input type="text" name="search" placeholder="Search…" value="<?= htmlspecialchars($searchTerm) ?>">
                     </div>
-                    <button type="submit" class="btn-primary" style="padding: 0 1.5rem;">Search</button>
+                    <button type="submit" class="btn-primary" style="padding:0 1.35rem;">Search</button>
                 </form>
             </div>
 
-            <div class="table-card">
-                <?php if ($type === 'documents'): ?>
-                <table class="data-table documents-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 80px;">SR NO</th>
-                            <th style="width: 45%;">FILENAME</th>
-                            <th style="width: 25%;">UPLOADED DATE</th>
-                            <th style="width: 15%;">FILE SIZE</th>
-                            <th style="width: 15%;">ACTION</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <?php if ($type === 'documents'): ?>
+                <div class="table-card">
+                    <table class="data-table documents-table">
+                        <thead>
+                            <tr>
+                                <th style="width:70px">SR</th>
+                                <th>FILENAME</th>
+                                <th style="width:180px">UPLOADED</th>
+                                <th style="width:110px">SIZE</th>
+                                <th style="width:130px">ACTION</th>
+                            </tr>
+                        </thead>
+                        <tbody>
                         <?php if (empty($documents)): ?>
+                            <tr><td colspan="5" class="table-empty"><p>No documents available.</p></td></tr>
+                        <?php else: foreach ($documents as $i => $doc): ?>
                             <tr>
-                                <td colspan="5" class="table-empty">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                    <p>No documents available at the moment.</p>
+                                <td style="text-align:center;font-weight:700;color:#64748b"><?= $i + 1 ?></td>
+                                <td>
+                                    <div class="doc-file-info">
+                                        <div class="doc-file-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                        </div>
+                                        <div>
+                                            <div class="cell-name"><?= htmlspecialchars($doc['original_name']) ?></div>
+                                            <?php if (!empty($doc['description'])): ?>
+                                            <div class="cell-sub"><?= htmlspecialchars(substr($doc['description'], 0, 80)) ?><?= strlen($doc['description']) > 80 ? '…' : '' ?></div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style="color:#64748b;font-size:.88rem"><?= date('d M Y', strtotime($doc['upload_date'])) ?></td>
+                                <td><span class="file-size-badge"><?= formatFileSize($doc['file_size']) ?></span></td>
+                                <td>
+                                    <a class="btn-download-compact" href="../<?= htmlspecialchars($doc['file_path']) ?>" download>
+                                        Download
+                                    </a>
                                 </td>
                             </tr>
-                        <?php else: ?>
-                            <?php foreach ($documents as $index => $doc): ?>
-                                <tr>
-                                    <td style="text-align: center; font-weight: 600; color: var(--text-secondary);"><?= $index + 1 ?></td>
-                                    <td>
-                                        <div class="doc-file-info">
-                                            <div class="doc-file-icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                            </div>
-                                            <div class="doc-file-details">
-                                                <div class="cell-name"><?= htmlspecialchars($doc['original_name']) ?></div>
-                                                <?php if ($doc['description']): ?>
-                                                    <div class="cell-sub"><?= htmlspecialchars(substr($doc['description'], 0, 70)) ?><?= strlen($doc['description']) > 70 ? '...' : '' ?></div>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td style="color: var(--text-secondary); font-size: 0.9rem;"><?= date('d M Y, h:i A', strtotime($doc['upload_date'])) ?></td>
-                                    <td>
-                                        <span class="file-size-badge"><?= formatFileSize($doc['file_size']) ?></span>
-                                    </td>
-                                    <td>
-                                        <a href="../<?= $doc['file_path'] ?>" download class="btn-download-compact">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                            Download
-                                        </a>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+                        <?php endforeach; endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+            <?php elseif ($type === 'banners'): ?>
+                <?php if (empty($banners)): ?>
+                    <div class="empty-panel">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        <div>No banners assigned to your centre yet.</div>
+                    </div>
                 <?php else: ?>
-                <table class="data-table documents-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 70px;">SR</th>
-                            <th>QUESTION BANK</th>
-                            <th style="width: 120px;">QUESTIONS</th>
-                            <th style="width: 140px;">UPDATED</th>
-                            <th style="width: 220px;">DOWNLOAD PDF</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($banks)): ?>
+                <div class="banner-grid">
+                    <?php foreach ($banners as $b):
+                        $path = (string)($b['image_path'] ?? '');
+                        $url = '../uploads/announcements/' . rawurlencode($path);
+                        $isVideo = bannerIsVideo($path);
+                        $title = (string)($b['title'] ?? 'Banner');
+                        $created = !empty($b['created_at']) ? date('d M Y', strtotime($b['created_at'])) : '—';
+                    ?>
+                    <div class="banner-dl-card">
+                        <div class="banner-dl-media">
+                            <?php if ($isVideo): ?>
+                                <video src="<?= htmlspecialchars($url) ?>" muted playsinline preload="metadata"></video>
+                            <?php else: ?>
+                                <img src="<?= htmlspecialchars($url) ?>" alt="<?= htmlspecialchars($title) ?>" loading="lazy">
+                            <?php endif; ?>
+                        </div>
+                        <div class="banner-dl-body">
+                            <div class="banner-dl-title"><?= htmlspecialchars($title) ?></div>
+                            <div class="banner-dl-meta"><?= $isVideo ? 'Video' : 'Image' ?> · <?= htmlspecialchars($created) ?></div>
+                            <div class="banner-dl-actions">
+                                <a class="btn-dl btn-dl-primary" href="<?= htmlspecialchars($url) ?>" download="<?= htmlspecialchars($path) ?>">Download</a>
+                                <a class="btn-dl btn-dl-ghost" href="<?= htmlspecialchars($url) ?>" target="_blank" rel="noopener">Open</a>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+
+            <?php else: ?>
+                <div class="table-card">
+                    <table class="data-table documents-table">
+                        <thead>
                             <tr>
-                                <td colspan="5" class="table-empty">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-                                    <p>No question banks assigned to your centre yet.</p>
+                                <th style="width:70px">SR</th>
+                                <th>QUESTION BANK</th>
+                                <th style="width:110px">QUESTIONS</th>
+                                <th style="width:130px">UPDATED</th>
+                                <th style="width:220px">DOWNLOAD PDF</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (empty($banks)): ?>
+                            <tr><td colspan="5" class="table-empty"><p>No question banks assigned yet.</p></td></tr>
+                        <?php else: foreach ($banks as $i => $bank):
+                            $id = (int)($bank['id'] ?? 0);
+                            $updated = !empty($bank['updated_at']) ? date('d M Y', strtotime((string)$bank['updated_at'])) : '—';
+                            $dl = 'documents.php?type=question_banks&download=' . $id;
+                        ?>
+                            <tr>
+                                <td style="text-align:center;font-weight:700;color:#64748b"><?= $i + 1 ?></td>
+                                <td>
+                                    <div class="cell-name"><?= htmlspecialchars((string)($bank['title'] ?? 'Untitled')) ?></div>
+                                    <?php if (!empty($bank['subject'])): ?>
+                                        <span class="qb-subject"><?= htmlspecialchars((string)$bank['subject']) ?></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= (int)($bank['questions_count'] ?? 0) ?></td>
+                                <td><?= htmlspecialchars($updated) ?></td>
+                                <td>
+                                    <div class="qb-actions">
+                                        <a class="with-ans" href="<?= htmlspecialchars($dl) ?>">With answers</a>
+                                        <a class="practice" href="<?= htmlspecialchars($dl . '&answers=0') ?>">Practice</a>
+                                    </div>
                                 </td>
                             </tr>
-                        <?php else: ?>
-                            <?php foreach ($banks as $index => $bank):
-                                $id = (int)($bank['id'] ?? 0);
-                                $updated = !empty($bank['updated_at'])
-                                    ? date('d M Y', strtotime((string)$bank['updated_at']))
-                                    : '—';
-                                $dlBase = 'documents.php?type=question_banks&download=' . $id;
-                            ?>
-                                <tr>
-                                    <td style="text-align:center;font-weight:600;color:var(--text-secondary)"><?= $index + 1 ?></td>
-                                    <td>
-                                        <div class="cell-name"><?= htmlspecialchars((string)($bank['title'] ?? 'Untitled')) ?></div>
-                                        <?php if (!empty($bank['subject'])): ?>
-                                            <span class="qb-subject"><?= htmlspecialchars((string)$bank['subject']) ?></span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?= (int)($bank['questions_count'] ?? 0) ?></td>
-                                    <td><?= htmlspecialchars($updated) ?></td>
-                                    <td>
-                                        <div class="qb-actions">
-                                            <a class="with-ans" href="<?= htmlspecialchars($dlBase) ?>" title="PDF with answer key">
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                                With answers
-                                            </a>
-                                            <a class="practice" href="<?= htmlspecialchars($dlBase . '&answers=0') ?>" title="Practice PDF without answers">
-                                                Practice
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-                <?php endif; ?>
-            </div>
+                        <?php endforeach; endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
         </div>
     </main>
 </div>
-
 <script src="../assets/js/dashboard.js"></script>
 </body>
 </html>
