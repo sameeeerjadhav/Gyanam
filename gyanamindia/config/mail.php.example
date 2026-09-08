@@ -1,0 +1,22 @@
+<?php
+/**
+ * Mail / SMTP Configuration — Gyanam India
+ * Copy to mail.php and fill Hostinger mailbox credentials.
+ * Never commit mail.php (it is gitignored).
+ *
+ * Hostinger typical values:
+ *   Host: smtp.hostinger.com
+ *   Port: 465 (SSL) or 587 (TLS)
+ */
+define('MAIL_ENABLED', true);
+
+define('MAIL_HOST', 'smtp.hostinger.com');
+define('MAIL_PORT', 465);                 // 465 = ssl, 587 = tls
+define('MAIL_ENCRYPTION', 'ssl');         // ssl | tls | none
+
+define('MAIL_USERNAME', 'noreply@gyanamindia.com'); // full mailbox address
+define('MAIL_PASSWORD', 'CHANGE_ME');
+
+define('MAIL_FROM_EMAIL', 'noreply@gyanamindia.com');
+define('MAIL_FROM_NAME',  'Gyanam India Educational Services');
+define('MAIL_REPLY_TO',   'contact@gyanamindia.com');
