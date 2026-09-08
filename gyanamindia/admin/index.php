@@ -19,6 +19,94 @@ $greeting = getGreeting();
 
 try { ensurePerformanceIndexes($pdo); } catch (Exception $e) {}
 
+/**
+ * Top ATCs by fees collected (+ admission count), optional center-type + period filters.
+ *
+ * @return list<array{atc_name:string,atc_code:?string,center_type:?string,dlc_name:?string,student_count:int,revenue_collected:float}>
+ */
+function fetchTopPerformingAtcs(PDO $pdo, string $centerType = '', string $period = 'all', int $limit = 10): array {
+    $centerType = trim($centerType);
+    $period = strtolower(trim($period));
+    if (!in_array($period, ['today', 'month', 'year', 'all'], true)) {
+        $period = 'all';
+    }
+    $limit = max(1, min(25, $limit));
+
+    $dateSql = '';
+    if ($period === 'today') {
+        $dateSql = ' AND adm.admission_date = CURDATE()';
+    } elseif ($period === 'month') {
+        $dateSql = ' AND adm.admission_date >= DATE_FORMAT(CURDATE(), \'%Y-%m-01\')';
+    } elseif ($period === 'year') {
+        $dateSql = ' AND YEAR(adm.admission_date) = YEAR(CURDATE())';
+    }
+
+    $typeSql = '';
+    $params = [];
+    if ($centerType === 'Abacus') {
+        $typeSql = " AND atc.center_type LIKE ?";
+        $params[] = '%Abacus%';
+    } elseif ($centerType === 'Vedic Maths') {
+        $typeSql = " AND atc.center_type LIKE ?";
+        $params[] = '%Vedic%';
+    } elseif ($centerType === 'IT') {
+        // Match IT-only and combo types that include IT (avoid false positives)
+        $typeSql = " AND (
+            atc.center_type = 'IT'
+            OR atc.center_type LIKE '%+ IT'
+            OR atc.center_type LIKE 'IT +%'
+            OR atc.center_type LIKE '%+ IT +%'
+        )";
+    }
+
+    $sql = "
+        SELECT atc.name AS atc_name,
+               atc.atc_code,
+               atc.center_type,
+               dlc.name AS dlc_name,
+               COUNT(adm.id) AS student_count,
+               COALESCE(SUM(adm.fees_paid), 0) AS revenue_collected
+        FROM atc_centers atc
+        LEFT JOIN dlc_offices dlc ON atc.dlc_id = dlc.id
+        LEFT JOIN admissions adm
+               ON atc.id = adm.atc_id
+              AND adm.status = 'Active'
+              $dateSql
+        WHERE atc.status = 'Active'
+          $typeSql
+        GROUP BY atc.id
+        HAVING student_count > 0 OR revenue_collected > 0
+        ORDER BY revenue_collected DESC, student_count DESC
+        LIMIT $limit
+    ";
+
+    try {
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
+        return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        // Older DBs may lack atc_code
+        try {
+            $sql2 = str_replace('atc.atc_code,', "NULL AS atc_code,", $sql);
+            $st = $pdo->prepare($sql2);
+            $st->execute($params);
+            return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $e2) {
+            return [];
+        }
+    }
+}
+
+// AJAX: filtered top ATCs
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'top_atcs') {
+    header('Content-Type: application/json; charset=utf-8');
+    $centerType = (string)($_POST['center_type'] ?? '');
+    $period = (string)($_POST['period'] ?? 'all');
+    $rows = fetchTopPerformingAtcs($pdo, $centerType, $period, 10);
+    echo json_encode(['success' => true, 'rows' => $rows, 'center_type' => $centerType, 'period' => $period]);
+    exit;
+}
+
 // Birthday push notifications: use cron/birthday_notifications.php (not every dashboard load)
 
 // ── Stats (session-cached 60s) ────────────────────────────────────────────────
@@ -319,16 +407,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     } catch(Exception $e){}
 
     try {
-        $topATCs = $pdo->query("
-            SELECT atc.name AS atc_name, dlc.name AS dlc_name,
-                   COUNT(adm.id) AS student_count,
-                   SUM(adm.fees_paid) AS revenue_collected
-            FROM atc_centers atc
-            LEFT JOIN dlc_offices dlc ON atc.dlc_id=dlc.id
-            LEFT JOIN admissions  adm ON atc.id=adm.atc_id AND adm.status='Active'
-            WHERE atc.status='Active'
-            GROUP BY atc.id ORDER BY revenue_collected DESC LIMIT 10
-        ")->fetchAll(PDO::FETCH_ASSOC);
+        $topATCs = fetchTopPerformingAtcs($pdo, '', 'all', 10);
     } catch(Exception $e){}
 
     try {
@@ -532,6 +611,36 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .chart-bar { width:65%; border-radius:6px 6px 0 0; background:linear-gradient(180deg,#6366f1,#4361ee); min-height:6px; transition:height .3s; }
     .chart-mlbl { font-size:.72rem; font-weight:700; color:var(--text-primary,#111); }
     .chart-msub { font-size:.67rem; color:var(--text-muted,#9ca3af); }
+
+    /* Top ATC filters */
+    .top-atc-head {
+        display:flex; align-items:flex-end; justify-content:space-between; gap:1rem;
+        flex-wrap:wrap; margin-bottom:.85rem;
+    }
+    .top-atc-filters { display:flex; flex-wrap:wrap; gap:.55rem; align-items:center; }
+    .top-atc-filters label {
+        font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+        color:var(--text-muted,#9ca3af); display:block; margin-bottom:.28rem;
+    }
+    .top-atc-filters select {
+        height:38px; padding:0 .8rem; border:1.5px solid var(--border-color,#e5e7eb);
+        border-radius:10px; font-family:inherit; font-size:.82rem; font-weight:600;
+        background:#fff; color:#1f2937; min-width:140px;
+    }
+    .period-pills { display:flex; flex-wrap:wrap; gap:.35rem; }
+    .period-pill {
+        height:38px; padding:0 .9rem; border-radius:999px; border:1.5px solid #e5e7eb;
+        background:#fff; color:#475569; font-size:.78rem; font-weight:700; cursor:pointer;
+        font-family:inherit; transition:all .15s;
+    }
+    .period-pill.active {
+        background:#4361ee; border-color:#4361ee; color:#fff;
+        box-shadow:0 3px 10px rgba(67,97,238,.25);
+    }
+    .ctype-chip {
+        display:inline-flex; padding:.15rem .5rem; border-radius:999px; font-size:.68rem;
+        font-weight:800; background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe;
+    }
     </style>
 </head>
 <body>
@@ -823,17 +932,50 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 <div class="dsp-card"><div class="dsp-val" style="color:#6366f1"><?= $dispatchStats['total_items']??0 ?></div><div class="dsp-lbl">Total Items</div></div>
             </div>
 
-            <!-- ═══ TOP ATCs ═══ -->
-            <?php if(!empty($topATCs)): ?>
+            <!-- ═══ TOP ATCs (center type + period filters) ═══ -->
             <div class="rpt-section">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                Top 10 ATC Centers
+                Top Performing ATCs
+            </div>
+            <div class="top-atc-head">
+                <div class="top-atc-filters">
+                    <div>
+                        <label for="topAtcCenterType">Center Type</label>
+                        <select id="topAtcCenterType">
+                            <option value="">All Types</option>
+                            <option value="Abacus">Abacus</option>
+                            <option value="Vedic Maths">Vedic Maths</option>
+                            <option value="IT">IT</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Period</label>
+                        <div class="period-pills" id="topAtcPeriodPills">
+                            <button type="button" class="period-pill" data-period="today">Today</button>
+                            <button type="button" class="period-pill" data-period="month">This Month</button>
+                            <button type="button" class="period-pill" data-period="year">This Year</button>
+                            <button type="button" class="period-pill active" data-period="all">All Time</button>
+                        </div>
+                    </div>
+                </div>
+                <div style="font-size:.75rem;color:#94a3b8;font-weight:600" id="topAtcMeta">Ranked by fees collected</div>
             </div>
             <div class="rpt-table-wrap">
                 <table class="rpt-table">
-                    <thead><tr><th>Rank</th><th>ATC Center</th><th>DLC Office</th><th>Students</th><th>Revenue Collected</th></tr></thead>
-                    <tbody>
-                    <?php foreach($topATCs as $i=>$atc): ?>
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>ATC Center</th>
+                            <th>Center Type</th>
+                            <th>DLC Office</th>
+                            <th>Students</th>
+                            <th>Revenue Collected</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topAtcTbody">
+                    <?php if (empty($topATCs)): ?>
+                        <tr><td colspan="6" style="text-align:center;padding:2rem;color:#9ca3af">No ATC performance data yet</td></tr>
+                    <?php else: foreach ($topATCs as $i => $atc): ?>
                     <tr>
                         <td>
                             <span class="rank-badge <?= $i===0?'rank-1':($i===1?'rank-2':($i===2?'rank-3':'rank-other')) ?>">
@@ -841,16 +983,21 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                                 #<?= $i+1 ?>
                             </span>
                         </td>
-                        <td style="font-weight:800"><?= htmlspecialchars($atc['atc_name']) ?></td>
+                        <td style="font-weight:800">
+                            <?= htmlspecialchars($atc['atc_name']) ?>
+                            <?php if (!empty($atc['atc_code'])): ?>
+                            <div style="font-size:.72rem;color:#94a3b8;font-weight:600;font-family:ui-monospace,monospace"><?= htmlspecialchars($atc['atc_code']) ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td><?php if (!empty($atc['center_type'])): ?><span class="ctype-chip"><?= htmlspecialchars($atc['center_type']) ?></span><?php else: ?>—<?php endif; ?></td>
                         <td style="color:#6b7280"><?= htmlspecialchars($atc['dlc_name']??'—') ?></td>
-                        <td><strong><?= $atc['student_count'] ?></strong></td>
-                        <td style="color:#059669;font-weight:700">₹<?= number_format($atc['revenue_collected'],0) ?></td>
+                        <td><strong><?= (int)$atc['student_count'] ?></strong></td>
+                        <td style="color:#059669;font-weight:700">₹<?= number_format((float)$atc['revenue_collected'],0) ?></td>
                     </tr>
-                    <?php endforeach; ?>
+                    <?php endforeach; endif; ?>
                     </tbody>
                 </table>
             </div>
-            <?php endif; ?>
 
             <!-- ═══ MONTHLY TREND CHART ═══ -->
             <?php if(!empty($monthlyTrend)):
@@ -1029,6 +1176,89 @@ function sendBdayWish(name, mobile) {
     const num = mobile.replace(/\D/g, '');
     window.open('https://wa.me/91' + num + '?text=' + msg, '_blank');
 }
+
+// ── Top Performing ATCs filters ──────────────────────────────────────────────
+let topAtcPeriod = 'all';
+const PERIOD_LABELS = { today: 'Today', month: 'This Month', year: 'This Year', all: 'All Time' };
+
+function escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtInr(n) {
+    return '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+}
+
+function renderTopAtcRows(rows) {
+    const tbody = document.getElementById('topAtcTbody');
+    if (!tbody) return;
+    if (!rows || !rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#9ca3af">No ATC performance data for this filter</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rows.map((atc, i) => {
+        const rankCls = i === 0 ? 'rank-1' : (i === 1 ? 'rank-2' : (i === 2 ? 'rank-3' : 'rank-other'));
+        const crown = i < 3
+            ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
+            : '';
+        const code = atc.atc_code
+            ? `<div style="font-size:.72rem;color:#94a3b8;font-weight:600;font-family:ui-monospace,monospace">${escHtml(atc.atc_code)}</div>`
+            : '';
+        const ctype = atc.center_type
+            ? `<span class="ctype-chip">${escHtml(atc.center_type)}</span>`
+            : '—';
+        return `<tr>
+            <td><span class="rank-badge ${rankCls}">${crown} #${i + 1}</span></td>
+            <td style="font-weight:800">${escHtml(atc.atc_name)}${code}</td>
+            <td>${ctype}</td>
+            <td style="color:#6b7280">${escHtml(atc.dlc_name || '—')}</td>
+            <td><strong>${Number(atc.student_count || 0)}</strong></td>
+            <td style="color:#059669;font-weight:700">${fmtInr(atc.revenue_collected)}</td>
+        </tr>`;
+    }).join('');
+}
+
+async function loadTopAtcs() {
+    const typeSel = document.getElementById('topAtcCenterType');
+    const meta = document.getElementById('topAtcMeta');
+    const tbody = document.getElementById('topAtcTbody');
+    if (!typeSel || !tbody) return;
+
+    const centerType = typeSel.value || '';
+    const typeLabel = centerType || 'All Types';
+    if (meta) meta.textContent = `${typeLabel} · ${PERIOD_LABELS[topAtcPeriod] || 'All Time'} · by fees collected`;
+    tbody.style.opacity = '.45';
+
+    const fd = new FormData();
+    fd.append('action', 'top_atcs');
+    fd.append('center_type', centerType);
+    fd.append('period', topAtcPeriod);
+
+    try {
+        const res = await fetch('index.php', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.success) renderTopAtcRows(data.rows || []);
+        else tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#ef4444">Could not load ranking</td></tr>';
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#ef4444">Network error</td></tr>';
+    } finally {
+        tbody.style.opacity = '1';
+    }
+}
+
+(function initTopAtcFilters() {
+    const typeSel = document.getElementById('topAtcCenterType');
+    const pills = document.getElementById('topAtcPeriodPills');
+    if (!typeSel || !pills) return;
+    typeSel.addEventListener('change', loadTopAtcs);
+    pills.querySelectorAll('.period-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+            pills.querySelectorAll('.period-pill').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            topAtcPeriod = btn.dataset.period || 'all';
+            loadTopAtcs();
+        });
+    });
+})();
 </script>
 </body>
 </html>
