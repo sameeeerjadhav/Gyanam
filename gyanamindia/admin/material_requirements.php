@@ -85,6 +85,22 @@ if ($filterAtc) {
         } catch (Exception $e) {}
     }
 
+    // ── 3.6 Exam-pass map (certificates are exam-driven) ─────────────────────
+    $atcCodeForPass = '';
+    foreach ($atcList as $a) {
+        if ((int)$a['id'] === $filterAtc) {
+            $atcCodeForPass = trim((string)($a['atc_code'] ?? ''));
+            break;
+        }
+    }
+    if (!function_exists('examIntegrationReady')) {
+        $examFile = __DIR__ . '/../includes/exam_integration.php';
+        if (is_file($examFile)) {
+            require_once $examFile;
+        }
+    }
+    $examPassMap = atcMainExamPassAdmissionMap($pdo, $filterAtc, $atcCodeForPass);
+
     // ── 3.5 Course material selection flags ──────────────────────────────────
     // For courses created with "With Material" mapping (with_material_configured=1),
     // admin requirements must only show T-Shirt / Book needs that are part of that mapping.
@@ -177,14 +193,16 @@ if ($filterAtc) {
             }
         }
 
-        // Certificate (every student gets one)
-        $cKey = $s['id'] . '_Certificate_' . ($s['course'] ?? 'General');
-        $certPartialStatus = $partialDispatched[$cKey] ?? null;
-        if ($certPartialStatus === 'Dispatched') {
-            $materials[] = ['type' => 'Certificate', 'detail' => $s['course'] ?? 'General', 'dispatched' => true];
-        } else {
-            $materials[] = ['type' => 'Certificate', 'detail' => $s['course'] ?? 'General', 'dispatched' => false];
-            $allDispatched = false;
+        // Certificate — only after main exam pass (physical print / dispatch)
+        if (!empty($examPassMap[(int)$s['id']])) {
+            $cKey = $s['id'] . '_Certificate_' . ($s['course'] ?? 'General');
+            $certPartialStatus = $partialDispatched[$cKey] ?? null;
+            if ($certPartialStatus === 'Dispatched') {
+                $materials[] = ['type' => 'Certificate', 'detail' => $s['course'] ?? 'General', 'dispatched' => true];
+            } else {
+                $materials[] = ['type' => 'Certificate', 'detail' => $s['course'] ?? 'General', 'dispatched' => false];
+                $allDispatched = false;
+            }
         }
 
         $s['materials'] = $materials;

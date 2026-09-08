@@ -2144,12 +2144,167 @@ function admissionHasHoSharePaid(PDO $pdo, int $admissionId, ?int $atcId = null,
 }
 
 /**
+ * Map admission_id => true for Active students at an ATC who passed the main exam.
+ * Prefers Exam Portal results; falls back to exam_schedules.exam_status = Passed.
+ *
+ * @return array<int,true>
+ */
+function atcMainExamPassAdmissionMap(PDO $pdo, int $atcId, string $atcCode = ''): array
+{
+    $map = [];
+    $byReg = [];
+    try {
+        $st = $pdo->prepare("
+            SELECT a.id, a.registration_id, a.roll_no, COALESCE(es.exam_status, '') AS exam_status
+            FROM admissions a
+            LEFT JOIN exam_schedules es ON es.admission_id = a.id AND es.atc_id = a.atc_id
+            WHERE a.atc_id = ? AND a.status = 'Active'
+        ");
+        $st->execute([$atcId]);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $admId = (int)$row['id'];
+            $reg = trim((string)($row['registration_id'] ?? ''));
+            if ($reg === '') {
+                $reg = trim((string)($row['roll_no'] ?? ''));
+            }
+            if ($reg !== '') {
+                $byReg[strtoupper($reg)] = $admId;
+            }
+            if (($row['exam_status'] ?? '') === 'Passed') {
+                $map[$admId] = true;
+            }
+        }
+    } catch (Exception $e) {
+        return $map;
+    }
+
+    if ($atcCode === '') {
+        try {
+            $c = $pdo->prepare('SELECT atc_code FROM atc_centers WHERE id = ? LIMIT 1');
+            $c->execute([$atcId]);
+            $atcCode = trim((string)($c->fetchColumn() ?: ''));
+        } catch (Exception $e) {}
+    }
+
+    if ($atcCode !== '' && function_exists('examIntegrationReady') && examIntegrationReady()
+        && function_exists('fetchAllExamResultsComplete') && function_exists('examSubmissionPassRecord')) {
+        $res = fetchAllExamResultsComplete();
+        if (!empty($res['success']) && !empty($res['data']['submissions'])) {
+            foreach ($res['data']['submissions'] as $sub) {
+                if (($sub['centre_name'] ?? '') !== $atcCode) {
+                    continue;
+                }
+                $rec = examSubmissionPassRecord($sub);
+                if (!$rec) {
+                    continue;
+                }
+                $key = strtoupper(trim((string)($rec['identifier'] ?? '')));
+                if ($key !== '' && isset($byReg[$key])) {
+                    $map[$byReg[$key]] = true;
+                }
+            }
+        }
+    }
+
+    return $map;
+}
+
+/**
+ * Physical certificate status for ATC (no soft-copy).
+ * received = Certificate line dispatched AND shipment marked Delivered.
+ *
+ * @return 'received'|'not_received'|'awaiting_exam'
+ */
+function admissionPhysicalCertificateStatus(PDO $pdo, int $admissionId, bool $examPassed): string
+{
+    if ($admissionId <= 0) {
+        return 'awaiting_exam';
+    }
+    if (!$examPassed) {
+        return 'awaiting_exam';
+    }
+    ensureDispatchTables($pdo);
+    try {
+        $st = $pdo->prepare("
+            SELECT di.status AS item_status, md.status AS dispatch_status
+            FROM dispatch_items di
+            INNER JOIN material_dispatches md ON md.id = di.dispatch_id
+            WHERE di.admission_id = ? AND di.item_type = 'Certificate'
+            ORDER BY
+                CASE WHEN di.status = 'Dispatched' AND md.status = 'Delivered' THEN 0
+                     WHEN di.status = 'Dispatched' THEN 1
+                     ELSE 2 END,
+                di.id DESC
+            LIMIT 1
+        ");
+        $st->execute([$admissionId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if ($row && ($row['item_status'] ?? '') === 'Dispatched' && ($row['dispatch_status'] ?? '') === 'Delivered') {
+            return 'received';
+        }
+    } catch (Exception $e) {}
+    return 'not_received';
+}
+
+/**
+ * Batch physical certificate statuses for many admissions.
+ *
+ * @param list<int> $admissionIds
+ * @param array<int,bool> $examPassByAdmission
+ * @return array<int,'received'|'not_received'|'awaiting_exam'>
+ */
+function admissionPhysicalCertificateStatusMap(PDO $pdo, array $admissionIds, array $examPassByAdmission = []): array
+{
+    $out = [];
+    $ids = array_values(array_unique(array_filter(array_map('intval', $admissionIds))));
+    foreach ($ids as $id) {
+        $passed = !empty($examPassByAdmission[$id]);
+        $out[$id] = $passed ? 'not_received' : 'awaiting_exam';
+    }
+    if ($ids === []) {
+        return $out;
+    }
+    ensureDispatchTables($pdo);
+    try {
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $st = $pdo->prepare("
+            SELECT di.admission_id, di.status AS item_status, md.status AS dispatch_status
+            FROM dispatch_items di
+            INNER JOIN material_dispatches md ON md.id = di.dispatch_id
+            WHERE di.admission_id IN ($ph) AND di.item_type = 'Certificate'
+        ");
+        $st->execute($ids);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $admId = (int)$row['admission_id'];
+            if (empty($examPassByAdmission[$admId]) && ($out[$admId] ?? '') === 'awaiting_exam') {
+                continue;
+            }
+            if (($row['item_status'] ?? '') === 'Dispatched' && ($row['dispatch_status'] ?? '') === 'Delivered') {
+                $out[$admId] = 'received';
+            } elseif (($out[$admId] ?? '') !== 'received') {
+                $out[$admId] = 'not_received';
+            }
+        }
+    } catch (Exception $e) {}
+    return $out;
+}
+
+/**
  * Validate local + exam-portal requirements before issuing a GIIT course certificate.
  *
  * @return array{eligible:bool,message:string,exam:?array}
  */
 function validateCourseCertificateRequest(PDO $pdo, array $student, string $role): array
 {
+    // Soft-copy PDFs are Admin/DLC only — ATCs receive physical certificates via dispatch.
+    if ($role === 'ATC CENTER') {
+        return [
+            'eligible' => false,
+            'message'  => 'Soft-copy certificates are not available to ATC centres. Physical certificates are sent by Head Office; check Received / Not Received status on Completion Certificate.',
+            'exam'     => null,
+        ];
+    }
+
     if (!function_exists('examIntegrationReady')) {
         $examFile = __DIR__ . '/exam_integration.php';
         if (is_file($examFile)) {
@@ -3350,6 +3505,23 @@ function dispatchItemDetailForMappedItem(array $item, array $student): string {
 function collectPendingAtcMaterials(PDO $pdo, int $atcId): array {
     ensureCourseMaterialItemsSchema($pdo);
     ensureInventoryTables($pdo);
+    ensureDispatchTables($pdo);
+
+    if (!function_exists('examIntegrationReady')) {
+        $examFile = __DIR__ . '/exam_integration.php';
+        if (is_file($examFile)) {
+            require_once $examFile;
+        }
+    }
+
+    $atcCode = '';
+    try {
+        $c = $pdo->prepare('SELECT atc_code FROM atc_centers WHERE id = ? LIMIT 1');
+        $c->execute([$atcId]);
+        $atcCode = trim((string)($c->fetchColumn() ?: ''));
+    } catch (Exception $e) {}
+
+    $examPassMap = atcMainExamPassAdmissionMap($pdo, $atcId, $atcCode);
 
     $stmt = $pdo->prepare("
         SELECT a.id, a.roll_no, a.registration_id,
@@ -3451,7 +3623,7 @@ function collectPendingAtcMaterials(PDO $pdo, int $atcId): array {
         string $type,
         string $detail,
         ?int $invId
-    ) use ($dispatchedMap, $dispatchedInv, $legacyDispatched): bool {
+    ) use (&$dispatchedMap, &$dispatchedInv, &$legacyDispatched): bool {
         $admId = (int)$s['id'];
         $already = $dispatchedMap[$admId . '_' . $type . '_' . $detail] ?? null;
         if ($already === 'Dispatched') {
@@ -3498,18 +3670,17 @@ function collectPendingAtcMaterials(PDO $pdo, int $atcId): array {
         $materials = [];
 
         if ($isCourseConfigured) {
-            $mappedHasCert = false;
             foreach ($mappedItems as $inv) {
-                if (($inv['category'] ?? '') === 'Certificates') {
-                    $mappedHasCert = true;
-                }
-
                 $resolvedInv = resolveMappedInventoryItemForStudent($inv, $s, $invItemsLegacy);
                 if ($resolvedInv === null) {
                     continue;
                 }
 
                 $type = dispatchMaterialTypeForCategory((string)$inv['category']);
+                // Certificates are exam-driven — never from kit mapping alone
+                if ($type === 'Certificate') {
+                    continue;
+                }
                 $detail = dispatchItemDetailForMappedItem($inv, $s);
                 $invId = !empty($resolvedInv['id']) ? (int)$resolvedInv['id'] : null;
                 $already = $dispatchedMap[$s['id'] . '_' . $type . '_' . $detail] ?? null;
@@ -3526,31 +3697,6 @@ function collectPendingAtcMaterials(PDO $pdo, int $atcId): array {
                     'status' => $lineStatus($already, $stock),
                     'pending_dispatch_id' => $already === 'Pending',
                 ];
-            }
-
-            if (!$mappedHasCert) {
-                $certKey = $s['id'] . '_Certificate_' . ($s['course'] ?? 'General');
-                $certStatus = $dispatchedMap[$certKey] ?? null;
-                if (!$isLineDispatched($s, 'Certificate', (string)($s['course'] ?? 'General'), null)) {
-                    $matchedCert = null;
-                    $matchedCertStock = 0;
-                    foreach ($invItemsLegacy as $inv) {
-                        if ($inv['category'] === 'Certificates' && stripos($inv['item_name'], 'Course Completion') !== false) {
-                            $matchedCert = $inv;
-                            $matchedCertStock = (int)$inv['current_stock'];
-                            break;
-                        }
-                    }
-                    $materials[] = [
-                        'type' => 'Certificate',
-                        'detail' => $s['course'] ?? 'General',
-                        'inventory_item_id' => $matchedCert ? (int)$matchedCert['id'] : null,
-                        'inventory_item_name' => $matchedCert['item_name'] ?? null,
-                        'stock' => $matchedCertStock,
-                        'status' => $lineStatus($certStatus, $matchedCertStock),
-                        'pending_dispatch_id' => $certStatus === 'Pending',
-                    ];
-                }
             }
         } else {
             if (!empty($s['uniform_size'])) {
@@ -3604,29 +3750,6 @@ function collectPendingAtcMaterials(PDO $pdo, int $atcId): array {
                     ];
                 }
             }
-
-            $certKey = $s['id'] . '_Certificate_' . ($s['course'] ?? 'General');
-            $certStatus = $dispatchedMap[$certKey] ?? null;
-            if (!$isLineDispatched($s, 'Certificate', (string)($s['course'] ?? 'General'), null)) {
-                $matchedCert = null;
-                $matchedCertStock = 0;
-                foreach ($invItemsLegacy as $inv) {
-                    if ($inv['category'] === 'Certificates' && stripos($inv['item_name'], 'Course Completion') !== false) {
-                        $matchedCert = $inv;
-                        $matchedCertStock = (int)$inv['current_stock'];
-                        break;
-                    }
-                }
-                $materials[] = [
-                    'type' => 'Certificate',
-                    'detail' => $s['course'] ?? 'General',
-                    'inventory_item_id' => $matchedCert ? (int)$matchedCert['id'] : null,
-                    'inventory_item_name' => $matchedCert['item_name'] ?? null,
-                    'stock' => $matchedCertStock,
-                    'status' => $lineStatus($certStatus, $matchedCertStock),
-                    'pending_dispatch_id' => $certStatus === 'Pending',
-                ];
-            }
         }
 
         if (empty($materials)) {
@@ -3657,6 +3780,114 @@ function collectPendingAtcMaterials(PDO $pdo, int $atcId): array {
             }
             $totals[$tid]['qty']++;
         }
+    }
+
+    // ── Exam-pass → pending Course Completion Certificate (physical print/dispatch) ──
+    $resultById = [];
+    foreach ($result as $idx => $row) {
+        $resultById[(int)$row['id']] = $idx;
+    }
+
+    $passIds = array_keys($examPassMap);
+    $passStudents = [];
+    if (!empty($passIds)) {
+        try {
+            $ph = implode(',', array_fill(0, count($passIds), '?'));
+            $ps = $pdo->prepare("
+                SELECT a.id, a.roll_no, a.registration_id,
+                       TRIM(CONCAT(a.first_name,' ',COALESCE(a.middle_name,''),' ',a.last_name)) AS student_name,
+                       a.course, a.admission_date
+                FROM admissions a
+                WHERE a.atc_id = ? AND a.status = 'Active' AND a.id IN ($ph)
+            ");
+            $ps->execute(array_merge([$atcId], $passIds));
+            $passStudents = $ps->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Exception $e) {
+            $passStudents = [];
+        }
+    }
+
+    // Refresh dispatched map for pass students not already in With Material set
+    $extraIds = [];
+    foreach ($passStudents as $psRow) {
+        if (!isset($dispatchedMap[$psRow['id'] . '_Certificate_' . ($psRow['course'] ?? 'General')])) {
+            $extraIds[] = (int)$psRow['id'];
+        }
+    }
+    if (!empty($extraIds)) {
+        try {
+            $ph = implode(',', array_fill(0, count($extraIds), '?'));
+            $diStmt = $pdo->prepare("SELECT admission_id, item_type, item_detail, inventory_item_id, status FROM dispatch_items WHERE admission_id IN ($ph) AND item_type = 'Certificate'");
+            $diStmt->execute($extraIds);
+            foreach ($diStmt->fetchAll(PDO::FETCH_ASSOC) as $di) {
+                $key = $di['admission_id'] . '_' . $di['item_type'] . '_' . $di['item_detail'];
+                $dispatchedMap[$key] = $di['status'];
+                $iid = (int)($di['inventory_item_id'] ?? 0);
+                if ($iid > 0 && $di['status'] === 'Dispatched') {
+                    $dispatchedInv[(int)$di['admission_id']][$iid] = true;
+                }
+            }
+        } catch (Exception $e) {}
+    }
+
+    $matchedCert = null;
+    $matchedCertStock = 0;
+    foreach ($invItemsLegacy as $inv) {
+        if (($inv['category'] ?? '') === 'Certificates' && stripos((string)$inv['item_name'], 'Course Completion') !== false) {
+            $matchedCert = $inv;
+            $matchedCertStock = (int)$inv['current_stock'];
+            break;
+        }
+    }
+
+    foreach ($passStudents as $psRow) {
+        $detail = (string)($psRow['course'] ?? 'General');
+        $sStub = ['id' => (int)$psRow['id']];
+        if ($isLineDispatched($sStub, 'Certificate', $detail, $matchedCert ? (int)$matchedCert['id'] : null)) {
+            continue;
+        }
+        $certKey = $psRow['id'] . '_Certificate_' . $detail;
+        $certStatus = $dispatchedMap[$certKey] ?? null;
+        $certMaterial = [
+            'type' => 'Certificate',
+            'detail' => $detail,
+            'inventory_item_id' => $matchedCert ? (int)$matchedCert['id'] : null,
+            'inventory_item_name' => $matchedCert['item_name'] ?? 'Course Completion Certificate',
+            'stock' => $matchedCertStock,
+            'status' => $lineStatus($certStatus, $matchedCertStock),
+            'pending_dispatch_id' => $certStatus === 'Pending',
+            'reason' => 'exam_pass',
+        ];
+
+        $admId = (int)$psRow['id'];
+        if (isset($resultById[$admId])) {
+            $idx = $resultById[$admId];
+            $result[$idx]['materials'][] = $certMaterial;
+        } else {
+            $resultById[$admId] = count($result);
+            $result[] = [
+                'id' => $admId,
+                'student_name' => $psRow['student_name'],
+                'roll_no' => $psRow['roll_no'],
+                'registration_id' => $psRow['registration_id'],
+                'course' => $psRow['course'],
+                'admission_date' => $psRow['admission_date'],
+                'materials' => [$certMaterial],
+            ];
+        }
+
+        $label = (string)($certMaterial['inventory_item_name'] ?: ('Certificate — ' . $detail));
+        $tid = $certMaterial['inventory_item_id'] ? ('id:' . $certMaterial['inventory_item_id']) : ('name:' . $label);
+        if (!isset($totals[$tid])) {
+            $totals[$tid] = [
+                'inventory_item_id' => $certMaterial['inventory_item_id'],
+                'item_name' => $label,
+                'category' => 'Certificate',
+                'qty' => 0,
+                'stock' => (int)$certMaterial['stock'],
+            ];
+        }
+        $totals[$tid]['qty']++;
     }
 
     $totalsList = array_values($totals);
