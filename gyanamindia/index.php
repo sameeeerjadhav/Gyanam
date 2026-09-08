@@ -180,6 +180,14 @@ $csrfToken = generateCSRFToken();
 
             <div class="login-footer">
                 &copy; <?= date('Y') ?> Gyanam India Educational Services
+                <div style="margin-top:.55rem;display:flex;flex-wrap:wrap;gap:.35rem .75rem;justify-content:center;font-size:.72rem;line-height:1.4">
+                    <a href="about-us.php" style="color:inherit;opacity:.85">About</a>
+                    <a href="pricing.php" style="color:inherit;opacity:.85">Pricing</a>
+                    <a href="privacy-policy.php" style="color:inherit;opacity:.85">Privacy</a>
+                    <a href="terms-and-conditions.php" style="color:inherit;opacity:.85">Terms</a>
+                    <a href="refund-policy.php" style="color:inherit;opacity:.85">Refunds</a>
+                    <a href="contact-us.php" style="color:inherit;opacity:.85">Contact</a>
+                </div>
             </div>
         </div>
     </div>
