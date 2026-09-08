@@ -417,6 +417,15 @@ $materialOption = $isEdit
         .item-check { display:flex; align-items:flex-start; gap:.6rem; padding:.55rem .65rem; border:1.5px solid var(--border-color); border-radius:12px; background:#fff; }
         .item-check.is-hidden, .cat-block.is-hidden { display: none !important; }
         .atc-vis-box { border:1.5px solid var(--border-color); border-radius:14px; padding:.85rem 1rem; background:#fafafa; }
+        .atc-vis-toolbar { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin-bottom:.65rem; }
+        .atc-vis-toolbar .field-input { flex:1; min-width:180px; margin:0; }
+        .atc-vis-select-all {
+            display:inline-flex; align-items:center; gap:.45rem;
+            padding:.55rem .8rem; border-radius:10px; border:1.5px solid var(--border-color);
+            background:#fff; font-size:.8rem; font-weight:800; color:#374151; cursor:pointer; white-space:nowrap;
+            user-select:none;
+        }
+        .atc-vis-select-all input { width:16px; height:16px; cursor:pointer; }
         .atc-vis-list { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .5rem; max-height: 280px; overflow:auto; padding-right:.25rem; }
         .atc-vis-item { display:flex; align-items:flex-start; gap:.6rem; padding:.55rem .65rem; border:1.5px solid var(--border-color); border-radius:12px; background:#fff; cursor:pointer; }
         .atc-vis-item.is-hidden { display: none !important; }
@@ -557,7 +566,13 @@ $materialOption = $isEdit
                         <div class="full" id="specificAtcWrap" style="<?= $visibilityScope === 'specific' ? '' : 'display:none' ?>">
                             <label>Select ATC Centers <span class="field-req">*</span></label>
                             <div class="atc-vis-box">
-                                <input type="text" id="atcVisSearch" class="field-input" placeholder="Search ATC by name…" oninput="filterAtcVisibilityList()" style="margin-bottom:.65rem">
+                                <div class="atc-vis-toolbar">
+                                    <input type="text" id="atcVisSearch" class="field-input" placeholder="Search ATC by name…" oninput="filterAtcVisibilityList()">
+                                    <label class="atc-vis-select-all">
+                                        <input type="checkbox" id="atcVisSelectAll" onchange="toggleSelectAllAtcs(this.checked)">
+                                        <span>Select all</span>
+                                    </label>
+                                </div>
                                 <div class="atc-vis-list" id="atcVisList">
                                     <?php
                                     $selectedAtcLookup = array_fill_keys($selectedAtcIds, true);
@@ -1003,16 +1018,50 @@ $materialOption = $isEdit
         if (resetSearch && searchEl) searchEl.value = '';
         const q = (searchEl?.value || '').trim().toLowerCase();
         let visible = 0;
+        let checkedVisible = 0;
         document.querySelectorAll('#atcVisList .atc-vis-item').forEach(el => {
             const matchType = centerMatchesCourseType(el.dataset.centerType || '', courseType);
             const matchSearch = !q || (el.dataset.name || '').includes(q);
             const show = !!courseType && matchType && matchSearch;
             el.classList.toggle('is-hidden', !show);
-            if (show) visible++;
+            if (show) {
+                visible++;
+                const cb = el.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked) checkedVisible++;
+            }
         });
         const hint = document.getElementById('atcVisEmptyHint');
         if (hint) hint.style.display = (courseType && visible === 0) ? 'block' : 'none';
+        syncSelectAllCheckbox(visible, checkedVisible);
     }
+
+    function syncSelectAllCheckbox(visibleCount, checkedVisibleCount) {
+        const master = document.getElementById('atcVisSelectAll');
+        if (!master) return;
+        if (!visibleCount) {
+            master.checked = false;
+            master.indeterminate = false;
+            master.disabled = true;
+            return;
+        }
+        master.disabled = false;
+        master.checked = checkedVisibleCount === visibleCount;
+        master.indeterminate = checkedVisibleCount > 0 && checkedVisibleCount < visibleCount;
+    }
+
+    function toggleSelectAllAtcs(checked) {
+        document.querySelectorAll('#atcVisList .atc-vis-item:not(.is-hidden) input[type="checkbox"]').forEach(cb => {
+            cb.checked = !!checked;
+        });
+        filterAtcVisibilityList();
+    }
+
+    // Keep master checkbox in sync when individual ATCs are toggled
+    document.getElementById('atcVisList')?.addEventListener('change', function(e) {
+        if (e.target && e.target.matches('input[type="checkbox"]')) {
+            filterAtcVisibilityList();
+        }
+    });
 
     // Init ATC visibility list on load
     onVisibilityScopeChange();
