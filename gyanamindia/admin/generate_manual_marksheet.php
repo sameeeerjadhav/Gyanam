@@ -1,24 +1,17 @@
 <?php
 /**
- * Temporary: Statement of Marks for allowlisted ATC (no exam portal required).
+ * Admin-only: Statement of Marks without exam portal.
  * POST/GET: admission_id + score [, preview=1]
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-requireLogin(['ATC CENTER']);
+requireLogin(['Admin']);
 
 require_once __DIR__ . '/../assets/fpdi/fpdi_autoload.php';
 use setasign\Fpdi\Fpdi;
 
 $pdo = getDBConnection();
-$sessionAtcId = (int)($_SESSION['atc_id'] ?? 0);
-$sessionAtcCode = (string)($_SESSION['atc_code'] ?? '');
-
-if (!atcCanUseManualCourseCertificate($sessionAtcId, $sessionAtcCode)) {
-    http_response_code(403);
-    die('<b>Access denied:</b> Manual marksheet is not enabled for this ATC.');
-}
 
 $src = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' ? $_POST : $_GET;
 $preview = isset($src['preview']) || isset($_GET['preview']);
@@ -44,14 +37,14 @@ $st = $pdo->prepare("
     FROM admissions a
     LEFT JOIN atc_centers atc ON atc.id = a.atc_id
     LEFT JOIN courses c ON c.course_name = a.course AND c.status = 'Active'
-    WHERE a.id = ? AND a.atc_id = ?
+    WHERE a.id = ?
     LIMIT 1
 ");
-$st->execute([$admissionId, $sessionAtcId]);
+$st->execute([$admissionId]);
 $student = $st->fetch(PDO::FETCH_ASSOC);
 if (!$student) {
     http_response_code(404);
-    die('<b>Error:</b> Student not found for your ATC.');
+    die('<b>Error:</b> Student not found.');
 }
 
 $grade = courseExamGradeFromScore($score);

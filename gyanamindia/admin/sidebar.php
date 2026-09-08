@@ -79,6 +79,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/><circle cx="12" cy="5" r="1.5"/></svg>
                 <span>Course Certificates</span>
             </a>
+            <a href="manual_certificate.php" class="nav-link <?= $currentPage === 'manual_certificate.php' ? 'active' : '' ?>" data-tooltip="Manual Certificate">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg>
+                <span>Manual Certificate</span>
+            </a>
             <?php
             // Pending duplicate cert requests badge
             try {
