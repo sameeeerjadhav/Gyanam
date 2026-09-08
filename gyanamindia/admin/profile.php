@@ -12,13 +12,13 @@ requireLogin(['Admin']);
 $pdo = getDBConnection();
 $userId = getUserId();
 
-// Fetch user data
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$userId]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 $mailSettings = getMailSettings($pdo);
 $mailConfigured = trim($mailSettings['mail_username'] ?? '') !== '' && trim($mailSettings['mail_password'] ?? '') !== '';
+$mailEnabled = ($mailSettings['mail_enabled'] ?? '1') !== '0';
 
 $success = $_SESSION['profile_success'] ?? '';
 $error   = $_SESSION['profile_error'] ?? '';
@@ -26,8 +26,8 @@ unset($_SESSION['profile_success'], $_SESSION['profile_error']);
 
 $roleBadgeClass = 'admin';
 $roleLabel = 'Head Office';
-$_userName = sanitize(getUserName());
-$_userInitial = strtoupper(substr($_userName, 0, 1));
+$displayName = sanitize($user['name'] ?? $user['username'] ?? 'Admin');
+$initial = strtoupper(substr($user['name'] ?? $user['username'] ?? 'G', 0, 1));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -53,7 +53,7 @@ $_userInitial = strtoupper(substr($_userName, 0, 1));
                 </button>
                 <div class="header-greeting">
                     <h2>My Profile</h2>
-                    <p>Manage your account information</p>
+                    <p>Account details &amp; outbound email settings</p>
                 </div>
             </div>
             <div class="header-right">
@@ -61,7 +61,7 @@ $_userInitial = strtoupper(substr($_userName, 0, 1));
             </div>
         </header>
 
-        <div class="page-content profile-page">
+        <div class="page-content profile-page profile-page--admin">
 
             <?php if ($success): ?>
                 <div class="alert-success">
@@ -77,25 +77,31 @@ $_userInitial = strtoupper(substr($_userName, 0, 1));
                 </div>
             <?php endif; ?>
 
-            <!-- Profile Header Card -->
             <div class="profile-header-card">
-                <div class="profile-avatar-lg"><?= strtoupper(substr($user['name'] ?? $user['username'], 0, 1)) ?></div>
+                <div class="profile-avatar-lg"><?= $initial ?></div>
                 <div class="profile-header-info">
-                    <h2><?= sanitize($user['name'] ?? $user['username']) ?></h2>
+                    <h2><?= $displayName ?></h2>
                     <span class="profile-role-badge <?= $roleBadgeClass ?>"><?= $roleLabel ?></span>
                     <div class="profile-meta">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                         Member since <?= formatDate($user['created_at'], 'd M Y') ?>
                     </div>
                 </div>
+                <div class="profile-header-aside">
+                    <div class="profile-stat-chip <?= $mailConfigured ? 'is-ok' : 'is-warn' ?>">
+                        <span class="dot"></span>
+                        <?= $mailConfigured ? 'Email ready' : 'Email setup needed' ?>
+                    </div>
+                </div>
             </div>
 
-            <!-- Profile Info Form -->
             <form action="../update_profile.php" method="POST" class="profile-form-card">
-                <h3>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    Personal Information
-                </h3>
+                <div class="card-head">
+                    <h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        Personal Information
+                    </h3>
+                </div>
                 <input type="hidden" name="action" value="update_profile">
 
                 <div class="profile-form-grid">
@@ -133,26 +139,27 @@ $_userInitial = strtoupper(substr($_userName, 0, 1));
                 </div>
             </form>
 
-            <!-- Change Password Form -->
             <form action="../update_profile.php" method="POST" class="profile-form-card password-section">
-                <h3>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    Change Password
-                </h3>
+                <div class="card-head">
+                    <h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        Change Password
+                    </h3>
+                </div>
                 <input type="hidden" name="action" value="change_password">
 
                 <div class="profile-form-grid">
                     <div class="form-field full-width">
                         <label>Current Password *</label>
-                        <input type="password" name="current_password" required placeholder="Enter current password">
+                        <input type="password" name="current_password" required placeholder="Enter current password" autocomplete="current-password">
                     </div>
                     <div class="form-field">
                         <label>New Password *</label>
-                        <input type="password" name="new_password" required placeholder="Minimum 6 characters" minlength="6">
+                        <input type="password" name="new_password" required placeholder="Minimum 6 characters" minlength="6" autocomplete="new-password">
                     </div>
                     <div class="form-field">
                         <label>Confirm New Password *</label>
-                        <input type="password" name="confirm_password" required placeholder="Re-enter new password">
+                        <input type="password" name="confirm_password" required placeholder="Re-enter new password" autocomplete="new-password">
                     </div>
                 </div>
 
@@ -164,29 +171,37 @@ $_userInitial = strtoupper(substr($_userName, 0, 1));
                 </div>
             </form>
 
-            <!-- SMTP / Email Settings (Admin only) -->
-            <form action="../update_profile.php" method="POST" class="profile-form-card">
-                <h3>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                    Email (SMTP) Settings
-                </h3>
+            <form action="../update_profile.php" method="POST" class="profile-form-card mail-settings-card">
+                <div class="card-head">
+                    <div>
+                        <h3>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                            Email (SMTP) Settings
+                        </h3>
+                        <p class="card-sub">Powers ATC welcome / onboarding emails from the portal.</p>
+                    </div>
+                    <span class="status-pill <?= $mailConfigured ? 'ok' : 'warn' ?>">
+                        <span class="dot"></span>
+                        <?= $mailConfigured ? ($mailEnabled ? 'Configured' : 'Saved · Disabled') : 'Not configured' ?>
+                    </span>
+                </div>
                 <input type="hidden" name="action" value="update_mail_settings">
-                <p style="margin:0 0 1rem;font-size:.82rem;color:#64748b;line-height:1.5">
-                    Used for ATC welcome / onboarding emails. Create a Hostinger mailbox (e.g. <strong>gyanamindia@labxco.in</strong>) and save it here.
-                    Status:
-                    <?php if ($mailConfigured): ?>
-                        <span style="color:#059669;font-weight:700">Configured</span>
-                    <?php else: ?>
-                        <span style="color:#d97706;font-weight:700">Not configured</span>
-                    <?php endif; ?>
-                </p>
 
-                <div class="profile-form-grid">
+                <div class="info-note">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    <div>
+                        Use your Hostinger mailbox (for example <strong>gyanamindia@labxco.in</strong>).
+                        Leave password blank to keep the currently saved password.
+                    </div>
+                </div>
+
+                <div class="mail-section-label">Connection</div>
+                <div class="profile-form-grid mail-grid">
                     <div class="form-field">
                         <label>Enable outbound email</label>
                         <select name="mail_enabled">
-                            <option value="1" <?= ($mailSettings['mail_enabled'] ?? '1') !== '0' ? 'selected' : '' ?>>Enabled</option>
-                            <option value="0" <?= ($mailSettings['mail_enabled'] ?? '') === '0' ? 'selected' : '' ?>>Disabled</option>
+                            <option value="1" <?= $mailEnabled ? 'selected' : '' ?>>Enabled</option>
+                            <option value="0" <?= !$mailEnabled ? 'selected' : '' ?>>Disabled</option>
                         </select>
                     </div>
                     <div class="form-field">
@@ -205,14 +220,22 @@ $_userInitial = strtoupper(substr($_userName, 0, 1));
                             <option value="tls" <?= $enc === 'tls' ? 'selected' : '' ?>>TLS (port 587)</option>
                         </select>
                     </div>
+                </div>
+
+                <div class="mail-section-label">Mailbox credentials</div>
+                <div class="profile-form-grid mail-grid">
                     <div class="form-field">
                         <label>Mailbox Email (SMTP Username) *</label>
                         <input type="email" name="mail_username" value="<?= sanitize($mailSettings['mail_username'] ?? '') ?>" placeholder="gyanamindia@labxco.in" required>
                     </div>
                     <div class="form-field">
                         <label>Mailbox Password <?= $mailConfigured ? '' : '*' ?></label>
-                        <input type="password" name="mail_password" value="" placeholder="<?= $mailConfigured ? 'Leave blank to keep saved password' : 'Hostinger mailbox password' ?>" <?= $mailConfigured ? '' : 'required' ?> autocomplete="new-password">
+                        <input type="password" name="mail_password" value="" placeholder="<?= $mailConfigured ? '••••••••  (leave blank to keep)' : 'Hostinger mailbox password' ?>" <?= $mailConfigured ? '' : 'required' ?> autocomplete="new-password">
                     </div>
+                </div>
+
+                <div class="mail-section-label">Sender identity</div>
+                <div class="profile-form-grid mail-grid">
                     <div class="form-field">
                         <label>From Email *</label>
                         <input type="email" name="mail_from_email" value="<?= sanitize($mailSettings['mail_from_email'] ?: ($mailSettings['mail_username'] ?? '')) ?>" placeholder="gyanamindia@labxco.in" required>
