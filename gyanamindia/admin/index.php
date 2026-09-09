@@ -769,6 +769,22 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         .cal-bday-side-body { max-height: 160px; }
     }
 
+    /* Flaticon attribution (required for free icons) */
+    .cc-flaticon-attr {
+        margin-top: .55rem;
+        font-size: .62rem;
+        font-weight: 600;
+        line-height: 1.35;
+    }
+    .cc-flaticon-attr a {
+        color: #94a3b8;
+        text-decoration: none;
+    }
+    .cc-flaticon-attr a:hover {
+        color: #6366f1;
+        text-decoration: underline;
+    }
+
     /* Detail modal */
     .detail-modal-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:1rem; padding:1.25rem 1.5rem; max-height:60vh; overflow-y:auto; }
     .detail-card { background:var(--gray-50,#f9fafb); border:1.5px solid var(--border-color,#e5e7eb); border-radius:14px; padding:1rem; display:flex; flex-direction:column; align-items:center; gap:.5rem; text-align:center; }
@@ -1031,11 +1047,16 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             <div class="cc-grid cc-grid-4" style="margin-top:1rem">
                 <a class="cc-card cc-card-pad" href="print_certificates.php" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
-                        <?= cc_ico('certificate', 'xl') ?>
+                        <span class="cc-ico cc-ico-xl" style="background:none;box-shadow:none;border-radius:0">
+                            <img src="../assets/icons/flaticon-certified.png" alt="Certified" width="72" height="72" style="width:72px;height:72px;object-fit:contain;display:block">
+                        </span>
                         <h3>Certified Students</h3>
                     </div>
                     <div class="cc-metric-value green"><?= (int)$certifiedStudents ?></div>
                     <div class="cc-metric-label">Certificates issued</div>
+                    <div class="cc-flaticon-attr" onclick="event.preventDefault();event.stopPropagation()">
+                        <a href="https://www.flaticon.com/free-icons/certified" title="certified icons" target="_blank" rel="noopener">Certified icons created by Magnific - Flaticon</a>
+                    </div>
                 </a>
                 <a class="cc-card cc-card-pad" href="dispatches.php?date=today" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
