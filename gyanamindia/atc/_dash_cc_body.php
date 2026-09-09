@@ -56,7 +56,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad" id="totalCollCard">
                         <div class="cc-card-head">
-                            <?= cc_png('icon-share-revenue.png', 'xl', 'Grand total') ?>
+                            <?= cc_png('icon-grand-total.png', 'xl', 'Grand total') ?>
                             <h3>Grand Total</h3>
                             <select id="collFilter" onchange="applyCollFilter()" style="margin-left:auto;font-size:.7rem;font-weight:700;border:1px solid var(--cc-border);border-radius:8px;background:#f8fafc;color:var(--cc-text);padding:.2rem .4rem;cursor:pointer;outline:none;font-family:inherit">
                                 <option value="all">All Time</option>
