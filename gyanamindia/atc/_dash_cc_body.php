@@ -1,5 +1,6 @@
 <?php
 /** ClassChakra-style ATC dashboard body (included from index.php) */
+require_once __DIR__ . '/_dash_cc_icons.php';
 $todayFeeTotal = $todayCash + $todayOnline;
 ?>
                 <!-- ═══ DASHBOARD BANNERS ═══ -->
@@ -10,9 +11,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-grid cc-grid-1" style="margin-bottom:1rem">
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                            </span>
+                            <?= cc_ico('bell') ?>
                             <h3>Notice Board</h3>
                             <a class="cc-link" href="notifications.php">Show All</a>
                         </div>
@@ -49,9 +48,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-grid cc-grid-4">
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M5 8h7a3 3 0 0 1 0 6H8a3 3 0 0 0 0 6h11"/></svg>
-                            </span>
+                            <?= cc_ico('balance', 'xl') ?>
                             <h3>Balance Amount</h3>
                         </div>
                         <div class="cc-metric-label">Pending fees (active)</div>
@@ -59,9 +56,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad" id="totalCollCard">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
-                            </span>
+                            <?= cc_ico('pie', 'xl') ?>
                             <h3>Grand Total</h3>
                             <select id="collFilter" onchange="applyCollFilter()" style="margin-left:auto;font-size:.7rem;font-weight:700;border:1px solid var(--cc-border);border-radius:8px;background:#f8fafc;color:var(--cc-text);padding:.2rem .4rem;cursor:pointer;outline:none;font-family:inherit">
                                 <option value="all">All Time</option>
@@ -80,9 +75,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                            </span>
+                            <?= cc_ico('bars') ?>
                             <h3>Today's Summary</h3>
                         </div>
                         <div class="cc-kv"><span class="k">Admissions</span><span class="v blue"><?= (int)$todayAdmissions ?></span></div>
@@ -91,9 +84,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad" id="todayCollCard" onclick="openTransModal()" style="cursor:pointer" title="Click to view transactions">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                            </span>
+                            <?= cc_ico('wallet') ?>
                             <h3>Today's Fee Summary</h3>
                             <input type="date" id="todayDatePicker" value="<?= date('Y-m-d') ?>"
                                 style="margin-left:auto;font-size:.7rem;font-weight:700;border:1px solid var(--cc-border);border-radius:8px;background:#f8fafc;padding:.2rem .35rem;outline:none;font-family:inherit"
@@ -110,9 +101,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-grid cc-grid-4">
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-                            </span>
+                            <?= cc_ico('gradcap') ?>
                             <h3>Courses</h3>
                         </div>
                         <div class="cc-kv"><span class="k">Total</span><span class="v"><?= (int)$totalCourses ?></span></div>
@@ -120,9 +109,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                            </span>
+                            <?= cc_ico('enquiry') ?>
                             <h3>Enquiries</h3>
                         </div>
                         <div class="cc-kv"><span class="k">Total</span><span class="v"><?= (int)($totalInquiries + $totalTelephonic) ?></span></div>
@@ -130,9 +117,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad" onclick="openExamModal('all')" style="cursor:pointer" title="View exam students">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                            </span>
+                            <?= cc_ico('exam') ?>
                             <h3>Total Exam</h3>
                         </div>
                         <div class="cc-metric-value blue"><?= (int)$totalExams ?></div>
@@ -141,9 +126,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-                            </span>
+                            <?= cc_ico('book') ?>
                             <h3>Course Notes</h3>
                         </div>
                         <?php if (!empty($popularCourses)): ?>
@@ -163,9 +146,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-grid cc-grid-4">
                     <div class="cc-card cc-card-pad cc-span-2">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                            </span>
+                            <?= cc_ico('students', 'xl') ?>
                             <h3>Students</h3>
                             <a class="cc-link" href="students.php">Show All</a>
                         </div>
@@ -178,9 +159,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>
-                            </span>
+                            <?= cc_ico('certificate') ?>
                             <h3>Certificates</h3>
                             <a class="cc-link" href="completion_certificate.php">Show All</a>
                         </div>
@@ -192,19 +171,15 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-stack">
                         <div class="cc-card cc-card-pad" onclick="openHOModal('reported')" style="cursor:pointer" title="Reported to HO">
                             <div class="cc-card-head" style="margin-bottom:.4rem">
-                                <span class="cc-ico">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                                </span>
-                                <h3>HO Reported</h3>
+                                <?= cc_ico('check', 'sm') ?>
+                            <h3>HO Reported</h3>
                             </div>
                             <div class="cc-metric-value green" style="font-size:1.35rem"><?= (int)$reportedCount ?></div>
                         </div>
                         <div class="cc-card cc-card-pad" onclick="openHOModal('pending')" style="cursor:pointer" title="Pending HO share">
                             <div class="cc-card-head" style="margin-bottom:.4rem">
-                                <span class="cc-ico">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                </span>
-                                <h3>HO Pending</h3>
+                                <?= cc_ico('clock', 'sm') ?>
+                            <h3>HO Pending</h3>
                             </div>
                             <div class="cc-metric-value orange" style="font-size:1.35rem"><?= (int)$pendingReportCount ?></div>
                         </div>
@@ -215,9 +190,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-card" style="margin-bottom:1rem">
                     <div class="cc-card-pad">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                            </span>
+                            <?= cc_ico('cake') ?>
                             <h3>Student Birthdays Today</h3>
                             <span style="margin-left:auto;font-size:.78rem;font-weight:700;color:var(--cc-muted)"><?= count($birthdays) ?></span>
                         </div>
@@ -248,10 +221,8 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card cc-span-2">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <span class="cc-ico">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                                </span>
-                                <h3>Recent Enquiries</h3>
+                                <?= cc_ico('chat') ?>
+                            <h3>Recent Enquiries</h3>
                                 <a class="cc-link" href="inquiries.php">Show All</a>
                             </div>
                         </div>
@@ -275,10 +246,8 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <span class="cc-ico">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-                                </span>
-                                <h3>Popular Courses for Enquiries</h3>
+                                <?= cc_ico('book') ?>
+                            <h3>Popular Courses for Enquiries</h3>
                             </div>
                         </div>
                         <?php if (empty($popularEnquiryCourses)): ?>
@@ -300,10 +269,8 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <span class="cc-ico">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-                                </span>
-                                <h3>Popular Courses for Admission</h3>
+                                <?= cc_ico('book') ?>
+                            <h3>Popular Courses for Admission</h3>
                             </div>
                         </div>
                         <?php if (empty($popularCourses)): ?>
@@ -328,9 +295,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-card" style="margin-bottom:1rem">
                     <div class="cc-card-pad" style="padding-bottom:.35rem">
                         <div class="cc-card-head" style="margin-bottom:.35rem">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                            </span>
+                            <?= cc_ico('exam') ?>
                             <h3>Recent Exam</h3>
                             <a class="cc-link" href="javascript:void(0)" onclick="openExamModal('conducted')">Show All</a>
                         </div>
@@ -368,10 +333,8 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:0">
                             <div class="cc-card-head">
-                                <span class="cc-ico">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-                                </span>
-                                <h3>Monthly Admissions</h3>
+                                <?= cc_ico('useradd') ?>
+                            <h3>Monthly Admissions</h3>
                             </div>
                         </div>
                         <div class="cc-chart-wrap"><canvas id="admissionsChart"></canvas></div>
@@ -379,10 +342,8 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:0">
                             <div class="cc-card-head">
-                                <span class="cc-ico">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                                </span>
-                                <h3>Revenue</h3>
+                                <?= cc_ico('rupee') ?>
+                            <h3>Revenue</h3>
                             </div>
                         </div>
                         <div class="cc-chart-wrap"><canvas id="revenueChart"></canvas></div>
@@ -393,9 +354,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-card" style="margin-bottom:1rem">
                     <div class="cc-card-pad" style="padding-bottom:.35rem">
                         <div class="cc-card-head" style="margin-bottom:.35rem">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                            </span>
+                            <?= cc_ico('card') ?>
                             <h3>Recent Fees</h3>
                             <a class="cc-link" href="fees.php">Show All</a>
                         </div>
@@ -439,10 +398,8 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <span class="cc-ico">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                </span>
-                                <h3>Upcoming Due Fees</h3>
+                                <?= cc_ico('clock') ?>
+                            <h3>Upcoming Due Fees</h3>
                                 <a class="cc-link" href="fees.php">Show All</a>
                             </div>
                         </div>
@@ -468,10 +425,8 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <span class="cc-ico">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                </span>
-                                <h3>Pending Approvals</h3>
+                                <?= cc_ico('edit') ?>
+                            <h3>Pending Approvals</h3>
                                 <span style="margin-left:auto;font-size:.78rem;font-weight:800;color:var(--cc-orange)"><?= (int)$pendingApprovalCount ?></span>
                             </div>
                         </div>
@@ -493,9 +448,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <span class="cc-ico">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                            </span>
+                            <?= cc_ico('bolt') ?>
                             <h3>Quick Actions</h3>
                         </div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem">
