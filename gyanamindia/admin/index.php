@@ -579,17 +579,19 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     }
     .admin-banner-slot .banner-carousel-wrap {
         margin-bottom: 0 !important;
-        max-height: 280px;
+    }
+    .admin-banner-slot .carousel-slide {
+        max-height: 300px;
+        min-height: 160px;
     }
     .admin-banner-slot .carousel-slide img.slide-media,
     .admin-banner-slot .carousel-slide video.slide-media {
-        max-height: 280px;
+        max-height: 300px;
         object-fit: contain;
-        background: #0f172a;
     }
     .admin-banner-slot .carousel-slide.vertical-slide {
-        height: 280px;
-        max-height: 280px;
+        height: 300px;
+        max-height: 300px;
     }
     .admin-banner-empty {
         display: flex;

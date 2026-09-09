@@ -20,7 +20,7 @@ function _bannerIsVertical($b) {
 ?>
 <?php if (!empty($activeBanners)): ?>
 <style>
-/* ── Banner Carousel ── */
+/* ── Banner Carousel (full image visible — no crop/zoom) ── */
 .banner-carousel-wrap {
     position: relative;
     width: 100%;
@@ -28,7 +28,7 @@ function _bannerIsVertical($b) {
     overflow: hidden;
     margin-bottom: 1.5rem;
     box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    background: #000;
+    background: #0f172a;
     user-select: none;
 }
 .carousel-track {
@@ -40,28 +40,30 @@ function _bannerIsVertical($b) {
     min-width: 100%;
     position: relative;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0f172a;
+    min-height: 180px;
+    max-height: 360px;
 }
 
-/* ── Horizontal image slide ── */
+/* ── Horizontal image slide — show FULL banner ── */
 .carousel-slide img.slide-media {
     width: 100%;
+    height: auto;
+    max-height: 360px;
     display: block;
-    object-fit: cover;
-    max-height: 420px;
-    transition: transform 8s ease;
-}
-.carousel-slide.is-active img.slide-media {
-    transform: scale(1.04); /* Ken-Burns on active */
+    object-fit: contain;
+    object-position: center;
+    transform: none !important;
+    transition: none;
 }
 
 /* ── Vertical image slide — blurred background trick ── */
 .carousel-slide.vertical-slide {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #111;
-    height: 420px;
-    max-height: 420px;
+    height: 360px;
+    max-height: 360px;
 }
 .vertical-blur-bg {
     position: absolute;
@@ -69,7 +71,7 @@ function _bannerIsVertical($b) {
     background-size: cover;
     background-position: center;
     filter: blur(22px) brightness(0.55) saturate(1.2);
-    transform: scale(1.08); /* prevent blur edge gap */
+    transform: scale(1.08);
     z-index: 0;
 }
 .carousel-slide.vertical-slide img.slide-media {
@@ -78,11 +80,9 @@ function _bannerIsVertical($b) {
     width: auto;
     max-width: 100%;
     height: 100%;
-    max-height: 420px;
+    max-height: 360px;
     object-fit: contain;
     display: block;
-    transform: none;
-    transition: none;
     border-radius: 0;
     box-shadow: 0 4px 30px rgba(0,0,0,0.5);
 }
@@ -90,31 +90,53 @@ function _bannerIsVertical($b) {
 /* ── Video slide ── */
 .carousel-slide video.slide-media {
     width: 100%;
+    height: auto;
+    max-height: 360px;
     display: block;
-    max-height: 420px;
-    object-fit: cover;
-    background: #000;
+    object-fit: contain;
+    background: #0f172a;
 }
 .carousel-slide.vertical-slide video.slide-media {
     width: auto;
-    height: 420px;
+    height: 360px;
     object-fit: contain;
     position: relative;
     z-index: 1;
 }
 
-/* ── Caption overlay ── */
+/* ── Caption overlay (compact, doesn’t cover artwork) ── */
 .carousel-slide-caption {
     position: absolute;
-    bottom: 0; left: 0; right: 0;
-    padding: 1.5rem 1.5rem 1rem;
-    background: linear-gradient(transparent, rgba(0,0,0,0.55));
+    left: 12px;
+    bottom: 12px;
+    right: auto;
+    max-width: min(70%, 420px);
+    padding: .35rem .7rem;
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(6px);
     color: #fff;
-    font-size: 0.95rem;
+    font-size: 0.78rem;
     font-weight: 700;
     letter-spacing: 0.01em;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    text-shadow: none;
     z-index: 5;
+    pointer-events: none;
+}
+@media (max-width: 640px) {
+    .carousel-slide,
+    .carousel-slide.vertical-slide {
+        min-height: 140px;
+        max-height: 220px;
+        height: auto;
+    }
+    .carousel-slide img.slide-media,
+    .carousel-slide video.slide-media,
+    .carousel-slide.vertical-slide img.slide-media,
+    .carousel-slide.vertical-slide video.slide-media {
+        max-height: 220px;
+    }
+    .carousel-slide.vertical-slide video.slide-media { height: 220px; }
 }
 
 /* ── Dots ── */
