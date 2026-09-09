@@ -646,10 +646,11 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         height: 100% !important;
         max-height: none !important;
         min-height: 0 !important;
-        object-fit: cover !important;
+        object-fit: contain !important;
         object-position: center !important;
         display: block;
         transform: none !important;
+        background: #0f172a;
     }
     .admin-overview-banners .carousel-slide.is-active img.slide-media {
         transform: none !important;
