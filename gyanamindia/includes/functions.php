@@ -3230,11 +3230,123 @@ function gyanamAbacusCourseCertificateDrawFrame($pdf, float $W, float $H): void 
     $pdf->Cell($W, 4, '(Grade : A++: 90 & above, A+ : 80 to 89, A : 66 to 79, B : 55 to 65, C : 40 to 54)', 0, 0, 'C');
 }
 
-/** Active dashboard banners — lean columns, capped. $audience = ATC|DLC */
-function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8, ?int $atcId = null): array {
-    $audience = strtoupper($audience) === 'DLC' ? 'DLC' : 'ATC';
-    ensureAnnouncementAtcVisibilitySchema($pdo);
+/**
+ * Allowed announcement audiences.
+ *
+ * @return list<string>
+ */
+function announcementAudienceOptions(): array {
+    return ['All', 'Admin', 'ATC', 'DLC'];
+}
+
+/**
+ * Normalize a posted/stored audience value to a known option.
+ */
+function normalizeAnnouncementAudience(?string $audience): string {
+    $audience = trim((string)$audience);
+    foreach (announcementAudienceOptions() as $opt) {
+        if (strcasecmp($audience, $opt) === 0) {
+            return $opt;
+        }
+    }
+    return 'All';
+}
+
+/**
+ * Ensure announcements columns support Admin audience + ATC visibility mapping.
+ * Old ENUM(target_audience) without 'Admin' silently stored '' and hid banners everywhere.
+ */
+function ensureAnnouncementAtcVisibilitySchema(PDO $pdo): void {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
     try {
+        $colMeta = $pdo->query('SHOW COLUMNS FROM announcements')->fetchAll(PDO::FETCH_ASSOC);
+        $cols = array_column($colMeta, 'Field');
+        $typeByField = [];
+        foreach ($colMeta as $c) {
+            $typeByField[$c['Field']] = strtolower((string)($c['Type'] ?? ''));
+        }
+
+        // Widen target_audience so Admin (and future values) can be stored
+        $audType = $typeByField['target_audience'] ?? '';
+        $needsWiden = $audType === ''
+            || str_contains($audType, 'enum')
+            || (str_contains($audType, 'varchar') && preg_match('/varchar\((\d+)\)/', $audType, $m) && (int)$m[1] < 20);
+        if ($needsWiden || !in_array('target_audience', $cols, true)) {
+            if (!in_array('target_audience', $cols, true)) {
+                $pdo->exec("ALTER TABLE announcements ADD COLUMN target_audience VARCHAR(20) NOT NULL DEFAULT 'All'");
+            } else {
+                $pdo->exec("ALTER TABLE announcements MODIFY COLUMN target_audience VARCHAR(20) NOT NULL DEFAULT 'All'");
+            }
+        }
+
+        if (!in_array('orientation', $cols, true)) {
+            $pdo->exec("ALTER TABLE announcements ADD COLUMN orientation VARCHAR(20) NOT NULL DEFAULT 'horizontal'");
+        }
+        if (!in_array('visibility_scope', $cols, true)) {
+            $pdo->exec("ALTER TABLE announcements ADD COLUMN visibility_scope VARCHAR(20) NOT NULL DEFAULT 'all' COMMENT 'all=all ATCs (when audience includes ATC); specific=mapped ATCs only'");
+        }
+
+        // Repair rows corrupted by old ENUM (empty / unknown audience)
+        $pdo->exec("
+            UPDATE announcements
+            SET target_audience = 'All'
+            WHERE target_audience IS NULL
+               OR TRIM(target_audience) = ''
+               OR target_audience NOT IN ('All', 'Admin', 'ATC', 'DLC')
+        ");
+
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS announcement_atc_visibility (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                announcement_id INT NOT NULL,
+                atc_id INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_ann_atc (announcement_id, atc_id),
+                KEY idx_aav_atc (atc_id),
+                KEY idx_aav_ann (announcement_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+    } catch (Exception $e) {
+        error_log('[AnnAtcVis] ' . $e->getMessage());
+        // Allow retry on next request if migration partially failed
+        $done = false;
+    }
+}
+
+/**
+ * Active dashboard banners — lean columns, capped.
+ * $audience = Admin|ATC|DLC
+ *  - All → every dashboard
+ *  - Admin → Admin only
+ *  - ATC → ATC (+ Admin HO overview)
+ *  - DLC → DLC (+ Admin HO overview)
+ */
+function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8, ?int $atcId = null): array {
+    $audience = normalizeAnnouncementAudience($audience);
+    if ($audience === 'All') {
+        $audience = 'Admin'; // treat unknown/All callers as HO overview
+    }
+    ensureAnnouncementAtcVisibilitySchema($pdo);
+    $limit = max(1, min(20, (int)$limit));
+
+    try {
+        if ($audience === 'Admin') {
+            // Head office sees every active banner (including Admin-only)
+            $sql = "
+                SELECT id, title, image_path, orientation, target_audience, visibility_scope, created_at
+                FROM announcements
+                WHERE status = 'Active'
+                  AND target_audience IN ('All', 'Admin', 'ATC', 'DLC')
+                ORDER BY created_at DESC
+                LIMIT {$limit}
+            ";
+            return $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        }
+
         $sql = "
             SELECT id, title, image_path, orientation, target_audience, visibility_scope, created_at
             FROM announcements
@@ -3253,54 +3365,21 @@ function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8, ?int
                     )
                 )
             ";
-            $params[] = $atcId;
+            $params[] = (int)$atcId;
         }
 
-        $sql .= ' ORDER BY created_at DESC LIMIT ?';
+        $sql .= " ORDER BY created_at DESC LIMIT {$limit}";
         $stmt = $pdo->prepare($sql);
-        foreach ($params as $i => $val) {
-            $stmt->bindValue($i + 1, $val);
-        }
-        $stmt->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
-        $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     } catch (Exception $e) {
+        error_log('[getActiveAnnouncements] ' . $e->getMessage());
         return [];
     }
 }
 
 /**
- * Ensure announcements.visibility_scope + announcement_atc_visibility mapping.
- */
-function ensureAnnouncementAtcVisibilitySchema(PDO $pdo): void {
-    static $done = false;
-    if ($done) {
-        return;
-    }
-    $done = true;
-    try {
-        $cols = $pdo->query('SHOW COLUMNS FROM announcements')->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('visibility_scope', $cols, true)) {
-            $pdo->exec("ALTER TABLE announcements ADD COLUMN visibility_scope VARCHAR(20) NOT NULL DEFAULT 'all' COMMENT 'all=all ATCs (when audience includes ATC); specific=mapped ATCs only'");
-        }
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS announcement_atc_visibility (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                announcement_id INT NOT NULL,
-                atc_id INT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY uq_ann_atc (announcement_id, atc_id),
-                KEY idx_aav_atc (atc_id),
-                KEY idx_aav_ann (announcement_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ");
-    } catch (Exception $e) {
-        error_log('[AnnAtcVis] ' . $e->getMessage());
-    }
-}
-
-/**
- * Save ATC assignment for a banner. Ignored when audience is DLC-only.
+ * Save ATC assignment for a banner. Ignored when audience is DLC/Admin-only.
  *
  * @param list<int> $atcIds
  */
@@ -3309,11 +3388,11 @@ function saveAnnouncementAtcVisibility(PDO $pdo, int $announcementId, string $sc
     if ($announcementId <= 0) {
         return;
     }
-    $audience = strtoupper(trim($targetAudience));
+    $audience = normalizeAnnouncementAudience($targetAudience);
     $scope = strtolower(trim($scope)) === 'specific' ? 'specific' : 'all';
 
-    // DLC-only banners do not use ATC mapping
-    if ($audience === 'DLC') {
+    // DLC / Admin-only banners do not use ATC mapping
+    if ($audience === 'DLC' || $audience === 'Admin') {
         $scope = 'all';
         $atcIds = [];
     }
