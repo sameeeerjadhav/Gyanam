@@ -1019,7 +1019,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             <div class="cc-grid cc-grid-4" style="margin-top:1rem">
                 <a class="cc-card cc-card-pad" href="print_certificates.php" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
-                        <?= cc_ico('certificate', 'xl') ?>
+                        <?= cc_png('icon-certified.png', 'xl', 'Certified') ?>
                         <h3>Certified Students</h3>
                     </div>
                     <div class="cc-metric-value green"><?= (int)$certifiedStudents ?></div>
@@ -1027,7 +1027,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </a>
                 <a class="cc-card cc-card-pad" href="dispatches.php?date=today" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
-                        <?= cc_ico('card', 'xl') ?>
+                        <?= cc_png('icon-material.png', 'xl', 'Dispatches') ?>
                         <h3>Today's Dispatches</h3>
                     </div>
                     <div class="cc-metric-value blue"><?= (int)$todayDispatches ?></div>
@@ -1035,7 +1035,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </a>
                 <a class="cc-card cc-card-pad" href="dispatches.php?status=Dispatched" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
-                        <?= cc_ico('clock', 'xl') ?>
+                        <?= cc_png('icon-pending.png', 'xl', 'Pending') ?>
                         <h3>Pending Dispatches</h3>
                     </div>
                     <div class="cc-metric-value orange"><?= (int)$pendingDispatches ?></div>
@@ -1043,7 +1043,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </a>
                 <a class="cc-card cc-card-pad" href="print_certificates.php?filter=print_pending" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
-                        <?= cc_ico('exam', 'xl') ?>
+                        <?= cc_png('icon-print.png', 'xl', 'Print certificates') ?>
                         <h3>Certificate Printing Pending</h3>
                     </div>
                     <div class="cc-metric-value orange"><?= (int)$certPrintPending ?></div>
@@ -1053,7 +1053,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             <div class="cc-grid cc-grid-4">
                 <a class="cc-card cc-card-pad" href="dispatches.php?view=pending" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
-                        <?= cc_ico('book', 'xl') ?>
+                        <?= cc_png('icon-books.png', 'xl', 'Course material') ?>
                         <h3>Course Material Pending</h3>
                     </div>
                     <div class="cc-metric-value red"><?= (int)$courseMaterialPending ?></div>
@@ -1061,7 +1061,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </a>
                 <a class="cc-card cc-card-pad" href="material_requirements.php?tab=pending" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
-                        <?= cc_ico('bars', 'xl') ?>
+                        <?= cc_png('icon-material.png', 'xl', 'Material requirements') ?>
                         <h3>Material Requirements</h3>
                     </div>
                     <div class="cc-kv"><span class="k">Open pending tab</span><span class="v orange">View</span></div>
@@ -1073,7 +1073,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             <div class="cc-grid cc-grid-4">
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
-                        <?= cc_ico('pie', 'xl') ?>
+                        <?= cc_png('icon-share-revenue.png', 'xl', 'Share revenue') ?>
                         <h3>Share Revenue</h3>
                         <a class="cc-link" href="share_payments.php">Show All</a>
                     </div>
@@ -1082,7 +1082,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
-                        <?= cc_ico('clock', 'xl') ?>
+                        <?= cc_png('icon-pending.png', 'xl', 'Pending share') ?>
                         <h3>Pending Share</h3>
                     </div>
                     <div class="cc-metric-label">Awaiting completion</div>
@@ -1090,7 +1090,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
-                        <?= cc_ico('wallet', 'xl') ?>
+                        <?= cc_png('icon-share-revenue.png', 'xl', "Today's share") ?>
                         <h3>Today's Share</h3>
                     </div>
                     <div class="cc-metric-label">Completed today</div>
@@ -1098,7 +1098,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
-                        <?= cc_ico('bars', 'xl') ?>
+                        <?= cc_png('icon-staff.png', 'xl', 'Share summary') ?>
                         <h3>Share Summary</h3>
                     </div>
                     <div class="cc-kv"><span class="k">Transactions</span><span class="v"><?= (int)($revenueStats['txn_count'] ?? 0) ?></span></div>
@@ -1110,7 +1110,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             <div class="cc-grid cc-grid-4">
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
-                        <?= cc_ico('students', 'xl') ?>
+                        <?= cc_png('icon-staff.png', 'xl', 'Network') ?>
                         <h3>Network</h3>
                     </div>
                     <div class="cc-kv"><span class="k">DLC Offices</span><span class="v"><?= (int)$totalDLC ?></span></div>
@@ -1119,7 +1119,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad" onclick="openDetailModal('admissions')" style="cursor:pointer" title="View admissions">
                     <div class="cc-card-head">
-                        <?= cc_ico('useradd', 'xl') ?>
+                        <?= cc_png('icon-staff.png', 'xl', 'Admissions') ?>
                         <h3>Admissions</h3>
                     </div>
                     <div class="cc-metric-value blue"><?= (int)$totalAdmissions ?></div>
@@ -1127,7 +1127,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad" onclick="openDetailModal('reported')" style="cursor:pointer" title="Reported students">
                     <div class="cc-card-head">
-                        <?= cc_ico('check', 'xl') ?>
+                        <?= cc_png('icon-certified.png', 'xl', 'Reported') ?>
                         <h3>Reported Students</h3>
                     </div>
                     <div class="cc-metric-value green"><?= (int)$reportedStudents ?></div>
@@ -1135,7 +1135,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad" onclick="openDetailModal('pending_report')" style="cursor:pointer" title="Pending reports">
                     <div class="cc-card-head">
-                        <?= cc_ico('enquiry', 'xl') ?>
+                        <?= cc_png('icon-pending.png', 'xl', 'Pending reports') ?>
                         <h3>Pending Reports</h3>
                     </div>
                     <div class="cc-metric-value orange"><?= (int)$pendingReporting ?></div>
