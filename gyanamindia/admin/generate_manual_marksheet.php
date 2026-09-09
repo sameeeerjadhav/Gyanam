@@ -192,7 +192,7 @@ if ($brand === 'abacus') {
     $headerImgPath = $abacusLogoPath;
 } else {
     $headerImgW = $tw * 0.65;
-    $headerImgH = $headerImgW * (348.0 / 856.0);
+    $headerImgH = $headerImgW * (520.0 / 1280.0);
     $headerImgX = $x + ($tw - $headerImgW) / 2;
     $headerImgPath = $headerBannerPath;
 }
