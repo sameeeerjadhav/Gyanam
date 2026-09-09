@@ -198,11 +198,19 @@ $signatory = $brand === 'abacus'
     ? 'Authorized Signatory For Gyanam Abacus'
     : 'Authorized Signatory For GIIT';
 
-$headerBannerPath = __DIR__ . '/../assets/templates/giit_marksheet_header.png';
-$abacusLogoPath   = __DIR__ . '/../assets/templates/abacus_marksheet_logo.png';
+$headerBannerPath = __DIR__ . '/../assets/templates/giit_marksheet_header_bw.png';
+if (!is_file($headerBannerPath)) {
+    $headerBannerPath = __DIR__ . '/../assets/templates/giit_marksheet_header.png';
+}
+$abacusLogoPath = __DIR__ . '/../assets/templates/abacus_marksheet_logo_bw.png';
+if (!is_file($abacusLogoPath)) {
+    $abacusLogoPath = __DIR__ . '/../assets/templates/abacus_marksheet_logo.png';
+}
 if (!is_file($abacusLogoPath)) {
     $abacusLogoPath = admissionFormBrandLogoPath('abacus');
 }
+$signPljPath = __DIR__ . '/../assets/templates/marksheet_sign_plj.png';
+$signRpsPath = __DIR__ . '/../assets/templates/marksheet_sign_rps.png';
 
 $pdf = new Fpdi();
 $pdf->SetTitle('Statement of Marks — ' . $studentId);
@@ -309,8 +317,11 @@ if (is_file($headerImgPath)) {
 }
 
 $barY = $top + $headerBodyH;
-$pdf->SetFillColor(210, 210, 210);
+$pdf->SetFillColor(255, 255, 255);
+$pdf->SetDrawColor(0, 0, 0);
+$pdf->SetLineWidth(0.25);
 $pdf->Rect($x, $barY, $tw, $barH, 'DF');
+$pdf->SetTextColor(0, 0, 0);
 $pdf->SetFont('Times', 'B', $FONT);
 $pdf->SetXY($x, $barY + ($barH - 4.2) / 2);
 $pdf->Cell($tw, 4.2, 'Statement of Marks', 0, 0, 'C');
@@ -370,12 +381,42 @@ $sx = $x + $leftW;
 $sy = $marksY;
 $sh = $marksHdrH + $marksBodyH;
 $pdf->Rect($sx, $sy, $rightW, $sh, 'D');
+
+// Signatures (reduced) above authorized-signatory text; seal reserved below later
+$sigH = 10.5;
+$sigW1 = $sigH * (223.0 / 118.0);
+$sigW2 = $sigH * (280.0 / 118.0);
+$sigGap = 2.0;
+$sigTotalW = $sigW1 + $sigGap + $sigW2;
+$maxSigW = max(20.0, $rightW - 4.0);
+if ($sigTotalW > $maxSigW) {
+    $scale = $maxSigW / $sigTotalW;
+    $sigH *= $scale;
+    $sigW1 *= $scale;
+    $sigW2 *= $scale;
+    $sigTotalW = $sigW1 + $sigGap + $sigW2;
+}
+$sigY = $sy + 3.5;
+$sigX = $sx + ($rightW - $sigTotalW) / 2;
+if (is_file($signPljPath)) {
+    try {
+        $pdf->Image($signPljPath, $sigX, $sigY, $sigW1, $sigH);
+    } catch (Exception $e) {}
+}
+if (is_file($signRpsPath)) {
+    try {
+        $pdf->Image($signRpsPath, $sigX + $sigW1 + $sigGap, $sigY, $sigW2, $sigH);
+    } catch (Exception $e) {}
+}
+$textY = $sigY + $sigH + 2.0;
+$pdf->SetTextColor(0, 0, 0);
 $pdf->SetFont('Times', 'B', $FONT);
-$pdf->SetXY($sx + 1, $sy + $sh - 14);
-$pdf->Cell($rightW - 2, 5, $signatory, 0, 0, 'C');
+$pdf->SetXY($sx + 1, $textY);
+$pdf->Cell($rightW - 2, 4.5, $signatory, 0, 0, 'C');
 $pdf->SetFont('Times', '', $FONT);
-$pdf->SetXY($sx + 1, $sy + $sh - 8);
+$pdf->SetXY($sx + 1, $textY + 4.8);
 $pdf->Cell($rightW - 2, 4.5, 'Gyanam India Educational Services', 0, 0, 'C');
+// Seal will be placed below this text in a follow-up.
 
 $legY = $bottom - $legendTotal;
 $grades = ['A++', 'A+', 'A', 'B', 'C', 'Fail', 'AB'];
