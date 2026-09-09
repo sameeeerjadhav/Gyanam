@@ -330,52 +330,71 @@ try {
 } catch (Exception $e) {}
 
 // ── Birthdays ─────────────────────────────────────────────────────────────────
+$todayBirthdays = [];
+$calendarBirthdays = []; // [{name,type,mobile,month,day,dob}]
 try {
-    $todayBirthdays = [];
-
     $aStmt = $pdo->prepare("
         SELECT COALESCE(NULLIF(TRIM(contact_person),''), name) AS name,
                dob, 'ATC Center' AS type, IFNULL(district,'') AS location,
-               IFNULL(mobile,'') AS mobile
+               IFNULL(mobile,'') AS mobile,
+               MONTH(dob) AS b_month, DAY(dob) AS b_day
         FROM atc_centers
-        WHERE dob IS NOT NULL
-          AND MONTH(dob) = MONTH(CURDATE()) AND DAY(dob) = DAY(CURDATE())
-          AND status = 'Active'
+        WHERE dob IS NOT NULL AND status = 'Active'
         ORDER BY name ASC
     ");
     $aStmt->execute();
-    $todayBirthdays = array_merge($todayBirthdays, $aStmt->fetchAll(PDO::FETCH_ASSOC));
+    foreach ($aStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $calendarBirthdays[] = $row;
+    }
 
     $dStmt = $pdo->prepare("
         SELECT COALESCE(NULLIF(TRIM(contact_person),''), name) AS name,
                dob, 'DLC Office' AS type, IFNULL(district,'') AS location,
-               IFNULL(mobile,'') AS mobile
+               IFNULL(mobile,'') AS mobile,
+               MONTH(dob) AS b_month, DAY(dob) AS b_day
         FROM dlc_offices
-        WHERE dob IS NOT NULL
-          AND MONTH(dob) = MONTH(CURDATE()) AND DAY(dob) = DAY(CURDATE())
-          AND status = 'Active'
+        WHERE dob IS NOT NULL AND status = 'Active'
         ORDER BY name ASC
     ");
     $dStmt->execute();
-    $todayBirthdays = array_merge($todayBirthdays, $dStmt->fetchAll(PDO::FETCH_ASSOC));
+    foreach ($dStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $calendarBirthdays[] = $row;
+    }
 
     $mStmt = $pdo->prepare("
         SELECT person_name AS name,
                birth_date AS dob, 'Manual Entry' AS type, IFNULL(description,'') AS location,
-               IFNULL(mobile,'') AS mobile
+               IFNULL(mobile,'') AS mobile,
+               MONTH(birth_date) AS b_month, DAY(birth_date) AS b_day
         FROM birthdays
-        WHERE birth_date IS NOT NULL
-          AND MONTH(birth_date) = MONTH(CURDATE()) AND DAY(birth_date) = DAY(CURDATE())
-          AND status = 'Active'
+        WHERE birth_date IS NOT NULL AND status = 'Active'
         ORDER BY name ASC
     ");
     $mStmt->execute();
-    $todayBirthdays = array_merge($todayBirthdays, $mStmt->fetchAll(PDO::FETCH_ASSOC));
+    foreach ($mStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $calendarBirthdays[] = $row;
+    }
 
+    $todayM = (int)date('n');
+    $todayD = (int)date('j');
+    foreach ($calendarBirthdays as $row) {
+        if ((int)$row['b_month'] === $todayM && (int)$row['b_day'] === $todayD) {
+            $todayBirthdays[] = $row;
+        }
+    }
     usort($todayBirthdays, static function ($left, $right) {
         return strcasecmp((string)($left['name'] ?? ''), (string)($right['name'] ?? ''));
     });
 } catch (Exception $e) {}
+
+// Optional fixed holidays (month-day) for calendar legend markers
+$calendarHolidays = [
+    '1-26' => 'Republic Day',
+    '8-15' => 'Independence Day',
+    '10-2' => 'Gandhi Jayanti',
+    '1-1'  => 'New Year',
+    '5-1'  => 'Labour Day',
+];
 
 // ── Expiring ATCs ─────────────────────────────────────────────────────────────
 try {
@@ -573,7 +592,163 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .bday-avatar { width:38px; height:38px; border-radius:50%; flex-shrink:0; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1rem; font-weight:700; }
     .bday-name { font-weight:600; font-size:.875rem; color:var(--text); }
     .bday-tag { display:inline-block; margin-top:.2rem; font-size:.72rem; font-weight:600; background:var(--surface-3); color:var(--text-3); padding:.1rem .5rem; border-radius:99px; }
-    .bday-wish { margin-left:auto; font-size:1.3rem; }
+    .bday-wish { margin-left: auto; font-size: 1.3rem; }
+
+    /* Calendar + month birthdays */
+    .cal-bday-wrap {
+        display: grid;
+        grid-template-columns: 1.6fr 1fr;
+        gap: 1rem;
+        margin: 1.5rem 0;
+    }
+    .cal-card, .cal-bday-side {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 2px 12px rgba(0,0,0,.05);
+        overflow: hidden;
+    }
+    .cal-card { padding: 1.15rem 1.25rem 1rem; }
+    .cal-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+    }
+    .cal-nav h3 {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: var(--text);
+        letter-spacing: -.01em;
+    }
+    .cal-nav-btn {
+        width: 34px; height: 34px;
+        border-radius: 50%;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #64748b;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background .15s, color .15s, border-color .15s;
+    }
+    .cal-nav-btn:hover { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
+    .cal-nav-btn svg { width: 16px; height: 16px; }
+    .cal-weekdays, .cal-days {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: .35rem;
+    }
+    .cal-weekdays span {
+        text-align: center;
+        font-size: .72rem;
+        font-weight: 700;
+        color: #94a3b8;
+        padding: .35rem 0;
+        text-transform: uppercase;
+    }
+    .cal-day {
+        position: relative;
+        aspect-ratio: 1;
+        min-height: 42px;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-size: .9rem;
+        font-weight: 700;
+        color: #334155;
+        cursor: default;
+        border: 1.5px solid transparent;
+        transition: background .15s;
+    }
+    .cal-day.empty { visibility: hidden; }
+    .cal-day.has-bday { cursor: pointer; }
+    .cal-day.has-bday:hover { background: #fdf2f8; }
+    .cal-day.is-today {
+        background: #6366f1;
+        color: #fff;
+        box-shadow: 0 6px 16px rgba(99, 102, 241, .35);
+    }
+    .cal-day.is-holiday:not(.is-today) {
+        border-color: #c4b5fd;
+        background: #f5f3ff;
+        color: #5b21b6;
+    }
+    .cal-day.is-selected:not(.is-today) {
+        outline: 2px solid #6366f1;
+        outline-offset: 1px;
+    }
+    .cal-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: #ec4899;
+        margin-top: 3px;
+    }
+    .cal-day.is-today .cal-dot { background: #fda4af; }
+    .cal-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .85rem 1.15rem;
+        margin-top: 1rem;
+        padding-top: .85rem;
+        border-top: 1px solid #f1f5f9;
+        font-size: .75rem;
+        font-weight: 700;
+        color: #64748b;
+    }
+    .cal-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+    .lg-holiday {
+        width: 12px; height: 12px; border-radius: 3px;
+        border: 1.5px solid #c4b5fd; background: #f5f3ff;
+    }
+    .lg-today {
+        width: 12px; height: 12px; border-radius: 3px; background: #6366f1;
+    }
+    .lg-bday {
+        width: 8px; height: 8px; border-radius: 50%; background: #ec4899;
+    }
+    .cal-bday-side-head {
+        display: flex;
+        align-items: center;
+        gap: .55rem;
+        padding: 1rem 1.15rem;
+        border-bottom: 1px solid #f1f5f9;
+        font-weight: 800;
+        font-size: .95rem;
+        color: var(--text);
+    }
+    .cal-bday-side-head .ico {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: #fce7f3; color: #db2777;
+        display: inline-flex; align-items: center; justify-content: center;
+    }
+    .cal-bday-side-head .ico svg { width: 14px; height: 14px; }
+    .cal-bday-side-body {
+        padding: .5rem 0;
+        max-height: 340px;
+        overflow-y: auto;
+        min-height: 220px;
+    }
+    .cal-bday-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .5rem;
+        padding: 2.5rem 1rem;
+        color: #94a3b8;
+        font-weight: 600;
+        font-size: .9rem;
+        text-align: center;
+    }
+    .cal-bday-empty .cake { font-size: 1.6rem; }
+    @media (max-width: 900px) {
+        .cal-bday-wrap { grid-template-columns: 1fr; }
+    }
 
     /* Detail modal */
     .detail-modal-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:1rem; padding:1.25rem 1.5rem; max-height:60vh; overflow-y:auto; }
@@ -1059,22 +1234,50 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             </div>
             <?php endif; ?>
 
-            <!-- ═══ Birthdays ═══ -->
-            <div class="bday-panel" style="margin-top:1.5rem;">
+            <!-- ═══ Calendar + Birthdays ═══ -->
+            <div class="cal-bday-wrap">
+                <div class="cal-card">
+                    <div class="cal-nav">
+                        <button type="button" class="cal-nav-btn" id="calPrev" aria-label="Previous month">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                        </button>
+                        <h3 id="calTitle">—</h3>
+                        <button type="button" class="cal-nav-btn" id="calNext" aria-label="Next month">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
+                    </div>
+                    <div class="cal-weekdays">
+                        <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+                    </div>
+                    <div class="cal-days" id="calDays"></div>
+                    <div class="cal-legend">
+                        <span><i class="lg-holiday"></i> Holiday</span>
+                        <span><i class="lg-today"></i> Today</span>
+                        <span><i class="lg-bday"></i> Birthday</span>
+                    </div>
+                </div>
+                <div class="cal-bday-side">
+                    <div class="cal-bday-side-head">
+                        <span class="ico">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </span>
+                        <span id="calBdayTitle">Birthdays</span>
+                    </div>
+                    <div class="cal-bday-side-body" id="calBdayList"></div>
+                </div>
+            </div>
+
+            <!-- ═══ Today's Birthdays (quick list) ═══ -->
+            <?php if (!empty($todayBirthdays)): ?>
+            <div class="bday-panel" style="margin-top:0;">
                 <div class="bday-panel-header">
                     <div class="bday-panel-title">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        🎂 Today's Birthdays — ATC & DLC
+                        🎂 Today's Birthdays — ATC &amp; DLC
                     </div>
                     <span class="bday-date"><?= date('d F Y') ?></span>
                 </div>
                 <div class="bday-panel-body">
-                <?php if (empty($todayBirthdays)): ?>
-                    <div class="bday-empty">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-                        <p>No birthdays today</p>
-                    </div>
-                <?php else: ?>
                     <?php foreach ($todayBirthdays as $b): ?>
                     <div class="bday-row">
                         <div class="bday-avatar"><?= mb_strtoupper(mb_substr($b['name'], 0, 1)) ?></div>
@@ -1084,7 +1287,6 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         </div>
                         <?php if (!empty($b['mobile'])): ?>
                         <button onclick="sendBdayWish('<?= addslashes(htmlspecialchars($b['name'])) ?>', '<?= htmlspecialchars($b['mobile']) ?>')" style="margin-left:auto;display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .85rem;border-radius:999px;border:none;background:#25d366;color:#fff;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-                            <svg viewBox="0 0 24 24" fill="white" style="width:13px;height:13px"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.67-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.076 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421-7.403h-.004c-1.425 0-2.835.356-4.06 1.031l-.291.169-3.015-.787.804 2.93-.189.301A7.002 7.002 0 003.02 9.414c0 3.866 3.113 7.012 6.938 7.012 1.893 0 3.672-.652 5.093-1.849 1.42-1.198 2.33-2.926 2.33-4.856 0-3.866-3.113-7.012-6.938-7.012m6.938 13.6H4.059A8.968 8.968 0 000 11.5C0 5.477 5.507 0.5 12 0.5s12 4.977 12 11-5.507 11-12 11z"/></svg>
                             Send Wish
                         </button>
                         <?php else: ?>
@@ -1092,12 +1294,11 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         <?php endif; ?>
                     </div>
                     <?php endforeach; ?>
-                <?php endif; ?>
                 </div>
             </div>
+            <?php endif; ?>
 
-            <!-- ═══ Quick Actions ═══ -->
-            <div class="section-header">
+            <!-- ═══ Quick Actions ═══ -->            <div class="section-header">
                 <h3>Quick Actions</h3>
             </div>
             <div class="actions-grid">
@@ -1443,6 +1644,137 @@ function openDetailModal(type) {
 function closeDetailModal() {
     document.getElementById('detailModal').classList.remove('active');
 }
+
+// ── Dashboard calendar + birthdays ───────────────────────────────────────────
+(function initDashCalendar() {
+    const daysEl = document.getElementById('calDays');
+    const titleEl = document.getElementById('calTitle');
+    const listEl = document.getElementById('calBdayList');
+    const listTitle = document.getElementById('calBdayTitle');
+    if (!daysEl || !titleEl || !listEl) return;
+
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const raw = <?= json_encode(array_map(static function ($r) {
+        return [
+            'name' => (string)($r['name'] ?? ''),
+            'type' => (string)($r['type'] ?? ''),
+            'mobile' => (string)($r['mobile'] ?? ''),
+            'month' => (int)($r['b_month'] ?? 0),
+            'day' => (int)($r['b_day'] ?? 0),
+        ];
+    }, $calendarBirthdays ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    const holidays = <?= json_encode($calendarHolidays ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+    const byKey = {};
+    raw.forEach(b => {
+        if (!b.month || !b.day) return;
+        const k = b.month + '-' + b.day;
+        (byKey[k] || (byKey[k] = [])).push(b);
+    });
+
+    const now = new Date();
+    let viewY = now.getFullYear();
+    let viewM = now.getMonth(); // 0-based
+    let selectedDay = null;
+
+    function esc(s) {
+        return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function renderList(monthIdx, dayFilter) {
+        const monthNum = monthIdx + 1;
+        let items = [];
+        Object.keys(byKey).forEach(k => {
+            const [m, d] = k.split('-').map(Number);
+            if (m !== monthNum) return;
+            if (dayFilter && d !== dayFilter) return;
+            byKey[k].forEach(b => items.push({ ...b, day: d }));
+        });
+        items.sort((a, b) => a.day - b.day || a.name.localeCompare(b.name));
+
+        listTitle.textContent = dayFilter
+            ? ('Birthdays — ' + dayFilter + ' ' + MONTHS[monthIdx])
+            : ('Birthdays — ' + MONTHS[monthIdx]);
+
+        if (!items.length) {
+            listEl.innerHTML = '<div class="cal-bday-empty"><div class="cake">🎂</div><div>No birthdays this ' + (dayFilter ? 'day' : 'month') + '</div></div>';
+            return;
+        }
+
+        listEl.innerHTML = items.map(b => {
+            const init = esc((b.name || '?').trim().charAt(0).toUpperCase());
+            const wish = b.mobile
+                ? `<button type="button" onclick="sendBdayWish('${esc(b.name).replace(/'/g, "\\'")}', '${esc(b.mobile)}')" style="margin-left:auto;display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .7rem;border-radius:999px;border:none;background:#25d366;color:#fff;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit">Wish</button>`
+                : `<span class="bday-wish" style="margin-left:auto">🎉</span>`;
+            return `<div class="bday-row">
+                <div class="bday-avatar" style="width:34px;height:34px;font-size:.85rem">${init}</div>
+                <div class="bday-info">
+                    <div class="bday-name">${esc(b.name)}</div>
+                    <div class="bday-tag">${esc(b.type)} · ${b.day} ${MONTHS[monthIdx].slice(0,3)}</div>
+                </div>
+                ${wish}
+            </div>`;
+        }).join('');
+    }
+
+    function render() {
+        titleEl.textContent = MONTHS[viewM] + ' ' + viewY;
+        const first = new Date(viewY, viewM, 1);
+        // Monday-first: Sun=0 -> 6, Mon=1 -> 0
+        let startPad = first.getDay() - 1;
+        if (startPad < 0) startPad = 6;
+        const dim = new Date(viewY, viewM + 1, 0).getDate();
+        const todayY = now.getFullYear(), todayM = now.getMonth(), todayD = now.getDate();
+
+        let html = '';
+        for (let i = 0; i < startPad; i++) html += '<div class="cal-day empty"></div>';
+        for (let d = 1; d <= dim; d++) {
+            const key = (viewM + 1) + '-' + d;
+            const hasBday = !!(byKey[key] && byKey[key].length);
+            const isHoliday = !!holidays[key];
+            const isToday = viewY === todayY && viewM === todayM && d === todayD;
+            const isSelected = selectedDay === d;
+            const cls = ['cal-day'];
+            if (hasBday) cls.push('has-bday');
+            if (isToday) cls.push('is-today');
+            if (isHoliday) cls.push('is-holiday');
+            if (isSelected) cls.push('is-selected');
+            const title = [
+                isHoliday ? holidays[key] : '',
+                hasBday ? (byKey[key].length + ' birthday(s)') : ''
+            ].filter(Boolean).join(' · ');
+            html += `<div class="${cls.join(' ')}" data-day="${d}" title="${esc(title)}">
+                <span>${d}</span>
+                ${hasBday ? '<span class="cal-dot"></span>' : ''}
+            </div>`;
+        }
+        daysEl.innerHTML = html;
+        daysEl.querySelectorAll('.cal-day.has-bday').forEach(el => {
+            el.addEventListener('click', () => {
+                selectedDay = Number(el.dataset.day);
+                render();
+                renderList(viewM, selectedDay);
+            });
+        });
+        renderList(viewM, null);
+    }
+
+    document.getElementById('calPrev')?.addEventListener('click', () => {
+        selectedDay = null;
+        viewM -= 1;
+        if (viewM < 0) { viewM = 11; viewY -= 1; }
+        render();
+    });
+    document.getElementById('calNext')?.addEventListener('click', () => {
+        selectedDay = null;
+        viewM += 1;
+        if (viewM > 11) { viewM = 0; viewY += 1; }
+        render();
+    });
+
+    render();
+})();
+
 function sendBdayWish(name, mobile) {
     const msg = encodeURIComponent('Dear ' + name + ',\n\nWarm Birthday Greetings from the entire Gyanam India family!\n\nOn this special occasion, we extend our heartfelt wishes to you. May this new year of your life bring you great health, abundant happiness, and continued success in everything you pursue.\n\nWe are grateful to have you as a valued part of the Gyanam India community. May your day be as wonderful as the joy you bring to everyone around you.\n\nWith warm regards,\nTeam Gyanam India');
     const num = mobile.replace(/\D/g, '');
