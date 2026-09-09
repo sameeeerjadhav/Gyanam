@@ -20,7 +20,7 @@ $greeting = getGreeting();
 try { ensurePerformanceIndexes($pdo); } catch (Exception $e) {}
 
 /**
- * Top ATCs by fees collected (+ admission count), optional center-type + period filters.
+ * Top ATCs by HO share paid (Completed share_payments), optional center-type + period filters.
  *
  * @return list<array{atc_name:string,atc_code:?string,center_type:?string,dlc_name:?string,student_count:int,revenue_collected:float}>
  */
@@ -32,13 +32,14 @@ function fetchTopPerformingAtcs(PDO $pdo, string $centerType = '', string $perio
     }
     $limit = max(1, min(25, $limit));
 
+    // Period applies to share payments (admin revenue), not ATC student fee collections
     $dateSql = '';
     if ($period === 'today') {
-        $dateSql = ' AND adm.admission_date = CURDATE()';
+        $dateSql = ' AND DATE(sp.created_at) = CURDATE()';
     } elseif ($period === 'month') {
-        $dateSql = ' AND adm.admission_date >= DATE_FORMAT(CURDATE(), \'%Y-%m-01\')';
+        $dateSql = ' AND sp.created_at >= DATE_FORMAT(CURDATE(), \'%Y-%m-01\')';
     } elseif ($period === 'year') {
-        $dateSql = ' AND YEAR(adm.admission_date) = YEAR(CURDATE())';
+        $dateSql = ' AND YEAR(sp.created_at) = YEAR(CURDATE())';
     }
 
     $typeSql = '';
@@ -50,7 +51,6 @@ function fetchTopPerformingAtcs(PDO $pdo, string $centerType = '', string $perio
         $typeSql = " AND atc.center_type LIKE ?";
         $params[] = '%Vedic%';
     } elseif ($centerType === 'IT') {
-        // Match IT-only and combo types that include IT (avoid false positives)
         $typeSql = " AND (
             atc.center_type = 'IT'
             OR atc.center_type LIKE '%+ IT'
@@ -64,14 +64,12 @@ function fetchTopPerformingAtcs(PDO $pdo, string $centerType = '', string $perio
                atc.atc_code,
                atc.center_type,
                dlc.name AS dlc_name,
-               COUNT(adm.id) AS student_count,
-               COALESCE(SUM(adm.fees_paid), 0) AS revenue_collected
+               (SELECT COUNT(*) FROM admissions adm
+                 WHERE adm.atc_id = atc.id AND adm.status = 'Active') AS student_count,
+               COALESCE(SUM(CASE WHEN sp.status = 'Completed' THEN sp.total_share_amount ELSE 0 END), 0) AS revenue_collected
         FROM atc_centers atc
         LEFT JOIN dlc_offices dlc ON atc.dlc_id = dlc.id
-        LEFT JOIN admissions adm
-               ON atc.id = adm.atc_id
-              AND adm.status = 'Active'
-              $dateSql
+        LEFT JOIN share_payments sp ON atc.id = sp.atc_id $dateSql
         WHERE atc.status = 'Active'
           $typeSql
         GROUP BY atc.id
@@ -85,7 +83,6 @@ function fetchTopPerformingAtcs(PDO $pdo, string $centerType = '', string $perio
         $st->execute($params);
         return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
     } catch (Throwable $e) {
-        // Older DBs may lack atc_code
         try {
             $sql2 = str_replace('atc.atc_code,', "NULL AS atc_code,", $sql);
             $st = $pdo->prepare($sql2);
@@ -344,48 +341,73 @@ try {
     ")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 
-// ── Report stats (embedded from reports.php) — session-cached 90s ────────
-$revenueStats    = ['total_revenue'=>0,'total_collected'=>0,'total_pending'=>0];
+// ── Report stats — HO share revenue only (not ATC student fee collections) ──
+$revenueStats    = [
+    'total_revenue' => 0,
+    'total_collected' => 0,
+    'total_pending' => 0,
+    'today_share' => 0,
+    'txn_count' => 0,
+    'atc_paid_count' => 0,
+];
 $dlcRevenue      = [];
 $dispatchStats   = ['total_dispatches'=>0,'created'=>0,'sent_to_dlc'=>0,'forwarded_to_atc'=>0,'delivered'=>0,'total_items'=>0];
 $materialBreakdown = [];
 $topATCs         = [];
 $monthlyTrend    = [];
+$recentSharePayments = [];
 
-$_rcKey = 'admin_dash_reports';
-$_rcAt  = 'admin_dash_reports_at';
+$_rcKey = 'admin_dash_reports_share_v1';
+$_rcAt  = 'admin_dash_reports_share_at';
 if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_rcAt]) < 90) {
     $cached = $_SESSION[$_rcKey];
-    $revenueStats      = $cached['revenueStats'] ?? $revenueStats;
+    $revenueStats      = array_merge($revenueStats, $cached['revenueStats'] ?? []);
     $dlcRevenue        = $cached['dlcRevenue'] ?? [];
     $dispatchStats     = $cached['dispatchStats'] ?? $dispatchStats;
     $materialBreakdown = $cached['materialBreakdown'] ?? [];
     $topATCs           = $cached['topATCs'] ?? [];
     $monthlyTrend      = $cached['monthlyTrend'] ?? [];
+    $recentSharePayments = $cached['recentSharePayments'] ?? [];
 } else {
     try {
-        $revenueStats = $pdo->query("
-            SELECT COALESCE(SUM(course_fees - discount_amount),0) AS total_revenue,
-                   COALESCE(SUM(fees_paid),0)    AS total_collected,
-                   COALESCE(SUM(fees_pending),0) AS total_pending
-            FROM admissions WHERE status='Active'
-        ")->fetch(PDO::FETCH_ASSOC) ?: $revenueStats;
-    } catch(Exception $e){}
+        $row = $pdo->query("
+            SELECT
+                COALESCE(SUM(CASE WHEN status = 'Completed' THEN total_share_amount ELSE 0 END), 0) AS total_collected,
+                COALESCE(SUM(CASE WHEN status = 'Pending' THEN COALESCE(total_amount, total_share_amount, 0) ELSE 0 END), 0) AS total_pending,
+                COALESCE(SUM(CASE WHEN status = 'Completed' AND DATE(created_at) = CURDATE() THEN total_share_amount ELSE 0 END), 0) AS today_share,
+                COUNT(*) AS txn_count,
+                COUNT(DISTINCT CASE WHEN status = 'Completed' THEN atc_id END) AS atc_paid_count
+            FROM share_payments
+        ")->fetch(PDO::FETCH_ASSOC) ?: [];
+        $revenueStats['total_collected'] = (float)($row['total_collected'] ?? 0);
+        $revenueStats['total_pending']   = (float)($row['total_pending'] ?? 0);
+        $revenueStats['today_share']     = (float)($row['today_share'] ?? 0);
+        $revenueStats['txn_count']       = (int)($row['txn_count'] ?? 0);
+        $revenueStats['atc_paid_count']  = (int)($row['atc_paid_count'] ?? 0);
+        // Admin "revenue" = share received (HO income), not ATC fee earnings
+        $revenueStats['total_revenue']   = $revenueStats['total_collected'];
+    } catch (Exception $e) {}
 
     try {
         $dlcRevenue = $pdo->query("
             SELECT dlc.id, dlc.name AS dlc_name, dlc.district,
                    COUNT(DISTINCT atc.id) AS atc_count,
-                   COUNT(DISTINCT adm.id) AS total_students,
-                   COALESCE(SUM(adm.course_fees-adm.discount_amount),0) AS total_revenue,
-                   COALESCE(SUM(adm.fees_paid),0)    AS collected,
-                   COALESCE(SUM(adm.fees_pending),0) AS pending
+                   (SELECT COUNT(*) FROM admissions adm
+                      JOIN atc_centers a2 ON adm.atc_id = a2.id
+                     WHERE a2.dlc_id = dlc.id AND adm.status = 'Active') AS total_students,
+                   COALESCE(SUM(CASE WHEN sp.status = 'Completed' THEN sp.total_share_amount ELSE 0 END), 0) AS collected,
+                   COALESCE(SUM(CASE WHEN sp.status = 'Pending' THEN COALESCE(sp.total_amount, sp.total_share_amount, 0) ELSE 0 END), 0) AS pending
             FROM dlc_offices dlc
-            LEFT JOIN atc_centers atc ON dlc.id=atc.dlc_id AND atc.status='Active'
-            LEFT JOIN admissions  adm ON atc.id=adm.atc_id AND adm.status='Active'
-            GROUP BY dlc.id ORDER BY collected DESC
+            LEFT JOIN atc_centers atc ON dlc.id = atc.dlc_id AND atc.status = 'Active'
+            LEFT JOIN share_payments sp ON atc.id = sp.atc_id
+            GROUP BY dlc.id
+            ORDER BY collected DESC
         ")->fetchAll(PDO::FETCH_ASSOC);
-    } catch(Exception $e){}
+        foreach ($dlcRevenue as &$dlcRow) {
+            $dlcRow['total_revenue'] = (float)$dlcRow['collected'] + (float)$dlcRow['pending'];
+        }
+        unset($dlcRow);
+    } catch (Exception $e) {}
 
     try {
         $dispatchStats = $pdo->query("
@@ -397,32 +419,64 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                    SUM(quantity)                  AS total_items
             FROM dispatches
         ")->fetch(PDO::FETCH_ASSOC) ?: $dispatchStats;
-    } catch(Exception $e){}
+    } catch (Exception $e) {}
 
     try {
         $materialBreakdown = $pdo->query("
             SELECT material_type, COUNT(*) AS dispatch_count, SUM(quantity) AS total_quantity
             FROM dispatches GROUP BY material_type ORDER BY total_quantity DESC
         ")->fetchAll(PDO::FETCH_ASSOC);
-    } catch(Exception $e){}
+    } catch (Exception $e) {}
 
     try {
         $topATCs = fetchTopPerformingAtcs($pdo, '', 'all', 10);
-    } catch(Exception $e){}
+    } catch (Exception $e) {}
+
+    // Monthly: admissions count + HO share revenue (not ATC fee collections)
+    try {
+        $mapAdm = [];
+        $mapRev = [];
+        foreach ($pdo->query("
+            SELECT DATE_FORMAT(admission_date,'%Y-%m') AS month, COUNT(*) AS admissions
+            FROM admissions
+            WHERE admission_date >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
+            GROUP BY DATE_FORMAT(admission_date,'%Y-%m')
+        ")->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $mapAdm[$r['month']] = (int)$r['admissions'];
+        }
+        foreach ($pdo->query("
+            SELECT DATE_FORMAT(created_at,'%Y-%m') AS month,
+                   COALESCE(SUM(CASE WHEN status='Completed' THEN total_share_amount ELSE 0 END),0) AS revenue
+            FROM share_payments
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
+            GROUP BY DATE_FORMAT(created_at,'%Y-%m')
+        ")->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $mapRev[$r['month']] = (float)$r['revenue'];
+        }
+        $monthlyTrend = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $sk = date('Y-m', strtotime("-{$i} months"));
+            $monthlyTrend[] = [
+                'month' => $sk,
+                'admissions' => $mapAdm[$sk] ?? 0,
+                'revenue' => $mapRev[$sk] ?? 0,
+                'collected' => $mapRev[$sk] ?? 0,
+            ];
+        }
+    } catch (Exception $e) {}
 
     try {
-        $monthlyTrend = $pdo->query("
-            SELECT DATE_FORMAT(admission_date,'%Y-%m') AS month,
-                   COUNT(*) AS admissions,
-                   SUM(course_fees-discount_amount) AS revenue,
-                   SUM(fees_paid) AS collected
-            FROM admissions
-            WHERE admission_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-            GROUP BY DATE_FORMAT(admission_date,'%Y-%m') ORDER BY month ASC
+        $recentSharePayments = $pdo->query("
+            SELECT sp.id, sp.total_share_amount, sp.status, sp.created_at, sp.payment_mode,
+                   atc.name AS atc_name
+            FROM share_payments sp
+            JOIN atc_centers atc ON atc.id = sp.atc_id
+            ORDER BY sp.created_at DESC
+            LIMIT 6
         ")->fetchAll(PDO::FETCH_ASSOC);
-    } catch(Exception $e){}
+    } catch (Exception $e) {}
 
-    $_SESSION[$_rcKey] = compact('revenueStats', 'dlcRevenue', 'dispatchStats', 'materialBreakdown', 'topATCs', 'monthlyTrend');
+    $_SESSION[$_rcKey] = compact('revenueStats', 'dlcRevenue', 'dispatchStats', 'materialBreakdown', 'topATCs', 'monthlyTrend', 'recentSharePayments');
     $_SESSION[$_rcAt]  = time();
 }
 ?>
@@ -436,7 +490,9 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
+    <link rel="stylesheet" href="../assets/css/atc-dash-cc.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+    <?php require_once __DIR__ . '/../atc/_dash_cc_icons.php'; ?>
     <style>
     :root {
         --border: var(--border-color);
@@ -664,9 +720,120 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             </div>
         </header>
 
-        <div class="page-content">
+        <div class="page-content cc-dash">
 
-            <!-- ═══ OVERVIEW CARDS ═══ -->
+            <!-- ═══ ClassChakra-style HO Share cards (admin revenue = share only) ═══ -->
+            <div class="cc-grid cc-grid-4">
+                <div class="cc-card cc-card-pad">
+                    <div class="cc-card-head">
+                        <?= cc_ico('pie', 'xl') ?>
+                        <h3>Share Revenue</h3>
+                        <a class="cc-link" href="share_payments.php">Show All</a>
+                    </div>
+                    <div class="cc-metric-label">HO income from ATC share payments</div>
+                    <div class="cc-metric-value green">₹ <?= number_format((float)$revenueStats['total_collected'], 0) ?></div>
+                </div>
+                <div class="cc-card cc-card-pad">
+                    <div class="cc-card-head">
+                        <?= cc_ico('clock', 'xl') ?>
+                        <h3>Pending Share</h3>
+                    </div>
+                    <div class="cc-metric-label">Awaiting completion</div>
+                    <div class="cc-metric-value orange">₹ <?= number_format((float)$revenueStats['total_pending'], 0) ?></div>
+                </div>
+                <div class="cc-card cc-card-pad">
+                    <div class="cc-card-head">
+                        <?= cc_ico('wallet', 'xl') ?>
+                        <h3>Today's Share</h3>
+                    </div>
+                    <div class="cc-metric-label">Completed today</div>
+                    <div class="cc-metric-value blue">₹ <?= number_format((float)($revenueStats['today_share'] ?? 0), 0) ?></div>
+                </div>
+                <div class="cc-card cc-card-pad">
+                    <div class="cc-card-head">
+                        <?= cc_ico('bars', 'xl') ?>
+                        <h3>Share Summary</h3>
+                    </div>
+                    <div class="cc-kv"><span class="k">Transactions</span><span class="v"><?= (int)($revenueStats['txn_count'] ?? 0) ?></span></div>
+                    <div class="cc-kv"><span class="k">ATCs paid</span><span class="v green"><?= (int)($revenueStats['atc_paid_count'] ?? 0) ?></span></div>
+                    <div class="cc-kv"><span class="k">ATC Logins</span><span class="v"><?= (int)$totalATC ?></span></div>
+                </div>
+            </div>
+
+            <div class="cc-grid cc-grid-4">
+                <div class="cc-card cc-card-pad">
+                    <div class="cc-card-head">
+                        <?= cc_ico('students', 'xl') ?>
+                        <h3>Network</h3>
+                    </div>
+                    <div class="cc-kv"><span class="k">DLC Offices</span><span class="v"><?= (int)$totalDLC ?></span></div>
+                    <div class="cc-kv"><span class="k">ATC Centers</span><span class="v blue"><?= (int)$totalATC ?></span></div>
+                    <div class="cc-kv"><span class="k">Total Logins</span><span class="v"><?= (int)$totalUsers ?></span></div>
+                </div>
+                <div class="cc-card cc-card-pad" onclick="openDetailModal('admissions')" style="cursor:pointer" title="View admissions">
+                    <div class="cc-card-head">
+                        <?= cc_ico('useradd', 'xl') ?>
+                        <h3>Admissions</h3>
+                    </div>
+                    <div class="cc-metric-value blue"><?= (int)$totalAdmissions ?></div>
+                    <div class="cc-kv"><span class="k">Inquiries</span><span class="v"><?= (int)$totalInquiries ?></span></div>
+                </div>
+                <div class="cc-card cc-card-pad" onclick="openDetailModal('reported')" style="cursor:pointer" title="Reported students">
+                    <div class="cc-card-head">
+                        <?= cc_ico('check', 'xl') ?>
+                        <h3>Reported Students</h3>
+                    </div>
+                    <div class="cc-metric-value green"><?= (int)$reportedStudents ?></div>
+                    <div class="cc-kv"><span class="k">Share paid to HO</span><span class="v green">Yes</span></div>
+                </div>
+                <div class="cc-card cc-card-pad" onclick="openDetailModal('pending_report')" style="cursor:pointer" title="Pending reports">
+                    <div class="cc-card-head">
+                        <?= cc_ico('enquiry', 'xl') ?>
+                        <h3>Pending Reports</h3>
+                    </div>
+                    <div class="cc-metric-value orange"><?= (int)$pendingReporting ?></div>
+                    <div class="cc-kv"><span class="k">Share not yet paid</span><span class="v orange">Open</span></div>
+                </div>
+            </div>
+
+            <?php if (!empty($recentSharePayments)): ?>
+            <div class="cc-card" style="margin-bottom:1rem">
+                <div class="cc-card-pad" style="padding-bottom:.35rem">
+                    <div class="cc-card-head" style="margin-bottom:.35rem">
+                        <?= cc_ico('card', 'xl') ?>
+                        <h3>Recent Share Payments</h3>
+                        <a class="cc-link" href="share_payments.php">Show All</a>
+                    </div>
+                </div>
+                <table class="cc-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>ATC</th>
+                            <th>Amount</th>
+                            <th>Mode</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($recentSharePayments as $sp): ?>
+                        <tr>
+                            <td class="muted"><?= !empty($sp['created_at']) ? date('d M Y', strtotime($sp['created_at'])) : '—' ?></td>
+                            <td class="name"><?= htmlspecialchars($sp['atc_name'] ?? '—') ?></td>
+                            <td class="name" style="color:var(--cc-green)">₹ <?= number_format((float)$sp['total_share_amount'], 0) ?></td>
+                            <td><?= htmlspecialchars($sp['payment_mode'] ?? '—') ?></td>
+                            <td>
+                                <?php $st = $sp['status'] ?? ''; ?>
+                                <span class="v <?= $st === 'Completed' ? 'green' : 'orange' ?>" style="font-weight:800"><?= htmlspecialchars($st) ?></span>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+
+            <!-- ═══ OVERVIEW CARDS (existing) ═══ -->
             <div class="stats-grid">
                 <!-- L1: Renamed "Total Users" → "Total Logins" -->
                 <div class="stat-card purple">
@@ -849,10 +1016,11 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </a>
             </div>
 
-            <!-- ═══ REVENUE OVERVIEW ═══ -->
+            <!-- ═══ REVENUE OVERVIEW (HO Share only — not ATC fee earnings) ═══ -->
             <div class="rpt-section">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                Revenue Overview
+                Share Revenue Overview
+                <span style="margin-left:.5rem;font-size:.72rem;font-weight:600;color:#64748b;text-transform:none;letter-spacing:0">Admin income = ATC share payments only</span>
             </div>
             <div class="rev-grid">
                 <div class="rev-card">
@@ -860,9 +1028,9 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                     </div>
                     <div>
-                        <div class="rev-label">Total Revenue</div>
+                        <div class="rev-label">Share Revenue</div>
                         <div class="rev-value">₹ <?= number_format($revenueStats['total_revenue'],0) ?></div>
-                        <div class="rev-sub">Expected from all admissions</div>
+                        <div class="rev-sub">Completed HO share received</div>
                     </div>
                 </div>
                 <div class="rev-card">
@@ -870,9 +1038,9 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
                     </div>
                     <div>
-                        <div class="rev-label">Collected</div>
+                        <div class="rev-label">Share Received</div>
                         <div class="rev-value">₹ <?= number_format($revenueStats['total_collected'],0) ?></div>
-                        <div class="rev-sub"><?= $revenueStats['total_revenue']>0 ? round($revenueStats['total_collected']/$revenueStats['total_revenue']*100,1) : 0 ?>% collection rate</div>
+                        <div class="rev-sub"><?= (int)($revenueStats['atc_paid_count'] ?? 0) ?> ATC(s) · <?= (int)($revenueStats['txn_count'] ?? 0) ?> txn</div>
                     </div>
                 </div>
                 <div class="rev-card">
@@ -880,21 +1048,21 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     </div>
                     <div>
-                        <div class="rev-label">Pending</div>
+                        <div class="rev-label">Pending Share</div>
                         <div class="rev-value">₹ <?= number_format($revenueStats['total_pending'],0) ?></div>
-                        <div class="rev-sub">Outstanding amount</div>
+                        <div class="rev-sub">Share payments awaiting completion</div>
                     </div>
                 </div>
             </div>
 
-            <!-- ═══ DLC REVENUE TABLE ═══ -->
+            <!-- ═══ DLC SHARE TABLE ═══ -->
             <div class="rpt-section">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                Revenue by DLC Office
+                Share Received by DLC Office
             </div>
             <div class="rpt-table-wrap">
                 <table class="rpt-table">
-                    <thead><tr><th>DLC Office</th><th>Location</th><th>ATCs</th><th>Students</th><th>Revenue</th><th>Collected</th><th>Pending</th><th>%</th></tr></thead>
+                    <thead><tr><th>DLC Office</th><th>Location</th><th>ATCs</th><th>Students</th><th>Share Total</th><th>Received</th><th>Pending</th><th>%</th></tr></thead>
                     <tbody>
                     <?php foreach ($dlcRevenue as $dlc):
                         $pct = $dlc['total_revenue']>0 ? round($dlc['collected']/$dlc['total_revenue']*100,1) : 0;
@@ -958,7 +1126,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         </div>
                     </div>
                 </div>
-                <div style="font-size:.75rem;color:#94a3b8;font-weight:600" id="topAtcMeta">Ranked by fees collected</div>
+                <div style="font-size:.75rem;color:#94a3b8;font-weight:600" id="topAtcMeta">Ranked by share paid to HO</div>
             </div>
             <div class="rpt-table-wrap">
                 <table class="rpt-table">
@@ -969,7 +1137,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                             <th>Center Type</th>
                             <th>DLC Office</th>
                             <th>Students</th>
-                            <th>Revenue Collected</th>
+                            <th>Share Paid to HO</th>
                         </tr>
                     </thead>
                     <tbody id="topAtcTbody">
@@ -1005,7 +1173,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             ?>
             <div class="rpt-section">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                Monthly Admissions &amp; Revenue (Last 6 Months)
+                Monthly Admissions &amp; Share Revenue (Last 6 Months)
             </div>
             <div class="rpt-table-wrap" style="padding:1.25rem 1.5rem 1rem">
                 <div class="chart-wrap">
@@ -1015,13 +1183,14 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                     ?>
                     <div class="chart-col">
                         <div class="chart-bar-box">
-                            <div class="chart-bar" style="height:<?= $h ?>px" title="<?= $lbl ?>: ₹<?= number_format($m['revenue'],0) ?>"></div>
+                            <div class="chart-bar" style="height:<?= $h ?>px" title="<?= $lbl ?>: Share ₹<?= number_format($m['revenue'],0) ?>"></div>
                         </div>
                         <div class="chart-mlbl"><?= date('M', strtotime($m['month'].'-01')) ?></div>
                         <div class="chart-msub"><?= $m['admissions'] ?> adm</div>
                     </div>
                     <?php endforeach; ?>
                 </div>
+                <div style="font-size:.72rem;color:#64748b;font-weight:600;margin-top:.75rem">Bar height = HO share received (not ATC student fees)</div>
             </div>
             <?php endif; ?>
 
@@ -1225,7 +1394,7 @@ async function loadTopAtcs() {
 
     const centerType = typeSel.value || '';
     const typeLabel = centerType || 'All Types';
-    if (meta) meta.textContent = `${typeLabel} · ${PERIOD_LABELS[topAtcPeriod] || 'All Time'} · by fees collected`;
+    if (meta) meta.textContent = `${typeLabel} · ${PERIOD_LABELS[topAtcPeriod] || 'All Time'} · by share paid to HO`;
     tbody.style.opacity = '.45';
 
     const fd = new FormData();
