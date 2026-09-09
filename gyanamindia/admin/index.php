@@ -141,6 +141,20 @@ $expiringATCs = [];
 // Keep pendingExam as int for templates
 $pendingExam = (int)$pendingExam;
 
+// Dashboard banners for admin overview (right panel)
+$activeBanners = [];
+try {
+    $activeBanners = $pdo->query("
+        SELECT id, title, image_path, orientation, target_audience, created_at
+        FROM announcements
+        WHERE status = 'Active'
+        ORDER BY created_at DESC
+        LIMIT 8
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $activeBanners = [];
+}
+
 // ── Ops counts: certificates / dispatches / materials ─────────────────────────
 $certifiedStudents   = 0;
 $certPrintPending    = 0;
@@ -564,6 +578,103 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .stat-card.clickable { cursor: pointer; }
     .stat-card.clickable:hover { transform: translateY(-4px) !important; box-shadow: 0 14px 36px rgba(0,0,0,.12) !important; }
 
+    /* Overview: 3×2 stats left + banners right */
+    .admin-overview-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(260px, 1.05fr);
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+        align-items: stretch;
+    }
+    .admin-overview-row .stats-grid.admin-stats-2x3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .75rem;
+        margin-bottom: 0;
+    }
+    .admin-overview-row .stat-card {
+        padding: 1.05rem 1rem;
+        min-height: 0;
+    }
+    .admin-overview-banners {
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .admin-overview-banners .banner-carousel-wrap {
+        flex: 1;
+        margin-bottom: 0;
+        height: 100%;
+        min-height: 220px;
+        display: flex;
+        flex-direction: column;
+    }
+    .admin-overview-banners .carousel-track {
+        flex: 1;
+        height: 100%;
+    }
+    .admin-overview-banners .carousel-slide {
+        height: 100%;
+        min-height: 220px;
+    }
+    .admin-overview-banners .carousel-slide img.slide-media,
+    .admin-overview-banners .carousel-slide video.slide-media {
+        max-height: none;
+        height: 100%;
+        object-fit: cover;
+    }
+    .admin-overview-banners .carousel-slide.vertical-slide,
+    .admin-overview-banners .carousel-slide.vertical-slide video.slide-media {
+        height: 100%;
+        max-height: none;
+    }
+    .admin-banner-empty {
+        flex: 1;
+        min-height: 220px;
+        border-radius: 16px;
+        border: 1.5px dashed #cbd5e1;
+        background: linear-gradient(145deg, #f8fafc 0%, #eef2ff 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .45rem;
+        text-align: center;
+        padding: 1.25rem;
+        color: #64748b;
+        text-decoration: none;
+        transition: border-color .15s, box-shadow .15s, transform .15s;
+    }
+    .admin-banner-empty:hover {
+        border-color: #818cf8;
+        box-shadow: 0 8px 24px rgba(67, 97, 238, .12);
+        transform: translateY(-2px);
+        color: #4338ca;
+    }
+    .admin-banner-empty strong {
+        font-size: .95rem;
+        color: inherit;
+    }
+    .admin-banner-empty span {
+        font-size: .78rem;
+        max-width: 220px;
+        line-height: 1.35;
+    }
+    @media (max-width: 1100px) {
+        .admin-overview-row {
+            grid-template-columns: 1fr;
+        }
+        .admin-overview-banners .banner-carousel-wrap,
+        .admin-banner-empty {
+            min-height: 200px;
+            max-height: 280px;
+        }
+    }
+    @media (max-width: 560px) {
+        .admin-overview-row .stats-grid.admin-stats-2x3 {
+            grid-template-columns: 1fr;
+        }
+    }
+
     /* Birthday Panel */
     .bday-panel { background:#fff; border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.05); margin-bottom:1.5rem; }
     .bday-panel-header { display:flex; align-items:center; justify-content:space-between; padding:1rem 1.5rem; border-bottom:1px solid var(--border); background:var(--surface-2); }
@@ -953,65 +1064,73 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
 
         <div class="page-content cc-dash">
 
-            <!-- ═══ OVERVIEW CARDS (top) ═══ -->
-            <div class="stats-grid">
-                <!-- L1: Renamed "Total Users" → "Total Logins" -->
-                <div class="stat-card purple">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <!-- ═══ OVERVIEW: 3×2 stats + banners ═══ -->
+            <div class="admin-overview-row">
+                <div class="stats-grid admin-stats-2x3">
+                    <div class="stat-card purple">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Total Logins</div>
+                            <div class="stat-value" data-count="<?= $totalUsers ?>">0</div>
+                        </div>
                     </div>
-                    <div class="stat-info">
-                        <div class="stat-label">Total Logins</div>
-                        <div class="stat-value" data-count="<?= $totalUsers ?>">0</div>
+                    <div class="stat-card sky clickable" onclick="openDetailModal('pending_exam')" title="Click to view pending exam students by ATC">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Pending Exam</div>
+                            <div class="stat-value" data-count="<?= $pendingExam ?>">0</div>
+                        </div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">ATC Logins</div>
+                            <div class="stat-value" data-count="<?= $totalATC ?>">0</div>
+                        </div>
+                    </div>
+                    <div class="stat-card blue">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">DLC Logins</div>
+                            <div class="stat-value" data-count="<?= $totalDLC ?>">0</div>
+                        </div>
+                    </div>
+                    <div class="stat-card amber clickable" onclick="openDetailModal('inquiries')" title="Click to view all inquiries">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Inquiries</div>
+                            <div class="stat-value" data-count="<?= $totalInquiries ?>">0</div>
+                        </div>
+                    </div>
+                    <div class="stat-card rose clickable" onclick="openDetailModal('admissions')" title="Click to view all admissions">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Admissions</div>
+                            <div class="stat-value" data-count="<?= $totalAdmissions ?>">0</div>
+                        </div>
                     </div>
                 </div>
-                <div class="stat-card blue">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">DLC Logins</div>
-                        <div class="stat-value" data-count="<?= $totalDLC ?>">0</div>
-                    </div>
-                </div>
-                <!-- L1: Renamed "ATC Centers" → "ATC Logins" -->
-                <div class="stat-card green">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">ATC Logins</div>
-                        <div class="stat-value" data-count="<?= $totalATC ?>">0</div>
-                    </div>
-                </div>
-                <!-- L2: Clickable Inquiries -->
-                <div class="stat-card amber clickable" onclick="openDetailModal('inquiries')" title="Click to view all inquiries">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">Inquiries</div>
-                        <div class="stat-value" data-count="<?= $totalInquiries ?>">0</div>
-                    </div>
-                </div>
-                <!-- L2: Clickable Admissions -->
-                <div class="stat-card rose clickable" onclick="openDetailModal('admissions')" title="Click to view all admissions">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">Admissions</div>
-                        <div class="stat-value" data-count="<?= $totalAdmissions ?>">0</div>
-                    </div>
-                </div>
-                <div class="stat-card sky clickable" onclick="openDetailModal('pending_exam')" title="Click to view pending exam students by ATC">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">Pending Exam</div>
-                        <div class="stat-value" data-count="<?= $pendingExam ?>">0</div>
-                    </div>
+                <div class="admin-overview-banners">
+                    <?php if (!empty($activeBanners)): ?>
+                        <?php $imgPrefix = '../uploads/announcements/'; include __DIR__ . '/../includes/banner_carousel.php'; ?>
+                    <?php else: ?>
+                        <a class="admin-banner-empty" href="announcements.php">
+                            <strong>Dashboard Banners</strong>
+                            <span>Upload banners in Dashboard Banners to show them here.</span>
+                        </a>
+                    <?php endif; ?>
                 </div>
             </div>
 
