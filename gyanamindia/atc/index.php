@@ -224,7 +224,13 @@ try {
 
 $recentInquiries = [];
 try {
-    $stmt = $pdo->prepare("SELECT name, course_interested, created_at FROM inquiries WHERE atc_id = ? ORDER BY created_at DESC LIMIT 5");
+    $stmt = $pdo->prepare("
+        SELECT CONCAT(first_name,' ',COALESCE(last_name,'')) AS name,
+               COALESCE(interested_course, '') AS course_interested,
+               created_at, status
+        FROM inquiries WHERE atc_id = ?
+        ORDER BY created_at DESC LIMIT 6
+    ");
     $stmt->execute([$atcId]);
     $recentInquiries = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
@@ -379,6 +385,124 @@ try {
 } catch (Exception $e) {
 }
 
+// ── ClassChakra dashboard extras ───────────────────────────────────────────
+$todayAdmissions = 0;
+$todayInquiries = 0;
+try {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM admissions WHERE atc_id = ? AND admission_date = CURDATE()");
+    $stmt->execute([$atcId]);
+    $todayAdmissions = (int)$stmt->fetchColumn();
+} catch (Exception $e) {}
+try {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM inquiries WHERE atc_id = ? AND DATE(created_at) = CURDATE()");
+    $stmt->execute([$atcId]);
+    $todayInquiries = (int)$stmt->fetchColumn();
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM telephonic_inquiries WHERE atc_id = ? AND DATE(created_at) = CURDATE()");
+    $stmt->execute([$atcId]);
+    $todayInquiries += (int)$stmt->fetchColumn();
+} catch (Exception $e) {}
+
+$openEnquiries = max(0, ($totalInquiries + $totalTelephonic) - $convertedInquiries);
+$certsTotal = $certsDistributed + $certsPending;
+$certsPct = $certsTotal > 0 ? (int)round(($certsDistributed / $certsTotal) * 100) : 0;
+
+// Fix courses count via ATC fee structure when master courses aren't ATC-scoped
+if ($totalCourses === 0) {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(DISTINCT c.id) AS total,
+                   SUM(CASE WHEN c.status = 'Active' AND (COALESCE(acf.fee_with_material,0)>0 OR COALESCE(acf.fee_without_material,0)>0 OR COALESCE(acf.final_fee,0)>0) THEN 1 ELSE 0 END) AS active
+            FROM courses c
+            INNER JOIN atc_course_fees acf ON acf.course_id = c.id AND acf.atc_id = ?
+        ");
+        $stmt->execute([$atcId]);
+        $r = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $totalCourses = (int)($r['total'] ?? 0);
+        $activeCourses = (int)($r['active'] ?? 0);
+    } catch (Exception $e) {}
+}
+
+$recentPayments = [];
+try {
+    $stmt = $pdo->prepare("
+        SELECT fp.id, fp.amount, fp.payment_mode, fp.payment_date, fp.receipt_no,
+               CONCAT(a.first_name,' ',COALESCE(a.last_name,'')) AS student_name,
+               a.roll_no, a.course
+        FROM fee_payments fp
+        JOIN admissions a ON a.id = fp.admission_id
+        WHERE a.atc_id = ?
+        ORDER BY fp.payment_date DESC, fp.id DESC
+        LIMIT 8
+    ");
+    $stmt->execute([$atcId]);
+    $recentPayments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {}
+
+$recentExamsDash = array_slice($examStudentsConducted ?: $examStudentsAll, 0, 6);
+
+$popularEnquiryCourses = [];
+try {
+    $stmt = $pdo->prepare("
+        SELECT COALESCE(NULLIF(TRIM(interested_course),''),'Unknown') AS cname, COUNT(*) AS cnt
+        FROM inquiries WHERE atc_id = ?
+        GROUP BY cname ORDER BY cnt DESC LIMIT 6
+    ");
+    $stmt->execute([$atcId]);
+    $popularEnquiryCourses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {}
+
+// Prefer richer recent inquiry rows (already loaded above)
+try {
+    if (empty($recentInquiries)) {
+        $stmt = $pdo->prepare("
+            SELECT CONCAT(first_name,' ',COALESCE(last_name,'')) AS name,
+                   COALESCE(interested_course, '') AS course_interested,
+                   created_at, status
+            FROM inquiries WHERE atc_id = ?
+            ORDER BY created_at DESC LIMIT 6
+        ");
+        $stmt->execute([$atcId]);
+        $recentInquiries = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+} catch (Exception $e) {}
+
+// Extend charts to 12 months (fill missing months with 0)
+try {
+    $monthlyLabels = [];
+    $monthlyData = [];
+    $revenueLabels = [];
+    $revenueData = [];
+    $mapAdm = [];
+    $mapRev = [];
+    $stmt = $pdo->prepare("
+        SELECT DATE_FORMAT(admission_date,'%Y-%m') AS sk, COUNT(*) AS cnt
+        FROM admissions WHERE atc_id = ? AND admission_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
+        GROUP BY sk
+    ");
+    $stmt->execute([$atcId]);
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $mapAdm[$r['sk']] = (int)$r['cnt'];
+    }
+    $stmt = $pdo->prepare("
+        SELECT DATE_FORMAT(fp.payment_date,'%Y-%m') AS sk, COALESCE(SUM(fp.amount),0) AS total
+        FROM fee_payments fp JOIN admissions a ON fp.admission_id = a.id
+        WHERE a.atc_id = ? AND fp.payment_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
+        GROUP BY sk
+    ");
+    $stmt->execute([$atcId]);
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $mapRev[$r['sk']] = (float)$r['total'];
+    }
+    for ($i = 11; $i >= 0; $i--) {
+        $sk = date('Y-m', strtotime("-{$i} months"));
+        $label = date('M \'y', strtotime($sk . '-01'));
+        $monthlyLabels[] = $label;
+        $monthlyData[] = $mapAdm[$sk] ?? 0;
+        $revenueLabels[] = $label;
+        $revenueData[] = $mapRev[$sk] ?? 0;
+    }
+} catch (Exception $e) {}
+
 $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInquiries) * 100, 1) : 0;
 ?>
 <!DOCTYPE html>
@@ -393,6 +517,7 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
+    <link rel="stylesheet" href="../assets/css/atc-dash-cc.css">
     <link rel="preload" as="style"
         href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
         onload="this.onload=null;this.rel='stylesheet'">
@@ -1552,784 +1677,9 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
                 </div>
             </header>
 
-            <div class="page-content">
+            <div class="page-content cc-dash">
 
-                <!-- ═══ DASHBOARD BANNERS — Auto-Sliding Carousel ═══ -->
-                <?php $imgPrefix = '../uploads/announcements/';
-                include __DIR__ . '/../includes/banner_carousel.php'; ?>
-
-                <!-- ═══ DASHBOARD KPI STRIP ═══ -->
-                <!--<div class="dash-kpi-strip" style="margin-bottom:1.25rem">-->
-                <!--    <div class="dash-kpi" style="animation-delay:.05s">-->
-                <!--        <div class="dash-kpi-icon" style="background:#eef2ff">-->
-                <!--            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#4361ee" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>-->
-                <!--        </div>-->
-                <!--        <div>-->
-                <!--            <div class="dash-kpi-label">Total Students</div>-->
-                <!--            <div class="dash-kpi-value"><?= $totalStudents ?></div>-->
-                <!--            <div class="dash-kpi-sub"><?= $activeStudents ?> active · <?= $totalStudents - $activeStudents ?> inactive</div>-->
-                <!--        </div>-->
-                <!--    </div>-->
-                <!--    <div class="dash-kpi" style="animation-delay:.1s">-->
-                <!--        <div class="dash-kpi-icon" style="background:#ecfdf5">-->
-                <!--            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>-->
-                <!--        </div>-->
-                <!--        <div>-->
-                <!--            <div class="dash-kpi-label">Total Collected</div>-->
-                <!--            <div class="dash-kpi-value" style="color:#047857">&#8377;<?= number_format($grandTotalCollected, 0) ?></div>-->
-                <!--            <div class="dash-kpi-sub"><?= $collectionPercentage ?>% of total fees</div>-->
-                <!--        </div>-->
-                <!--    </div>-->
-                <!--    <div class="dash-kpi" style="animation-delay:.15s">-->
-                <!--        <div class="dash-kpi-icon" style="background:#fef2f2">-->
-                <!--            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>-->
-                <!--        </div>-->
-                <!--        <div>-->
-                <!--            <div class="dash-kpi-label">Pending Fees</div>-->
-                <!--            <div class="dash-kpi-value" style="color:#be123c">&#8377;<?= number_format($pendingFees, 0) ?></div>-->
-                <!--            <div class="dash-kpi-sub"><?= $activeUnpaid ?> students with balance due</div>-->
-                <!--        </div>-->
-                <!--    </div>-->
-                <!--    <div class="dash-kpi" style="animation-delay:.2s">-->
-                <!--        <div class="dash-kpi-icon" style="background:#fefce8">-->
-                <!--            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ca8a04" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>-->
-                <!--        </div>-->
-                <!--        <div>-->
-                <!--            <div class="dash-kpi-label">Conversion Rate</div>-->
-                <!--            <div class="dash-kpi-value" style="color:#854d0e"><?= $conversionRate ?>%</div>-->
-                <!--            <div class="dash-kpi-sub"><?= $convertedInquiries ?> of <?= $totalInquiries ?> inquiries</div>-->
-                <!--        </div>-->
-                <!--    </div>-->
-                <!--</div>-->
-
-                <!-- ═══ OVERVIEW (existing) ═══ -->
-                <div class="dash-section-label">Overview</div>
-                <div class="stats-grid">
-                    <div class="stat-card amber">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path
-                                    d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Total Inquiries</div>
-                            <div class="stat-value" data-count="<?= $totalInquiries ?>">0</div>
-                        </div>
-                    </div>
-                    <div class="stat-card blue">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path
-                                    d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.19 11.9 19.79 19.79 0 0 1 1.12 3.2 2 2 0 0 1 3.11 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Telephonic Inquiries</div>
-                            <div class="stat-value" data-count="<?= $totalTelephonic ?>">0</div>
-                        </div>
-                    </div>
-                    <div class="stat-card purple">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                                <circle cx="9" cy="7" r="4" />
-                                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Admissions</div>
-                            <div class="stat-value" data-count="<?= $totalAdmissions ?>">0</div>
-                        </div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Converted</div>
-                            <div class="stat-value" data-count="<?= $convertedInquiries ?>">0</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ═══ NOTICE BOARD (Task G — card-style redesign) ═══ -->
-                <?php if (!empty($tickerNotifs)): ?>
-                    <div class="dash-section-label">Notice Board</div>
-                    <div class="nb-grid">
-                        <?php foreach ($tickerNotifs as $i => $tn):
-                            $isUrgent = stripos($tn['title'], 'urgent') !== false
-                                || stripos($tn['message'], 'urgent') !== false
-                                || ($tn['priority'] ?? '') === 'High';
-                            $preview = htmlspecialchars(mb_strimwidth($tn['message'], 0, 120, '…'));
-                            $full = htmlspecialchars($tn['message']);
-                            $date = date('d M Y', strtotime($tn['created_at']));
-                            ?>
-                            <div class="nb-card <?= $isUrgent ? 'nb-urgent' : '' ?>" id="nb2-<?= $i ?>">
-                                <div class="nb-card-top">
-                                    <div class="nb-badge <?= $isUrgent ? 'nb-badge-urgent' : 'nb-badge-regular' ?>">
-                                        <?= $isUrgent ? '🔴 Urgent' : '📢 Notice' ?>
-                                    </div>
-                                    <span class="nb-date"><?= $date ?></span>
-                                </div>
-                                <div class="nb-title"><?= htmlspecialchars($tn['title']) ?></div>
-                                <div class="nb-preview" id="nb-prev-<?= $i ?>"><?= $preview ?></div>
-                                <div class="nb-full" id="nb-full-<?= $i ?>" style="display:none"><?= nl2br($full) ?></div>
-                                <?php if (strlen($tn['message']) > 120): ?>
-                                    <button class="nb-toggle" onclick="toggleNotice(<?= $i ?>)" id="nb-btn-<?= $i ?>">Read more
-                                        ▾</button>
-                                <?php endif; ?>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-
-                <!-- ═══ FEES STATISTICS (existing) ═══ -->
-                <div class="dash-section-label">Fees Statistics</div>
-                <div class="fees-stats-grid">
-                    <div class="fees-card fc-total">
-                        <div class="fees-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <line x1="12" y1="1" x2="12" y2="23" />
-                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                            </svg></div>
-                        <div class="fees-info">
-                            <div class="fees-label">Total Fees</div>
-                            <div class="fees-value">₹ <?= number_format($totalFees, 2) ?></div>
-                            <div class="fees-subtitle">Expected revenue</div>
-                        </div>
-                    </div>
-                    <div class="fees-card fc-col">
-                        <div class="fees-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <polyline points="20 6 9 17 4 12" />
-                                <line x1="12" y1="1" x2="12" y2="23" />
-                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                            </svg></div>
-                        <div class="fees-info">
-                            <div class="fees-label">Fees Collected</div>
-                            <div class="fees-value">₹ <?= number_format($paidFees, 2) ?></div>
-                            <div class="fees-subtitle"><span class="collection-badge"><?= $collectionPercentage ?>%
-                                    collected</span></div>
-                        </div>
-                    </div>
-                    <div class="fees-card fc-pend">
-                        <div class="fees-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10" />
-                                <polyline points="12 6 12 12 16 14" />
-                            </svg></div>
-                        <div class="fees-info">
-                            <div class="fees-label">Pending Fees</div>
-                            <div class="fees-value">₹ <?= number_format($pendingFees, 2) ?></div>
-                            <div class="fees-subtitle">Outstanding amount</div>
-                        </div>
-                    </div>
-                    <div class="fees-card fc-prog">
-                        <div class="fees-info" style="width:100%">
-                            <div class="fees-label">Collection Progress</div>
-                            <div class="progress-bar-container">
-                                <div class="progress-bar" style="width:<?= $collectionPercentage ?>%">
-                                    <span class="progress-text"><?= $collectionPercentage ?>%</span>
-                                </div>
-                            </div>
-                            <div class="progress-details">₹<?= number_format($paidFees, 0) ?> of
-                                ₹<?= number_format($totalFees, 0) ?></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ═══ COLLECTIONS (Task F — filter + clickable) ═══ -->
-                <div class="dash-section-label">Collections</div>
-                <div class="stats-grid">
-                    <!-- Total Collections with filter -->
-                    <div class="stat-card green" id="totalCollCard">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <line x1="12" y1="1" x2="12" y2="23" />
-                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                            </svg>
-                        </div>
-                        <div class="stat-info" style="width:100%">
-                            <div
-                                style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem">
-                                <div class="stat-label">Total Collections</div>
-                                <select id="collFilter" onchange="applyCollFilter()"
-                                    style="font-size:.68rem;font-weight:700;border:1px solid rgba(255,255,255,.3);border-radius:6px;background:rgba(255,255,255,.15);color:inherit;padding:.15rem .35rem;cursor:pointer;outline:none">
-                                    <option value="all">All Time</option>
-                                    <option value="month">This Month</option>
-                                    <option value="custom">Custom</option>
-                                </select>
-                            </div>
-                            <div class="stat-value" id="totalCollValue">₹<?= number_format($grandTotalCollected, 0) ?>
-                            </div>
-                            <div id="collCustomRange"
-                                style="display:none;margin-top:.4rem;display:none;gap:.3rem;flex-wrap:wrap">
-                                <input type="date" id="collFrom"
-                                    style="font-size:.68rem;border:1px solid rgba(255,255,255,.3);border-radius:6px;background:rgba(255,255,255,.15);color:inherit;padding:.15rem .35rem;outline:none"
-                                    onchange="applyCollFilter()">
-                                <span style="font-size:.68rem;opacity:.8">to</span>
-                                <input type="date" id="collTo"
-                                    style="font-size:.68rem;border:1px solid rgba(255,255,255,.3);border-radius:6px;background:rgba(255,255,255,.15);color:inherit;padding:.15rem .35rem;outline:none"
-                                    onchange="applyCollFilter()">
-                            </div>
-                            <div class="stat-sub" style="margin-top:.4rem">
-                                <div class="stat-sub-item" id="collSubLabel"><span class="dot dot-gray"></span>All time
-                                    via receipts</div>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Today's Collections — clickable + date picker -->
-                    <div class="stat-card blue clickable" id="todayCollCard" onclick="openTransModal()"
-                        title="Click to view transactions">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-                                <line x1="1" y1="10" x2="23" y2="10" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div
-                                style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem">
-                                <div class="stat-label">Today's Collections</div>
-                                <input type="date" id="todayDatePicker" value="<?= date('Y-m-d') ?>"
-                                    style="font-size:.68rem;font-weight:700;border:1px solid rgba(255,255,255,.3);border-radius:6px;background:rgba(255,255,255,.15);color:inherit;padding:.15rem .35rem;outline:none"
-                                    onchange="applyTodayFilter(event)">
-                            </div>
-                            <div class="stat-value" id="todayCollValue">₹<?= number_format($todayCash + $todayOnline, 0) ?>
-                            </div>
-                            <div class="stat-sub">
-                                <div class="stat-sub-item"><span class="dot dot-green"></span>Cash
-                                    ₹<?= number_format($todayCash, 0) ?></div>
-                                <div class="stat-sub-item"><span class="dot dot-blue"></span>Online
-                                    ₹<?= number_format($todayOnline, 0) ?></div>
-                            </div>
-                            <div style="font-size:.7rem;margin-top:.4rem;opacity:.8">👆 Click card to view transactions
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ═══ ACADEMIC OVERVIEW (new) ═══ -->
-                <div class="dash-section-label">Academic Overview</div>
-                <div class="stats-grid-6">
-                    <div class="stat-card blue">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Courses</div>
-                            <div class="stat-value"><?= $totalCourses ?></div>
-                            <div class="stat-sub">
-                                <div class="stat-sub-item"><span class="dot dot-green"></span><?= $activeCourses ?>
-                                    Active</div>
-                                <div class="stat-sub-item"><span
-                                        class="dot dot-gray"></span><?= $totalCourses - $activeCourses ?> Inactive</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="stat-card indigo">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="8" r="6" />
-                                <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Certificates</div>
-                            <div class="stat-value"><?= $certsDistributed + $certsPending ?></div>
-                            <div class="stat-sub">
-                                <div class="stat-sub-item"><span class="dot dot-green"></span><?= $certsDistributed ?>
-                                    Issued</div>
-                                <div class="stat-sub-item"><span class="dot dot-gray"></span><?= $certsPending ?>
-                                    Pending</div>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Exam Cards (D) -->
-                    <div class="stat-card amber clickable" onclick="openExamModal('all')"
-                        title="Click to view all exam students">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                                <line x1="16" y1="13" x2="8" y2="13" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Total Exams</div>
-                            <div class="stat-value" data-count="<?= $totalExams ?>"><?= $totalExams ?></div>
-                            <div class="stat-sub">
-                                <div class="stat-sub-item"><span class="dot dot-gray"></span>All scheduled</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="stat-card orange clickable" onclick="openExamModal('pending')"
-                        title="Click to view students with pending exams">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10" />
-                                <polyline points="12 6 12 12 16 14" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Pending Exams</div>
-                            <div class="stat-value"><?= $pendingExams ?></div>
-                            <div class="stat-sub">
-                                <div class="stat-sub-item"><span class="dot dot-red"></span>Upcoming / today</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="stat-card green clickable" onclick="openExamModal('conducted')"
-                        title="Click to view students with conducted exams">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Conducted Exams</div>
-                            <div class="stat-value"><?= $conductedExams ?></div>
-                            <div class="stat-sub">
-                                <div class="stat-sub-item"><span class="dot dot-green"></span>Completed</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="stat-card teal">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                <circle cx="9" cy="7" r="4" />
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Total Students</div>
-                            <div class="stat-value"><?= $totalStudents ?></div>
-                            <div class="stat-sub">
-                                <div class="stat-sub-item"><span class="dot dot-green"></span><?= $activeStudents ?>
-                                    Active</div>
-                                <div class="stat-sub-item"><span
-                                        class="dot dot-gray"></span><?= $totalStudents - $activeStudents ?> Inactive
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Active — Fees Clear</div>
-                            <div class="stat-value"><?= $activePaid ?></div>
-                            <div class="stat-sub">
-                                <div class="stat-sub-item"><span class="dot dot-green"></span>No pending balance</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="stat-card red">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10" />
-                                <line x1="12" y1="8" x2="12" y2="12" />
-                                <line x1="12" y1="16" x2="12.01" y2="16" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Active — Fees Due</div>
-                            <div class="stat-value"><?= $activeUnpaid ?></div>
-                            <div class="stat-sub">
-                                <div class="stat-sub-item"><span class="dot dot-red"></span>Balance pending</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ═══ GYANAM HEAD OFFICE (Task E) ═══ -->
-                <div class="dash-section-label" style="display:flex;align-items:center;gap:.5rem">
-                    <span
-                        style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#4361ee,#8b5cf6);color:#fff;font-size:.7rem;font-weight:900;flex-shrink:0">HO</span>
-                    Gyanam Head Office
-                </div>
-                <div class="stats-grid">
-                    <div class="stat-card green clickable" onclick="openHOModal('reported')"
-                        title="View reported students">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Reported Students</div>
-                            <div class="stat-value"><?= $reportedCount ?></div>
-                            <div class="stat-sub">
-                                <div class="stat-sub-item"><span class="dot dot-green"></span>Share paid to HO</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="stat-card amber clickable" onclick="openHOModal('pending')"
-                        title="View pending report students">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10" />
-                                <polyline points="12 6 12 12 16 14" />
-                            </svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Pending Reports</div>
-                            <div class="stat-value"><?= $pendingReportCount ?></div>
-                            <div class="stat-sub">
-                                <div class="stat-sub-item"><span class="dot dot-red"></span>Share not yet reported</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-
-
-                <!-- ═══ BIRTHDAYS ═══ -->
-                <?php if (!empty($birthdays)): ?>
-                    <div class="dash-section-label">🎂 Student Birthdays Today</div>
-                    <div class="atc-bday-panel">
-                        <div class="atc-bday-header">
-                            <div class="atc-bday-title">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="2" style="width:18px;height:18px;color:#f97316">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                    <line x1="16" y1="2" x2="16" y2="6" />
-                                    <line x1="8" y1="2" x2="8" y2="6" />
-                                    <line x1="3" y1="10" x2="21" y2="10" />
-                                </svg>
-                                🎂 Today's Student Birthdays
-                            </div>
-                            <span class="atc-bday-count"><?= count($birthdays) ?>
-                                birthday<?= count($birthdays) !== 1 ? 's' : '' ?> today</span>
-                        </div>
-                        <div class="atc-bday-body">
-                            <?php foreach ($birthdays as $b): ?>
-                                <div class="atc-bday-row">
-                                    <div class="atc-bday-avatar"><?= mb_strtoupper(mb_substr(trim($b['name']), 0, 1)) ?></div>
-                                    <div style="flex:1;min-width:0">
-                                        <div class="atc-bday-name"><?= htmlspecialchars(trim($b['name'])) ?></div>
-                                        <div class="atc-bday-meta">📚 <?= htmlspecialchars($b['course'] ?? '') ?> &middot;
-                                            Birthday Today 🎉</div>
-                                    </div>
-                                    <?php if (!empty($b['mobile'])): ?>
-                                        <button
-                                            onclick="sendAtcBdayWish('<?= addslashes(htmlspecialchars(trim($b['name']))) ?>', '<?= htmlspecialchars($b['mobile']) ?>')"
-                                            style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .85rem;border-radius:999px;border:none;background:#25d366;color:#fff;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;transition:opacity .15s"
-                                            onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-                                            <svg viewBox="0 0 24 24" fill="white" style="width:13px;height:13px">
-                                                <path
-                                                    d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.67-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.076 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421-7.403h-.004c-1.425 0-2.835.356-4.06 1.031l-.291.169-3.015-.787.804 2.93-.189.301A7.002 7.002 0 003.02 9.414c0 3.866 3.113 7.012 6.938 7.012 1.893 0 3.672-.652 5.093-1.849 1.42-1.198 2.33-2.926 2.33-4.856 0-3.866-3.113-7.012-6.938-7.012m6.938 13.6H4.059A8.968 8.968 0 000 11.5C0 5.477 5.507 0.5 12 0.5s12 4.977 12 11-5.507 11-12 11z" />
-                                            </svg>
-                                            Send Wish
-                                        </button>
-                                    <?php else: ?>
-                                        <span style="font-size:1.25rem;flex-shrink:0">🎉</span>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-                <!-- ═══ ACTIVITY WIDGETS ═══ -->
-                <div class="dash-section-label">Activity</div>
-                <div class="dash-cols">
-                    <div class="widget-card">
-                        <div class="widget-title">Recent Inquiries</div>
-                        <?php if (empty($recentInquiries)): ?>
-                            <p class="no-data">No recent inquiries.</p>
-                        <?php else: ?>
-                            <table class="mini-table">
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Course</th>
-                                        <th>Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($recentInquiries as $inq): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($inq['name']) ?></td>
-                                            <td><?= htmlspecialchars($inq['course_interested'] ?? '—') ?></td>
-                                            <td><?= date('d M', strtotime($inq['created_at'])) ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        <?php endif; ?>
-                    </div>
-                    <div class="widget-card">
-                        <div class="widget-title">Popular Courses</div>
-                        <?php if (empty($popularCourses)): ?>
-                            <p class="no-data">No admissions yet.</p>
-                        <?php else: ?>
-                            <table class="mini-table">
-                                <thead>
-                                    <tr>
-                                        <th>Course</th>
-                                        <th>Students</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($popularCourses as $pc): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($pc['cname']) ?></td>
-                                            <td><strong><?= (int) $pc['cnt'] ?></strong></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <!-- ═══ ANALYTICS (charts) ═══ -->
-                <div class="dash-section-label">Analytics</div>
-                <div class="dash-cols">
-                    <div class="widget-card">
-                        <div class="widget-title">Monthly Admissions (Last 6 Months)</div>
-                        <canvas id="admissionsChart" height="240"></canvas>
-                    </div>
-                    <div class="widget-card">
-                        <div class="widget-title">Revenue (Last 6 Months)</div>
-                        <canvas id="revenueChart" height="240"></canvas>
-                    </div>
-                </div>
-
-                <!-- ═══ INSIGHTS WIDGETS ═══ -->
-                <div class="dash-section-label">Insights</div>
-                <div class="dash-widget-grid">
-                    <!-- Recent Enrollments -->
-                    <div class="dash-widget" style="animation-delay:.1s">
-                        <div class="dash-widget-head">
-                            <div class="dash-widget-title">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#4361ee"
-                                    stroke-width="2">
-                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                                    <circle cx="9" cy="7" r="4" />
-                                    <path d="M22 11v2M19 8v8" />
-                                </svg>
-                                Recent Enrollments
-                            </div>
-                            <span class="dash-widget-badge"
-                                style="background:#eef2ff;color:#4361ee"><?= count($recentEnrollments) ?></span>
-                        </div>
-                        <div class="dash-widget-body">
-                            <?php if (empty($recentEnrollments)): ?>
-                                <div class="dash-widget-empty">No enrollments yet</div>
-                            <?php else: ?>
-                                <?php foreach ($recentEnrollments as $re):
-                                    $reInit = strtoupper(substr(trim($re['name']), 0, 1));
-                                    ?>
-                                    <div class="dash-widget-row">
-                                        <div class="dash-widget-avatar">
-                                            <?php if (!empty($re['photo'])): ?>
-                                                <img src="../<?= htmlspecialchars($re['photo']) ?>"
-                                                    alt="<?= htmlspecialchars($reInit) ?>"
-                                                    onerror="this.style.display='none';this.parentElement.textContent='<?= $reInit ?>'">
-                                            <?php else: ?>
-                                                <?= $reInit ?>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div style="min-width:0;flex:1">
-                                            <div class="dash-widget-name"><?= htmlspecialchars(trim($re['name'])) ?></div>
-                                            <div class="dash-widget-meta"><?= htmlspecialchars($re['course']) ?> ·
-                                                <?= htmlspecialchars($re['roll_no']) ?></div>
-                                        </div>
-                                        <div class="dash-widget-right">
-                                            <div class="dash-widget-meta"><?= date('d M', strtotime($re['admission_date'])) ?>
-                                            </div>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </div>
-                        <div class="dash-widget-footer">
-                            <a href="students.php" class="dash-widget-link">View All Students →</a>
-                        </div>
-                    </div>
-
-                    <!-- Pending Approvals -->
-                    <div class="dash-widget" style="animation-delay:.2s">
-                        <div class="dash-widget-head">
-                            <div class="dash-widget-title">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#f59e0b"
-                                    stroke-width="2">
-                                    <circle cx="12" cy="12" r="10" />
-                                    <polyline points="12 6 12 12 16 14" />
-                                </svg>
-                                Pending Approvals
-                            </div>
-                            <span class="dash-widget-badge"
-                                style="background:#fef3c7;color:#92400e"><?= $pendingApprovalCount ?></span>
-                        </div>
-                        <div class="dash-widget-body">
-                            <?php if (empty($pendingApprovals)): ?>
-                                <div class="dash-widget-empty">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#d1d5db"
-                                        stroke-width="1.5" style="width:32px;height:32px;margin-bottom:.5rem">
-                                        <polyline points="20 6 9 17 4 12" />
-                                    </svg><br>
-                                    All caught up!
-                                </div>
-                            <?php else: ?>
-                                <?php foreach ($pendingApprovals as $pa): ?>
-                                    <div class="dash-widget-row">
-                                        <div class="dash-widget-avatar"
-                                            style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:50%;width:36px;height:36px;font-size:.75rem">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                                stroke="#fff" stroke-width="2" style="width:16px;height:16px">
-                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                            </svg>
-                                        </div>
-                                        <div style="min-width:0;flex:1">
-                                            <div class="dash-widget-name"><?= htmlspecialchars($pa['student_name']) ?></div>
-                                            <div class="dash-widget-meta">Change: <?= htmlspecialchars($pa['field_label']) ?> →
-                                                <?= htmlspecialchars(mb_strimwidth($pa['new_value'], 0, 20, '…')) ?></div>
-                                        </div>
-                                        <div class="dash-widget-right">
-                                            <div class="dash-widget-meta"><?= date('d M', strtotime($pa['requested_at'])) ?>
-                                            </div>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </div>
-                        <div class="dash-widget-footer">
-                            <a href="students.php" class="dash-widget-link">Manage Requests →</a>
-                        </div>
-                    </div>
-
-                    <!-- Upcoming Due Fees -->
-                    <div class="dash-widget" style="animation-delay:.3s">
-                        <div class="dash-widget-head">
-                            <div class="dash-widget-title">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ef4444"
-                                    stroke-width="2">
-                                    <line x1="12" y1="1" x2="12" y2="23" />
-                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                                </svg>
-                                Upcoming Due Fees
-                            </div>
-                            <span class="dash-widget-badge"
-                                style="background:#fee2e2;color:#991b1b"><?= count($upcomingDueFees) ?></span>
-                        </div>
-                        <div class="dash-widget-body">
-                            <?php if (empty($upcomingDueFees)): ?>
-                                <div class="dash-widget-empty">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#d1d5db"
-                                        stroke-width="1.5" style="width:32px;height:32px;margin-bottom:.5rem">
-                                        <polyline points="20 6 9 17 4 12" />
-                                    </svg><br>
-                                    All fees cleared!
-                                </div>
-                            <?php else: ?>
-                                <?php foreach ($upcomingDueFees as $uf):
-                                    $ufInit = strtoupper(substr(trim($uf['name']), 0, 1));
-                                    $ufPct = floatval($uf['net_payable']) > 0 ? min(100, round((floatval($uf['fees_paid']) / floatval($uf['net_payable'])) * 100)) : 0;
-                                    ?>
-                                    <div class="dash-widget-row"
-                                        onclick="window.location='collect_fees.php?id=<?= (int) $uf['id'] ?>'"
-                                        style="cursor:pointer">
-                                        <div class="dash-widget-avatar"
-                                            style="background:linear-gradient(135deg,#ef4444,#dc2626)">
-                                            <?php if (!empty($uf['photo'])): ?>
-                                                <img src="../<?= htmlspecialchars($uf['photo']) ?>"
-                                                    alt="<?= htmlspecialchars($ufInit) ?>"
-                                                    onerror="this.style.display='none';this.parentElement.textContent='<?= $ufInit ?>'">
-                                            <?php else: ?>
-                                                <?= $ufInit ?>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div style="min-width:0;flex:1">
-                                            <div class="dash-widget-name"><?= htmlspecialchars(trim($uf['name'])) ?></div>
-                                            <div class="dash-widget-meta"><?= htmlspecialchars($uf['course']) ?></div>
-                                            <div
-                                                style="margin-top:.35rem;height:4px;background:#e5e7eb;border-radius:999px;overflow:hidden;width:100%;max-width:120px">
-                                                <div
-                                                    style="height:100%;border-radius:999px;background:<?= $ufPct > 50 ? 'linear-gradient(90deg,#f59e0b,#d97706)' : 'linear-gradient(90deg,#ef4444,#dc2626)' ?>;width:<?= $ufPct ?>%">
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="dash-widget-right">
-                                            <div class="dash-widget-amount" style="color:#be123c">
-                                                ₹<?= number_format(floatval($uf['fees_pending']), 0) ?></div>
-                                            <div class="dash-widget-meta">pending</div>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </div>
-                        <div class="dash-widget-footer">
-                            <a href="fees.php" class="dash-widget-link">View All Fees →</a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ═══ CALENDAR + QUICK ACTIONS ═══ -->
-                <div class="dash-section-label">Calendar &amp; Quick Actions</div>
-                <div class="dash-cols">
-                    <div class="widget-card">
-                        <div class="widget-title"><?= date('F Y') ?></div>
-                        <div class="cal-grid" id="miniCal"></div>
-                    </div>
-                    <div class="widget-card">
-                        <div class="widget-title">Quick Actions</div>
-                        <div class="actions-grid" style="grid-template-columns: repeat(3, 1fr); gap: .75rem;">
-                            <?php
-                            $qa = [
-                                ['inquiries.php', 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z', 'New Inquiry'],
-                                ['new_admission.php', 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6', 'New Admission'],
-                                ['fees.php', 'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6', 'Collect Fees'],
-                                ['students.php', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75', 'Students'],
-                                ['notifications.php', 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0', 'Notifications'],
-                                ['pay_share.php', 'M1 4h22v16H1zM1 10h22', 'Pay Share'],
-                            ];
-                            foreach ($qa as [$href, $path, $label]):
-                                ?>
-                                <a href="<?= $href ?>" class="action-card" style="padding:1.1rem .75rem;gap:.5rem">
-                                    <div class="action-icon" style="width:42px;height:42px">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2">
-                                            <path d="<?= $path ?>" />
-                                        </svg>
-                                    </div>
-                                    <h4 style="font-size:.78rem"><?= $label ?></h4>
-                                </a>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                </div>
+                <?php include __DIR__ . '/_dash_cc_body.php'; ?>
 
             </div><!-- /page-content -->
         </main>
@@ -2410,20 +1760,20 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
             if (!el) return;
             const ctx = el.getContext('2d');
             const grad = ctx.createLinearGradient(0, 0, 0, 280);
-            grad.addColorStop(0, 'rgba(99, 102, 241, 0.85)');
-            grad.addColorStop(1, 'rgba(139, 92, 246, 0.55)');
+            grad.addColorStop(0, 'rgba(37, 99, 235, 0.9)');
+            grad.addColorStop(1, 'rgba(56, 189, 248, 0.55)');
             new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: <?= json_encode($monthlyLabels ?: ['No data']) ?>,
                     datasets: [{
                         label: 'Admissions', data: <?= json_encode($monthlyData ?: [0]) ?>,
-                        backgroundColor: grad, hoverBackgroundColor: 'rgba(99,102,241,1)',
+                        backgroundColor: grad, hoverBackgroundColor: 'rgba(37,99,235,1)',
                         borderRadius: 10, borderSkipped: false, maxBarThickness: 48
                     }]
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: true,
+                    responsive: true, maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -2446,21 +1796,21 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
             if (!el) return;
             const ctx = el.getContext('2d');
             const grad = ctx.createLinearGradient(0, 0, 0, 280);
-            grad.addColorStop(0, 'rgba(16, 185, 129, 0.25)');
-            grad.addColorStop(1, 'rgba(16, 185, 129, 0.02)');
+            grad.addColorStop(0, 'rgba(37, 99, 235, 0.28)');
+            grad.addColorStop(1, 'rgba(37, 99, 235, 0.02)');
             new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: <?= json_encode($revenueLabels ?: ['No data']) ?>,
                     datasets: [{
                         label: 'Revenue (₹)', data: <?= json_encode($revenueData ?: [0]) ?>,
-                        borderColor: '#10b981', backgroundColor: grad, borderWidth: 3,
-                        pointBackgroundColor: '#fff', pointBorderColor: '#10b981', pointBorderWidth: 2.5,
+                        borderColor: '#2563eb', backgroundColor: grad, borderWidth: 3,
+                        pointBackgroundColor: '#fff', pointBorderColor: '#2563eb', pointBorderWidth: 2.5,
                         pointRadius: 5, pointHoverRadius: 8, fill: true, tension: 0.4
                     }]
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: true,
+                    responsive: true, maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -2479,6 +1829,8 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
         });
 
         (function () {
+            const cal = document.getElementById('miniCal');
+            if (!cal) return;
             const now = new Date(), y = now.getFullYear(), m = now.getMonth(), t = now.getDate();
             const fd = new Date(y, m, 1).getDay(), dim = new Date(y, m + 1, 0).getDate();
             const days = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -2486,7 +1838,7 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
             days.forEach(d => h += `<div class="cal-day-name">${d}</div>`);
             for (let i = 0; i < fd; i++) h += '<div class="cal-day empty"></div>';
             for (let d = 1; d <= dim; d++) h += `<div class="cal-day${d === t ? ' today' : ''}">${d}</div>`;
-            document.getElementById('miniCal').innerHTML = h;
+            cal.innerHTML = h;
         })();
 
         // ── Exam Modal (Task D) ──────────────────────────────────────────────────────
@@ -2605,7 +1957,7 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
                 const fmt = new Intl.NumberFormat('en-IN');
                 document.getElementById('totalCollValue').textContent = '₹' + fmt.format(Math.round(data.total));
                 const labels = { all: 'All time via receipts', month: 'This month only', custom: `${from} → ${to}` };
-                lbl.innerHTML = `<span class="dot dot-gray"></span>${labels[mode]}`;
+                if (lbl) lbl.textContent = labels[mode];
             });
         }
 
