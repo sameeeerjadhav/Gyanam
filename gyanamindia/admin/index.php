@@ -144,14 +144,8 @@ $pendingExam = (int)$pendingExam;
 // Dashboard banners for admin overview (All / Admin / ATC / DLC — HO sees active banners)
 $activeBanners = [];
 try {
-    $activeBanners = $pdo->query("
-        SELECT id, title, image_path, orientation, target_audience, created_at
-        FROM announcements
-        WHERE status = 'Active'
-          AND target_audience IN ('All', 'Admin', 'ATC', 'DLC')
-        ORDER BY created_at DESC
-        LIMIT 8
-    ")->fetchAll(PDO::FETCH_ASSOC);
+    ensureAnnouncementAtcVisibilitySchema($pdo);
+    $activeBanners = getActiveAnnouncements($pdo, 'Admin', 8);
 } catch (Exception $e) {
     $activeBanners = [];
 }

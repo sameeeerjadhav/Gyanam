@@ -45,14 +45,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'upload') {
         $title          = trim(sanitize($_POST['title'] ?? ''));
-        $targetAudience = sanitize($_POST['target_audience'] ?? 'All');
-        $status         = sanitize($_POST['status'] ?? 'Active');
-        $orientation    = sanitize($_POST['orientation'] ?? 'horizontal');
+        $targetAudience = normalizeAnnouncementAudience($_POST['target_audience'] ?? 'All');
+        $status         = in_array(($_POST['status'] ?? 'Active'), ['Active', 'Inactive'], true) ? $_POST['status'] : 'Active';
+        $orientation    = in_array(($_POST['orientation'] ?? 'horizontal'), ['horizontal', 'vertical', 'auto'], true)
+            ? $_POST['orientation'] : 'horizontal';
         $visibilityScope = strtolower(trim((string)($_POST['visibility_scope'] ?? 'all'))) === 'specific' ? 'specific' : 'all';
         $selectedAtcIds = $parseAtcIds();
-        if (!in_array($targetAudience, ['All', 'ATC', 'DLC', 'Admin'], true)) {
-            $targetAudience = 'All';
-        }
         if ($targetAudience === 'DLC' || $targetAudience === 'Admin') {
             $visibilityScope = 'all';
             $selectedAtcIds = [];
@@ -105,13 +103,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $error = 'Video must be under 15 MB.';
                     }
                     if (!$error) {
-                        $stmt = $pdo->prepare("INSERT INTO announcements (title, image_path, target_audience, status, orientation, visibility_scope) VALUES (?, ?, ?, ?, ?, ?)");
-                        if ($stmt->execute([$title, $finalName, $targetAudience, $status, $orientation, $visibilityScope])) {
-                            $newId = (int)$pdo->lastInsertId();
-                            saveAnnouncementAtcVisibility($pdo, $newId, $visibilityScope, $selectedAtcIds, $targetAudience);
-                            $message = 'Banner uploaded successfully!';
-                        } else {
-                            $error = 'Database error while saving banner info.';
+                        try {
+                            ensureAnnouncementAtcVisibilitySchema($pdo);
+                            $stmt = $pdo->prepare("INSERT INTO announcements (title, image_path, target_audience, status, orientation, visibility_scope) VALUES (?, ?, ?, ?, ?, ?)");
+                            if ($stmt->execute([$title, $finalName, $targetAudience, $status, $orientation, $visibilityScope])) {
+                                $newId = (int)$pdo->lastInsertId();
+                                saveAnnouncementAtcVisibility($pdo, $newId, $visibilityScope, $selectedAtcIds, $targetAudience);
+                                $message = 'Banner uploaded successfully!';
+                            } else {
+                                $error = 'Database error while saving banner info.';
+                            }
+                        } catch (Exception $e) {
+                            error_log('[BannerUpload] ' . $e->getMessage());
+                            $error = 'Could not save banner. Please try again. If this persists, contact support.';
+                            if (is_file($uploadDir . $finalName)) {
+                                @unlink($uploadDir . $finalName);
+                            }
                         }
                     }
                 } else {
@@ -121,12 +128,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'toggle_status') {
         $id = (int)($_POST['banner_id'] ?? 0);
-        $newStatus = sanitize($_POST['new_status'] ?? 'Active');
-        if (in_array($newStatus, ['Active', 'Inactive'])) {
-            $stmt = $pdo->prepare("UPDATE announcements SET status=? WHERE id=?");
-            if ($stmt->execute([$newStatus, $id])) {
-                $message = 'Banner status updated.';
-            }
+        $newStatus = ($_POST['new_status'] ?? 'Active') === 'Inactive' ? 'Inactive' : 'Active';
+        $stmt = $pdo->prepare("UPDATE announcements SET status=? WHERE id=?");
+        if ($stmt->execute([$newStatus, $id])) {
+            $message = 'Banner status updated.';
         }
     } elseif ($action === 'delete') {
         $id = (int)($_POST['banner_id'] ?? 0);
@@ -142,13 +147,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'edit') {
         $id             = (int)($_POST['banner_id'] ?? 0);
         $newTitle       = trim(sanitize($_POST['title'] ?? ''));
-        $newAudience    = sanitize($_POST['target_audience'] ?? 'All');
-        $newStatus      = sanitize($_POST['status'] ?? 'Active');
+        $newAudience    = normalizeAnnouncementAudience($_POST['target_audience'] ?? 'All');
+        $newStatus      = in_array(($_POST['status'] ?? 'Active'), ['Active', 'Inactive'], true) ? $_POST['status'] : 'Active';
         $visibilityScope = strtolower(trim((string)($_POST['visibility_scope'] ?? $_POST['edit_visibility_scope'] ?? 'all'))) === 'specific' ? 'specific' : 'all';
         $selectedAtcIds = $parseAtcIds();
-        if (!in_array($newAudience, ['All', 'ATC', 'DLC', 'Admin'], true)) {
-            $newAudience = 'All';
-        }
         if ($newAudience === 'DLC' || $newAudience === 'Admin') {
             $visibilityScope = 'all';
             $selectedAtcIds = [];
@@ -194,15 +196,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             if (!$error) {
-                if ($newImagePath) {
-                    $stmt = $pdo->prepare("UPDATE announcements SET title=?, target_audience=?, status=?, image_path=?, orientation=?, visibility_scope=? WHERE id=?");
-                    $stmt->execute([$newTitle, $newAudience, $newStatus, $newImagePath, $newOrientation ?: 'horizontal', $visibilityScope, $id]);
-                } else {
-                    $stmt = $pdo->prepare("UPDATE announcements SET title=?, target_audience=?, status=?, orientation=?, visibility_scope=? WHERE id=?");
-                    $stmt->execute([$newTitle, $newAudience, $newStatus, $newOrientation ?: 'horizontal', $visibilityScope, $id]);
+                try {
+                    ensureAnnouncementAtcVisibilitySchema($pdo);
+                    if (in_array($newOrientation, ['horizontal', 'vertical'], true)) {
+                        $orientVal = $newOrientation;
+                    } else {
+                        $curOrient = $pdo->prepare('SELECT orientation FROM announcements WHERE id=?');
+                        $curOrient->execute([$id]);
+                        $existingOrient = (string)$curOrient->fetchColumn();
+                        $orientVal = in_array($existingOrient, ['horizontal', 'vertical'], true) ? $existingOrient : 'horizontal';
+                    }
+                    if ($newImagePath) {
+                        $stmt = $pdo->prepare("UPDATE announcements SET title=?, target_audience=?, status=?, image_path=?, orientation=?, visibility_scope=? WHERE id=?");
+                        $stmt->execute([$newTitle, $newAudience, $newStatus, $newImagePath, $orientVal, $visibilityScope, $id]);
+                    } else {
+                        $stmt = $pdo->prepare("UPDATE announcements SET title=?, target_audience=?, status=?, orientation=?, visibility_scope=? WHERE id=?");
+                        $stmt->execute([$newTitle, $newAudience, $newStatus, $orientVal, $visibilityScope, $id]);
+                    }
+                    saveAnnouncementAtcVisibility($pdo, $id, $visibilityScope, $selectedAtcIds, $newAudience);
+                    $message = 'Banner updated successfully!';
+                } catch (Exception $e) {
+                    error_log('[BannerEdit] ' . $e->getMessage());
+                    $error = 'Could not update banner. Please try again.';
                 }
-                saveAnnouncementAtcVisibility($pdo, $id, $visibilityScope, $selectedAtcIds, $newAudience);
-                $message = 'Banner updated successfully!';
             }
         }
     }
@@ -220,18 +236,20 @@ unset($bRow);
 // Count active slides per audience
 $activeAtc = 0; $activeDlc = 0; $activeAdmin = 0;
 foreach ($banners as $b) {
-    if ($b['status'] === 'Active') {
-        if ($b['target_audience'] === 'All') {
-            $activeAtc++; $activeDlc++; $activeAdmin++;
-        } elseif ($b['target_audience'] === 'ATC') {
-            $activeAtc++;
-            $activeAdmin++; // HO dashboard also shows ATC banners
-        } elseif ($b['target_audience'] === 'DLC') {
-            $activeDlc++;
-            $activeAdmin++;
-        } elseif ($b['target_audience'] === 'Admin') {
-            $activeAdmin++;
-        }
+    if (($b['status'] ?? '') !== 'Active') {
+        continue;
+    }
+    $aud = normalizeAnnouncementAudience($b['target_audience'] ?? 'All');
+    if ($aud === 'All') {
+        $activeAtc++; $activeDlc++; $activeAdmin++;
+    } elseif ($aud === 'ATC') {
+        $activeAtc++;
+        $activeAdmin++; // HO dashboard also shows ATC banners
+    } elseif ($aud === 'DLC') {
+        $activeDlc++;
+        $activeAdmin++;
+    } elseif ($aud === 'Admin') {
+        $activeAdmin++;
     }
 }
 
