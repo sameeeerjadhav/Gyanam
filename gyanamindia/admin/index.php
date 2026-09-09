@@ -330,7 +330,6 @@ try {
 } catch (Exception $e) {}
 
 // ── Birthdays ─────────────────────────────────────────────────────────────────
-$todayBirthdays = [];
 $calendarBirthdays = []; // [{name,type,mobile,month,day,dob}]
 try {
     $aStmt = $pdo->prepare("
