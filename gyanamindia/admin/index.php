@@ -136,7 +136,7 @@ $_SESSION[$dashCacheKey] = compact('totalUsers', 'totalDLC', 'totalATC', 'totalI
 $_SESSION[$dashCacheAt] = time();
 }
 
-$todayBirthdays = []; $expiringATCs = [];
+$expiringATCs = [];
 
 // Keep pendingExam as int for templates
 $pendingExam = (int)$pendingExam;
@@ -374,17 +374,6 @@ try {
     foreach ($mStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $calendarBirthdays[] = $row;
     }
-
-    $todayM = (int)date('n');
-    $todayD = (int)date('j');
-    foreach ($calendarBirthdays as $row) {
-        if ((int)$row['b_month'] === $todayM && (int)$row['b_day'] === $todayD) {
-            $todayBirthdays[] = $row;
-        }
-    }
-    usort($todayBirthdays, static function ($left, $right) {
-        return strcasecmp((string)($left['name'] ?? ''), (string)($right['name'] ?? ''));
-    });
 } catch (Exception $e) {}
 
 // Optional fixed holidays (month-day) for calendar legend markers
@@ -1307,38 +1296,8 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
             </div>
 
-            <!-- ═══ Today's Birthdays (quick list) ═══ -->
-            <?php if (!empty($todayBirthdays)): ?>
-            <div class="bday-panel" style="margin-top:0;">
-                <div class="bday-panel-header">
-                    <div class="bday-panel-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        🎂 Today's Birthdays — ATC &amp; DLC
-                    </div>
-                    <span class="bday-date"><?= date('d F Y') ?></span>
-                </div>
-                <div class="bday-panel-body">
-                    <?php foreach ($todayBirthdays as $b): ?>
-                    <div class="bday-row">
-                        <div class="bday-avatar"><?= mb_strtoupper(mb_substr($b['name'], 0, 1)) ?></div>
-                        <div class="bday-info">
-                            <div class="bday-name"><?= htmlspecialchars($b['name']) ?></div>
-                            <div class="bday-tag"><?= htmlspecialchars($b['type']) ?></div>
-                        </div>
-                        <?php if (!empty($b['mobile'])): ?>
-                        <button onclick="sendBdayWish('<?= addslashes(htmlspecialchars($b['name'])) ?>', '<?= htmlspecialchars($b['mobile']) ?>')" style="margin-left:auto;display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .85rem;border-radius:999px;border:none;background:#25d366;color:#fff;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-                            Send Wish
-                        </button>
-                        <?php else: ?>
-                        <div class="bday-wish" style="margin-left:auto;">🎉</div>
-                        <?php endif; ?>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            <?php endif; ?>
-
-            <!-- ═══ Quick Actions ═══ -->            <div class="section-header">
+            <!-- ═══ Quick Actions ═══ -->
+            <div class="section-header">
                 <h3>Quick Actions</h3>
             </div>
             <div class="actions-grid">
