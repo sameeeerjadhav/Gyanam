@@ -1027,7 +1027,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </a>
                 <a class="cc-card cc-card-pad" href="dispatches.php?date=today" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-material.png', 'xl', 'Dispatches') ?>
+                        <?= cc_png('icon-dispatch.png', 'xl', 'Dispatches') ?>
                         <h3>Today's Dispatches</h3>
                     </div>
                     <div class="cc-metric-value blue"><?= (int)$todayDispatches ?></div>
@@ -1090,7 +1090,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-share-revenue.png', 'xl', "Today's share") ?>
+                        <?= cc_png('icon-today-share.png', 'xl', "Today's share") ?>
                         <h3>Today's Share</h3>
                     </div>
                     <div class="cc-metric-label">Completed today</div>
@@ -1119,7 +1119,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad" onclick="openDetailModal('admissions')" style="cursor:pointer" title="View admissions">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-staff.png', 'xl', 'Admissions') ?>
+                        <?= cc_png('icon-admissions.png', 'xl', 'Admissions') ?>
                         <h3>Admissions</h3>
                     </div>
                     <div class="cc-metric-value blue"><?= (int)$totalAdmissions ?></div>
@@ -1127,7 +1127,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad" onclick="openDetailModal('reported')" style="cursor:pointer" title="Reported students">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-certified.png', 'xl', 'Reported') ?>
+                        <?= cc_png('icon-reported.png', 'xl', 'Reported') ?>
                         <h3>Reported Students</h3>
                     </div>
                     <div class="cc-metric-value green"><?= (int)$reportedStudents ?></div>
