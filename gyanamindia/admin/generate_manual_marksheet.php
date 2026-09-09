@@ -219,7 +219,8 @@ $planned = $metaHdrH + $metaValH + ($rowH * 3) + $contentH + $marksHdrH + $marks
 $marksBodyH += ($stretchH - $planned);
 
 $colW = $tw / 4;
-$labelW = $colW;
+$gw = $tw / 7; // shared vertical grid for marks + grade legend
+$labelW = 2 * $gw;
 $valW = $tw - $labelW;
 $pW = $labelW;
 
@@ -264,12 +265,12 @@ $cell($x, $contentY, $labelW, $contentH, "Course\nContents", false, 'C', $FONT, 
 $cell($x + $labelW, $contentY, $valW, $contentH, $contents, false, 'C', $FONT, 'B', true);
 
 $marksY = $contentY + $contentH;
-$leftW = $tw * 0.68;
-$rightW = $tw - $leftW;
-$restW = $leftW - $pW;
-$mW = $restW * 0.30;
-$pctW = $restW * 0.35;
-$gW = $restW - $mW - $pctW;
+// 7-col grid: Particulars(2) + Marks(1) + Percentage(1) + Grade(1) + Signatory(2)
+$mW = $gw;
+$pctW = $gw;
+$gW = $gw;
+$rightW = 2 * $gw;
+$leftW = $pW + $mW + $pctW + $gW;
 $rh = $marksBodyH / 2;
 
 $cell($x, $marksY, $pW, $marksHdrH, 'Particulars', false, 'C', $FONT, 'B');
@@ -331,7 +332,6 @@ $pdf->Cell($rightW - 2, 4.5, 'Gyanam India Educational Services', 0, 0, 'C');
 $legY = $bottom - $legendTotal;
 $grades = ['A++', 'A+', 'A', 'B', 'C', 'Fail', 'AB'];
 $bands = ['90 & Above', '80 to 89', '66 to 79', '55 to 65', '40 to 54', 'Below 40', 'Absent'];
-$gw = $tw / 7;
 for ($i = 0; $i < 7; $i++) {
     $cell($x + $i * $gw, $legY, $gw, $legHdrH, $grades[$i], true, 'C', $FONT, 'B');
     $cell($x + $i * $gw, $legY + $legHdrH, $gw, $legValH, $bands[$i], false, 'C', $FONT, '');
