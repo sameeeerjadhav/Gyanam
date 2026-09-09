@@ -141,6 +141,55 @@ $todayBirthdays = []; $expiringATCs = [];
 // Keep pendingExam as int for templates
 $pendingExam = (int)$pendingExam;
 
+// ── Ops counts: certificates / dispatches / materials ─────────────────────────
+$certifiedStudents   = 0;
+$certPrintPending    = 0;
+$todayDispatches     = 0;
+$pendingDispatches   = 0; // in-transit material_dispatches (status = Dispatched)
+$courseMaterialPending = 0; // With Material students not yet dispatched
+
+try {
+    if (function_exists('ensureIssuedCertificatesTable')) {
+        ensureIssuedCertificatesTable($pdo);
+    }
+    $certifiedStudents = (int)$pdo->query('SELECT COUNT(*) FROM issued_certificates')->fetchColumn();
+} catch (Exception $e) {}
+try {
+    $issuedAlt = (int)$pdo->query("SELECT COUNT(*) FROM certificates WHERE status = 'Issued'")->fetchColumn();
+    if ($issuedAlt > $certifiedStudents) {
+        $certifiedStudents = $issuedAlt;
+    }
+} catch (Exception $e) {}
+try {
+    $certPrintPending = (int)$pdo->query("SELECT COUNT(*) FROM certificates WHERE status = 'Pending'")->fetchColumn();
+} catch (Exception $e) {}
+try {
+    $todayDispatches = (int)$pdo->query("
+        SELECT COUNT(*) FROM material_dispatches
+        WHERE DATE(COALESCE(dispatch_date, created_at)) = CURDATE()
+    ")->fetchColumn();
+} catch (Exception $e) {}
+try {
+    $pendingDispatches = (int)$pdo->query("
+        SELECT COUNT(*) FROM material_dispatches WHERE status = 'Dispatched'
+    ")->fetchColumn();
+} catch (Exception $e) {}
+try {
+    $courseMaterialPending = (int)$pdo->query("
+        SELECT COUNT(*) FROM admissions
+        WHERE material_type = 'With Material' AND status = 'Active'
+          AND id NOT IN (SELECT DISTINCT admission_id FROM material_dispatch_students WHERE admission_id IS NOT NULL)
+    ")->fetchColumn();
+} catch (Exception $e) {
+    try {
+        $courseMaterialPending = (int)$pdo->query("
+            SELECT COUNT(*) FROM admissions
+            WHERE material_type = 'With Material' AND status = 'Active'
+              AND id NOT IN (SELECT DISTINCT admission_id FROM material_dispatch_students)
+        ")->fetchColumn();
+    } catch (Exception $e2) {}
+}
+
 // ── Pending Exam breakdown: per-ATC list for the clickable modal ────────────
 $pendingExamList = [];
 try {
@@ -722,6 +771,122 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
 
         <div class="page-content cc-dash">
 
+            <!-- ═══ OVERVIEW CARDS (top) ═══ -->
+            <div class="stats-grid">
+                <!-- L1: Renamed "Total Users" → "Total Logins" -->
+                <div class="stat-card purple">
+                    <div class="stat-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">Total Logins</div>
+                        <div class="stat-value" data-count="<?= $totalUsers ?>">0</div>
+                    </div>
+                </div>
+                <div class="stat-card blue">
+                    <div class="stat-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">DLC Logins</div>
+                        <div class="stat-value" data-count="<?= $totalDLC ?>">0</div>
+                    </div>
+                </div>
+                <!-- L1: Renamed "ATC Centers" → "ATC Logins" -->
+                <div class="stat-card green">
+                    <div class="stat-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">ATC Logins</div>
+                        <div class="stat-value" data-count="<?= $totalATC ?>">0</div>
+                    </div>
+                </div>
+                <!-- L2: Clickable Inquiries -->
+                <div class="stat-card amber clickable" onclick="openDetailModal('inquiries')" title="Click to view all inquiries">
+                    <div class="stat-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">Inquiries</div>
+                        <div class="stat-value" data-count="<?= $totalInquiries ?>">0</div>
+                    </div>
+                </div>
+                <!-- L2: Clickable Admissions -->
+                <div class="stat-card rose clickable" onclick="openDetailModal('admissions')" title="Click to view all admissions">
+                    <div class="stat-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">Admissions</div>
+                        <div class="stat-value" data-count="<?= $totalAdmissions ?>">0</div>
+                    </div>
+                </div>
+                <div class="stat-card sky clickable" onclick="openDetailModal('pending_exam')" title="Click to view pending exam students by ATC">
+                    <div class="stat-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">Pending Exam</div>
+                        <div class="stat-value" data-count="<?= $pendingExam ?>">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ OPS CARDS: certificates / dispatches / materials ═══ -->
+            <div class="cc-grid cc-grid-4" style="margin-top:1rem">
+                <a class="cc-card cc-card-pad" href="print_certificates.php" style="text-decoration:none;color:inherit">
+                    <div class="cc-card-head">
+                        <?= cc_ico('certificate', 'xl') ?>
+                        <h3>Certified Students</h3>
+                    </div>
+                    <div class="cc-metric-value green"><?= (int)$certifiedStudents ?></div>
+                    <div class="cc-metric-label">Certificates issued</div>
+                </a>
+                <a class="cc-card cc-card-pad" href="dispatches.php?date=today" style="text-decoration:none;color:inherit">
+                    <div class="cc-card-head">
+                        <?= cc_ico('card', 'xl') ?>
+                        <h3>Today's Dispatches</h3>
+                    </div>
+                    <div class="cc-metric-value blue"><?= (int)$todayDispatches ?></div>
+                    <div class="cc-metric-label">Created / sent today</div>
+                </a>
+                <a class="cc-card cc-card-pad" href="dispatches.php?status=Dispatched" style="text-decoration:none;color:inherit">
+                    <div class="cc-card-head">
+                        <?= cc_ico('clock', 'xl') ?>
+                        <h3>Pending Dispatches</h3>
+                    </div>
+                    <div class="cc-metric-value orange"><?= (int)$pendingDispatches ?></div>
+                    <div class="cc-metric-label">In transit (not delivered)</div>
+                </a>
+                <a class="cc-card cc-card-pad" href="print_certificates.php?filter=print_pending" style="text-decoration:none;color:inherit">
+                    <div class="cc-card-head">
+                        <?= cc_ico('exam', 'xl') ?>
+                        <h3>Certificate Printing Pending</h3>
+                    </div>
+                    <div class="cc-metric-value orange"><?= (int)$certPrintPending ?></div>
+                    <div class="cc-metric-label">Awaiting print / issue</div>
+                </a>
+            </div>
+            <div class="cc-grid cc-grid-4">
+                <a class="cc-card cc-card-pad" href="dispatches.php?view=pending" style="text-decoration:none;color:inherit">
+                    <div class="cc-card-head">
+                        <?= cc_ico('book', 'xl') ?>
+                        <h3>Course Material Pending</h3>
+                    </div>
+                    <div class="cc-metric-value red"><?= (int)$courseMaterialPending ?></div>
+                    <div class="cc-metric-label">With-material students awaiting dispatch</div>
+                </a>
+                <a class="cc-card cc-card-pad" href="material_requirements.php?tab=pending" style="text-decoration:none;color:inherit">
+                    <div class="cc-card-head">
+                        <?= cc_ico('bars', 'xl') ?>
+                        <h3>Material Requirements</h3>
+                    </div>
+                    <div class="cc-kv"><span class="k">Open pending tab</span><span class="v orange">View</span></div>
+                    <div class="cc-metric-label">ATC-wise material needs</div>
+                </a>
+            </div>
+
             <!-- ═══ ClassChakra-style HO Share cards (admin revenue = share only) ═══ -->
             <div class="cc-grid cc-grid-4">
                 <div class="cc-card cc-card-pad">
@@ -832,68 +997,6 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </table>
             </div>
             <?php endif; ?>
-
-            <!-- ═══ OVERVIEW CARDS (existing) ═══ -->
-            <div class="stats-grid">
-                <!-- L1: Renamed "Total Users" → "Total Logins" -->
-                <div class="stat-card purple">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">Total Logins</div>
-                        <div class="stat-value" data-count="<?= $totalUsers ?>">0</div>
-                    </div>
-                </div>
-                <div class="stat-card blue">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">DLC Logins</div>
-                        <div class="stat-value" data-count="<?= $totalDLC ?>">0</div>
-                    </div>
-                </div>
-                <!-- L1: Renamed "ATC Centers" → "ATC Logins" -->
-                <div class="stat-card green">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">ATC Logins</div>
-                        <div class="stat-value" data-count="<?= $totalATC ?>">0</div>
-                    </div>
-                </div>
-                <!-- L2: Clickable Inquiries -->
-                <div class="stat-card amber clickable" onclick="openDetailModal('inquiries')" title="Click to view all inquiries">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">Inquiries</div>
-                        <div class="stat-value" data-count="<?= $totalInquiries ?>">0</div>
-                    </div>
-                </div>
-                <!-- L2: Clickable Admissions -->
-                <div class="stat-card rose clickable" onclick="openDetailModal('admissions')" title="Click to view all admissions">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">Admissions</div>
-                        <div class="stat-value" data-count="<?= $totalAdmissions ?>">0</div>
-                    </div>
-                </div>
-                <div class="stat-card sky clickable" onclick="openDetailModal('pending_exam')" title="Click to view pending exam students by ATC">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">Pending Exam</div>
-                        <div class="stat-value" data-count="<?= $pendingExam ?>">0</div>
-                    </div>
-                </div>
-            </div>
 
             <!-- ═══ L3: GYANAM HEAD OFFICE REPORTING CARDS ═══ -->
             <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted,#9ca3af);margin:1.5rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border-color,#e5e7eb)">

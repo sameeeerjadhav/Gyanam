@@ -515,7 +515,7 @@ try {
             </div>
 
             <!-- ATC-wise material need report -->
-            <div class="section-card" style="margin-bottom:1.5rem;border-left:4px solid #f97316">
+            <div id="pendingMaterialSection" class="section-card" style="margin-bottom:1.5rem;border-left:4px solid #f97316">
                 <div style="padding:1rem 1.25rem;border-bottom:1.5px solid var(--border);background:var(--surface-2);display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
                     <div>
                         <div style="font-weight:800;font-size:.95rem;color:var(--text)">ATC Material Requirements</div>
@@ -681,7 +681,7 @@ try {
                         $pendItems = $ic ? (int)$ic['pending_items'] : null;
                         $totalItems = $ic ? (int)$ic['total_items'] : null;
                     ?>
-                    <tr data-atc="<?= $d['atc_id'] ?>" data-status="<?= $d['status'] ?>">
+                    <tr data-atc="<?= $d['atc_id'] ?>" data-status="<?= $d['status'] ?>" data-date="<?= htmlspecialchars(date('Y-m-d', strtotime($d['dispatch_date'] ?: ($d['created_at'] ?? 'now')))) ?>">
                         <td><span class="dispatch-id"><?= htmlspecialchars($d['dispatch_id']) ?></span></td>
                         <td><?= htmlspecialchars($d['atc_name']) ?></td>
                         <td><strong><?= $d['student_count'] ?></strong> student(s)</td>
@@ -1224,14 +1224,54 @@ function applyFilter() {
     const atc = document.getElementById('filterAtc').value;
     const status = document.getElementById('filterStatus').value;
     const search = (document.getElementById('filterSearch')?.value || '').toLowerCase().trim();
+    const dateFilter = (window._dispatchDateFilter || '').toLowerCase();
     document.querySelectorAll('#dispatchTable tbody tr[data-atc]').forEach(row => {
         const matchAtc = !atc || row.dataset.atc === atc;
         const matchStatus = !status || row.dataset.status === status;
         const rowText = row.textContent.toLowerCase();
         const matchSearch = !search || rowText.includes(search);
-        row.style.display = (matchAtc && matchStatus && matchSearch) ? '' : 'none';
+        let matchDate = true;
+        if (dateFilter === 'today') {
+            // Date column is near the end — compare with today's formatted day
+            const todayLabel = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                .replace(/ /g, ' '); // "09 Sep 2026"
+            // Also accept without leading zero variants via includes of day+month+year parts
+            const cells = row.querySelectorAll('td');
+            const dateCell = (cells[6]?.textContent || '').trim();
+            matchDate = dateCell === todayLabel || dateCell.includes(String(new Date().getFullYear()));
+            // Stricter: parse from data attribute if present
+            if (row.dataset.date) {
+                matchDate = row.dataset.date === new Date().toISOString().slice(0, 10);
+            }
+        }
+        row.style.display = (matchAtc && matchStatus && matchSearch && matchDate) ? '' : 'none';
     });
 }
+
+// Deep-link filters from admin dashboard (?status= & ?date= & ?view=pending)
+(function initDispatchUrlFilters() {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('status') || '';
+    const date = params.get('date') || '';
+    const view = params.get('view') || '';
+    const statusSel = document.getElementById('filterStatus');
+    if (status && statusSel) {
+        statusSel.value = status;
+    }
+    if (date === 'today') {
+        window._dispatchDateFilter = 'today';
+    }
+    if (status || date === 'today') {
+        applyFilter();
+    }
+    if (view === 'pending') {
+        const el = document.getElementById('pendingMaterialSection');
+        if (el) {
+            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+            el.style.boxShadow = '0 0 0 3px rgba(249,115,22,.35)';
+        }
+    }
+})();
 
 // ── Notify ATC about pending items ──
 async function notifyAtcPending(dispPK) {
