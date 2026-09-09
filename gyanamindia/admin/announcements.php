@@ -1,7 +1,7 @@
 <?php
 /**
  * Gyanam Portal - Admin: Dashboard Banners
- * Manage global announcements (images) shown on ATC & DLC dashboards.
+ * Manage global announcements (images) shown on Admin, ATC & DLC dashboards.
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -50,10 +50,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $orientation    = sanitize($_POST['orientation'] ?? 'horizontal');
         $visibilityScope = strtolower(trim((string)($_POST['visibility_scope'] ?? 'all'))) === 'specific' ? 'specific' : 'all';
         $selectedAtcIds = $parseAtcIds();
-        if (!in_array($targetAudience, ['All', 'ATC', 'DLC'], true)) {
+        if (!in_array($targetAudience, ['All', 'ATC', 'DLC', 'Admin'], true)) {
             $targetAudience = 'All';
         }
-        if ($targetAudience === 'DLC') {
+        if ($targetAudience === 'DLC' || $targetAudience === 'Admin') {
             $visibilityScope = 'all';
             $selectedAtcIds = [];
         } elseif ($visibilityScope === 'specific' && empty($selectedAtcIds)) {
@@ -146,10 +146,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newStatus      = sanitize($_POST['status'] ?? 'Active');
         $visibilityScope = strtolower(trim((string)($_POST['visibility_scope'] ?? $_POST['edit_visibility_scope'] ?? 'all'))) === 'specific' ? 'specific' : 'all';
         $selectedAtcIds = $parseAtcIds();
-        if (!in_array($newAudience, ['All', 'ATC', 'DLC'], true)) {
+        if (!in_array($newAudience, ['All', 'ATC', 'DLC', 'Admin'], true)) {
             $newAudience = 'All';
         }
-        if ($newAudience === 'DLC') {
+        if ($newAudience === 'DLC' || $newAudience === 'Admin') {
             $visibilityScope = 'all';
             $selectedAtcIds = [];
         } elseif ($visibilityScope === 'specific' && empty($selectedAtcIds)) {
@@ -218,12 +218,20 @@ foreach ($banners as &$bRow) {
 unset($bRow);
 
 // Count active slides per audience
-$activeAtc = 0; $activeDlc = 0;
+$activeAtc = 0; $activeDlc = 0; $activeAdmin = 0;
 foreach ($banners as $b) {
     if ($b['status'] === 'Active') {
-        if ($b['target_audience'] === 'All')     { $activeAtc++; $activeDlc++; }
-        elseif ($b['target_audience'] === 'ATC') { $activeAtc++; }
-        elseif ($b['target_audience'] === 'DLC') { $activeDlc++; }
+        if ($b['target_audience'] === 'All') {
+            $activeAtc++; $activeDlc++; $activeAdmin++;
+        } elseif ($b['target_audience'] === 'ATC') {
+            $activeAtc++;
+            $activeAdmin++; // HO dashboard also shows ATC banners
+        } elseif ($b['target_audience'] === 'DLC') {
+            $activeDlc++;
+            $activeAdmin++;
+        } elseif ($b['target_audience'] === 'Admin') {
+            $activeAdmin++;
+        }
     }
 }
 
@@ -512,7 +520,7 @@ foreach ($banners as $b) {
                 </button>
                 <div class="header-greeting">
                     <h2>Dashboard Banners</h2>
-                    <p>Shown on dashboards &amp; downloadable by assigned ATCs in Downloads</p>
+                    <p>Shown on Admin, ATC &amp; DLC dashboards · downloadable by assigned ATCs</p>
                 </div>
             </div>
             <div class="header-right">
@@ -564,6 +572,19 @@ foreach ($banners as $b) {
                     <div class="slide-indicator"><span class="slide-dot"></span><?= $activeDlc ?> Slides</div>
                     <?php endif; ?>
                 </div>
+                <div class="status-card" style="border-color:#c7d2fe;background:linear-gradient(135deg,#eef2ff,#fff)">
+                    <div class="status-card-icon" style="background:#6366f1">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </div>
+                    <div>
+                        <div class="status-label">Admin Dashboard</div>
+                        <div class="status-count"><?= $activeAdmin ?> Active Slide<?= $activeAdmin !== 1 ? 's' : '' ?></div>
+                        <div class="status-hint"><?= $activeAdmin <= 1 ? 'Static — no auto-slide' : 'Auto-slides every 5 seconds ✨' ?></div>
+                    </div>
+                    <?php if ($activeAdmin > 1): ?>
+                    <div class="slide-indicator"><span class="slide-dot"></span><?= $activeAdmin ?> Slides</div>
+                    <?php endif; ?>
+                </div>
             </div>
 
             <div class="banners-layout">
@@ -597,7 +618,8 @@ foreach ($banners as $b) {
                             <div class="form-group">
                                 <label class="form-label">Show To</label>
                                 <select name="target_audience" id="uploadAudience" class="form-control" onchange="syncAtcAssignPanels()">
-                                    <option value="All">All — ATC &amp; DLC</option>
+                                    <option value="All">All — Admin, ATC &amp; DLC</option>
+                                    <option value="Admin">Admin Dashboard Only</option>
                                     <option value="ATC">ATC Centers Only</option>
                                     <option value="DLC">DLC Offices Only</option>
                                 </select>
@@ -688,7 +710,7 @@ foreach ($banners as $b) {
                             $imgUrl     = '../uploads/announcements/' . htmlspecialchars($b['image_path']);
                             $isVideo    = in_array(strtolower(pathinfo($b['image_path'], PATHINFO_EXTENSION)), $videoExtArr);
                             $isVertical = (($b['orientation'] ?? 'horizontal') === 'vertical');
-                            $audienceColors = ['All'=>'#fff','ATC'=>'#fde68a','DLC'=>'#a7f3d0'];
+                            $audienceColors = ['All'=>'#fff','ATC'=>'#fde68a','DLC'=>'#a7f3d0','Admin'=>'#c7d2fe'];
                         ?>
                         <div class="banner-card <?= $isActive ? 'is-active' : 'is-inactive' ?>">
                             <div class="banner-img-wrap">
@@ -722,11 +744,13 @@ foreach ($banners as $b) {
                                     $scope = strtolower((string)($b['visibility_scope'] ?? 'all'));
                                     $assignLabel = ($b['target_audience'] === 'DLC')
                                         ? 'DLC only'
-                                        : ($scope === 'specific'
-                                            ? ((int)($b['_atc_count'] ?? 0) . ' ATC(s) assigned')
-                                            : 'All ATCs');
+                                        : (($b['target_audience'] === 'Admin')
+                                            ? 'Admin only'
+                                            : ($scope === 'specific'
+                                                ? ((int)($b['_atc_count'] ?? 0) . ' ATC(s) assigned')
+                                                : 'All ATCs'));
                                 ?>
-                                <div class="banner-assign-meta"><?= htmlspecialchars($assignLabel) ?> · also in ATC Downloads</div>
+                                <div class="banner-assign-meta"><?= htmlspecialchars($assignLabel) ?><?= $b['target_audience'] === 'Admin' ? '' : ' · also in ATC Downloads' ?></div>
                             </div>
                             <div class="banner-actions">
                                 <!-- Edit Button -->
@@ -807,7 +831,8 @@ foreach ($banners as $b) {
                 <div class="form-group">
                     <label class="form-label">Show To</label>
                     <select name="target_audience" id="editAudience" class="form-control" onchange="syncAtcAssignPanels()">
-                        <option value="All">All — ATC &amp; DLC</option>
+                        <option value="All">All — Admin, ATC &amp; DLC</option>
+                        <option value="Admin">Admin Dashboard Only</option>
                         <option value="ATC">ATC Centers Only</option>
                         <option value="DLC">DLC Offices Only</option>
                     </select>
@@ -893,16 +918,18 @@ function syncAtcAssignPanels() {
     const editAud = document.getElementById('editAudience')?.value || 'All';
     const uploadWrap = document.getElementById('uploadAtcAssignWrap');
     const editWrap = document.getElementById('editAtcAssignWrap');
-    if (uploadWrap) uploadWrap.style.display = uploadAud === 'DLC' ? 'none' : '';
-    if (editWrap) editWrap.style.display = editAud === 'DLC' ? 'none' : '';
+    const hideUploadAtc = (uploadAud === 'DLC' || uploadAud === 'Admin');
+    const hideEditAtc = (editAud === 'DLC' || editAud === 'Admin');
+    if (uploadWrap) uploadWrap.style.display = hideUploadAtc ? 'none' : '';
+    if (editWrap) editWrap.style.display = hideEditAtc ? 'none' : '';
 
     const uploadSpecific = document.querySelector('#uploadForm input[name="visibility_scope"][value="specific"]')?.checked;
     const uploadBox = document.getElementById('uploadAtcSpecific');
-    if (uploadBox) uploadBox.hidden = !uploadSpecific || uploadAud === 'DLC';
+    if (uploadBox) uploadBox.hidden = !uploadSpecific || hideUploadAtc;
 
     const editSpecific = document.getElementById('editScopeSpecific')?.checked;
     const editBox = document.getElementById('editAtcSpecific');
-    if (editBox) editBox.hidden = !editSpecific || editAud === 'DLC';
+    if (editBox) editBox.hidden = !editSpecific || hideEditAtc;
 }
 
 function filterAtcChecks(which) {

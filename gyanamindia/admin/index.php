@@ -141,13 +141,14 @@ $expiringATCs = [];
 // Keep pendingExam as int for templates
 $pendingExam = (int)$pendingExam;
 
-// Dashboard banners for admin overview (right panel)
+// Dashboard banners for admin overview (All / Admin / ATC / DLC — HO sees active banners)
 $activeBanners = [];
 try {
     $activeBanners = $pdo->query("
         SELECT id, title, image_path, orientation, target_audience, created_at
         FROM announcements
         WHERE status = 'Active'
+          AND target_audience IN ('All', 'Admin', 'ATC', 'DLC')
         ORDER BY created_at DESC
         LIMIT 8
     ")->fetchAll(PDO::FETCH_ASSOC);
@@ -596,40 +597,46 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         min-height: 0;
     }
     .admin-overview-banners {
-        min-height: 100%;
+        min-height: 280px;
         display: flex;
         flex-direction: column;
     }
     .admin-overview-banners .banner-carousel-wrap {
         flex: 1;
-        margin-bottom: 0;
+        margin-bottom: 0 !important;
         height: 100%;
-        min-height: 220px;
+        min-height: 280px;
         display: flex;
         flex-direction: column;
     }
     .admin-overview-banners .carousel-track {
         flex: 1;
         height: 100%;
+        min-height: 280px;
     }
     .admin-overview-banners .carousel-slide {
         height: 100%;
-        min-height: 220px;
+        min-height: 280px;
+        background: #0f172a;
     }
     .admin-overview-banners .carousel-slide img.slide-media,
     .admin-overview-banners .carousel-slide video.slide-media {
-        max-height: none;
+        max-height: none !important;
+        min-height: 280px;
         height: 100%;
+        width: 100%;
         object-fit: cover;
+        display: block;
     }
     .admin-overview-banners .carousel-slide.vertical-slide,
     .admin-overview-banners .carousel-slide.vertical-slide video.slide-media {
-        height: 100%;
-        max-height: none;
+        height: 100% !important;
+        max-height: none !important;
+        min-height: 280px;
     }
     .admin-banner-empty {
         flex: 1;
-        min-height: 220px;
+        min-height: 280px;
         border-radius: 16px;
         border: 1.5px dashed #cbd5e1;
         background: linear-gradient(145deg, #f8fafc 0%, #eef2ff 100%);
