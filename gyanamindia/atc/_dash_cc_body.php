@@ -11,7 +11,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-grid cc-grid-1" style="margin-bottom:1rem">
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_ico('bell') ?>
+                            <?= cc_ico('bell', 'xl') ?>
                             <h3>Notice Board</h3>
                             <a class="cc-link" href="notifications.php">Show All</a>
                         </div>
@@ -75,7 +75,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_ico('bars') ?>
+                            <?= cc_ico('bars', 'xl') ?>
                             <h3>Today's Summary</h3>
                         </div>
                         <div class="cc-kv"><span class="k">Admissions</span><span class="v blue"><?= (int)$todayAdmissions ?></span></div>
@@ -84,7 +84,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad" id="todayCollCard" onclick="openTransModal()" style="cursor:pointer" title="Click to view transactions">
                         <div class="cc-card-head">
-                            <?= cc_ico('wallet') ?>
+                            <?= cc_ico('wallet', 'xl') ?>
                             <h3>Today's Fee Summary</h3>
                             <input type="date" id="todayDatePicker" value="<?= date('Y-m-d') ?>"
                                 style="margin-left:auto;font-size:.7rem;font-weight:700;border:1px solid var(--cc-border);border-radius:8px;background:#f8fafc;padding:.2rem .35rem;outline:none;font-family:inherit"
@@ -101,7 +101,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-grid cc-grid-4">
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_ico('gradcap') ?>
+                            <?= cc_ico('gradcap', 'xl') ?>
                             <h3>Courses</h3>
                         </div>
                         <div class="cc-kv"><span class="k">Total</span><span class="v"><?= (int)$totalCourses ?></span></div>
@@ -109,7 +109,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_ico('enquiry') ?>
+                            <?= cc_ico('enquiry', 'xl') ?>
                             <h3>Enquiries</h3>
                         </div>
                         <div class="cc-kv"><span class="k">Total</span><span class="v"><?= (int)($totalInquiries + $totalTelephonic) ?></span></div>
@@ -117,7 +117,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad" onclick="openExamModal('all')" style="cursor:pointer" title="View exam students">
                         <div class="cc-card-head">
-                            <?= cc_ico('exam') ?>
+                            <?= cc_ico('exam', 'xl') ?>
                             <h3>Total Exam</h3>
                         </div>
                         <div class="cc-metric-value blue"><?= (int)$totalExams ?></div>
@@ -126,7 +126,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_ico('book') ?>
+                            <?= cc_ico('book', 'xl') ?>
                             <h3>Course Notes</h3>
                         </div>
                         <?php if (!empty($popularCourses)): ?>
@@ -159,7 +159,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_ico('certificate') ?>
+                            <?= cc_ico('certificate', 'xl') ?>
                             <h3>Certificates</h3>
                             <a class="cc-link" href="completion_certificate.php">Show All</a>
                         </div>
@@ -190,7 +190,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-card" style="margin-bottom:1rem">
                     <div class="cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_ico('cake') ?>
+                            <?= cc_ico('cake', 'xl') ?>
                             <h3>Student Birthdays Today</h3>
                             <span style="margin-left:auto;font-size:.78rem;font-weight:700;color:var(--cc-muted)"><?= count($birthdays) ?></span>
                         </div>
@@ -221,7 +221,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card cc-span-2">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <?= cc_ico('chat') ?>
+                                <?= cc_ico('chat', 'xl') ?>
                             <h3>Recent Enquiries</h3>
                                 <a class="cc-link" href="inquiries.php">Show All</a>
                             </div>
@@ -246,7 +246,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <?= cc_ico('book') ?>
+                                <?= cc_ico('book', 'xl') ?>
                             <h3>Popular Courses for Enquiries</h3>
                             </div>
                         </div>
@@ -269,7 +269,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <?= cc_ico('book') ?>
+                                <?= cc_ico('book', 'xl') ?>
                             <h3>Popular Courses for Admission</h3>
                             </div>
                         </div>
@@ -295,7 +295,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-card" style="margin-bottom:1rem">
                     <div class="cc-card-pad" style="padding-bottom:.35rem">
                         <div class="cc-card-head" style="margin-bottom:.35rem">
-                            <?= cc_ico('exam') ?>
+                            <?= cc_ico('exam', 'xl') ?>
                             <h3>Recent Exam</h3>
                             <a class="cc-link" href="javascript:void(0)" onclick="openExamModal('conducted')">Show All</a>
                         </div>
@@ -333,7 +333,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:0">
                             <div class="cc-card-head">
-                                <?= cc_ico('useradd') ?>
+                                <?= cc_ico('useradd', 'xl') ?>
                             <h3>Monthly Admissions</h3>
                             </div>
                         </div>
@@ -342,7 +342,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:0">
                             <div class="cc-card-head">
-                                <?= cc_ico('rupee') ?>
+                                <?= cc_ico('rupee', 'xl') ?>
                             <h3>Revenue</h3>
                             </div>
                         </div>
@@ -354,7 +354,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-card" style="margin-bottom:1rem">
                     <div class="cc-card-pad" style="padding-bottom:.35rem">
                         <div class="cc-card-head" style="margin-bottom:.35rem">
-                            <?= cc_ico('card') ?>
+                            <?= cc_ico('card', 'xl') ?>
                             <h3>Recent Fees</h3>
                             <a class="cc-link" href="fees.php">Show All</a>
                         </div>
@@ -398,7 +398,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <?= cc_ico('clock') ?>
+                                <?= cc_ico('clock', 'xl') ?>
                             <h3>Upcoming Due Fees</h3>
                                 <a class="cc-link" href="fees.php">Show All</a>
                             </div>
@@ -425,7 +425,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <?= cc_ico('edit') ?>
+                                <?= cc_ico('edit', 'xl') ?>
                             <h3>Pending Approvals</h3>
                                 <span style="margin-left:auto;font-size:.78rem;font-weight:800;color:var(--cc-orange)"><?= (int)$pendingApprovalCount ?></span>
                             </div>
@@ -448,7 +448,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_ico('bolt') ?>
+                            <?= cc_ico('bolt', 'xl') ?>
                             <h3>Quick Actions</h3>
                         </div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem">
