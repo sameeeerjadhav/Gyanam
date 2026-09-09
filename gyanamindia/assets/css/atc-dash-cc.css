@@ -46,12 +46,12 @@
 .cc-card-head {
   display: flex;
   align-items: center;
-  gap: .65rem;
-  margin-bottom: .85rem;
+  gap: .85rem;
+  margin-bottom: .95rem;
 }
 .cc-card-head h3 {
   margin: 0;
-  font-size: .95rem;
+  font-size: 1.02rem;
   font-weight: 700;
   color: var(--cc-text);
   letter-spacing: -.01em;
@@ -65,18 +65,60 @@
 }
 .cc-card-head .cc-link:hover { text-decoration: underline; }
 
+/* Big pictorial icons — ClassChakra style */
 .cc-ico {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--cc-blue-soft);
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background: linear-gradient(160deg, #eef5ff 0%, #dbeafe 55%, #c7dbfc 100%);
   color: var(--cc-blue);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.75),
+    0 4px 12px rgba(37, 99, 235, .12);
 }
-.cc-ico svg { width: 18px; height: 18px; }
+.cc-ico svg {
+  width: 34px;
+  height: 34px;
+  display: block;
+  overflow: visible;
+  flex-shrink: 0;
+}
+.cc-ico.cc-ico-sm {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+}
+.cc-ico.cc-ico-sm svg {
+  width: 28px;
+  height: 28px;
+}
+.cc-ico.cc-ico-xl {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+}
+.cc-ico.cc-ico-xl svg {
+  width: 44px;
+  height: 44px;
+}
+
+@media (max-width: 640px) {
+  .cc-ico {
+    width: 50px;
+    height: 50px;
+    border-radius: 14px;
+  }
+  .cc-ico svg { width: 30px; height: 30px; }
+  .cc-ico.cc-ico-xl {
+    width: 56px;
+    height: 56px;
+  }
+  .cc-ico.cc-ico-xl svg { width: 34px; height: 34px; }
+}
 
 .cc-metric-label {
   font-size: .82rem;
