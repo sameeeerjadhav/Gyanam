@@ -15,7 +15,7 @@ ob_start();
 </ul>
 
 <h2>This website</h2>
-<p><strong>https://gyanamindia.labxco.in</strong> is our official operations and payments portal used by Head Office, DLC offices, and ATC centres. Public marketing information is also available at <a href="https://www.gyanamindia.com" target="_blank" rel="noopener">www.gyanamindia.com</a>.</p>
+<p><strong>https://portal.gyanamindia.com</strong> is our official operations and payments portal used by Head Office, DLC offices, and ATC centres. Public marketing information is also available at <a href="https://www.gyanamindia.com" target="_blank" rel="noopener">www.gyanamindia.com</a>.</p>
 
 <div class="note">Online payments on this portal are made by authorised logged-in centre users (not open public checkout). Payments are processed by Razorpay.</div>
 

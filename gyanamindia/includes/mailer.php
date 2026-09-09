@@ -154,14 +154,14 @@ function sendAppMail(string $toEmail, string $toName, string $subject, string $h
         };
 
         $read(); // banner
-        $cmd('EHLO gyanamindia.labxco.in', '250');
+        $cmd('EHLO portal.gyanamindia.com', '250');
 
         if ($enc === 'tls') {
             $cmd('STARTTLS', '220');
             if (!stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
                 throw new RuntimeException('STARTTLS negotiation failed');
             }
-            $cmd('EHLO gyanamindia.labxco.in', '250');
+            $cmd('EHLO portal.gyanamindia.com', '250');
         }
 
         $cmd('AUTH LOGIN', '334');

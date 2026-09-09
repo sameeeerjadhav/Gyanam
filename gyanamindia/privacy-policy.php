@@ -4,7 +4,7 @@ $pageHeading = 'Privacy Policy';
 $pageUpdated = '8 September 2026';
 ob_start();
 ?>
-<p>Gyanam India Educational Services (“Gyanam”, “we”, “us”) operates the online portal at <strong>https://gyanamindia.labxco.in</strong>. This Privacy Policy explains how we collect, use, and protect information when you use our portal and related payment services.</p>
+<p>Gyanam India Educational Services (“Gyanam”, “we”, “us”) operates the online portal at <strong>https://portal.gyanamindia.com</strong>. This Privacy Policy explains how we collect, use, and protect information when you use our portal and related payment services.</p>
 
 <div class="note">Online share / fee payments on this portal are processed securely through Razorpay. Payment card or UPI credentials are handled by Razorpay and are not stored on our servers.</div>
 

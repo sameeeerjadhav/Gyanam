@@ -16,7 +16,7 @@ ob_start();
 <ul>
     <li>Authorised centres use this portal to pay applicable Head Office / DLC shares for admitted students.</li>
     <li>Share amounts are configured per course by Head Office and shown inside the logged-in portal before payment.</li>
-    <li>Online share payments are collected via Razorpay Checkout on <strong>https://gyanamindia.labxco.in</strong>.</li>
+    <li>Online share payments are collected via Razorpay Checkout on <strong>https://portal.gyanamindia.com</strong>.</li>
 </ul>
 
 <h2>3. Example of online portal payment</h2>

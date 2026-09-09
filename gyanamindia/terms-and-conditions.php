@@ -4,7 +4,7 @@ $pageHeading = 'Terms and Conditions';
 $pageUpdated = '8 September 2026';
 ob_start();
 ?>
-<p>These Terms and Conditions govern use of the Gyanam India Educational Services portal at <strong>https://gyanamindia.labxco.in</strong> and related services, including online payments.</p>
+<p>These Terms and Conditions govern use of the Gyanam India Educational Services portal at <strong>https://portal.gyanamindia.com</strong> and related services, including online payments.</p>
 
 <h2>1. About the portal</h2>
 <p>This website is an official business portal for authorised Head Office, DLC Office, ATC Centre, and Training users of Gyanam India Educational Services. It is used for centre operations, student admissions, fee/share payments, exams coordination, certificates, and related administration.</p>
