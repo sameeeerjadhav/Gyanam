@@ -174,7 +174,7 @@ $current = basename($_SERVER['SCRIPT_NAME'] ?? '');
                 <img src="<?= htmlspecialchars(($base ? $base . '/' : '') . 'assets/logo.png') ?>" alt="Gyanam India">
                 <div>
                     <strong>Gyanam India Educational Services</strong>
-                    <span>Official portal — gyanamindia.labxco.in</span>
+                    <span>Official portal — portal.gyanamindia.com</span>
                 </div>
             </a>
             <nav class="nav" aria-label="Policy pages">

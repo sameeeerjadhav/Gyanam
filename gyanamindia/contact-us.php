@@ -26,7 +26,7 @@ ob_start();
 
 <h2>Portal</h2>
 <ul>
-    <li>Login portal: <a href="https://gyanamindia.labxco.in">https://gyanamindia.labxco.in</a></li>
+    <li>Login portal: <a href="https://portal.gyanamindia.com">https://portal.gyanamindia.com</a></li>
     <li>Public website: <a href="https://www.gyanamindia.com" target="_blank" rel="noopener">https://www.gyanamindia.com</a></li>
 </ul>
 

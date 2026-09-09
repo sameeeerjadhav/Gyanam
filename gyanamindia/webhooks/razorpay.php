@@ -3,7 +3,7 @@
  * Razorpay Webhook — Share Payments
  *
  * Dashboard URL to configure:
- *   https://gyanamindia.labxco.in/webhooks/razorpay.php
+ *   https://portal.gyanamindia.com/webhooks/razorpay.php
  *
  * Events to enable:
  *   - payment.captured

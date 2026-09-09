@@ -4,7 +4,7 @@ $pageHeading = 'Cancellation & Refund Policy';
 $pageUpdated = '8 September 2026';
 ob_start();
 ?>
-<p>This Cancellation and Refund Policy applies to online payments made on <strong>https://gyanamindia.labxco.in</strong> through Razorpay for Gyanam India Educational Services.</p>
+<p>This Cancellation and Refund Policy applies to online payments made on <strong>https://portal.gyanamindia.com</strong> through Razorpay for Gyanam India Educational Services.</p>
 
 <div class="note">Course / admission fees charged by ATC centres to students are governed by the centre’s admission agreement. This page mainly covers online portal payments (such as HO / DLC share payments) processed via Razorpay.</div>
 

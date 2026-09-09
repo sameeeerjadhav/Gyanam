@@ -2654,7 +2654,7 @@ Congratulations on becoming an Authorized Training Center (ATC) under Gyanam Ind
 Your *ATC Code / Username:* *${atcCode || username}*
 
 *ATC Login Details:*
-• Portal: gyanamindia.labxco.in
+• Portal: https://portal.gyanamindia.com
 • Username: *${username}*
 • Temporary Password: *${password || 'password'}*
 • On the login page, select *"ATC Login"*

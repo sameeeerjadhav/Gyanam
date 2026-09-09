@@ -13,7 +13,7 @@ This repository has two apps:
 
 Live (typical):
 
-- Portal: `https://gyanamindia.labxco.in`
+- Portal: `https://portal.gyanamindia.com`
 - Exam: `https://gyanamexam.labxco.in`
 
 ---
