@@ -579,7 +579,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .stat-card.clickable { cursor: pointer; }
     .stat-card.clickable:hover { transform: translateY(-4px) !important; box-shadow: 0 14px 36px rgba(0,0,0,.12) !important; }
 
-    /* Overview: 3×2 stats left + banners right */
+    /* Overview: 3×2 stats left + banners right (stats dictate height; banner fills) */
     .admin-overview-row {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(260px, 1.05fr);
@@ -591,55 +591,73 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: .75rem;
         margin-bottom: 0;
+        height: auto;
     }
     .admin-overview-row .stat-card {
         padding: 1.05rem 1rem;
         min-height: 0;
     }
+    /* Height comes only from left stats; banner paints into that box */
     .admin-overview-banners {
-        min-height: 280px;
-        display: flex;
-        flex-direction: column;
+        position: relative;
+        height: 0;
+        min-height: 100%;
+        overflow: hidden;
+        border-radius: 16px;
+        background: #0f172a;
+    }
+    .admin-overview-banners .banner-carousel-wrap,
+    .admin-overview-banners .admin-banner-empty {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        margin: 0 !important;
+        border-radius: 16px;
     }
     .admin-overview-banners .banner-carousel-wrap {
-        flex: 1;
-        margin-bottom: 0 !important;
-        height: 100%;
-        min-height: 280px;
-        display: flex;
-        flex-direction: column;
+        display: block;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0,0,0,.1);
     }
     .admin-overview-banners .carousel-track {
-        flex: 1;
-        height: 100%;
-        min-height: 280px;
+        height: 100% !important;
+        min-height: 0 !important;
     }
     .admin-overview-banners .carousel-slide {
-        height: 100%;
-        min-height: 280px;
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        position: relative;
+        overflow: hidden;
         background: #0f172a;
+    }
+    .admin-overview-banners .carousel-slide.vertical-slide {
+        height: 100% !important;
+        max-height: none !important;
     }
     .admin-overview-banners .carousel-slide img.slide-media,
     .admin-overview-banners .carousel-slide video.slide-media {
-        max-height: none !important;
-        min-height: 280px;
-        height: 100%;
-        width: 100%;
-        object-fit: cover;
-        display: block;
-    }
-    .admin-overview-banners .carousel-slide.vertical-slide,
-    .admin-overview-banners .carousel-slide.vertical-slide video.slide-media {
+        position: absolute !important;
+        inset: 0 !important;
+        width: 100% !important;
         height: 100% !important;
         max-height: none !important;
-        min-height: 280px;
+        min-height: 0 !important;
+        object-fit: cover !important;
+        object-position: center !important;
+        display: block;
+        transform: none !important;
+    }
+    .admin-overview-banners .carousel-slide.is-active img.slide-media {
+        transform: none !important;
+    }
+    .admin-overview-banners .vertical-blur-bg {
+        inset: 0;
     }
     .admin-banner-empty {
-        flex: 1;
-        min-height: 280px;
-        border-radius: 16px;
-        border: 1.5px dashed #cbd5e1;
-        background: linear-gradient(145deg, #f8fafc 0%, #eef2ff 100%);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -649,12 +667,14 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         padding: 1.25rem;
         color: #64748b;
         text-decoration: none;
-        transition: border-color .15s, box-shadow .15s, transform .15s;
+        border: 1.5px dashed #cbd5e1;
+        background: linear-gradient(145deg, #f8fafc 0%, #eef2ff 100%);
+        box-sizing: border-box;
+        transition: border-color .15s, box-shadow .15s, color .15s;
     }
     .admin-banner-empty:hover {
         border-color: #818cf8;
         box-shadow: 0 8px 24px rgba(67, 97, 238, .12);
-        transform: translateY(-2px);
         color: #4338ca;
     }
     .admin-banner-empty strong {
@@ -670,15 +690,18 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         .admin-overview-row {
             grid-template-columns: 1fr;
         }
-        .admin-overview-banners .banner-carousel-wrap,
-        .admin-banner-empty {
+        .admin-overview-banners {
+            height: 200px;
             min-height: 200px;
-            max-height: 280px;
         }
     }
     @media (max-width: 560px) {
         .admin-overview-row .stats-grid.admin-stats-2x3 {
             grid-template-columns: 1fr;
+        }
+        .admin-overview-banners {
+            height: 180px;
+            min-height: 180px;
         }
     }
 
