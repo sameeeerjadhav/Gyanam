@@ -305,8 +305,9 @@ $planned = $metaHdrH + $metaValH + ($rowH * 3) + $contentH + $marksHdrH + $marks
 $marksBodyH += ($stretchH - $planned);
 
 $colW   = $tw / 4;
-$gw     = $tw / 7; // shared vertical grid for marks + grade legend
-$labelW = 2 * $gw;
+$unit   = $tw / 28; // LCM of 4-col meta and 7-col legend
+$gw     = 4 * $unit;  // = $tw / 7
+$labelW = $colW;      // = 7 * $unit — aligns with first meta column
 $valW   = $tw - $labelW;
 $pW     = $labelW;
 
@@ -355,11 +356,11 @@ $cell($x + $labelW, $contentY, $valW, $contentH, $contents, false, 'C', $FONT, '
 
 // ── Marks ───────────────────────────────────────────────────────────────────
 $marksY = $contentY + $contentH;
-// 7-col grid: Particulars(2) + Marks(1) + Percentage(1) + Grade(1) + Signatory(2)
-$mW = $gw;
-$pctW = $gw;
-$gW = $gw;
-$rightW = 2 * $gw;
+// After Particulars (7 units), snap remaining edges to legend lines at 12/16/20/28
+$mW = 5 * $unit;
+$pctW = 4 * $unit;
+$gW = 4 * $unit;
+$rightW = 8 * $unit;
 $leftW = $pW + $mW + $pctW + $gW;
 $rh = $marksBodyH / 2;
 
