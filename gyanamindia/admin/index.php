@@ -579,84 +579,23 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .stat-card.clickable { cursor: pointer; }
     .stat-card.clickable:hover { transform: translateY(-4px) !important; box-shadow: 0 14px 36px rgba(0,0,0,.12) !important; }
 
-    /* Overview: 3×2 stats left + banners right (stats dictate height; banner fills) */
-    .admin-overview-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(260px, 1.05fr);
-        gap: 1rem;
-        margin-bottom: 1.25rem;
-        align-items: stretch;
+    /* Banner panel — full-width like ATC (no side split) */
+    .admin-banner-slot {
+        margin-bottom: 1rem;
     }
-    .admin-overview-row .stats-grid.admin-stats-2x3 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: .75rem;
-        margin-bottom: 0;
-        height: auto;
+    .admin-banner-slot .banner-carousel-wrap {
+        margin-bottom: 0 !important;
+        max-height: 280px;
     }
-    .admin-overview-row .stat-card {
-        padding: 1.05rem 1rem;
-        min-height: 0;
-    }
-    /* Height comes only from left stats; banner paints into that box */
-    .admin-overview-banners {
-        position: relative;
-        height: 0;
-        min-height: 100%;
-        overflow: hidden;
-        border-radius: 16px;
+    .admin-banner-slot .carousel-slide img.slide-media,
+    .admin-banner-slot .carousel-slide video.slide-media {
+        max-height: 280px;
+        object-fit: contain;
         background: #0f172a;
     }
-    .admin-overview-banners .banner-carousel-wrap,
-    .admin-overview-banners .admin-banner-empty {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100% !important;
-        min-height: 0 !important;
-        max-height: none !important;
-        margin: 0 !important;
-        border-radius: 16px;
-    }
-    .admin-overview-banners .banner-carousel-wrap {
-        display: block;
-        overflow: hidden;
-        box-shadow: 0 4px 20px rgba(0,0,0,.1);
-    }
-    .admin-overview-banners .carousel-track {
-        height: 100% !important;
-        min-height: 0 !important;
-    }
-    .admin-overview-banners .carousel-slide {
-        height: 100% !important;
-        min-height: 0 !important;
-        max-height: none !important;
-        position: relative;
-        overflow: hidden;
-        background: #0f172a;
-    }
-    .admin-overview-banners .carousel-slide.vertical-slide {
-        height: 100% !important;
-        max-height: none !important;
-    }
-    .admin-overview-banners .carousel-slide img.slide-media,
-    .admin-overview-banners .carousel-slide video.slide-media {
-        position: absolute !important;
-        inset: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-        max-height: none !important;
-        min-height: 0 !important;
-        object-fit: contain !important;
-        object-position: center !important;
-        display: block;
-        transform: none !important;
-        background: #0f172a;
-    }
-    .admin-overview-banners .carousel-slide.is-active img.slide-media {
-        transform: none !important;
-    }
-    .admin-overview-banners .vertical-blur-bg {
-        inset: 0;
+    .admin-banner-slot .carousel-slide.vertical-slide {
+        height: 280px;
+        max-height: 280px;
     }
     .admin-banner-empty {
         display: flex;
@@ -665,12 +604,13 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         justify-content: center;
         gap: .45rem;
         text-align: center;
+        min-height: 140px;
         padding: 1.25rem;
-        color: #64748b;
-        text-decoration: none;
+        border-radius: 14px;
         border: 1.5px dashed #cbd5e1;
         background: linear-gradient(145deg, #f8fafc 0%, #eef2ff 100%);
-        box-sizing: border-box;
+        color: #64748b;
+        text-decoration: none;
         transition: border-color .15s, box-shadow .15s, color .15s;
     }
     .admin-banner-empty:hover {
@@ -678,33 +618,10 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         box-shadow: 0 8px 24px rgba(67, 97, 238, .12);
         color: #4338ca;
     }
-    .admin-banner-empty strong {
-        font-size: .95rem;
-        color: inherit;
-    }
-    .admin-banner-empty span {
-        font-size: .78rem;
-        max-width: 220px;
-        line-height: 1.35;
-    }
-    @media (max-width: 1100px) {
-        .admin-overview-row {
-            grid-template-columns: 1fr;
-        }
-        .admin-overview-banners {
-            height: 200px;
-            min-height: 200px;
-        }
-    }
-    @media (max-width: 560px) {
-        .admin-overview-row .stats-grid.admin-stats-2x3 {
-            grid-template-columns: 1fr;
-        }
-        .admin-overview-banners {
-            height: 180px;
-            min-height: 180px;
-        }
-    }
+    .admin-banner-empty strong { font-size: .95rem; color: inherit; }
+    .admin-banner-empty span { font-size: .78rem; max-width: 280px; line-height: 1.35; }
+    .cc-card.clickable { cursor: pointer; transition: transform .15s, box-shadow .15s; }
+    .cc-card.clickable:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(15,23,42,.08); }
 
     /* Birthday Panel */
     .bday-panel { background:#fff; border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.05); margin-bottom:1.5rem; }
@@ -1095,78 +1012,92 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
 
         <div class="page-content cc-dash">
 
-            <!-- ═══ OVERVIEW: 3×2 stats + banners ═══ -->
-            <div class="admin-overview-row">
-                <div class="stats-grid admin-stats-2x3">
-                    <div class="stat-card purple">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Total Logins</div>
-                            <div class="stat-value" data-count="<?= $totalUsers ?>">0</div>
-                        </div>
+            <!-- ═══ Banners (ATC-style full width) ═══ -->
+            <div class="admin-banner-slot">
+                <?php if (!empty($activeBanners)): ?>
+                    <?php $imgPrefix = '../uploads/announcements/'; include __DIR__ . '/../includes/banner_carousel.php'; ?>
+                <?php else: ?>
+                    <a class="admin-banner-empty" href="announcements.php">
+                        <strong>Dashboard Banners</strong>
+                        <span>Upload banners in Dashboard Banners to show them here.</span>
+                    </a>
+                <?php endif; ?>
+            </div>
+
+            <!-- Row 1: Logins & exams -->
+            <div class="cc-grid cc-grid-4">
+                <div class="cc-card cc-card-pad">
+                    <div class="cc-card-head">
+                        <?= cc_png('icon-staff.png', 'xl', 'Total logins') ?>
+                        <h3>Total Logins</h3>
                     </div>
-                    <div class="stat-card sky clickable" onclick="openDetailModal('pending_exam')" title="Click to view pending exam students by ATC">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Pending Exam</div>
-                            <div class="stat-value" data-count="<?= $pendingExam ?>">0</div>
-                        </div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">ATC Logins</div>
-                            <div class="stat-value" data-count="<?= $totalATC ?>">0</div>
-                        </div>
-                    </div>
-                    <div class="stat-card blue">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/></svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">DLC Logins</div>
-                            <div class="stat-value" data-count="<?= $totalDLC ?>">0</div>
-                        </div>
-                    </div>
-                    <div class="stat-card amber clickable" onclick="openDetailModal('inquiries')" title="Click to view all inquiries">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Inquiries</div>
-                            <div class="stat-value" data-count="<?= $totalInquiries ?>">0</div>
-                        </div>
-                    </div>
-                    <div class="stat-card rose clickable" onclick="openDetailModal('admissions')" title="Click to view all admissions">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-label">Admissions</div>
-                            <div class="stat-value" data-count="<?= $totalAdmissions ?>">0</div>
-                        </div>
-                    </div>
+                    <div class="cc-metric-value blue"><?= (int)$totalUsers ?></div>
+                    <div class="cc-metric-label">Portal user accounts</div>
                 </div>
-                <div class="admin-overview-banners">
-                    <?php if (!empty($activeBanners)): ?>
-                        <?php $imgPrefix = '../uploads/announcements/'; include __DIR__ . '/../includes/banner_carousel.php'; ?>
-                    <?php else: ?>
-                        <a class="admin-banner-empty" href="announcements.php">
-                            <strong>Dashboard Banners</strong>
-                            <span>Upload banners in Dashboard Banners to show them here.</span>
-                        </a>
-                    <?php endif; ?>
+                <div class="cc-card cc-card-pad">
+                    <div class="cc-card-head">
+                        <?= cc_png('icon-admissions.png', 'xl', 'ATC logins') ?>
+                        <h3>ATC Logins</h3>
+                    </div>
+                    <div class="cc-metric-value green"><?= (int)$totalATC ?></div>
+                    <div class="cc-metric-label">Active training centres</div>
+                </div>
+                <div class="cc-card cc-card-pad">
+                    <div class="cc-card-head">
+                        <?= cc_png('icon-material.png', 'xl', 'DLC logins') ?>
+                        <h3>DLC Logins</h3>
+                    </div>
+                    <div class="cc-metric-value blue"><?= (int)$totalDLC ?></div>
+                    <div class="cc-metric-label">District level centres</div>
+                </div>
+                <div class="cc-card cc-card-pad clickable" onclick="openDetailModal('pending_exam')" title="Pending exam students">
+                    <div class="cc-card-head">
+                        <?= cc_png('icon-pending.png', 'xl', 'Pending exam') ?>
+                        <h3>Pending Exam</h3>
+                    </div>
+                    <div class="cc-metric-value orange"><?= (int)$pendingExam ?></div>
+                    <div class="cc-metric-label">Yet to appear (main exam)</div>
                 </div>
             </div>
 
-            <!-- ═══ OPS CARDS: certificates / dispatches / materials ═══ -->
-            <div class="cc-grid cc-grid-4" style="margin-top:1rem">
+            <!-- Row 2: Pipeline -->
+            <div class="cc-grid cc-grid-4">
+                <div class="cc-card cc-card-pad clickable" onclick="openDetailModal('inquiries')" title="View inquiries">
+                    <div class="cc-card-head">
+                        <?= cc_png('icon-staff.png', 'xl', 'Inquiries') ?>
+                        <h3>Inquiries</h3>
+                    </div>
+                    <div class="cc-metric-value blue"><?= (int)$totalInquiries ?></div>
+                    <div class="cc-metric-label">All centre inquiries</div>
+                </div>
+                <div class="cc-card cc-card-pad clickable" onclick="openDetailModal('admissions')" title="View admissions">
+                    <div class="cc-card-head">
+                        <?= cc_png('icon-admissions.png', 'xl', 'Admissions') ?>
+                        <h3>Admissions</h3>
+                    </div>
+                    <div class="cc-metric-value green"><?= (int)$totalAdmissions ?></div>
+                    <div class="cc-metric-label">Total student admissions</div>
+                </div>
+                <div class="cc-card cc-card-pad clickable" onclick="openDetailModal('reported')" title="Reported students">
+                    <div class="cc-card-head">
+                        <?= cc_png('icon-reported.png', 'xl', 'Reported') ?>
+                        <h3>Reported Students</h3>
+                    </div>
+                    <div class="cc-metric-value green"><?= (int)$reportedStudents ?></div>
+                    <div class="cc-kv"><span class="k">Share paid to HO</span><span class="v green">Yes</span></div>
+                </div>
+                <div class="cc-card cc-card-pad clickable" onclick="openDetailModal('pending_report')" title="Pending reports">
+                    <div class="cc-card-head">
+                        <?= cc_png('icon-pending.png', 'xl', 'Pending reports') ?>
+                        <h3>Pending Reports</h3>
+                    </div>
+                    <div class="cc-metric-value orange"><?= (int)$pendingReporting ?></div>
+                    <div class="cc-kv"><span class="k">Share not yet paid</span><span class="v orange">Open</span></div>
+                </div>
+            </div>
+
+            <!-- Row 3: Ops -->
+            <div class="cc-grid cc-grid-4">
                 <a class="cc-card cc-card-pad" href="print_certificates.php" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
                         <?= cc_png('icon-certified.png', 'xl', 'Certified') ?>
@@ -1185,7 +1116,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </a>
                 <a class="cc-card cc-card-pad" href="dispatches.php?status=Dispatched" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-pending.png', 'xl', 'Pending') ?>
+                        <?= cc_png('icon-pending.png', 'xl', 'Pending dispatches') ?>
                         <h3>Pending Dispatches</h3>
                     </div>
                     <div class="cc-metric-value orange"><?= (int)$pendingDispatches ?></div>
@@ -1193,13 +1124,15 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </a>
                 <a class="cc-card cc-card-pad" href="print_certificates.php?filter=print_pending" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-print.png', 'xl', 'Print certificates') ?>
-                        <h3>Certificate Printing Pending</h3>
+                        <?= cc_png('icon-print.png', 'xl', 'Print pending') ?>
+                        <h3>Certificate Printing</h3>
                     </div>
                     <div class="cc-metric-value orange"><?= (int)$certPrintPending ?></div>
                     <div class="cc-metric-label">Awaiting print / issue</div>
                 </a>
             </div>
+
+            <!-- Row 4: Materials + Share -->
             <div class="cc-grid cc-grid-4">
                 <a class="cc-card cc-card-pad" href="dispatches.php?view=pending" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
@@ -1207,7 +1140,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         <h3>Course Material Pending</h3>
                     </div>
                     <div class="cc-metric-value red"><?= (int)$courseMaterialPending ?></div>
-                    <div class="cc-metric-label">With-material students awaiting dispatch</div>
+                    <div class="cc-metric-label">Awaiting dispatch</div>
                 </a>
                 <a class="cc-card cc-card-pad" href="material_requirements.php?tab=pending" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
@@ -1217,17 +1150,13 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                     <div class="cc-kv"><span class="k">Open pending tab</span><span class="v orange">View</span></div>
                     <div class="cc-metric-label">ATC-wise material needs</div>
                 </a>
-            </div>
-
-            <!-- ═══ ClassChakra-style HO Share cards (admin revenue = share only) ═══ -->
-            <div class="cc-grid cc-grid-4">
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
                         <?= cc_png('icon-share-revenue.png', 'xl', 'Share revenue') ?>
                         <h3>Share Revenue</h3>
                         <a class="cc-link" href="share_payments.php">Show All</a>
                     </div>
-                    <div class="cc-metric-label">HO income from ATC share payments</div>
+                    <div class="cc-metric-label">HO share received</div>
                     <div class="cc-metric-value green">₹ <?= number_format((float)$revenueStats['total_collected'], 0) ?></div>
                 </div>
                 <div class="cc-card cc-card-pad">
@@ -1238,6 +1167,10 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                     <div class="cc-metric-label">Awaiting completion</div>
                     <div class="cc-metric-value orange">₹ <?= number_format((float)$revenueStats['total_pending'], 0) ?></div>
                 </div>
+            </div>
+
+            <!-- Row 5: Share today + summary + network + quick actions -->
+            <div class="cc-grid cc-grid-4">
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
                         <?= cc_png('icon-today-share.png', 'xl', "Today's share") ?>
@@ -1248,16 +1181,12 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-staff.png', 'xl', 'Share summary') ?>
+                        <?= cc_png('icon-grand-total.png', 'xl', 'Share summary') ?>
                         <h3>Share Summary</h3>
                     </div>
                     <div class="cc-kv"><span class="k">Transactions</span><span class="v"><?= (int)($revenueStats['txn_count'] ?? 0) ?></span></div>
                     <div class="cc-kv"><span class="k">ATCs paid</span><span class="v green"><?= (int)($revenueStats['atc_paid_count'] ?? 0) ?></span></div>
-                    <div class="cc-kv"><span class="k">ATC Logins</span><span class="v"><?= (int)$totalATC ?></span></div>
                 </div>
-            </div>
-
-            <div class="cc-grid cc-grid-4">
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
                         <?= cc_png('icon-staff.png', 'xl', 'Network') ?>
@@ -1267,29 +1196,19 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                     <div class="cc-kv"><span class="k">ATC Centers</span><span class="v blue"><?= (int)$totalATC ?></span></div>
                     <div class="cc-kv"><span class="k">Total Logins</span><span class="v"><?= (int)$totalUsers ?></span></div>
                 </div>
-                <div class="cc-card cc-card-pad" onclick="openDetailModal('admissions')" style="cursor:pointer" title="View admissions">
+                <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-admissions.png', 'xl', 'Admissions') ?>
-                        <h3>Admissions</h3>
+                        <?= cc_png('icon-dispatch.png', 'xl', 'Quick actions') ?>
+                        <h3>Quick Actions</h3>
                     </div>
-                    <div class="cc-metric-value blue"><?= (int)$totalAdmissions ?></div>
-                    <div class="cc-kv"><span class="k">Inquiries</span><span class="v"><?= (int)$totalInquiries ?></span></div>
-                </div>
-                <div class="cc-card cc-card-pad" onclick="openDetailModal('reported')" style="cursor:pointer" title="Reported students">
-                    <div class="cc-card-head">
-                        <?= cc_png('icon-reported.png', 'xl', 'Reported') ?>
-                        <h3>Reported Students</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem">
+                        <a class="cc-btn" href="dlc_offices.php" style="text-align:center">DLCs</a>
+                        <a class="cc-btn" href="atc_centers.php" style="text-align:center">ATCs</a>
+                        <a class="cc-btn" href="students.php" style="text-align:center">Students</a>
+                        <a class="cc-btn" href="reports.php" style="text-align:center">Reports</a>
+                        <a class="cc-btn" href="share_payments.php" style="text-align:center">Shares</a>
+                        <a class="cc-btn" href="announcements.php" style="text-align:center">Banners</a>
                     </div>
-                    <div class="cc-metric-value green"><?= (int)$reportedStudents ?></div>
-                    <div class="cc-kv"><span class="k">Share paid to HO</span><span class="v green">Yes</span></div>
-                </div>
-                <div class="cc-card cc-card-pad" onclick="openDetailModal('pending_report')" style="cursor:pointer" title="Pending reports">
-                    <div class="cc-card-head">
-                        <?= cc_png('icon-pending.png', 'xl', 'Pending reports') ?>
-                        <h3>Pending Reports</h3>
-                    </div>
-                    <div class="cc-metric-value orange"><?= (int)$pendingReporting ?></div>
-                    <div class="cc-kv"><span class="k">Share not yet paid</span><span class="v orange">Open</span></div>
                 </div>
             </div>
 
@@ -1297,7 +1216,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             <div class="cc-card" style="margin-bottom:1rem">
                 <div class="cc-card-pad" style="padding-bottom:.35rem">
                     <div class="cc-card-head" style="margin-bottom:.35rem">
-                        <?= cc_ico('card', 'xl') ?>
+                        <?= cc_png('icon-today-share.png', 'xl', 'Recent share payments') ?>
                         <h3>Recent Share Payments</h3>
                         <a class="cc-link" href="share_payments.php">Show All</a>
                     </div>
@@ -1329,33 +1248,6 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </table>
             </div>
             <?php endif; ?>
-
-            <!-- ═══ L3: GYANAM HEAD OFFICE REPORTING CARDS ═══ -->
-            <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted,#9ca3af);margin:1.5rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border-color,#e5e7eb)">
-                Gyanam Head Office — Reporting
-            </div>
-            <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
-                <div class="stat-card green clickable" onclick="openDetailModal('reported')" title="Click to view reported students">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">Reported Students</div>
-                        <div class="stat-value"><?= $reportedStudents ?></div>
-                        <div style="font-size:.72rem;color:var(--text-muted,#9ca3af);margin-top:.3rem">Share paid to HO</div>
-                    </div>
-                </div>
-                <div class="stat-card amber clickable" onclick="openDetailModal('pending_report')" title="Click to view pending reports grouped by ATC">
-                    <div class="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-label">Pending Reports</div>
-                        <div class="stat-value"><?= $pendingReporting ?></div>
-                        <div style="font-size:.72rem;color:var(--text-muted,#9ca3af);margin-top:.3rem">Share not yet paid</div>
-                    </div>
-                </div>
-            </div>
 
             <!-- ═══ Authorization Expiry Alert Panel ═══ -->
             <?php if (!empty($expiringATCs)): ?>
@@ -1421,68 +1313,6 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         <span id="calBdayTitle">Birthdays</span>
                     </div>
                     <div class="cal-bday-side-body" id="calBdayList"></div>
-                </div>
-            </div>
-
-            <!-- ═══ Quick Actions ═══ -->
-            <div class="section-header">
-                <h3>Quick Actions</h3>
-            </div>
-            <div class="actions-grid">
-                <a href="dlc_offices.php" class="action-card">
-                    <div class="action-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/></svg></div>
-                    <h4>Manage DLCs</h4><p>View and manage DLC offices</p>
-                </a>
-                <a href="atc_centers.php" class="action-card">
-                    <div class="action-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg></div>
-                    <h4>Manage ATCs</h4><p>View and manage ATC centers</p>
-                </a>
-                <a href="students.php" class="action-card">
-                    <div class="action-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div>
-                    <h4>Admissions</h4><p>All student admissions</p>
-                </a>
-                <a href="reports.php" class="action-card">
-                    <div class="action-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
-                    <h4>View Reports</h4><p>Analytics and reporting</p>
-                </a>
-            </div>
-
-            <!-- ═══ REVENUE OVERVIEW (HO Share only — not ATC fee earnings) ═══ -->
-            <div class="rpt-section">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                Share Revenue Overview
-                <span style="margin-left:.5rem;font-size:.72rem;font-weight:600;color:#64748b;text-transform:none;letter-spacing:0">Admin income = ATC share payments only</span>
-            </div>
-            <div class="rev-grid">
-                <div class="rev-card">
-                    <div class="rev-icon" style="background:linear-gradient(135deg,#ec4899,#db2777)">
-                        <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                    </div>
-                    <div>
-                        <div class="rev-label">Share Revenue</div>
-                        <div class="rev-value">₹ <?= number_format($revenueStats['total_revenue'],0) ?></div>
-                        <div class="rev-sub">Completed HO share received</div>
-                    </div>
-                </div>
-                <div class="rev-card">
-                    <div class="rev-icon" style="background:linear-gradient(135deg,#10b981,#059669)">
-                        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                    <div>
-                        <div class="rev-label">Share Received</div>
-                        <div class="rev-value">₹ <?= number_format($revenueStats['total_collected'],0) ?></div>
-                        <div class="rev-sub"><?= (int)($revenueStats['atc_paid_count'] ?? 0) ?> ATC(s) · <?= (int)($revenueStats['txn_count'] ?? 0) ?> txn</div>
-                    </div>
-                </div>
-                <div class="rev-card">
-                    <div class="rev-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">
-                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    </div>
-                    <div>
-                        <div class="rev-label">Pending Share</div>
-                        <div class="rev-value">₹ <?= number_format($revenueStats['total_pending'],0) ?></div>
-                        <div class="rev-sub">Share payments awaiting completion</div>
-                    </div>
                 </div>
             </div>
 
