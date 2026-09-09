@@ -92,13 +92,29 @@
   flex-shrink: 0;
   filter: drop-shadow(0 3px 6px rgba(37, 99, 235, .16));
 }
+.cc-ico img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 5px rgba(15, 23, 42, .12));
+}
 .cc-ico.cc-ico-sm svg {
   width: 52px;
   height: 52px;
 }
+.cc-ico.cc-ico-sm img {
+  width: 44px;
+  height: 44px;
+}
 .cc-ico.cc-ico-xl svg {
   width: 84px;
   height: 84px;
+}
+.cc-ico.cc-ico-xl img {
+  width: 72px;
+  height: 72px;
 }
 .cc-ico.cc-ico-sm,
 .cc-ico.cc-ico-xl {
@@ -113,6 +129,9 @@
   .cc-ico svg { width: 56px; height: 56px; }
   .cc-ico.cc-ico-xl svg { width: 64px; height: 64px; }
   .cc-ico.cc-ico-sm svg { width: 44px; height: 44px; }
+  .cc-ico img { width: 48px; height: 48px; }
+  .cc-ico.cc-ico-xl img { width: 56px; height: 56px; }
+  .cc-ico.cc-ico-sm img { width: 40px; height: 40px; }
 }
 
 .cc-metric-label {

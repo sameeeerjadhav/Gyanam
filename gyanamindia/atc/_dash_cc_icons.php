@@ -213,3 +213,16 @@ SVG,
     return '<span class="' . htmlspecialchars($cls) . '">' . $svg . '</span>';
 }
 }
+
+if (!function_exists('cc_png')) {
+/** PNG dashboard icon from assets/icons/ */
+function cc_png(string $file, string $size = 'xl', string $alt = ''): string {
+    $cls = 'cc-ico' . ($size !== '' ? ' cc-ico-' . $size : '');
+    $px = $size === 'sm' ? 48 : ($size === 'xl' ? 72 : 60);
+    $src = '../assets/icons/' . ltrim($file, '/');
+    $altEsc = htmlspecialchars($alt !== '' ? $alt : pathinfo($file, PATHINFO_FILENAME));
+    return '<span class="' . htmlspecialchars($cls) . '">'
+        . '<img src="' . htmlspecialchars($src) . '" alt="' . $altEsc . '" width="' . $px . '" height="' . $px . '" loading="lazy" decoding="async">'
+        . '</span>';
+}
+}
