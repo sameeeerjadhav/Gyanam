@@ -260,8 +260,8 @@ foreach ($banners as $b) {
     @media(max-width:1024px){ .banners-layout{ grid-template-columns:1fr; } }
 
     /* ── Status Cards ── */
-    .status-bar { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.75rem; }
-    @media(max-width:640px){ .status-bar{ grid-template-columns:1fr; } }
+    .status-bar { display:grid; grid-template-columns:repeat(3, 1fr); gap:1rem; margin-bottom:1.75rem; }
+    @media(max-width:900px){ .status-bar{ grid-template-columns:1fr; } }
     .status-card {
         border-radius:var(--radius-xl,16px); padding:1.1rem 1.25rem;
         display:flex; align-items:center; gap:.9rem;
@@ -431,23 +431,31 @@ foreach ($banners as $b) {
     .modal-overlay {
         position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;
         display:flex;align-items:center;justify-content:center;
+        padding:1rem;
         opacity:0;pointer-events:none;transition:opacity .25s;
+        overflow-y:auto;
+        -webkit-overflow-scrolling:touch;
     }
     .modal-overlay.open { opacity:1;pointer-events:auto; }
     .edit-modal {
         background:var(--bg-surface,#fff);border-radius:var(--radius-xl,16px);
-        width:min(480px,95vw);max-height:90vh;overflow-y:auto;
+        width:min(520px,95vw);
+        max-height:min(90vh, 760px);
+        display:flex;flex-direction:column;
+        overflow:hidden;
         box-shadow:0 20px 60px rgba(0,0,0,.18);
         transform:translateY(24px) scale(.97);transition:transform .28s ease, opacity .25s;
         opacity:0;
+        margin:auto;
     }
     .modal-overlay.open .edit-modal { transform:none;opacity:1; }
     .edit-modal-header {
-        padding:1.25rem 1.5rem;
+        padding:1rem 1.25rem;
         border-bottom:1px solid var(--border-color,#e2e8f0);
         display:flex;align-items:center;justify-content:space-between;
         background:linear-gradient(135deg,#6366f1,#8b5cf6);
         border-radius:var(--radius-xl,16px) var(--radius-xl,16px) 0 0;
+        flex-shrink:0;
     }
     .edit-modal-header h3 { margin:0;font-size:.95rem;font-weight:800;color:#fff; }
     .modal-close {
@@ -457,9 +465,21 @@ foreach ($banners as $b) {
         transition:background .2s;
     }
     .modal-close:hover { background:rgba(255,255,255,.35); }
-    .edit-modal-body { padding:1.5rem; }
+    .edit-modal-body {
+        padding:1.15rem 1.25rem;
+        overflow-y:auto;
+        flex:1 1 auto;
+        min-height:0;
+        -webkit-overflow-scrolling:touch;
+    }
+    .edit-modal-footer {
+        flex-shrink:0;
+        padding:.9rem 1.25rem 1.1rem;
+        border-top:1px solid var(--border-color,#e2e8f0);
+        background:#fff;
+    }
     .edit-img-preview {
-        width:100%;height:110px;object-fit:cover;
+        width:100%;height:90px;object-fit:contain;background:#0f172a;
         border-radius:10px;margin-bottom:1rem;display:block;
         border:1px solid var(--border-color,#e2e8f0);
     }
@@ -881,19 +901,20 @@ foreach ($banners as $b) {
                         <option value="vertical">Vertical (Portrait / Reel)</option>
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Status</label>
                     <select name="status" id="editStatus" class="form-control">
                         <option value="Active">Active — Live</option>
                         <option value="Inactive">Inactive — Hidden</option>
                     </select>
                 </div>
-
-                <button type="submit" class="btn-edit-submit">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    Save Changes
-                </button>
             </form>
+        </div>
+        <div class="edit-modal-footer">
+            <button type="submit" form="editForm" class="btn-edit-submit">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                Save Changes
+            </button>
         </div>
     </div>
 </div>
