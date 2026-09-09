@@ -35,6 +35,7 @@ $filterDlc    = isset($_GET['dlc_id'])    && $_GET['dlc_id']    !== '' ? (int)$_
 $filterAtc    = isset($_GET['atc_id'])    && $_GET['atc_id']    !== '' ? (int)$_GET['atc_id']    : 0;
 $filterCourse = trim($_GET['course']  ?? '');
 $filterSearch = trim($_GET['search']  ?? '');
+$filterMode   = trim($_GET['filter']  ?? ''); // print_pending = passed / pending print only
 
 // ── Try to pull passed student identifiers from exam portal ───────────────────
 $passedIdentifiers = [];
@@ -91,6 +92,41 @@ foreach ($students as &$s) {
     $s['exam_title']   = $passData['exam_title'] ?? '';
 }
 unset($s);
+
+// Already-issued certificate map (for print-pending filter)
+$issuedRegIds = [];
+try {
+    if (function_exists('ensureIssuedCertificatesTable')) {
+        ensureIssuedCertificatesTable($pdo);
+    }
+    foreach ($pdo->query('SELECT reg_id, admission_id FROM issued_certificates')->fetchAll(PDO::FETCH_ASSOC) as $ic) {
+        if (!empty($ic['reg_id'])) {
+            $issuedRegIds[trim((string)$ic['reg_id'])] = true;
+        }
+        if (!empty($ic['admission_id'])) {
+            $issuedRegIds['AID:' . (int)$ic['admission_id']] = true;
+        }
+    }
+} catch (Exception $e) {}
+
+foreach ($students as &$s) {
+    $regId = $s['registration_id'] ?: ('GYANAM' . $s['id']);
+    $s['cert_issued'] = isset($issuedRegIds[$regId]) || isset($issuedRegIds['AID:' . (int)$s['id']]);
+}
+unset($s);
+
+if ($filterMode === 'print_pending') {
+    // Prefer exam-passed & not issued; if exam portal offline, keep students not yet issued
+    $students = array_values(array_filter($students, function ($s) use ($integrationReady) {
+        if (!empty($s['cert_issued'])) {
+            return false;
+        }
+        if ($integrationReady) {
+            return !empty($s['exam_passed']);
+        }
+        return true;
+    }));
+}
 
 $totalStudents = count($students);
 $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
@@ -235,6 +271,13 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
 
         <!-- Filters -->
         <form method="GET" class="cert-filters">
+            <?php if ($filterMode === 'print_pending'): ?>
+            <input type="hidden" name="filter" value="print_pending">
+            <div style="flex:1 1 100%;padding:.65rem .9rem;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:.82rem;font-weight:700">
+                Showing certificate printing pending only
+                <a href="print_certificates.php" style="margin-left:.5rem;color:#2563eb">Clear filter</a>
+            </div>
+            <?php endif; ?>
             <div class="cf-grp">
                 <label>DLC Office</label>
                 <select name="dlc_id" onchange="this.form.submit()" style="min-width:160px">
