@@ -594,36 +594,37 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .bday-tag { display:inline-block; margin-top:.2rem; font-size:.72rem; font-weight:600; background:var(--surface-3); color:var(--text-3); padding:.1rem .5rem; border-radius:99px; }
     .bday-wish { margin-left: auto; font-size: 1.3rem; }
 
-    /* Calendar + month birthdays */
+    /* Calendar + month birthdays — compact */
     .cal-bday-wrap {
         display: grid;
-        grid-template-columns: 1.6fr 1fr;
-        gap: 1rem;
-        margin: 1.5rem 0;
+        grid-template-columns: 1.15fr .85fr;
+        gap: .75rem;
+        margin: 1rem 0;
+        align-items: start;
     }
     .cal-card, .cal-bday-side {
         background: #fff;
         border: 1px solid var(--border);
-        border-radius: 16px;
-        box-shadow: 0 2px 12px rgba(0,0,0,.05);
+        border-radius: 12px;
+        box-shadow: 0 1px 6px rgba(0,0,0,.04);
         overflow: hidden;
     }
-    .cal-card { padding: 1.15rem 1.25rem 1rem; }
+    .cal-card { padding: .7rem .8rem .65rem; }
     .cal-nav {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 1rem;
+        margin-bottom: .45rem;
     }
     .cal-nav h3 {
         margin: 0;
-        font-size: 1.05rem;
+        font-size: .88rem;
         font-weight: 800;
         color: var(--text);
         letter-spacing: -.01em;
     }
     .cal-nav-btn {
-        width: 34px; height: 34px;
+        width: 26px; height: 26px;
         border-radius: 50%;
         border: 1px solid #e5e7eb;
         background: #fff;
@@ -635,35 +636,37 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         transition: background .15s, color .15s, border-color .15s;
     }
     .cal-nav-btn:hover { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
-    .cal-nav-btn svg { width: 16px; height: 16px; }
+    .cal-nav-btn svg { width: 13px; height: 13px; }
     .cal-weekdays, .cal-days {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
-        gap: .35rem;
+        gap: 2px;
     }
     .cal-weekdays span {
         text-align: center;
-        font-size: .72rem;
+        font-size: .62rem;
         font-weight: 700;
         color: #94a3b8;
-        padding: .35rem 0;
+        padding: .15rem 0;
         text-transform: uppercase;
     }
     .cal-day {
         position: relative;
-        aspect-ratio: 1;
-        min-height: 42px;
-        border-radius: 12px;
+        height: 28px;
+        min-height: 0;
+        aspect-ratio: auto;
+        border-radius: 7px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        font-size: .9rem;
+        font-size: .74rem;
         font-weight: 700;
         color: #334155;
         cursor: default;
-        border: 1.5px solid transparent;
+        border: 1px solid transparent;
         transition: background .15s;
+        line-height: 1;
     }
     .cal-day.empty { visibility: hidden; }
     .cal-day.has-bday { cursor: pointer; }
@@ -671,7 +674,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .cal-day.is-today {
         background: #6366f1;
         color: #fff;
-        box-shadow: 0 6px 16px rgba(99, 102, 241, .35);
+        box-shadow: 0 2px 8px rgba(99, 102, 241, .3);
     }
     .cal-day.is-holiday:not(.is-today) {
         border-color: #c4b5fd;
@@ -679,75 +682,91 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         color: #5b21b6;
     }
     .cal-day.is-selected:not(.is-today) {
-        outline: 2px solid #6366f1;
-        outline-offset: 1px;
+        outline: 1.5px solid #6366f1;
+        outline-offset: 0;
     }
     .cal-dot {
-        width: 6px; height: 6px;
+        width: 4px; height: 4px;
         border-radius: 50%;
         background: #ec4899;
-        margin-top: 3px;
+        margin-top: 1px;
+        position: absolute;
+        bottom: 3px;
     }
     .cal-day.is-today .cal-dot { background: #fda4af; }
     .cal-legend {
         display: flex;
         flex-wrap: wrap;
-        gap: .85rem 1.15rem;
-        margin-top: 1rem;
-        padding-top: .85rem;
+        gap: .4rem .75rem;
+        margin-top: .5rem;
+        padding-top: .45rem;
         border-top: 1px solid #f1f5f9;
-        font-size: .75rem;
+        font-size: .65rem;
         font-weight: 700;
         color: #64748b;
     }
-    .cal-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+    .cal-legend span { display: inline-flex; align-items: center; gap: .3rem; }
     .lg-holiday {
-        width: 12px; height: 12px; border-radius: 3px;
+        width: 9px; height: 9px; border-radius: 2px;
         border: 1.5px solid #c4b5fd; background: #f5f3ff;
     }
     .lg-today {
-        width: 12px; height: 12px; border-radius: 3px; background: #6366f1;
+        width: 9px; height: 9px; border-radius: 2px; background: #6366f1;
     }
     .lg-bday {
-        width: 8px; height: 8px; border-radius: 50%; background: #ec4899;
+        width: 6px; height: 6px; border-radius: 50%; background: #ec4899;
     }
     .cal-bday-side-head {
         display: flex;
         align-items: center;
-        gap: .55rem;
-        padding: 1rem 1.15rem;
+        gap: .4rem;
+        padding: .65rem .8rem;
         border-bottom: 1px solid #f1f5f9;
         font-weight: 800;
-        font-size: .95rem;
+        font-size: .82rem;
         color: var(--text);
     }
     .cal-bday-side-head .ico {
-        width: 28px; height: 28px; border-radius: 50%;
+        width: 22px; height: 22px; border-radius: 50%;
         background: #fce7f3; color: #db2777;
         display: inline-flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
     }
-    .cal-bday-side-head .ico svg { width: 14px; height: 14px; }
+    .cal-bday-side-head .ico svg { width: 12px; height: 12px; }
     .cal-bday-side-body {
-        padding: .5rem 0;
-        max-height: 340px;
+        padding: .25rem 0;
+        max-height: 210px;
         overflow-y: auto;
-        min-height: 220px;
+        min-height: 0;
     }
+    .cal-bday-side .bday-row {
+        padding: .45rem .8rem;
+        gap: .55rem;
+    }
+    .cal-bday-side .bday-avatar {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: .72rem !important;
+    }
+    .cal-bday-side .bday-name { font-size: .8rem; }
+    .cal-bday-side .bday-tag { font-size: .65rem; }
     .cal-bday-empty {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: .5rem;
-        padding: 2.5rem 1rem;
+        gap: .3rem;
+        padding: 1.25rem .75rem;
         color: #94a3b8;
         font-weight: 600;
-        font-size: .9rem;
+        font-size: .78rem;
         text-align: center;
+        min-height: 120px;
     }
-    .cal-bday-empty .cake { font-size: 1.6rem; }
+    .cal-bday-empty .cake { font-size: 1.15rem; }
     @media (max-width: 900px) {
         .cal-bday-wrap { grid-template-columns: 1fr; }
+        .cal-bday-side-body { max-height: 160px; }
     }
 
     /* Detail modal */
