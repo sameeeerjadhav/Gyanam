@@ -641,12 +641,12 @@ class ExamPage {
       border:2px solid #e2e8f0;position:relative;
     `;
     container.innerHTML = `
-      <div style="position:absolute;top:0.4rem;left:0.4rem;background:rgba(15,23,42,0.85);color:white;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.65rem;font-weight:700;display:flex;align-items:center;gap:0.3rem;z-index:2">
-        <span style="width:6px;height:6px;background:#22c55e;border-radius:50%"></span>
-        LIVE PREVIEW ONLY
+      <div style="position:absolute;top:0.4rem;left:0.4rem;background:rgba(220,38,38,0.92);color:white;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.65rem;font-weight:700;display:flex;align-items:center;gap:0.3rem;z-index:2">
+        <span style="width:6px;height:6px;background:#fff;border-radius:50%;animation:timer-pulse 1.2s infinite"></span>
+        CAMERA ON — PROCTORED
       </div>
       <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(15,23,42,0.75);color:#e2e8f0;padding:0.25rem 0.4rem;font-size:0.62rem;font-weight:600;z-index:2">
-        Not recorded or uploaded
+        Keep your face visible during the exam
       </div>
     `;
 
