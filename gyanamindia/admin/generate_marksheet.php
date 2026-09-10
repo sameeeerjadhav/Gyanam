@@ -429,7 +429,7 @@ $boxBottom = $sy + $sh;
 $sealPadTop = 0.8;
 $sealPadBottom = 1.2;
 $sealAvailH = max(12.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
-$sealSize = min(28.0, $rightW - 4.0, $sealAvailH);
+$sealSize = min(29.0, $rightW - 4.0, $sealAvailH);
 $sealX = $sx + ($rightW - $sealSize) / 2;
 $sealY = $textBottom + $sealPadTop + max(0.0, ($sealAvailH - $sealSize) / 2);
 if (is_file($sealPath)) {
