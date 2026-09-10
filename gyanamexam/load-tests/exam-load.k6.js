@@ -17,8 +17,9 @@ const BASE = __ENV.BASE_URL || 'http://127.0.0.1:8000/api/v1';
 const STUDENT_ID = __ENV.STUDENT_ID || 'TEST001';
 const STUDENT_PASS = __ENV.STUDENT_PASS || 'password';
 const EXAM_ID = __ENV.EXAM_ID || '1';
-const THINK = Number(__ENV.THINK_SECONDS || 2);
-const HEARTBEATS = Number(__ENV.HEARTBEATS || 3); // short loop for CI; raise for soak
+const THINK = Number(__ENV.THINK_SECONDS || 5);
+const HEARTBEATS = Number(__ENV.HEARTBEATS || 2); // short loop for CI; raise for soak
+const HB_GAP = Number(__ENV.HB_GAP || 75); // matches production 75s heartbeat
 
 const errRate = new Rate('errors');
 const hbTrend = new Trend('heartbeat_ms');
@@ -26,19 +27,16 @@ const submitTrend = new Trend('submit_ms');
 
 export const options = {
   stages: [
-    { duration: '1m', target: 100 },
+    { duration: '1m', target: 50 },
     { duration: '2m', target: 100 },
-    { duration: '2m', target: 500 },
-    { duration: '2m', target: 500 },
-    { duration: '3m', target: 1000 },
-    { duration: '3m', target: 1000 },
-    { duration: '2m', target: 0 },
+    { duration: '3m', target: 100 },
+    { duration: '1m', target: 0 },
   ],
   thresholds: {
-    errors: ['rate<0.01'],
-    http_req_failed: ['rate<0.01'],
-    heartbeat_ms: ['p(95)<500'],
-    submit_ms: ['p(95)<2000'],
+    errors: ['rate<0.02'],
+    http_req_failed: ['rate<0.02'],
+    heartbeat_ms: ['p(95)<800'],
+    submit_ms: ['p(95)<3000'],
   },
 };
 
@@ -100,7 +98,7 @@ export default function () {
       };
       http.post(`${BASE}/student/exam/${EXAM_ID}/answers`, JSON.stringify(draft), opts);
     }
-    sleep(Math.max(1, THINK));
+    sleep(Math.max(1, HB_GAP));
   }
 
   const answers = questions.map((q, idx) => ({

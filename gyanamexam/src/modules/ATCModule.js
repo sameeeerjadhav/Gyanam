@@ -213,7 +213,7 @@ export async function renderATC(ApiClient, ctx) {
           </table></div>`}
         </div>
 
-        <p style="text-align:center;font-size:0.75rem;color:var(--text-muted);margin-top:1rem">Auto-refreshes every 10 seconds</p>
+        <p style="text-align:center;font-size:0.75rem;color:var(--text-muted);margin-top:1rem">Auto-refreshes every 30 seconds</p>
       `;
       await bindProctorCameras(ApiClient, panel);
     } catch (e) {
@@ -222,7 +222,7 @@ export async function renderATC(ApiClient, ctx) {
     } finally {
       _liveRunning = false;
     }
-    if (!_liveStopped) _liveTimer = setTimeout(doLiveRefresh, 10000);
+    if (!_liveStopped) _liveTimer = setTimeout(doLiveRefresh, 30000);
   }
 
   function startLiveRefresh() {

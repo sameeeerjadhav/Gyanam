@@ -37,8 +37,8 @@ export const CONFIG = {
     WS_PORT: 6001,
     WS_KEY: 'gyanam-secret-key',
 
-    // Hostinger shared hosting often blocks custom ports
-    USE_WEBSOCKETS: isLocal,
+    // Hostinger shared hosting: keep websockets OFF (blocks custom ports + adds load)
+    USE_WEBSOCKETS: false,
 
     TOKEN_KEY: 'gyanam_token',
     USER_KEY: 'gyanam_user'

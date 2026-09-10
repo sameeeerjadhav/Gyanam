@@ -26,7 +26,7 @@ export async function renderLive(ApiClient, { getScopedLive }) {
 
       el.innerHTML = `
         <div class="page-header">
-          <div><h2>Live Monitoring</h2><p>Auto-refreshes every 10 seconds</p></div>
+          <div><h2>Live Monitoring</h2><p>Auto-refreshes every 30 seconds</p></div>
           <button class="btn btn-outline btn-sm" id="live-refresh-btn">↻ Refresh Now</button>
         </div>
         <div class="stats-grid" style="margin-bottom:1.5rem">
@@ -101,7 +101,7 @@ export async function renderLive(ApiClient, { getScopedLive }) {
       _refreshRunning = false;
     }
 
-    if (!_stopped) setTimeout(refresh, 10000);
+    if (!_stopped) setTimeout(refresh, 30000);
   }
 
   window.addStudentTime = async (studentId, examId, studentName) => {
