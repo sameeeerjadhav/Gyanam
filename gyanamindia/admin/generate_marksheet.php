@@ -426,10 +426,10 @@ $pdf->Cell($rightW - 2, 4.5, 'Gyanam India Educational Services', 0, 0, 'C');
 // Official seal under signatures / signatory text
 $textBottom = $textY + 4.8 + 4.5;
 $boxBottom = $sy + $sh;
-$sealPadTop = 1.2;
-$sealPadBottom = 2.0;
-$sealAvailH = max(10.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
-$sealSize = min(22.0, $rightW - 6.0, $sealAvailH);
+$sealPadTop = 0.8;
+$sealPadBottom = 1.2;
+$sealAvailH = max(12.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
+$sealSize = min(28.0, $rightW - 4.0, $sealAvailH);
 $sealX = $sx + ($rightW - $sealSize) / 2;
 $sealY = $textBottom + $sealPadTop + max(0.0, ($sealAvailH - $sealSize) / 2);
 if (is_file($sealPath)) {
