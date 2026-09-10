@@ -5,6 +5,7 @@
 
 import AuthenticationModule from '../services/AuthenticationModule.js';
 import router from '../services/Router.js';
+import { stampedeDelayMs, withBackoff } from '../utils/stampede.js';
 
 class LoginPage {
   constructor(authModule = null) {
@@ -686,7 +687,12 @@ class LoginPage {
     this.isSubmitting = true;
 
     try {
-      const result = await this.authModule.authenticate({ identifier, password });
+      // Spread mass login: 0–15s deterministic delay by registration ID + retry on overload
+      await new Promise((r) => setTimeout(r, stampedeDelayMs(identifier, 15000, 1000)));
+      const result = await withBackoff(
+        () => this.authModule.authenticate({ identifier, password }),
+        { retries: 4, baseMs: 1000, maxMs: 8000, label: 'student-login' }
+      );
       if (result.success) router.navigate('/student');
     } catch (error) {
       this._showError(error.message);

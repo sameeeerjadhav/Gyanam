@@ -12,6 +12,7 @@ import ProctoringService from '../services/ProctoringService.js?v=2';
 import { QuestionView } from '../components/QuestionView.js';
 import { QuestionPalette } from '../components/QuestionPalette.js';
 import { Timer } from '../components/Timer.js';
+import { sleep, stampedeDelayMs, withBackoff } from '../utils/stampede.js';
 
 class ExamPage {
   constructor() {
@@ -263,16 +264,22 @@ class ExamPage {
     this._dirty = true;
     this._persistLocalDraft();
     if (this._autosaveTimer) clearTimeout(this._autosaveTimer);
-    // Debounce server write — answers live in localStorage until then
-    this._autosaveTimer = setTimeout(() => this._flushAutosave(), 45000);
+    // Debounce + jitter so many clients don't sync in the same second
+    const delay = 45000 + Math.floor(Math.random() * 15000);
+    this._autosaveTimer = setTimeout(() => this._flushAutosave(), delay);
   }
 
   _startAutosaveLoop() {
     if (this._autosaveInterval) clearInterval(this._autosaveInterval);
-    // Light periodic sync (paper already downloaded once at start)
-    this._autosaveInterval = setInterval(() => {
-      if (this._dirty && !this.isSubmitting) this._flushAutosave();
-    }, 60000);
+    if (this._autosaveTimeout) clearTimeout(this._autosaveTimeout);
+    const tick = () => {
+      if (this.isSubmitting) return;
+      if (this._dirty) this._flushAutosave();
+      // ~60–80s with jitter
+      const next = 60000 + Math.floor(Math.random() * 20000);
+      this._autosaveTimeout = setTimeout(tick, next);
+    };
+    this._autosaveTimeout = setTimeout(tick, 60000 + Math.floor(Math.random() * 20000));
   }
 
   async _flushAutosave() {
@@ -814,10 +821,13 @@ class ExamPage {
 
   _startHeartbeat() {
     if (this._heartbeatInterval) clearInterval(this._heartbeatInterval);
+    if (this._heartbeatTimeout) clearTimeout(this._heartbeatTimeout);
     this._appliedExtraMinutes = 0;
 
+    const seed = ApiClient.getUser()?.identifier || this.examId || 'hb';
+
     const sendBeat = async () => {
-      if (this.isSubmitting) { clearInterval(this._heartbeatInterval); return; }
+      if (this.isSubmitting) return;
       try {
         const resp = await ApiClient.pulseHeartbeat(this.examId);
         // Check if admin granted extra time
@@ -839,9 +849,22 @@ class ExamPage {
       } catch (e) { /* silent */ }
     };
 
-    sendBeat();
-    // ~75s heartbeat — enough for extra-time + clock skew; ~100 students ≈ 1.3 req/s
-    this._heartbeatInterval = setInterval(sendBeat, 75000);
+    const scheduleNext = () => {
+      if (this.isSubmitting) return;
+      // Base ~75s, spread clients ±20s so they don't align
+      const gap = 75000 + stampedeDelayMs(seed + String(Date.now() % 7), 20000, 3000) - 10000;
+      this._heartbeatTimeout = setTimeout(async () => {
+        await sendBeat();
+        scheduleNext();
+      }, Math.max(45000, gap));
+    };
+
+    // First beat also staggered (0–12s) to avoid post-start pile-up
+    const firstDelay = stampedeDelayMs(seed, 12000, 800);
+    this._heartbeatTimeout = setTimeout(async () => {
+      await sendBeat();
+      scheduleNext();
+    }, firstDelay);
   }
 
   async _submitExam(autoSubmit = false) {
@@ -865,14 +888,27 @@ class ExamPage {
         this.isSubmitting = false;
         return;
       }
+    } else {
+      // Timer expiry / auto-submit: spread ~100 submits across ~20s (within grace window)
+      const seed = ApiClient.getUser()?.identifier || this._clientSubmissionId || 'auto';
+      const waitMs = stampedeDelayMs(seed, 20000, 2000);
+      const waitEl = document.getElementById('submit-exam-button');
+      if (waitEl) {
+        waitEl.disabled = true;
+        waitEl.textContent = 'Time up — submitting…';
+      }
+      await sleep(waitMs);
+      if (this.isSubmitting) return; // another path already submitting
     }
 
     this.isSubmitting = true;
     this.timer.stop();
     if (this._timerInterval) clearInterval(this._timerInterval);
     if (this._heartbeatInterval) clearInterval(this._heartbeatInterval);
+    if (this._heartbeatTimeout) clearTimeout(this._heartbeatTimeout);
     if (this._autosaveTimer) clearTimeout(this._autosaveTimer);
     if (this._autosaveInterval) clearInterval(this._autosaveInterval);
+    if (this._autosaveTimeout) clearTimeout(this._autosaveTimeout);
     if (this.proctoring) this.proctoring.destroy();
 
     const submitBtn = document.getElementById('submit-exam-button');
@@ -891,16 +927,22 @@ class ExamPage {
       // Persist draft once more (bypass isSubmitting guard)
       this._persistLocalDraft();
       try {
-        await ApiClient.saveExamAnswers(this.examId, {
-          answers: this.answers,
-          marked_for_review: [...this.markedForReview],
-        });
+        await withBackoff(
+          () => ApiClient.saveExamAnswers(this.examId, {
+            answers: this.answers,
+            marked_for_review: [...this.markedForReview],
+          }),
+          { retries: 3, label: 'draft-before-submit' }
+        );
       } catch (_) { /* local copy still held */ }
 
-      const response = await ApiClient.submitExam(this.examId, {
-        answers,
-        client_submission_id: this._clientSubmissionId,
-      });
+      const response = await withBackoff(
+        () => ApiClient.submitExam(this.examId, {
+          answers,
+          client_submission_id: this._clientSubmissionId,
+        }),
+        { retries: 5, baseMs: 1000, maxMs: 10000, label: 'exam-submit' }
+      );
       const submissionId = response.submission_id;
       if (!submissionId) throw new Error('Server did not return a submission ID.');
 
@@ -938,8 +980,10 @@ class ExamPage {
     this.timer.stop();
     if (this._timerInterval) clearInterval(this._timerInterval);
     if (this._heartbeatInterval) clearInterval(this._heartbeatInterval);
+    if (this._heartbeatTimeout) clearTimeout(this._heartbeatTimeout);
     if (this._autosaveTimer) clearTimeout(this._autosaveTimer);
     if (this._autosaveInterval) clearInterval(this._autosaveInterval);
+    if (this._autosaveTimeout) clearTimeout(this._autosaveTimeout);
     if (this.proctoring) this.proctoring.destroy();
     this.isSubmitting = false;
     this.questions = [];

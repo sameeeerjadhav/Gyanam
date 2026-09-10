@@ -114,7 +114,14 @@ function setupRoutes(appContainer) {
 
       appContainer.innerHTML = _loadingHTML('Starting your exam session...');
 
-      const data = await ApiClient.getExamQuestions(examId);
+      // Spread paper download / session start across clients (login stampede #2)
+      const { stampedeDelayMs, withBackoff } = await import('./utils/stampede.js');
+      const seed = user?.identifier || user?.id || examId;
+      await new Promise((r) => setTimeout(r, stampedeDelayMs(seed, 12000, 800)));
+      const data = await withBackoff(
+        () => ApiClient.getExamQuestions(examId),
+        { retries: 4, baseMs: 1000, maxMs: 8000, label: 'get-questions' }
+      );
       const { exam, questions, draft } = data;
 
       if (!questions || questions.length === 0) {
