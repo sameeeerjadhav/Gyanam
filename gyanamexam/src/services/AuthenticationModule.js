@@ -50,7 +50,9 @@ export class AuthenticationModule {
       return { success: true, user: data.user };
     } catch (error) {
       const msg = this._extractError(error);
-      throw new Error(msg);
+      const err = new Error(msg);
+      if (error?.status) err.status = error.status;
+      throw err;
     }
   }
 
