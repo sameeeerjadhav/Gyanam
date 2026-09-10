@@ -3287,7 +3287,10 @@ function ensureAnnouncementAtcVisibilitySchema(PDO $pdo): void {
             $pdo->exec("ALTER TABLE announcements ADD COLUMN orientation VARCHAR(20) NOT NULL DEFAULT 'horizontal'");
         }
         if (!in_array('visibility_scope', $cols, true)) {
-            $pdo->exec("ALTER TABLE announcements ADD COLUMN visibility_scope VARCHAR(20) NOT NULL DEFAULT 'all' COMMENT 'all=all ATCs (when audience includes ATC); specific=mapped ATCs only'");
+            $pdo->exec("ALTER TABLE announcements ADD COLUMN visibility_scope VARCHAR(20) NOT NULL DEFAULT 'all' COMMENT 'all|type|specific'");
+        }
+        if (!in_array('center_types', $cols, true)) {
+            $pdo->exec("ALTER TABLE announcements ADD COLUMN center_types VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'JSON list of master types when visibility_scope=type'");
         }
 
         // Repair rows corrupted by old ENUM (empty / unknown audience)
@@ -3318,12 +3321,98 @@ function ensureAnnouncementAtcVisibilitySchema(PDO $pdo): void {
 }
 
 /**
+ * Normalize visibility scope: all | type | specific
+ */
+function normalizeAnnouncementVisibilityScope(?string $scope): string {
+    $scope = strtolower(trim((string)$scope));
+    if ($scope === 'specific' || $scope === 'type') {
+        return $scope;
+    }
+    return 'all';
+}
+
+/**
+ * Normalize posted/stored center type list to master types only.
+ *
+ * @param mixed $raw
+ * @return list<string>
+ */
+function normalizeAnnouncementCenterTypes($raw): array {
+    $allowed = masterCourseTypes();
+    $items = [];
+    if (is_string($raw)) {
+        $trim = trim($raw);
+        if ($trim !== '' && ($trim[0] === '[' || $trim[0] === '{')) {
+            $decoded = json_decode($trim, true);
+            $items = is_array($decoded) ? $decoded : [];
+        } else {
+            $items = preg_split('/\s*,\s*/', $trim) ?: [];
+        }
+    } elseif (is_array($raw)) {
+        $items = $raw;
+    }
+    $out = [];
+    foreach ($items as $item) {
+        $item = trim((string)$item);
+        foreach ($allowed as $opt) {
+            if (strcasecmp($item, $opt) === 0) {
+                $out[$opt] = $opt;
+                break;
+            }
+        }
+    }
+    return array_values($out);
+}
+
+/**
+ * Encode center types for DB storage.
+ *
+ * @param list<string> $types
+ */
+function encodeAnnouncementCenterTypes(array $types): string {
+    $types = normalizeAnnouncementCenterTypes($types);
+    return $types === [] ? '' : json_encode($types, JSON_UNESCAPED_UNICODE);
+}
+
+/**
+ * Decode center_types column.
+ *
+ * @return list<string>
+ */
+function decodeAnnouncementCenterTypes(?string $raw): array {
+    return normalizeAnnouncementCenterTypes($raw);
+}
+
+/**
+ * Whether an ATC center_type matches any selected banner center types.
+ *
+ * @param list<string> $selectedTypes
+ */
+function announcementMatchesCenterTypes(array $selectedTypes, ?string $atcCenterType): bool {
+    $selectedTypes = normalizeAnnouncementCenterTypes($selectedTypes);
+    if ($selectedTypes === []) {
+        return false;
+    }
+    foreach ($selectedTypes as $t) {
+        if (courseIsVisibleToCenter($t, $atcCenterType)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * Active dashboard banners — lean columns, capped.
  * $audience = Admin|ATC|DLC
  *  - All → every dashboard
  *  - Admin → Admin only
  *  - ATC → ATC (+ Admin HO overview)
  *  - DLC → DLC (+ Admin HO overview)
+ *
+ * ATC visibility_scope:
+ *  - all = every ATC
+ *  - type = ATCs matching center_types
+ *  - specific = mapped ATCs only
  */
 function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8, ?int $atcId = null): array {
     $audience = normalizeAnnouncementAudience($audience);
@@ -3337,7 +3426,7 @@ function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8, ?int
         if ($audience === 'Admin') {
             // Head office sees every active banner (including Admin-only)
             $sql = "
-                SELECT id, title, image_path, orientation, target_audience, visibility_scope, created_at
+                SELECT id, title, image_path, orientation, target_audience, visibility_scope, center_types, created_at
                 FROM announcements
                 WHERE status = 'Active'
                   AND target_audience IN ('All', 'Admin', 'ATC', 'DLC')
@@ -3348,17 +3437,17 @@ function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8, ?int
         }
 
         $sql = "
-            SELECT id, title, image_path, orientation, target_audience, visibility_scope, created_at
+            SELECT id, title, image_path, orientation, target_audience, visibility_scope, center_types, created_at
             FROM announcements
             WHERE status = 'Active' AND target_audience IN ('All', ?)
         ";
         $params = [$audience];
 
-        // ATC-specific assignment (All Centers vs Specific Centers)
+        // Pre-filter specific mappings in SQL; type matching done in PHP
         if ($audience === 'ATC' && $atcId !== null && $atcId > 0) {
             $sql .= "
                 AND (
-                    COALESCE(visibility_scope, 'all') <> 'specific'
+                    COALESCE(visibility_scope, 'all') IN ('all', 'type')
                     OR EXISTS (
                         SELECT 1 FROM announcement_atc_visibility aav
                         WHERE aav.announcement_id = announcements.id AND aav.atc_id = ?
@@ -3368,10 +3457,32 @@ function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8, ?int
             $params[] = (int)$atcId;
         }
 
-        $sql .= " ORDER BY created_at DESC LIMIT {$limit}";
+        $fetchLimit = ($audience === 'ATC' && $atcId) ? max($limit * 4, 24) : $limit;
+        $sql .= " ORDER BY created_at DESC LIMIT {$fetchLimit}";
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        if ($audience === 'ATC' && $atcId !== null && $atcId > 0) {
+            $centerType = getAtcCenterType($pdo, (int)$atcId);
+            $filtered = [];
+            foreach ($rows as $row) {
+                $scope = normalizeAnnouncementVisibilityScope($row['visibility_scope'] ?? 'all');
+                if ($scope === 'type') {
+                    $types = decodeAnnouncementCenterTypes($row['center_types'] ?? '');
+                    if (!announcementMatchesCenterTypes($types, $centerType)) {
+                        continue;
+                    }
+                }
+                $filtered[] = $row;
+                if (count($filtered) >= $limit) {
+                    break;
+                }
+            }
+            return $filtered;
+        }
+
+        return array_slice($rows, 0, $limit);
     } catch (Exception $e) {
         error_log('[getActiveAnnouncements] ' . $e->getMessage());
         return [];
@@ -3382,22 +3493,49 @@ function getActiveAnnouncements(PDO $pdo, string $audience, int $limit = 8, ?int
  * Save ATC assignment for a banner. Ignored when audience is DLC/Admin-only.
  *
  * @param list<int> $atcIds
+ * @param list<string> $centerTypes
  */
-function saveAnnouncementAtcVisibility(PDO $pdo, int $announcementId, string $scope, array $atcIds, string $targetAudience = 'All'): void {
+function saveAnnouncementAtcVisibility(
+    PDO $pdo,
+    int $announcementId,
+    string $scope,
+    array $atcIds,
+    string $targetAudience = 'All',
+    array $centerTypes = []
+): void {
     ensureAnnouncementAtcVisibilitySchema($pdo);
     if ($announcementId <= 0) {
         return;
     }
     $audience = normalizeAnnouncementAudience($targetAudience);
-    $scope = strtolower(trim($scope)) === 'specific' ? 'specific' : 'all';
+    $scope = normalizeAnnouncementVisibilityScope($scope);
+    $centerTypes = normalizeAnnouncementCenterTypes($centerTypes);
 
     // DLC / Admin-only banners do not use ATC mapping
     if ($audience === 'DLC' || $audience === 'Admin') {
         $scope = 'all';
         $atcIds = [];
+        $centerTypes = [];
     }
 
-    $pdo->prepare('UPDATE announcements SET visibility_scope = ? WHERE id = ?')->execute([$scope, $announcementId]);
+    if ($scope === 'type') {
+        $atcIds = [];
+        if ($centerTypes === []) {
+            $scope = 'all';
+        }
+    } elseif ($scope === 'specific') {
+        $centerTypes = [];
+        if ($atcIds === []) {
+            $scope = 'all';
+        }
+    } else {
+        $scope = 'all';
+        $atcIds = [];
+        $centerTypes = [];
+    }
+
+    $pdo->prepare('UPDATE announcements SET visibility_scope = ?, center_types = ? WHERE id = ?')
+        ->execute([$scope, encodeAnnouncementCenterTypes($centerTypes), $announcementId]);
     $pdo->prepare('DELETE FROM announcement_atc_visibility WHERE announcement_id = ?')->execute([$announcementId]);
 
     if ($scope !== 'specific') {
@@ -3441,12 +3579,12 @@ function getDownloadableBannersForAtc(PDO $pdo, int $atcId): array {
     ensureAnnouncementAtcVisibilitySchema($pdo);
     try {
         $stmt = $pdo->prepare("
-            SELECT id, title, image_path, orientation, target_audience, visibility_scope, created_at, status
+            SELECT id, title, image_path, orientation, target_audience, visibility_scope, center_types, created_at, status
             FROM announcements
             WHERE status = 'Active'
               AND target_audience IN ('All', 'ATC')
               AND (
-                  COALESCE(visibility_scope, 'all') <> 'specific'
+                  COALESCE(visibility_scope, 'all') IN ('all', 'type')
                   OR EXISTS (
                       SELECT 1 FROM announcement_atc_visibility aav
                       WHERE aav.announcement_id = announcements.id AND aav.atc_id = ?
@@ -3455,7 +3593,20 @@ function getDownloadableBannersForAtc(PDO $pdo, int $atcId): array {
             ORDER BY created_at DESC
         ");
         $stmt->execute([$atcId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $centerType = getAtcCenterType($pdo, $atcId);
+        $out = [];
+        foreach ($rows as $row) {
+            $scope = normalizeAnnouncementVisibilityScope($row['visibility_scope'] ?? 'all');
+            if ($scope === 'type') {
+                $types = decodeAnnouncementCenterTypes($row['center_types'] ?? '');
+                if (!announcementMatchesCenterTypes($types, $centerType)) {
+                    continue;
+                }
+            }
+            $out[] = $row;
+        }
+        return $out;
     } catch (Exception $e) {
         return [];
     }
