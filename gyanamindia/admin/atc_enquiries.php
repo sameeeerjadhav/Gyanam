@@ -14,10 +14,7 @@ $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 ensureAtcOnboardingEnquirySchema($pdo);
 
-$centerTypes = [
-    'Abacus', 'Vedic Maths', 'IT', 'Abacus + IT', 'Abacus + Vedic Maths',
-    'Vedic Maths + IT', 'Abacus + Vedic Maths + IT',
-];
+$centerTypes = atcCenterTypeOptions();
 $enquirySources = ['Phone', 'Walk-in', 'Online', 'Reference', 'Other'];
 $statuses = ['New', 'Contacted', 'Converted', 'Closed'];
 $states = [

@@ -762,7 +762,26 @@ function calculateDlcShareSummary(PDO $pdo, int $dlcId, bool $includeStudents = 
  * @return list<string>
  */
 function masterCourseTypes(): array {
-    return ['Abacus', 'Vedic Maths', 'IT'];
+    return ['Abacus', 'Vedic Maths', 'IT', 'Typing'];
+}
+
+/**
+ * Full ATC center_type dropdown values (master types + common combos).
+ *
+ * @return list<string>
+ */
+function atcCenterTypeOptions(): array {
+    return [
+        'Abacus',
+        'Vedic Maths',
+        'IT',
+        'Typing',
+        'Abacus + IT',
+        'Abacus + Vedic Maths',
+        'Vedic Maths + IT',
+        'Abacus + Vedic Maths + IT',
+        'Typing + IT',
+    ];
 }
 
 function getAtcCenterType(PDO $pdo, ?int $atcId): string {
@@ -796,6 +815,10 @@ function courseTypesForCenter(?string $centerType): array {
     if (str_contains($raw, 'vedic')) {
         $types[] = 'Vedic Maths';
     }
+    if (str_contains($raw, 'typing')) {
+        $types[] = 'Typing';
+    }
+    // Word-boundary IT so "Typing" alone does not count as IT
     if (preg_match('/(^|[^a-z])it([^a-z]|$)/', $raw) || str_contains($raw, 'all three')) {
         $types[] = 'IT';
     }
@@ -1137,7 +1160,7 @@ CSS;
  *
  * Rules:
  *  - Abacus and/or Vedic Maths only → Abacus (Gyanam) cert
- *  - IT only → IT (GIIT) cert
+ *  - IT and/or Typing only → IT (GIIT) cert
  *  - Any mix that includes IT + (Abacus|Vedic) → both certs
  *
  * @return list<array{variant:string,label:string,brand:string,course_line:string,code_prefix:string}>
@@ -1149,7 +1172,8 @@ function atcAuthCertificateVariants(?string $centerType): array {
 
     $hasAbacus = str_contains($t, 'abacus');
     $hasVedic  = str_contains($t, 'vedic');
-    $hasIt     = (bool)preg_match('/(?<![a-z])it(?![a-z])/', $t);
+    $hasTyping = str_contains($t, 'typing');
+    $hasIt     = (bool)preg_match('/(?<![a-z])it(?![a-z])/', $t) || $hasTyping;
 
     // Normalize common labels
     if ($t === 'it' || $t === 'i.t' || $t === 'i.t.') {
@@ -1417,9 +1441,9 @@ function ensureAtcOnboardingEnquirySchema(PDO $pdo): void {
 
 /**
  * Resize/compress an uploaded image in place (or to $destPath).
- * Max edge 1600px; JPEG quality 75. Returns final path on success.
+ * Max edge 1280px; JPEG quality 72. Returns final path on success.
  */
-function optimizeUploadedImage(string $srcPath, ?string $destPath = null, int $maxEdge = 1600, int $quality = 75): ?string {
+function optimizeUploadedImage(string $srcPath, ?string $destPath = null, int $maxEdge = 1280, int $quality = 72): ?string {
     $destPath = $destPath ?? $srcPath;
     if (!is_file($srcPath) || !function_exists('imagecreatefromjpeg')) {
         return is_file($srcPath) ? $destPath : null;
@@ -1462,7 +1486,8 @@ function optimizeUploadedImage(string $srcPath, ?string $destPath = null, int $m
 
     $ext = strtolower(pathinfo($destPath, PATHINFO_EXTENSION));
     $ok = false;
-    if ($ext === 'png' && $type === IMAGETYPE_PNG) {
+    if ($ext === 'png' && $type === IMAGETYPE_PNG && ($nw * $nh) < 400000) {
+        // Keep small transparent PNGs; large PNGs become JPEG for dashboard weight
         $ok = imagepng($dst, $destPath, 6);
     } elseif ($ext === 'webp' && function_exists('imagewebp')) {
         $ok = imagewebp($dst, $destPath, $quality);
@@ -1475,6 +1500,59 @@ function optimizeUploadedImage(string $srcPath, ?string $destPath = null, int $m
     }
     imagedestroy($dst);
     return $ok ? $destPath : null;
+}
+
+/**
+ * Lightweight image URL for dashboard carousel (max ~1280px JPEG under _dash/).
+ * Falls back to original when GD is unavailable or media is video.
+ *
+ * @param string $imagePath  Filename only (e.g. banner_….jpg)
+ * @param string $webPrefix  Relative URL prefix ending with / (e.g. ../uploads/announcements/)
+ */
+function announcementDashboardMediaSrc(string $imagePath, string $webPrefix = '../uploads/announcements/'): string {
+    $imagePath = ltrim(str_replace(['\\', '..'], ['/', ''], $imagePath), '/');
+    if ($imagePath === '') {
+        return $webPrefix;
+    }
+    $ext = strtolower(pathinfo($imagePath, PATHINFO_EXTENSION));
+    if (in_array($ext, ['mp4', 'webm', 'ogg'], true)) {
+        return $webPrefix . $imagePath;
+    }
+
+    $uploadsFs = dirname(__DIR__) . '/uploads/announcements/';
+    $srcFs = $uploadsFs . $imagePath;
+    $dashDir = $uploadsFs . '_dash/';
+    $dashName = pathinfo($imagePath, PATHINFO_FILENAME) . '.jpg';
+    $dashFs = $dashDir . $dashName;
+    $dashUrl = $webPrefix . '_dash/' . $dashName;
+
+    if (is_file($dashFs)) {
+        // Rebuild if source is newer
+        if (!is_file($srcFs) || filemtime($dashFs) >= filemtime($srcFs)) {
+            return $dashUrl . '?v=' . filemtime($dashFs);
+        }
+    }
+
+    if (is_file($srcFs) && function_exists('imagecreatefromjpeg')) {
+        if (!is_dir($dashDir)) {
+            @mkdir($dashDir, 0755, true);
+        }
+        $made = optimizeUploadedImage($srcFs, $dashFs, 1280, 72);
+        if ($made && is_file($made)) {
+            if (@realpath($made) && @realpath($dashFs) && realpath($made) !== realpath($dashFs)) {
+                @rename($made, $dashFs);
+            } elseif (!is_file($dashFs) && is_file($made)) {
+                @rename($made, $dashFs);
+            }
+            if (is_file($dashFs)) {
+                return $dashUrl . '?v=' . filemtime($dashFs);
+            }
+        }
+    }
+
+    // Fallback: original (still cache-bust)
+    $v = is_file($srcFs) ? filemtime($srcFs) : time();
+    return $webPrefix . $imagePath . '?v=' . $v;
 }
 
 /** Cached: does fee_payments have atc_id? */
@@ -2565,7 +2643,7 @@ function courseCertificateBrand(?string $courseType, ?string $centerType = null,
     if ($ct === 'abacus' || str_contains($ct, 'vedic')) {
         return 'abacus';
     }
-    if ($ct === 'it') {
+    if ($ct === 'it' || $ct === 'typing') {
         return 'it';
     }
     return admissionFormBrandVariant($centerType, $courseName, $courseType);

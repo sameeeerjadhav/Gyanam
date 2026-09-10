@@ -6,7 +6,7 @@
 import modalService from '../services/ModalService.js';
 
 const ASSIGN_BANK_KEY = 'gyanam_assign_bank_id';
-const MASTER_TYPES = ['Abacus', 'Vedic Maths', 'IT'];
+const MASTER_TYPES = ['Abacus', 'Vedic Maths', 'IT', 'Typing'];
 
 export function setAssignBankId(bankId) {
   sessionStorage.setItem(ASSIGN_BANK_KEY, String(bankId));
@@ -24,6 +24,8 @@ function centreMatchesType(centreType, filterType) {
   const ft = String(filterType).toLowerCase();
   if (ft === 'abacus') return raw.includes('abacus');
   if (ft === 'vedic maths' || ft === 'vedic') return raw.includes('vedic');
+  if (ft === 'typing') return raw.includes('typing');
+  // Word-boundary so "Typing" alone does not count as IT
   if (ft === 'it') return /(^|[^a-z])it([^a-z]|$)/.test(raw) || raw.includes('all three');
   return raw.includes(ft);
 }

@@ -225,13 +225,17 @@ function _bannerIsVertical($b) {
         <?php foreach($activeBanners as $i => $b):
             $isVideo    = _bannerIsVideo($b['image_path'], $videoExts);
             $isVertical = _bannerIsVertical($b);
-            $mediaSrc   = $imgPrefix . htmlspecialchars($b['image_path']);
+            $mediaSrc   = $isVideo
+                ? ($imgPrefix . htmlspecialchars($b['image_path']))
+                : (function_exists('announcementDashboardMediaSrc')
+                    ? htmlspecialchars(announcementDashboardMediaSrc($b['image_path'], $imgPrefix))
+                    : ($imgPrefix . htmlspecialchars($b['image_path'])));
             $slideClass = 'carousel-slide' . ($i === 0 ? ' is-active' : '') . ($isVertical ? ' vertical-slide' : '');
         ?>
         <div class="<?= $slideClass ?>" data-index="<?= $i ?>" data-is-video="<?= $isVideo ? '1' : '0' ?>">
 
             <?php if ($isVertical && !$isVideo): ?>
-            <!-- Blurred background for vertical images -->
+            <!-- Blurred background uses the same lightweight dash image -->
             <div class="vertical-blur-bg" style="background-image:url('<?= $mediaSrc ?>')"></div>
             <?php endif; ?>
 
@@ -251,6 +255,10 @@ function _bannerIsVertical($b) {
             <img class="slide-media"
                  src="<?= $mediaSrc ?>"
                  alt="<?= htmlspecialchars($b['title']) ?>"
+                 width="1280"
+                 height="720"
+                 decoding="async"
+                 fetchpriority="<?= $i === 0 ? 'high' : 'low' ?>"
                  loading="<?= $i === 0 ? 'eager' : 'lazy' ?>">
             <?php endif; ?>
 

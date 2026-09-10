@@ -108,6 +108,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (is_file($targetFile) && filesize($targetFile) > 1572864) {
                             @unlink($targetFile);
                             $error = 'Image is still too large after compression. Please use a smaller file (under ~2MB).';
+                        } elseif (!$error) {
+                            // Prefetch lightweight dashboard derivative
+                            announcementDashboardMediaSrc($finalName, '../uploads/announcements/');
                         }
                     } elseif (filesize($targetFile) > 15 * 1024 * 1024) {
                         @unlink($targetFile);
@@ -151,6 +154,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $file = $stmt->fetchColumn();
         if ($file && file_exists($uploadDir . $file)) {
             @unlink($uploadDir . $file);
+            $dashDeriv = $uploadDir . '_dash/' . pathinfo($file, PATHINFO_FILENAME) . '.jpg';
+            if (is_file($dashDeriv)) {
+                @unlink($dashDeriv);
+            }
         }
         $pdo->prepare("DELETE FROM announcement_atc_visibility WHERE announcement_id=?")->execute([$id]);
         $pdo->prepare("DELETE FROM announcements WHERE id=?")->execute([$id]);
@@ -204,7 +211,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $old->execute([$id]);
                         $oldFile = $old->fetchColumn();
                         if ($oldFile && file_exists($uploadDir . $oldFile)) @unlink($uploadDir . $oldFile);
+                        $oldDash = $uploadDir . '_dash/' . pathinfo((string)$oldFile, PATHINFO_FILENAME) . '.jpg';
+                        if ($oldFile && is_file($oldDash)) @unlink($oldDash);
                         $newImagePath = $finalName;
+                        if (in_array($ext, $allowedImg, true)) {
+                            announcementDashboardMediaSrc($finalName, '../uploads/announcements/');
+                        }
                     } else {
                         $error = 'Failed to upload new file.';
                     }

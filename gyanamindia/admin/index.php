@@ -57,6 +57,9 @@ function fetchTopPerformingAtcs(PDO $pdo, string $centerType = '', string $perio
             OR atc.center_type LIKE 'IT +%'
             OR atc.center_type LIKE '%+ IT +%'
         )";
+    } elseif ($centerType === 'Typing') {
+        $typeSql = " AND atc.center_type LIKE ?";
+        $params[] = '%Typing%';
     }
 
     $sql = "
@@ -1371,6 +1374,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                             <option value="Abacus">Abacus</option>
                             <option value="Vedic Maths">Vedic Maths</option>
                             <option value="IT">IT</option>
+                            <option value="Typing">Typing</option>
                         </select>
                     </div>
                     <div>

@@ -76,10 +76,7 @@ $states = [
     'Tamil Nadu','West Bengal','Telangana','Andhra Pradesh','Kerala','Punjab','Haryana',
     'Bihar','Odisha','Jharkhand','Chhattisgarh','Assam','Other',
 ];
-$centerTypes = [
-    'Abacus','Vedic Maths','IT','Abacus + IT','Abacus + Vedic Maths',
-    'Vedic Maths + IT','Abacus + Vedic Maths + IT',
-];
+$centerTypes = atcCenterTypeOptions();
 
 $v = function ($key, $default = '') use ($atc) {
     if ($atc && array_key_exists($key, $atc) && $atc[$key] !== null) {

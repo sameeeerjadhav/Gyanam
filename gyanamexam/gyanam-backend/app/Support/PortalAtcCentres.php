@@ -33,7 +33,7 @@ class PortalAtcCentres
     }
 
     /**
-     * Match master types (Abacus / Vedic Maths / IT) against combo centre_type values.
+     * Match master types (Abacus / Vedic Maths / IT / Typing) against combo centre_type values.
      */
     public static function matchesType(?string $centreType, string $targetType): bool
     {
@@ -55,7 +55,11 @@ class PortalAtcCentres
         if ($ft === 'vedic maths' || $ft === 'vedic') {
             return str_contains($raw, 'vedic');
         }
+        if ($ft === 'typing') {
+            return str_contains($raw, 'typing');
+        }
         if ($ft === 'it') {
+            // Word-boundary so "Typing" alone does not count as IT
             return (bool) preg_match('/(^|[^a-z])it([^a-z]|$)/', $raw)
                 || str_contains($raw, 'all three');
         }

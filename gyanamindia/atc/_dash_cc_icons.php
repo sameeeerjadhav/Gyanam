@@ -215,14 +215,26 @@ SVG,
 }
 
 if (!function_exists('cc_png')) {
-/** PNG dashboard icon from assets/icons/ */
+/** PNG dashboard icon from assets/icons/dash/ (128px) with cache-bust; falls back to full icons/. */
 function cc_png(string $file, string $size = 'xl', string $alt = ''): string {
+    static $preloaded = [];
     $cls = 'cc-ico' . ($size !== '' ? ' cc-ico-' . $size : '');
-    $px = $size === 'sm' ? 48 : ($size === 'xl' ? 72 : 60);
-    $src = '../assets/icons/' . ltrim($file, '/');
+    $px = $size === 'sm' ? 44 : ($size === 'xl' ? 72 : 64);
+    $file = basename(ltrim($file, '/'));
+    $baseFs = dirname(__DIR__) . '/assets/icons/';
+    $dashFs = $baseFs . 'dash/' . $file;
+    $fullFs = $baseFs . $file;
+    $useDash = is_file($dashFs);
+    $fs = $useDash ? $dashFs : $fullFs;
+    $rel = ($useDash ? '../assets/icons/dash/' : '../assets/icons/') . $file;
+    $v = is_file($fs) ? (int)filemtime($fs) : 0;
+    $src = $rel . ($v ? ('?v=' . $v) : '');
     $altEsc = htmlspecialchars($alt !== '' ? $alt : pathinfo($file, PATHINFO_FILENAME));
+    // Eager + high priority once per unique icon (above-the-fold cards); avoid lazy delay
+    $prio = empty($preloaded[$file]) && count($preloaded) < 4 ? ' fetchpriority="high"' : '';
+    $preloaded[$file] = true;
     return '<span class="' . htmlspecialchars($cls) . '">'
-        . '<img src="' . htmlspecialchars($src) . '" alt="' . $altEsc . '" width="' . $px . '" height="' . $px . '" loading="lazy" decoding="async">'
+        . '<img src="' . htmlspecialchars($src) . '" alt="' . $altEsc . '" width="' . $px . '" height="' . $px . '" loading="eager" decoding="async"' . $prio . '>'
         . '</span>';
 }
 }
