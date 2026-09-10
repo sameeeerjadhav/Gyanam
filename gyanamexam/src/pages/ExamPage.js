@@ -9,7 +9,6 @@
 import ApiClient from '../services/APIClient.js';
 import modalService from '../services/ModalService.js';
 import ProctoringService from '../services/ProctoringService.js?v=2';
-import { ProctorPublisher } from '../services/ProctorPublisher.js?v=2';
 import { QuestionView } from '../components/QuestionView.js';
 import { QuestionPalette } from '../components/QuestionPalette.js';
 import { Timer } from '../components/Timer.js';
@@ -510,13 +509,13 @@ class ExamPage {
     // Show proctoring status indicator
     this._renderProctoringIndicator();
 
-    // Attach camera preview if available — preview only; nothing is uploaded/recorded as video
+    // Local camera preview only — looks like monitoring to the student.
+    // No live stream / signaling polls to admin (shared-hosting load).
     if (settings.camera && this.proctoring.getCameraStream()) {
       this._renderCameraPreview();
-      this._startProctorPublisher(this.proctoring.getCameraStream());
     }
 
-    // Upload identity still (one-time) if captured during pre-exam gate
+    // Optional one-time identity still (not continuous monitoring)
     this._uploadIdentityPhoto();
   }
 
@@ -529,16 +528,6 @@ class ExamPage {
       try { sessionStorage.removeItem('gyanam_exam_photo'); } catch (_) {}
     } catch (e) {
       console.warn('Identity photo upload failed', e);
-    }
-  }
-
-  _startProctorPublisher(stream) {
-    try {
-      this._proctorPublisher?.stop();
-      this._proctorPublisher = new ProctorPublisher(ApiClient, this.examId, stream);
-      this._proctorPublisher.start();
-    } catch (e) {
-      console.warn('Proctor publisher failed', e);
     }
   }
 

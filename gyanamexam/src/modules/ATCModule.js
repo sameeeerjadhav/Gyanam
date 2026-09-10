@@ -157,7 +157,7 @@ export async function renderATC(ApiClient, ctx) {
     if (_liveStopped || _liveRunning) return;
     _liveRunning = true;
     try {
-      const { renderProctorCamerasHTML, bindProctorCameras } = await import('./ProctorCamerasModule.js?v=1');
+      const { renderProctorCamerasHTML, bindProctorCameras } = await import('./ProctorCamerasModule.js?v=2');
       const oneHourAgo = new Date(Date.now() - 3600 * 1000).toISOString();
       const [live, resultData] = await Promise.all([
         getScopedLive(),

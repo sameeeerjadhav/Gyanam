@@ -1,4 +1,4 @@
-import { renderProctorCamerasHTML, bindProctorCameras } from './ProctorCamerasModule.js?v=1';
+import { renderProctorCamerasHTML, bindProctorCameras } from './ProctorCamerasModule.js?v=2';
 
 export async function renderLive(ApiClient, { getScopedLive }) {
   const el = document.getElementById('page-content');
