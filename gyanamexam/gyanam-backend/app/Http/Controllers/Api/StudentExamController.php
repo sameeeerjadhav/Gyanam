@@ -156,7 +156,9 @@ class StudentExamController extends Controller
         $this->liveSessions->setQuestionIds($session, $questionIds);
 
         try {
-            broadcast(new StudentExamActivity($session->toMonitorArray(), 'started'));
+            if (!in_array(config('broadcasting.default'), ['log', 'null', ''], true)) {
+                broadcast(new StudentExamActivity($session->toMonitorArray(), 'started'));
+            }
         } catch (\Throwable $e) {
             \Log::warning('Reverb broadcast failed (session start): ' . $e->getMessage());
         }
@@ -250,6 +252,25 @@ class StudentExamController extends Controller
             return response()->json(['message' => 'Too many answers in draft.'], 422);
         }
 
+        $marks = $data['marked_for_review'] ?? [];
+        $existing = ExamAnswerDraft::where('student_id', $student->id)
+            ->where('exam_config_id', $examId)
+            ->first();
+
+        // Skip DB write when nothing changed (cuts shared-hosting write load)
+        if ($existing
+            && (int) $existing->attempt_number === (int) ($session?->attempt_number ?? $existing->attempt_number)
+            && json_encode($existing->answers ?? []) === json_encode($answers)
+            && json_encode($existing->marked_for_review ?? []) === json_encode($marks)
+        ) {
+            return response()->json([
+                'ok'             => true,
+                'updated_at'     => optional($existing->updated_at)->toISOString(),
+                'attempt_number' => (int) $existing->attempt_number,
+                'unchanged'      => true,
+            ]);
+        }
+
         $draft = ExamAnswerDraft::updateOrCreate(
             [
                 'student_id'     => $student->id,
@@ -257,7 +278,7 @@ class StudentExamController extends Controller
             ],
             [
                 'answers'           => $answers,
-                'marked_for_review' => $data['marked_for_review'] ?? [],
+                'marked_for_review' => $marks,
                 'attempt_number'    => $session?->attempt_number ?? 1,
             ]
         );
@@ -611,7 +632,9 @@ class StudentExamController extends Controller
             'submittedAt' => now()->toISOString(),
         ];
         try {
-            broadcast(new StudentExamActivity($submittedSession, 'submitted'));
+            if (!in_array(config('broadcasting.default'), ['log', 'null', ''], true)) {
+                broadcast(new StudentExamActivity($submittedSession, 'submitted'));
+            }
         } catch (\Throwable $e) {
             \Log::warning('Reverb broadcast failed (submit): ' . $e->getMessage());
         }

@@ -172,7 +172,7 @@ async function openLiveWatchModal(ApiClient, { studentId, examId, name }) {
     };
 
     await poll();
-    pollTimer = setInterval(poll, 2000);
+    pollTimer = setInterval(poll, 5000);
   } catch (e) {
     setStatus('Failed to start live view: ' + e.message);
   }

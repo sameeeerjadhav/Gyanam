@@ -9,7 +9,7 @@
 import ApiClient from '../services/APIClient.js';
 import modalService from '../services/ModalService.js';
 import ProctoringService from '../services/ProctoringService.js?v=2';
-import { ProctorPublisher } from '../services/ProctorPublisher.js?v=1';
+import { ProctorPublisher } from '../services/ProctorPublisher.js?v=2';
 import { QuestionView } from '../components/QuestionView.js';
 import { QuestionPalette } from '../components/QuestionPalette.js';
 import { Timer } from '../components/Timer.js';
@@ -42,6 +42,7 @@ class ExamPage {
       : `sub-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     this._autosaveTimer = null;
     this._dirty = false;
+    this._lastSavedFingerprint = null;
     this._preCameraStream = options.cameraStream || null;
 
     if (this.timer) this.timer.stop();
@@ -259,31 +260,41 @@ class ExamPage {
   }
 
   _scheduleAutosave() {
+    // Local draft immediately; server sync is throttled for shared-hosting batches (~100 students)
     this._dirty = true;
     this._persistLocalDraft();
     if (this._autosaveTimer) clearTimeout(this._autosaveTimer);
-    this._autosaveTimer = setTimeout(() => this._flushAutosave(), 1500);
+    // Debounce server write — answers live in localStorage until then
+    this._autosaveTimer = setTimeout(() => this._flushAutosave(), 45000);
   }
 
   _startAutosaveLoop() {
     if (this._autosaveInterval) clearInterval(this._autosaveInterval);
+    // Light periodic sync (paper already downloaded once at start)
     this._autosaveInterval = setInterval(() => {
       if (this._dirty && !this.isSubmitting) this._flushAutosave();
-    }, 20000);
+    }, 60000);
   }
 
   async _flushAutosave() {
     if (this.isSubmitting || !this.examId) return;
     this._persistLocalDraft();
+    const payload = {
+      answers: this.answers,
+      marked_for_review: [...this.markedForReview],
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (fingerprint === this._lastSavedFingerprint) {
+      this._dirty = false;
+      return;
+    }
     try {
-      await ApiClient.saveExamAnswers(this.examId, {
-        answers: this.answers,
-        marked_for_review: [...this.markedForReview],
-      });
+      await ApiClient.saveExamAnswers(this.examId, payload);
+      this._lastSavedFingerprint = fingerprint;
       this._dirty = false;
       const el = document.getElementById('autosave-status');
       if (el) {
-        el.textContent = 'Saved';
+        el.textContent = 'Synced';
         el.style.color = '#16a34a';
         setTimeout(() => { if (el) el.textContent = ''; }, 2000);
       }
@@ -840,7 +851,8 @@ class ExamPage {
     };
 
     sendBeat();
-    this._heartbeatInterval = setInterval(sendBeat, 45000);
+    // ~75s heartbeat — enough for extra-time + clock skew; ~100 students ≈ 1.3 req/s
+    this._heartbeatInterval = setInterval(sendBeat, 75000);
   }
 
   async _submitExam(autoSubmit = false) {

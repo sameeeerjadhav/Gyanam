@@ -21,20 +21,28 @@ export class ProctorPublisher {
     this._stopped = false;
     this.ApiClient.postProctorSignal(this.examId, { action: 'status', camera_active: true }).catch(() => {});
     this._tick();
-    this._timer = setInterval(() => this._tick(), 2500);
+    // Slow poll when idle; speeds up only while a viewer is watching (see _scheduleNext)
+    this._scheduleNext(8000);
   }
 
   stop() {
     this._stopped = true;
-    if (this._timer) clearInterval(this._timer);
+    if (this._timer) clearTimeout(this._timer);
     this._timer = null;
     try { this.pc?.close(); } catch (_) {}
     this.pc = null;
     this.ApiClient.postProctorSignal(this.examId, { action: 'clear', camera_active: false }).catch(() => {});
   }
 
+  _scheduleNext(ms) {
+    if (this._timer) clearTimeout(this._timer);
+    if (this._stopped) return;
+    this._timer = setTimeout(() => this._tick(), ms);
+  }
+
   async _tick() {
     if (this._stopped || !this.stream) return;
+    let nextMs = 12000; // no viewer — light load on shared hosting
     try {
       const res = await this.ApiClient.getProctorSignal(this.examId);
       const signals = res?.signals || {};
@@ -45,11 +53,15 @@ export class ProctorPublisher {
           this.pc = null;
           this._appliedIce = new Set();
         }
+        this._scheduleNext(nextMs);
         return;
       }
 
+      nextMs = 5000; // viewer connected — still far slower than old 2.5s
+
       if (!this.pc) {
         await this._createOffer();
+        this._scheduleNext(nextMs);
         return;
       }
 
@@ -66,6 +78,7 @@ export class ProctorPublisher {
     } catch (e) {
       // silent — exam continues without live view
     }
+    this._scheduleNext(nextMs);
   }
 
   async _createOffer() {
