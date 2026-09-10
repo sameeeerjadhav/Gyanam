@@ -126,6 +126,10 @@ if (!is_file($abacusLogoPath) && function_exists('admissionFormBrandLogoPath')) 
 }
 $signPljPath = __DIR__ . '/../assets/templates/marksheet_sign_plj.png';
 $signRpsPath = __DIR__ . '/../assets/templates/marksheet_sign_rps.png';
+$sealPath = __DIR__ . '/../assets/templates/marksheet_seal_giit.png';
+if (!is_file($sealPath)) {
+    $sealPath = __DIR__ . '/../assets/templates/marksheet_seal_giit.jpg';
+}
 
 $pdf = new Fpdi();
 $pdf->SetTitle('Statement of Marks — ' . $studentId);
@@ -294,7 +298,7 @@ $sy = $marksY;
 $sh = $marksHdrH + $marksBodyH;
 $pdf->Rect($sx, $sy, $rightW, $sh, 'D');
 
-// Signatures (reduced) above authorized-signatory text; seal reserved below later
+// Signatures above authorized-signatory text; GIIT seal centered below
 $sigH = 10.5;
 $sigW1 = $sigH * (223.0 / 118.0);
 $sigW2 = $sigH * (280.0 / 118.0);
@@ -328,7 +332,21 @@ $pdf->Cell($rightW - 2, 4.5, $signatory, 0, 0, 'C');
 $pdf->SetFont('Times', '', $FONT);
 $pdf->SetXY($sx + 1, $textY + 4.8);
 $pdf->Cell($rightW - 2, 4.5, 'Gyanam India Educational Services', 0, 0, 'C');
-// Seal will be placed below this text in a follow-up.
+
+// Official seal under signatures / signatory text
+$textBottom = $textY + 4.8 + 4.5;
+$boxBottom = $sy + $sh;
+$sealPadTop = 1.2;
+$sealPadBottom = 2.0;
+$sealAvailH = max(10.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
+$sealSize = min(22.0, $rightW - 6.0, $sealAvailH);
+$sealX = $sx + ($rightW - $sealSize) / 2;
+$sealY = $textBottom + $sealPadTop + max(0.0, ($sealAvailH - $sealSize) / 2);
+if (is_file($sealPath)) {
+    try {
+        $pdf->Image($sealPath, $sealX, $sealY, $sealSize, $sealSize);
+    } catch (Exception $e) {}
+}
 
 $legY = $bottom - $legendTotal;
 $grades = ['A++', 'A+', 'A', 'B', 'C', 'Fail', 'AB'];
