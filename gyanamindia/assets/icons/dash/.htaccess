@@ -1,0 +1,4 @@
+# Long-cache dashboard icon PNGs (URLs are cache-busted with ?v=mtime)
+<IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=31536000, immutable"
+</IfModule>

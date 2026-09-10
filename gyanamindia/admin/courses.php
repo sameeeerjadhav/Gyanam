@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             case 'add':
                 $courseType = trim($_POST['course_type'] ?? '');
                 if (!in_array($courseType, masterCourseTypes(), true)) {
-                    echo json_encode(['success' => false, 'message' => 'Select which center type can see this course (Abacus, Vedic Maths, or IT).']);
+                    echo json_encode(['success' => false, 'message' => 'Select which center type can see this course (Abacus, Vedic Maths, IT, or Typing).']);
                     exit;
                 }
                 $shareWith    = floatval($_POST['ho_share_with_material'] ?? 0);
@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             case 'edit':
                 $courseType = trim($_POST['course_type'] ?? '');
                 if (!in_array($courseType, masterCourseTypes(), true)) {
-                    echo json_encode(['success' => false, 'message' => 'Select which center type can see this course (Abacus, Vedic Maths, or IT).']);
+                    echo json_encode(['success' => false, 'message' => 'Select which center type can see this course (Abacus, Vedic Maths, IT, or Typing).']);
                     exit;
                 }
                 $shareWith    = floatval($_POST['ho_share_with_material'] ?? 0);
@@ -844,11 +844,11 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                             <label class="field-label" for="course_type">Visible to center type <span class="field-req">*</span></label>
                             <select class="field-select" id="course_type" name="course_type" required>
                                 <option value="">— Select center type —</option>
-                                <option value="Abacus">Abacus centers</option>
-                                <option value="Vedic Maths">Vedic Maths centers</option>
-                                <option value="IT">IT centers</option>
+                                <?php foreach (masterCourseTypes() as $ct): ?>
+                                <option value="<?= htmlspecialchars($ct) ?>"><?= htmlspecialchars($ct) ?> centers</option>
+                                <?php endforeach; ?>
                             </select>
-                            <div class="field-hint">Only ATCs of this type will see the course. Combo centers (e.g. Abacus + IT) see every type they include.</div>
+                            <div class="field-hint">Only ATCs of this type will see the course. Combo centers (e.g. Typing + IT) see every type they include.</div>
                         </div>
                         <div>
                             <label class="field-label" for="duration">Duration</label>

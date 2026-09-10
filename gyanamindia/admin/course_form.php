@@ -156,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     try {
         $courseType = trim($_POST['course_type'] ?? '');
         if (!in_array($courseType, $centerTypes, true)) {
-            throw new Exception('Select which center type can see this course (Abacus, Vedic Maths, or IT).');
+            throw new Exception('Select which center type can see this course (Abacus, Vedic Maths, IT, or Typing).');
         }
 
         $visibilityScope = strtolower(trim((string)($_POST['visibility_scope'] ?? 'all')));

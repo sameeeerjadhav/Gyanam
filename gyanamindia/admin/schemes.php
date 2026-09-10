@@ -324,7 +324,9 @@ $atcList = $pdo->query("SELECT id,name,center_type FROM atc_centers WHERE status
                     <select id="f_atc_type" class="sc-input">
                         <option value="">— Any —</option>
                         <option value="Abacus">Abacus</option>
+                        <option value="Vedic Maths">Vedic Maths</option>
                         <option value="IT">IT</option>
+                        <option value="Typing">Typing</option>
                         <option value="Other">Other</option>
                     </select>
                 </div>

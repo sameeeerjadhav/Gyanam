@@ -82,7 +82,7 @@ class PortalATCController extends Controller
             ->pluck('centre_type')
             ->filter()
             ->unique();
-        $allTypes = collect(['Abacus', 'Vedic Maths', 'IT'])
+        $allTypes = collect(['Abacus', 'Vedic Maths', 'IT', 'Typing'])
             ->merge($syncedTypes)
             ->unique()
             ->sort()
