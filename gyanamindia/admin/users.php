@@ -176,19 +176,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
-$searchTerm  = $_GET['search'] ?? '';
+$searchTerm  = trim($_GET['search'] ?? '');
 $roleFilter  = $_GET['role']   ?? 'all';
 $statusFilter = $_GET['status'] ?? 'all';
 
 $sql = "SELECT u.*, dlc.name as dlc_name, atc.name as atc_name FROM users u LEFT JOIN dlc_offices dlc ON u.dlc_id = dlc.id LEFT JOIN atc_centers atc ON u.atc_id = atc.id WHERE 1=1";
 $params = [];
-if ($searchTerm) {
-    $sql .= " AND (u.username LIKE ? OR u.name LIKE ? OR u.email LIKE ? OR u.mobile LIKE ?)";
-    $s = "%$searchTerm%";
-    $params = array_merge($params, [$s, $s, $s, $s]);
-}
+// Search + status are live client-side; role tabs stay server-side
 if ($roleFilter !== 'all')   { $sql .= " AND u.role = ?";   $params[] = $roleFilter; }
-if ($statusFilter !== 'all') { $sql .= " AND u.status = ?"; $params[] = $statusFilter; }
 $sql .= " ORDER BY u.created_at DESC";
 
 $stmt = $pdo->prepare($sql);
@@ -632,21 +627,21 @@ $activeCount = $pdo->query("SELECT COUNT(*) FROM users WHERE status = 'Active'")
             <div class="toolbar">
                 <div class="toolbar-left">
                     <span class="toolbar-title">User List</span>
-                    <span class="toolbar-count"><?= count($users) ?> shown</span>
+                    <span class="toolbar-count" id="userListCount"><?= count($users) ?> shown</span>
                 </div>
                 <div class="toolbar-right">
-                    <form method="GET" style="display:contents;">
+                    <form method="GET" id="userFilterForm" style="display:contents;">
                         <input type="hidden" name="role" value="<?= htmlspecialchars($roleFilter) ?>">
-                        <select name="status" class="select-sm" onchange="this.form.submit()">
+                        <select name="status" id="userStatusFilter" class="select-sm">
                             <option value="all"     <?= $statusFilter === 'all'      ? 'selected' : '' ?>>All Status</option>
                             <option value="Active"  <?= $statusFilter === 'Active'   ? 'selected' : '' ?>>Active</option>
                             <option value="Inactive"<?= $statusFilter === 'Inactive' ? 'selected' : '' ?>>Inactive</option>
                         </select>
                         <div class="search-wrap">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                            <input type="text" name="search" class="search-input" placeholder="Search users…" value="<?= htmlspecialchars($searchTerm) ?>">
+                            <input type="search" name="search" id="userSearchInput" class="search-input" placeholder="Search users…" value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off">
                         </div>
-                        <button type="submit" class="btn-search">Search</button>
+                        <button type="button" class="btn-search" id="userSearchBtn">Search</button>
                     </form>
                 </div>
             </div>
@@ -687,8 +682,18 @@ $activeCount = $pdo->query("SELECT COUNT(*) FROM users WHERE status = 'Active'")
                                 default      => 'role-dlc'
                             };
                             $statusClass = strtolower($user['status']) === 'active' ? 'status-active' : 'status-inactive';
+                            $searchHay = strtolower(trim(implode(' ', array_filter([
+                                $user['username'] ?? '',
+                                $user['name'] ?? '',
+                                $user['email'] ?? '',
+                                $user['mobile'] ?? '',
+                                $user['role'] ?? '',
+                                $user['atc_name'] ?? '',
+                                $user['dlc_name'] ?? '',
+                                (string)($user['id'] ?? ''),
+                            ]))));
                         ?>
-                        <tr>
+                        <tr class="live-row" data-search="<?= htmlspecialchars($searchHay, ENT_QUOTES) ?>" data-status="<?= htmlspecialchars($user['status'] ?? '', ENT_QUOTES) ?>">
                             <td>
                                 <div class="user-cell">
                                     <div class="user-avatar"><?= $initial ?></div>
@@ -1109,6 +1114,21 @@ document.addEventListener('DOMContentLoaded', () => {
 const style = document.createElement('style');
 style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
 document.head.appendChild(style);
+</script>
+<script src="../assets/js/live-filter.js"></script>
+<script>
+GyanamLiveFilter({
+    input: '#userSearchInput',
+    button: '#userSearchBtn',
+    form: '#userFilterForm',
+    tbody: 'table.data-table tbody',
+    rowSelector: 'tr.live-row',
+    countEl: '#userListCount',
+    countFormat: (n) => n + ' shown',
+    searchParam: 'search',
+    emptyColspan: 7,
+    filters: [{ select: '#userStatusFilter', attr: 'data-status', param: 'status', allValue: 'all' }],
+});
 </script>
 
 </body>

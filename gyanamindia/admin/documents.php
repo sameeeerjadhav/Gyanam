@@ -105,17 +105,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 /* ══════════════════════════════════════
    PAGE DATA
 ══════════════════════════════════════ */
-$searchTerm   = $_GET['search'] ?? '';
+$searchTerm   = trim($_GET['search'] ?? '');
 $statusFilter = $_GET['status'] ?? 'all';
 
 $sql    = "SELECT d.*, u.username AS uploaded_by_name FROM documents d LEFT JOIN users u ON d.uploaded_by = u.id WHERE 1=1";
 $params = [];
 
-if ($searchTerm) {
-    $sql   .= " AND (d.original_name LIKE ? OR d.description LIKE ?)";
-    $p      = "%$searchTerm%";
-    $params = [$p, $p];
-}
+// Search is live client-side; status tabs stay server-side
 if ($statusFilter !== 'all') {
     $sql     .= " AND d.status = ?";
     $params[] = $statusFilter;
@@ -680,16 +676,16 @@ $pageUrl = strtok($_SERVER['REQUEST_URI'], '?');
             <div class="toolbar">
                 <div class="toolbar-left">
                     <span class="toolbar-title">Document Library</span>
-                    <span class="toolbar-count"><?= count($documents) ?> shown</span>
+                    <span class="toolbar-count" id="docListCount"><?= count($documents) ?> shown</span>
                 </div>
                 <div class="toolbar-right">
-                    <form method="GET" style="display:contents;">
+                    <form method="GET" id="docFilterForm" style="display:contents;">
                         <input type="hidden" name="status" value="<?= htmlspecialchars($statusFilter) ?>">
                         <div class="search-wrap">
                             <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                            <input type="text" name="search" class="search-input" placeholder="Search documents…" value="<?= htmlspecialchars($searchTerm) ?>">
+                            <input type="search" name="search" id="docSearchInput" class="search-input" placeholder="Search documents…" value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off">
                         </div>
-                        <button type="submit" class="btn-search">Search</button>
+                        <button type="button" class="btn-search" id="docSearchBtn">Search</button>
                     </form>
                 </div>
             </div>
@@ -722,8 +718,15 @@ $pageUrl = strtok($_SERVER['REQUEST_URI'], '?');
                         <?php foreach ($documents as $idx => $doc):
                             $typeInfo    = fileTypeInfo($doc['original_name'], $doc['file_type'] ?? '');
                             $statusClass = strtolower($doc['status']) === 'active' ? 's-active' : 's-inactive';
+                            $searchHay = strtolower(trim(implode(' ', array_filter([
+                                $doc['original_name'] ?? '',
+                                $doc['description'] ?? '',
+                                $doc['uploaded_by_name'] ?? '',
+                                $doc['status'] ?? '',
+                                $typeInfo['label'] ?? '',
+                            ]))));
                         ?>
-                        <tr>
+                        <tr class="live-row" data-search="<?= htmlspecialchars($searchHay, ENT_QUOTES) ?>">
                             <td><span class="row-num"><?= $idx + 1 ?></span></td>
                             <td>
                                 <div class="file-cell">
@@ -1077,6 +1080,20 @@ document.addEventListener('keydown', function(e) {
         el.classList.remove('active');
     });
     _deleteId = null;
+});
+</script>
+<script src="../assets/js/live-filter.js"></script>
+<script>
+GyanamLiveFilter({
+    input: '#docSearchInput',
+    button: '#docSearchBtn',
+    form: '#docFilterForm',
+    tbody: 'table.data-table tbody',
+    rowSelector: 'tr.live-row',
+    countEl: '#docListCount',
+    countFormat: (n) => n + ' shown',
+    searchParam: 'search',
+    emptyColspan: 6,
 });
 </script>
 </body>

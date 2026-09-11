@@ -20,10 +20,7 @@ $expFilter = trim($_GET['exp'] ?? 'all');   // all | expiring | expired | valid
 $where  = '1=1';
 $params = [];
 
-if ($search) {
-    $where .= ' AND (a.name LIKE ? OR a.atc_code LIKE ? OR a.district LIKE ?)';
-    $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%";
-}
+// Search is live client-side; DLC + expiry stay server-side
 if ($dlcFilter) {
     $where .= ' AND a.dlc_id = ?'; $params[] = $dlcFilter;
 }
@@ -356,20 +353,20 @@ function acCenterTypeLabel(?string $centerType): string {
 
         <!-- Filters -->
         <form method="GET" class="ac-toolbar" id="filterForm">
-            <div class="ac-toolbar-meta">Showing <?= count($atcs) ?> center<?= count($atcs) === 1 ? '' : 's' ?><?= $search ? ' matching “'.htmlspecialchars($search).'”' : '' ?></div>
+            <div class="ac-toolbar-meta" id="acListCount">Showing <?= count($atcs) ?> center<?= count($atcs) === 1 ? '' : 's' ?></div>
             <a href="?exp=all" class="ac-filter-btn <?= $expFilter==='all' ? 'active' : '' ?>">All</a>
             <a href="?exp=valid" class="ac-filter-btn valid <?= $expFilter==='valid' ? 'active' : '' ?>">Valid</a>
             <a href="?exp=expiring" class="ac-filter-btn expiring <?= $expFilter==='expiring' ? 'active' : '' ?>">Expiring</a>
             <a href="?exp=expired" class="ac-filter-btn expired <?= $expFilter==='expired' ? 'active' : '' ?>">Expired</a>
             <input type="hidden" name="exp" value="<?= htmlspecialchars($expFilter) ?>">
-            <select name="dlc" class="ac-select" onchange="this.form.submit()">
+            <select name="dlc" id="acDlcFilter" class="ac-select">
                 <option value="0">All DLC Offices</option>
                 <?php foreach ($dlcList as $d): ?>
                 <option value="<?= $d['id'] ?>" <?= $dlcFilter == $d['id'] ? 'selected' : '' ?>><?= htmlspecialchars($d['name']) ?></option>
                 <?php endforeach; ?>
             </select>
-            <input type="text" name="q" class="ac-search-input" placeholder="Search name, code, district…" value="<?= htmlspecialchars($search) ?>">
-            <button type="submit" class="ac-btn-search">Search</button>
+            <input type="search" name="q" id="acSearchInput" class="ac-search-input" placeholder="Search name, code, district…" value="<?= htmlspecialchars($search) ?>" autocomplete="off">
+            <button type="button" class="ac-btn-search" id="acSearchBtn">Search</button>
             <?php if ($search || $dlcFilter): ?>
             <a href="?exp=<?= urlencode($expFilter) ?>" class="ac-btn-clear">Clear</a>
             <?php endif; ?>
@@ -437,7 +434,14 @@ function acCenterTypeLabel(?string $centerType): string {
                     'certs'   => $waCerts,
                 ], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
             ?>
-            <div class="ac-card">
+            <?php
+                $acSearchHay = strtolower(trim(implode(' ', array_filter([
+                    $atc['name'] ?? '', $atcCodeDisp, $atc['district'] ?? '', $atc['city'] ?? '',
+                    $atc['state'] ?? '', $atc['center_type'] ?? '', $atc['dlc_name'] ?? '',
+                    $atc['contact_person'] ?? '', $atc['mobile'] ?? '',
+                ]))));
+            ?>
+            <div class="ac-card live-row" data-search="<?= htmlspecialchars($acSearchHay, ENT_QUOTES) ?>">
                 <div class="ac-card-accent <?= $expStatus ?>"></div>
                 <div class="ac-card-body">
                     <div class="ac-card-top">
@@ -562,8 +566,13 @@ function acCenterTypeLabel(?string $centerType): string {
                             'code'    => $atcCode2,
                             'certs'   => $waCerts2,
                         ], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                        $acSearchHay2 = strtolower(trim(implode(' ', array_filter([
+                            $atc['name'] ?? '', $atcCode2, $atc['district'] ?? '', $atc['city'] ?? '',
+                            $atc['state'] ?? '', $atc['center_type'] ?? '', $atc['dlc_name'] ?? '',
+                            $atc['contact_person'] ?? '', $atc['mobile'] ?? '',
+                        ]))));
                     ?>
-                    <tr>
+                    <tr class="live-row" data-search="<?= htmlspecialchars($acSearchHay2, ENT_QUOTES) ?>">
                         <td style="color:var(--text-secondary);font-size:.8rem"><?= $i+1 ?></td>
                         <td><span class="ac-code-badge"><?= htmlspecialchars($atcCode2) ?></span></td>
                         <td>
@@ -738,6 +747,22 @@ Best Regards,
         btn.style.opacity = '';
     }
 }
+</script>
+<script src="../assets/js/live-filter.js"></script>
+<script>
+GyanamLiveFilter({
+    input: '#acSearchInput',
+    button: '#acSearchBtn',
+    form: '#filterForm',
+    scope: document.body,
+    tbody: 'table.ac-tbl tbody',
+    rowSelector: '.live-row',
+    countEl: '#acListCount',
+    countFormat: (n) => 'Showing ' + n + ' center' + (n === 1 ? '' : 's'),
+    searchParam: 'q',
+    emptyColspan: 7,
+    reloadSelects: ['#acDlcFilter'],
+});
 </script>
 </body>
 </html>
