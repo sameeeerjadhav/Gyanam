@@ -1,20 +1,22 @@
 /**
  * Gyanam — shared live table filter (search + optional attribute filters).
- * Usage:
+ *
+ * Client mode (default) — filter rows already on the page:
+ *   GyanamLiveFilter({ input, tbody, rowSelector, filters, ... });
+ *
+ * Server mode — debounce then GET-reload (for paginated / heavy lists):
  *   GyanamLiveFilter({
+ *     mode: 'server',
  *     input: '#searchInput',
  *     button: '#searchBtn',
- *     tbody: 'table.data-table tbody',
- *     rowSelector: 'tr.live-row',
- *     countEl: '#listCount',
- *     countFormat: (n) => n + ' shown',
- *     searchParam: 'search', // URL query key (false to skip)
- *     emptyColspan: 8,
- *     emptyHtml: '<div class="empty-title">No matches</div>',
- *     filters: [
- *       { select: '#statusFilter', attr: 'data-status', param: 'status', allValue: 'all' }
- *     ],
- *     reloadSelects: ['#dlcFilter'], // full page reload on change
+ *     form: '#filterForm',          // optional GET form
+ *     searchParam: 'search',
+ *     debounceMs: 400,
+ *     minChars: 0,                  // reload even when cleared
+ *     params: { status: 'Active' }, // extra static params
+ *     keepParams: ['status','course','fees'], // preserve from current URL / form
+ *     reloadSelects: ['#course','#fees'],     // change → immediate reload
+ *     loadingClass: 'is-searching',
  *   });
  */
 (function (global) {
@@ -25,7 +27,138 @@
     return typeof ref === 'string' ? document.querySelector(ref) : ref;
   }
 
+  function navigateWithParams(opts, inputValue) {
+    try {
+      const url = new URL(window.location.href);
+      const searchParam = opts.searchParam === false ? null : (opts.searchParam || 'search');
+      const form = opts.form ? el(opts.form) : (el(opts.input) && el(opts.input).form);
+
+      // Start from current query, then overlay form fields + opts
+      if (form) {
+        Array.from(form.elements || []).forEach(function (field) {
+          if (!field.name || field.disabled) return;
+          if (field.type === 'submit' || field.type === 'button' || field.type === 'file') return;
+          if ((field.type === 'checkbox' || field.type === 'radio') && !field.checked) return;
+          if (searchParam && field.name === searchParam) return; // set below
+          const v = (field.value || '').trim();
+          const allVal = opts.allValue != null ? opts.allValue : 'all';
+          if (!v || v === allVal) url.searchParams.delete(field.name);
+          else url.searchParams.set(field.name, v);
+        });
+      }
+
+      (opts.keepParams || []).forEach(function (key) {
+        const fromUrl = new URL(window.location.href).searchParams.get(key);
+        if (fromUrl != null && fromUrl !== '' && !url.searchParams.has(key)) {
+          url.searchParams.set(key, fromUrl);
+        }
+      });
+
+      if (opts.params && typeof opts.params === 'object') {
+        Object.keys(opts.params).forEach(function (k) {
+          const v = opts.params[k];
+          if (v == null || v === '' || v === 'all') url.searchParams.delete(k);
+          else url.searchParams.set(k, String(v));
+        });
+      }
+
+      if (searchParam) {
+        const q = (inputValue != null ? inputValue : ((el(opts.input) && el(opts.input).value) || '')).trim();
+        if (q) url.searchParams.set(searchParam, q);
+        else url.searchParams.delete(searchParam);
+      }
+
+      url.searchParams.delete('page');
+      const next = url.pathname + url.search;
+      const cur = window.location.pathname + window.location.search;
+      if (next === cur) return false;
+      window.location.href = next;
+      return true;
+    } catch (e) {
+      const form = opts.form ? el(opts.form) : (el(opts.input) && el(opts.input).form);
+      if (form) {
+        form.submit();
+        return true;
+      }
+      return false;
+    }
+  }
+
+  function setLoading(opts, on) {
+    const input = el(opts.input);
+    const cls = opts.loadingClass || 'is-searching';
+    if (input) input.classList.toggle(cls, !!on);
+    if (opts.loadingEl) {
+      const le = el(opts.loadingEl);
+      if (le) le.hidden = !on;
+    }
+    document.documentElement.classList.toggle('gy-live-searching', !!on);
+  }
+
   function GyanamLiveFilter(opts) {
+    opts = opts || {};
+    if (opts.mode === 'server') {
+      return GyanamServerLiveFilter(opts);
+    }
+    return GyanamClientLiveFilter(opts);
+  }
+
+  function GyanamServerLiveFilter(opts) {
+    const input = el(opts.input);
+    const button = el(opts.button);
+    const form = opts.form ? el(opts.form) : (input && input.form);
+    const debounceMs = opts.debounceMs != null ? opts.debounceMs : 400;
+    const minChars = opts.minChars != null ? opts.minChars : 0;
+    let timer = null;
+    let lastSent = input ? String(input.value || '').trim() : '';
+
+    function go(force) {
+      const q = input ? String(input.value || '').trim() : '';
+      if (!force && q === lastSent) return;
+      if (q.length > 0 && q.length < minChars) return;
+      lastSent = q;
+      setLoading(opts, true);
+      if (!navigateWithParams(opts, q)) setLoading(opts, false);
+    }
+
+    function schedule() {
+      clearTimeout(timer);
+      timer = setTimeout(function () { go(false); }, debounceMs);
+    }
+
+    if (input) {
+      input.setAttribute('autocomplete', input.getAttribute('autocomplete') || 'off');
+      input.addEventListener('input', schedule);
+      input.addEventListener('search', function () { clearTimeout(timer); go(true); });
+    }
+    if (button) {
+      button.addEventListener('click', function (e) {
+        e.preventDefault();
+        clearTimeout(timer);
+        go(true);
+      });
+    }
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        clearTimeout(timer);
+        go(true);
+      });
+    }
+
+    (opts.reloadSelects || []).forEach(function (ref) {
+      const sel = el(ref);
+      if (!sel) return;
+      sel.addEventListener('change', function () {
+        clearTimeout(timer);
+        go(true);
+      });
+    });
+
+    return { apply: function () { go(true); }, navigate: go };
+  }
+
+  function GyanamClientLiveFilter(opts) {
     opts = opts || {};
     const input = el(opts.input);
     const button = el(opts.button);
@@ -159,7 +292,6 @@
       });
     });
 
-    // Prevent GET form submit on Enter for search forms
     const form = opts.form ? el(opts.form) : (input && input.form);
     if (form) {
       form.addEventListener('submit', function (e) {
@@ -179,11 +311,14 @@
     return { apply: apply };
   }
 
-  // Hide helper class (pages can also define their own)
   if (!document.getElementById('gyanam-live-filter-style')) {
     const style = document.createElement('style');
     style.id = 'gyanam-live-filter-style';
-    style.textContent = '.live-row-hidden{display:none!important}';
+    style.textContent = [
+      '.live-row-hidden{display:none!important}',
+      'input.is-searching,input.gy-live-searching{opacity:.72}',
+      'html.gy-live-searching{cursor:progress}',
+    ].join('');
     document.head.appendChild(style);
   }
 

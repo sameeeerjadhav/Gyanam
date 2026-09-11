@@ -695,15 +695,15 @@ $courses = $stmt->fetchAll(PDO::FETCH_COLUMN);
                     </div>
                 </div>
                 <div class="students-toolbar-bottom">
-                    <form method="GET" style="display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; width: 100%;">
-                        <input type="hidden" name="status" value="<?= $statusFilter ?>">
-                        <select name="course" onchange="this.form.submit()">
+                    <form method="GET" id="studentsFilterForm" style="display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; width: 100%;">
+                        <input type="hidden" name="status" value="<?= htmlspecialchars($statusFilter) ?>">
+                        <select name="course" id="studentsCourseFilter">
                             <option value="all">All Courses</option>
                             <?php foreach ($courses as $course): ?>
                                 <option value="<?= htmlspecialchars($course) ?>" <?= $courseFilter === $course ? 'selected' : '' ?>><?= htmlspecialchars($course) ?></option>
                             <?php endforeach; ?>
                         </select>
-                        <select name="fees" onchange="this.form.submit()">
+                        <select name="fees" id="studentsFeesFilter">
                             <option value="all" <?= $feesFilter === 'all' ? 'selected' : '' ?>>All Fees</option>
                             <option value="paid" <?= $feesFilter === 'paid' ? 'selected' : '' ?>>✅ Paid (<?= $feesPaidCount ?>)</option>
                             <option value="partial" <?= $feesFilter === 'partial' ? 'selected' : '' ?>>⚠️ Partial (<?= $feesPartialCount ?>)</option>
@@ -711,9 +711,9 @@ $courses = $stmt->fetchAll(PDO::FETCH_COLUMN);
                         </select>
                         <div class="search-bar">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                            <input type="text" name="search" placeholder="Search by name, roll no, mobile..." value="<?= htmlspecialchars($searchTerm) ?>">
+                            <input type="search" id="studentsSearchInput" name="search" placeholder="Search by name, roll no, mobile..." value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off" aria-label="Search students">
                         </div>
-                        <button type="submit" class="btn-primary">Search</button>
+                        <button type="submit" class="btn-primary" id="studentsSearchBtn">Search</button>
                     </form>
                 </div>
             </div>
@@ -2253,6 +2253,19 @@ function printStudents() {
     w.focus();
     setTimeout(() => { w.print(); w.close(); }, 400);
 }
+</script>
+<script src="../assets/js/live-filter.js"></script>
+<script>
+GyanamLiveFilter({
+    mode: 'server',
+    form: '#studentsFilterForm',
+    input: '#studentsSearchInput',
+    button: '#studentsSearchBtn',
+    searchParam: 'search',
+    debounceMs: 450,
+    reloadSelects: ['#studentsCourseFilter', '#studentsFeesFilter'],
+    keepParams: ['status'],
+});
 </script>
 </body>
 </html>
