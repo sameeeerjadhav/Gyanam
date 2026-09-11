@@ -166,7 +166,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 // ── Fetch courses ─────────────────────────────────────────────────────────────
 $statusFilter = $_GET['status'] ?? 'all';
 $searchTerm   = trim($_GET['search'] ?? '');
-$pagerParams  = paginationParams(25);
+// Load full status set so live search can filter client-side (master list is small)
+$pagerParams  = paginationParams(500);
 
 // Keep Exam Portal course dropdown up to date (once per admin session)
 $examSyncNotice = null;
@@ -186,11 +187,7 @@ if (function_exists('syncCoursesToExamPortal') && empty($_SESSION['exam_courses_
 $where  = [];
 $params = [];
 
-if ($searchTerm) {
-    $where[]  = "(c.course_name LIKE ? OR c.course_type LIKE ?)";
-    $params[] = "%$searchTerm%";
-    $params[] = "%$searchTerm%";
-}
+// Search is live on the client; status still filtered server-side
 if ($statusFilter !== 'all') {
     $where[]  = "c.status = ?";
     $params[] = $statusFilter;
@@ -345,6 +342,78 @@ $inactiveCount = $counts['Inactive'] ?? 0;
 
         /* Toolbar */
         .page-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; gap: 1rem; flex-wrap: wrap; }
+        .courses-toolbar-actions {
+            display: flex;
+            gap: .65rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .courses-search-form {
+            display: flex;
+            gap: .55rem;
+            align-items: center;
+        }
+        .courses-search-form .search-bar {
+            min-width: 220px;
+            max-width: 280px;
+            height: 40px;
+            box-sizing: border-box;
+        }
+        .btn-courses-search,
+        .btn-courses-sync {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .4rem;
+            height: 40px;
+            padding: 0 1.1rem;
+            border: none;
+            border-radius: 10px;
+            font-size: .82rem;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: transform .2s ease, box-shadow .2s ease, background .2s ease, filter .2s ease;
+        }
+        .btn-courses-search {
+            background: linear-gradient(135deg, #4361ee, #3730a3);
+            color: #fff;
+            box-shadow: 0 3px 10px rgba(67, 97, 238, .22);
+        }
+        .btn-courses-search:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 14px rgba(67, 97, 238, .32);
+        }
+        .btn-courses-search:active { transform: translateY(0); }
+        .btn-courses-search svg {
+            width: 15px;
+            height: 15px;
+            flex-shrink: 0;
+        }
+        .btn-courses-sync {
+            background: linear-gradient(135deg, #0d9488, #0f766e);
+            color: #fff;
+            box-shadow: 0 3px 10px rgba(15, 118, 110, .22);
+        }
+        .btn-courses-sync:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 14px rgba(15, 118, 110, .32);
+            filter: brightness(1.03);
+        }
+        .btn-courses-sync:active { transform: translateY(0); }
+        .btn-courses-sync:disabled {
+            opacity: .7;
+            cursor: wait;
+            transform: none;
+            box-shadow: none;
+        }
+        .btn-courses-sync svg {
+            width: 15px;
+            height: 15px;
+            flex-shrink: 0;
+        }
+        #coursesTable tbody tr.course-row-hidden { display: none; }
         .status-tabs { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
         .status-tab { display: flex; align-items: center; gap: .5rem; padding: .65rem 1.1rem; border-radius: 12px; border: 1.5px solid #e5e7eb; text-decoration: none; color: #374151; font-size: .85rem; font-weight: 700; transition: all .2s; white-space: nowrap; background: #fff; }
         .status-tab:hover { border-color: #a5b4fc; background: #eef2ff; }
@@ -685,16 +754,19 @@ $inactiveCount = $counts['Inactive'] ?? 0;
             <div class="page-toolbar">
                 <h3>
                     Course List
-                    <span class="badge-count"><?= $pager['total'] ?></span>
+                    <span class="badge-count" id="courseListCount"><?= $pager['total'] ?></span>
                 </h3>
-                <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
-                    <form method="GET" style="display:flex;gap:.75rem">
+                <div class="courses-toolbar-actions">
+                    <form method="GET" class="courses-search-form" id="courseSearchForm" action="" onsubmit="return false;">
                         <input type="hidden" name="status" value="<?= htmlspecialchars($statusFilter) ?>">
                         <div class="search-bar">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                            <input type="text" name="search" placeholder="Search courses…" value="<?= htmlspecialchars($searchTerm) ?>">
+                            <input type="search" id="courseSearchInput" name="search" placeholder="Search courses…" value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off" aria-label="Search courses">
                         </div>
-                        <button type="submit" class="btn-primary" style="padding:0 1.25rem">Search</button>
+                        <button type="button" class="btn-courses-search" id="courseSearchBtn" title="Search courses">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                            Search
+                        </button>
                     </form>
                     <?php
                     $examSyncTotal = 0;
@@ -706,8 +778,9 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                         ")->fetchColumn();
                     } catch (Exception $e) {}
                     ?>
-                    <button type="button" class="btn-primary" id="sync-exam-courses-btn" style="padding:0 1rem;background:#0f766e" title="Push all Active IT courses to Exam Portal QB/Exam dropdowns">
-                        ↻ Sync IT Courses to Exam<?= $examSyncTotal ? ' (' . $examSyncTotal . ')' : '' ?>
+                    <button type="button" class="btn-courses-sync" id="sync-exam-courses-btn" title="Push all Active IT courses to Exam Portal QB/Exam dropdowns">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+                        Sync IT Courses to Exam<?= $examSyncTotal ? ' (' . $examSyncTotal . ')' : '' ?>
                     </button>
                     <button class="btn-add" onclick="location.href='course_form.php?action=add'">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -751,8 +824,14 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                                     $shareWithout = floatval($c['ho_share']);
                                 }
                             }
+                            $searchHay = strtolower(trim(
+                                ($c['course_name'] ?? '') . ' ' .
+                                ($c['course_type'] ?? '') . ' ' .
+                                ($c['duration'] ?? '') . ' ' .
+                                ($c['course_content'] ?? '')
+                            ));
                         ?>
-                        <tr>
+                        <tr class="course-data-row" data-search="<?= htmlspecialchars($searchHay, ENT_QUOTES) ?>">
                             <td>
                                 <div class="cell-name"><?= htmlspecialchars($c['course_name']) ?></div>
                                 <?php if (!empty($c['course_content'])): ?>
@@ -1110,7 +1189,7 @@ document.addEventListener('keydown', function(e) {
 
 document.getElementById('sync-exam-courses-btn')?.addEventListener('click', async function () {
     const btn = this;
-    const prev = btn.textContent;
+    const prev = btn.innerHTML;
     btn.disabled = true;
     btn.textContent = 'Syncing…';
     try {
@@ -1123,9 +1202,66 @@ document.getElementById('sync-exam-courses-btn')?.addEventListener('click', asyn
         alert('Network error: ' + err.message);
     } finally {
         btn.disabled = false;
-        btn.textContent = prev;
+        btn.innerHTML = prev;
     }
 });
+
+/* ── Live course search (filters table as you type) ───────────────────────── */
+(function initLiveCourseSearch() {
+    const input = document.getElementById('courseSearchInput');
+    const btn = document.getElementById('courseSearchBtn');
+    const countEl = document.getElementById('courseListCount');
+    const tbody = document.querySelector('#coursesTable tbody');
+    if (!input || !tbody) return;
+
+    const rows = () => Array.from(tbody.querySelectorAll('tr.course-data-row'));
+    let emptyRow = tbody.querySelector('tr.course-live-empty');
+    if (!emptyRow) {
+        emptyRow = document.createElement('tr');
+        emptyRow.className = 'course-live-empty';
+        emptyRow.innerHTML = '<td colspan="8" class="table-empty"><p>No courses match your search.</p></td>';
+        emptyRow.hidden = true;
+        tbody.appendChild(emptyRow);
+    }
+
+    function syncUrl(q) {
+        try {
+            const url = new URL(window.location.href);
+            if (q) url.searchParams.set('search', q);
+            else url.searchParams.delete('search');
+            url.searchParams.delete('page');
+            history.replaceState(null, '', url.pathname + url.search);
+        } catch (_) { /* ignore */ }
+    }
+
+    function applyFilter() {
+        const q = (input.value || '').trim().toLowerCase();
+        let visible = 0;
+        rows().forEach((tr) => {
+            const hay = (tr.getAttribute('data-search') || '').toLowerCase();
+            const show = !q || hay.includes(q);
+            tr.classList.toggle('course-row-hidden', !show);
+            if (show) visible += 1;
+        });
+        if (countEl) countEl.textContent = String(visible);
+        const hasDataRows = rows().length > 0;
+        emptyRow.hidden = !hasDataRows || visible > 0;
+        syncUrl((input.value || '').trim());
+    }
+
+    let timer = null;
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(applyFilter, 120);
+    });
+    input.addEventListener('search', applyFilter); // clear (x) on type=search
+    btn?.addEventListener('click', () => {
+        applyFilter();
+        input.focus();
+    });
+
+    if ((input.value || '').trim()) applyFilter();
+})();
 </script>
 </body>
 </html>
