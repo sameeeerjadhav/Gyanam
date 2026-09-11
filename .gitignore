@@ -59,3 +59,11 @@ gyanamindia/duplicate_cert_requests.sql
 gyanamindia/fix_fee_payments_schema.sql
 gyanamindia/missing_tables_migration.sql
 gyanamindia/atc/*_migration.sql
+
+# Repo-root design refs / scratch (not app assets)
+/Blank*.pdf
+/Marksheet*.pdf
+/image.png
+/newheaderHD.jpeg
+/*-removebg-preview.png
+/*_sign-removebg-preview.png

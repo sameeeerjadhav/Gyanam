@@ -788,7 +788,6 @@ function questionBankPdfBrandPaths(): array
     $candidatesLetterhead = [
         __DIR__ . '/../assets/branding/giit_letterhead.png',
         __DIR__ . '/../assets/templates/giit_marksheet_header.png',
-        __DIR__ . '/../../image.png',
     ];
     $candidatesLogo = [
         __DIR__ . '/../assets/giit_logo.png',
