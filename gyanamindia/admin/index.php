@@ -424,8 +424,10 @@ $materialBreakdown = [];
 $topATCs         = [];
 $monthlyTrend    = [];
 $recentSharePayments = [];
+$chartAtcTypes   = [];
+$chartDlcBars    = [];
 
-$_rcKey = 'admin_dash_reports_share_v1';
+$_rcKey = 'admin_dash_reports_share_v2';
 $_rcAt  = 'admin_dash_reports_share_at';
 if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_rcAt]) < 90) {
     $cached = $_SESSION[$_rcKey];
@@ -436,6 +438,8 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     $topATCs           = $cached['topATCs'] ?? [];
     $monthlyTrend      = $cached['monthlyTrend'] ?? [];
     $recentSharePayments = $cached['recentSharePayments'] ?? [];
+    $chartAtcTypes     = $cached['chartAtcTypes'] ?? [];
+    $chartDlcBars      = $cached['chartDlcBars'] ?? [];
 } else {
     try {
         $row = $pdo->query("
@@ -544,7 +548,34 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         ")->fetchAll(PDO::FETCH_ASSOC);
     } catch (Exception $e) {}
 
-    $_SESSION[$_rcKey] = compact('revenueStats', 'dlcRevenue', 'dispatchStats', 'materialBreakdown', 'topATCs', 'monthlyTrend', 'recentSharePayments');
+    // ATC mix by center type (pie)
+    try {
+        $chartAtcTypes = $pdo->query("
+            SELECT COALESCE(NULLIF(TRIM(center_type), ''), 'Other') AS label,
+                   COUNT(*) AS c
+            FROM atc_centers
+            WHERE status = 'Active'
+            GROUP BY label
+            ORDER BY c DESC
+            LIMIT 8
+        ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Exception $e) {
+        $chartAtcTypes = [];
+    }
+
+    // Top DLC offices by HO share collected (bar)
+    $chartDlcBars = [];
+    foreach (array_slice($dlcRevenue, 0, 8) as $d) {
+        $chartDlcBars[] = [
+            'label' => (string)($d['dlc_name'] ?? 'DLC'),
+            'collected' => (float)($d['collected'] ?? 0),
+        ];
+    }
+
+    $_SESSION[$_rcKey] = compact(
+        'revenueStats', 'dlcRevenue', 'dispatchStats', 'materialBreakdown',
+        'topATCs', 'monthlyTrend', 'recentSharePayments', 'chartAtcTypes', 'chartDlcBars'
+    );
     $_SESSION[$_rcAt]  = time();
 }
 ?>
@@ -957,6 +988,57 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .chart-mlbl { font-size:.72rem; font-weight:700; color:var(--text-primary,#111); }
     .chart-msub { font-size:.67rem; color:var(--text-muted,#9ca3af); }
 
+    /* Chart.js dashboard cards */
+    .admin-charts-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+        margin: 0 0 1.25rem;
+    }
+    .admin-chart-card {
+        background: #fff;
+        border: 1.5px solid var(--border-color, #e5e7eb);
+        border-radius: 16px;
+        box-shadow: 0 2px 10px rgba(0,0,0,.05);
+        padding: 1rem 1.15rem 1.1rem;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+    .admin-chart-card.span-2 { grid-column: span 2; }
+    .admin-chart-card h3 {
+        margin: 0 0 .15rem;
+        font-size: .92rem;
+        font-weight: 800;
+        color: var(--text-primary, #0f172a);
+        letter-spacing: -.01em;
+    }
+    .admin-chart-card .chart-sub {
+        font-size: .72rem;
+        font-weight: 600;
+        color: #94a3b8;
+        margin-bottom: .85rem;
+    }
+    .admin-chart-canvas-wrap {
+        position: relative;
+        height: 260px;
+        width: 100%;
+        flex: 1;
+    }
+    .admin-chart-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 260px;
+        color: #94a3b8;
+        font-size: .84rem;
+        font-weight: 600;
+    }
+    @media (max-width: 1100px) {
+        .admin-charts-grid { grid-template-columns: 1fr; }
+        .admin-chart-card.span-2 { grid-column: auto; }
+    }
+
     /* Top ATC filters */
     .top-atc-head {
         display:flex; align-items:flex-end; justify-content:space-between; gap:1rem;
@@ -1211,6 +1293,60 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
             </div>
 
+            <!-- ═══ Analytics charts ═══ -->
+            <?php
+            $chartMonthLabels = [];
+            $chartMonthAdm = [];
+            $chartMonthRev = [];
+            foreach ($monthlyTrend as $m) {
+                $chartMonthLabels[] = date('M Y', strtotime(($m['month'] ?? date('Y-m')) . '-01'));
+                $chartMonthAdm[] = (int)($m['admissions'] ?? 0);
+                $chartMonthRev[] = round((float)($m['revenue'] ?? 0), 0);
+            }
+            $pieLabels = array_column($chartAtcTypes, 'label');
+            $pieData = array_map('intval', array_column($chartAtcTypes, 'c'));
+            $barLabels = array_map(static function ($r) {
+                $n = (string)($r['label'] ?? 'DLC');
+                return mb_strlen($n) > 16 ? (mb_substr($n, 0, 14) . '…') : $n;
+            }, $chartDlcBars);
+            $barData = array_map(static function ($r) {
+                return round((float)($r['collected'] ?? 0), 0);
+            }, $chartDlcBars);
+            ?>
+            <div class="rpt-section">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                Analytics Overview
+            </div>
+            <div class="admin-charts-grid">
+                <div class="admin-chart-card">
+                    <h3>ATC Center Types</h3>
+                    <div class="chart-sub">Active centres by center type</div>
+                    <?php if (!empty($pieData) && array_sum($pieData) > 0): ?>
+                    <div class="admin-chart-canvas-wrap"><canvas id="adminPieChart"></canvas></div>
+                    <?php else: ?>
+                    <div class="admin-chart-empty">No ATC type data yet</div>
+                    <?php endif; ?>
+                </div>
+                <div class="admin-chart-card span-2">
+                    <h3>DLC Share Collected</h3>
+                    <div class="chart-sub">Top DLC offices by HO share paid</div>
+                    <?php if (!empty($barData) && array_sum($barData) > 0): ?>
+                    <div class="admin-chart-canvas-wrap"><canvas id="adminBarChart"></canvas></div>
+                    <?php else: ?>
+                    <div class="admin-chart-empty">No DLC share data yet</div>
+                    <?php endif; ?>
+                </div>
+                <div class="admin-chart-card span-2" style="grid-column: 1 / -1;">
+                    <h3>Monthly Trend</h3>
+                    <div class="chart-sub">Admissions &amp; HO share revenue — last 6 months</div>
+                    <?php if (!empty($chartMonthLabels)): ?>
+                    <div class="admin-chart-canvas-wrap" style="height:280px"><canvas id="adminLineChart"></canvas></div>
+                    <?php else: ?>
+                    <div class="admin-chart-empty">No monthly trend data yet</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <?php if (!empty($recentSharePayments)): ?>
             <div class="cc-card" style="margin-bottom:1rem">
                 <div class="cc-card-pad" style="padding-bottom:.35rem">
@@ -1428,32 +1564,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </table>
             </div>
 
-            <!-- ═══ MONTHLY TREND CHART ═══ -->
-            <?php if(!empty($monthlyTrend)):
-                $maxRev = max(array_column($monthlyTrend,'revenue')?:[1]);
-            ?>
-            <div class="rpt-section">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                Monthly Admissions &amp; Share Revenue (Last 6 Months)
-            </div>
-            <div class="rpt-table-wrap" style="padding:1.25rem 1.5rem 1rem">
-                <div class="chart-wrap">
-                    <?php foreach($monthlyTrend as $m):
-                        $h = $maxRev>0 ? max(6,round(($m['revenue']/$maxRev)*140)) : 6;
-                        $lbl = date('M Y', strtotime($m['month'].'-01'));
-                    ?>
-                    <div class="chart-col">
-                        <div class="chart-bar-box">
-                            <div class="chart-bar" style="height:<?= $h ?>px" title="<?= $lbl ?>: Share ₹<?= number_format($m['revenue'],0) ?>"></div>
-                        </div>
-                        <div class="chart-mlbl"><?= date('M', strtotime($m['month'].'-01')) ?></div>
-                        <div class="chart-msub"><?= $m['admissions'] ?> adm</div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-                <div style="font-size:.72rem;color:#64748b;font-weight:600;margin-top:.75rem">Bar height = HO share received (not ATC student fees)</div>
-            </div>
-            <?php endif; ?>
+            <!-- Monthly CSS bars replaced by Chart.js line chart above -->
 
         </div>
     </main>
@@ -1818,6 +1929,201 @@ async function loadTopAtcs() {
             topAtcPeriod = btn.dataset.period || 'all';
             loadTopAtcs();
         });
+    });
+})();
+
+/* ── Dashboard Chart.js (pie / bar / line) ── */
+(function initAdminCharts() {
+    const CHART_DATA = {
+        pieLabels: <?= json_encode(array_values($pieLabels ?? []), JSON_UNESCAPED_UNICODE) ?>,
+        pieData: <?= json_encode(array_values($pieData ?? [])) ?>,
+        barLabels: <?= json_encode(array_values($barLabels ?? []), JSON_UNESCAPED_UNICODE) ?>,
+        barData: <?= json_encode(array_values($barData ?? [])) ?>,
+        lineLabels: <?= json_encode(array_values($chartMonthLabels ?? []), JSON_UNESCAPED_UNICODE) ?>,
+        lineAdm: <?= json_encode(array_values($chartMonthAdm ?? [])) ?>,
+        lineRev: <?= json_encode(array_values($chartMonthRev ?? [])) ?>,
+    };
+
+    function loadChartJs(cb) {
+        if (window.Chart) { cb(); return; }
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+        s.async = true;
+        s.onload = cb;
+        document.head.appendChild(s);
+    }
+
+    const palette = ['#4361ee', '#0d9488', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16', '#ec4899'];
+
+    loadChartJs(function () {
+        Chart.defaults.font.family = "'Sora', 'Inter', system-ui, sans-serif";
+        Chart.defaults.font.weight = 600;
+        Chart.defaults.color = '#64748b';
+
+        const pieEl = document.getElementById('adminPieChart');
+        if (pieEl && CHART_DATA.pieData.length) {
+            new Chart(pieEl, {
+                type: 'pie',
+                data: {
+                    labels: CHART_DATA.pieLabels,
+                    datasets: [{
+                        data: CHART_DATA.pieData,
+                        backgroundColor: palette.slice(0, CHART_DATA.pieData.length),
+                        borderWidth: 2,
+                        borderColor: '#fff',
+                        hoverOffset: 6,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 12, padding: 12, font: { size: 11, weight: 700 } },
+                        },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            cornerRadius: 10,
+                            padding: 10,
+                            callbacks: {
+                                label: (c) => {
+                                    const total = c.dataset.data.reduce((a, b) => a + b, 0) || 1;
+                                    const pct = Math.round((c.parsed / total) * 100);
+                                    return ` ${c.label}: ${c.parsed} (${pct}%)`;
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+        }
+
+        const barEl = document.getElementById('adminBarChart');
+        if (barEl && CHART_DATA.barData.length) {
+            const ctx = barEl.getContext('2d');
+            const grad = ctx.createLinearGradient(0, 0, 0, 260);
+            grad.addColorStop(0, 'rgba(67, 97, 238, 0.95)');
+            grad.addColorStop(1, 'rgba(56, 189, 248, 0.55)');
+            new Chart(barEl, {
+                type: 'bar',
+                data: {
+                    labels: CHART_DATA.barLabels,
+                    datasets: [{
+                        label: 'Share collected',
+                        data: CHART_DATA.barData,
+                        backgroundColor: grad,
+                        borderRadius: 8,
+                        maxBarThickness: 42,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            cornerRadius: 10,
+                            padding: 10,
+                            callbacks: {
+                                label: (c) => ' ₹' + Number(c.parsed.y || 0).toLocaleString('en-IN'),
+                            },
+                        },
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: (v) => '₹' + Number(v).toLocaleString('en-IN'),
+                                font: { size: 10 },
+                            },
+                            grid: { color: '#f1f5f9', drawBorder: false },
+                        },
+                        x: {
+                            ticks: { font: { size: 10, weight: 700 }, maxRotation: 35, minRotation: 0 },
+                            grid: { display: false },
+                        },
+                    },
+                },
+            });
+        }
+
+        const lineEl = document.getElementById('adminLineChart');
+        if (lineEl && CHART_DATA.lineLabels.length) {
+            new Chart(lineEl, {
+                type: 'line',
+                data: {
+                    labels: CHART_DATA.lineLabels,
+                    datasets: [
+                        {
+                            label: 'Admissions',
+                            data: CHART_DATA.lineAdm,
+                            borderColor: '#4361ee',
+                            backgroundColor: 'rgba(67, 97, 238, 0.12)',
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'HO share (₹)',
+                            data: CHART_DATA.lineRev,
+                            borderColor: '#0d9488',
+                            backgroundColor: 'rgba(13, 148, 136, 0.08)',
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            yAxisID: 'y1',
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            align: 'end',
+                            labels: { boxWidth: 12, padding: 14, font: { size: 11, weight: 700 } },
+                        },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            cornerRadius: 10,
+                            padding: 10,
+                        },
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            beginAtZero: true,
+                            title: { display: true, text: 'Admissions', font: { size: 11, weight: 700 } },
+                            ticks: { stepSize: 1, font: { size: 10 } },
+                            grid: { color: '#f1f5f9', drawBorder: false },
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: true,
+                            title: { display: true, text: 'Share ₹', font: { size: 11, weight: 700 } },
+                            ticks: {
+                                callback: (v) => '₹' + Number(v).toLocaleString('en-IN'),
+                                font: { size: 10 },
+                            },
+                            grid: { drawOnChartArea: false },
+                        },
+                        x: {
+                            ticks: { font: { size: 11, weight: 700 } },
+                            grid: { display: false },
+                        },
+                    },
+                },
+            });
+        }
     });
 })();
 </script>
