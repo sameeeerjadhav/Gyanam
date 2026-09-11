@@ -466,7 +466,7 @@ try {
     }
 } catch (Exception $e) {}
 
-// Extend charts to 12 months (fill missing months with 0)
+// Extend charts to 6 months (fill missing months with 0) — matches Admin analytics
 try {
     $monthlyLabels = [];
     $monthlyData = [];
@@ -476,7 +476,7 @@ try {
     $mapRev = [];
     $stmt = $pdo->prepare("
         SELECT DATE_FORMAT(admission_date,'%Y-%m') AS sk, COUNT(*) AS cnt
-        FROM admissions WHERE atc_id = ? AND admission_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
+        FROM admissions WHERE atc_id = ? AND admission_date >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
         GROUP BY sk
     ");
     $stmt->execute([$atcId]);
@@ -486,21 +486,60 @@ try {
     $stmt = $pdo->prepare("
         SELECT DATE_FORMAT(fp.payment_date,'%Y-%m') AS sk, COALESCE(SUM(fp.amount),0) AS total
         FROM fee_payments fp JOIN admissions a ON fp.admission_id = a.id
-        WHERE a.atc_id = ? AND fp.payment_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
+        WHERE a.atc_id = ? AND fp.payment_date >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
         GROUP BY sk
     ");
     $stmt->execute([$atcId]);
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $mapRev[$r['sk']] = (float)$r['total'];
     }
-    for ($i = 11; $i >= 0; $i--) {
+    for ($i = 5; $i >= 0; $i--) {
         $sk = date('Y-m', strtotime("-{$i} months"));
-        $label = date('M \'y', strtotime($sk . '-01'));
+        $label = date('M Y', strtotime($sk . '-01'));
         $monthlyLabels[] = $label;
         $monthlyData[] = $mapAdm[$sk] ?? 0;
         $revenueLabels[] = $label;
         $revenueData[] = $mapRev[$sk] ?? 0;
     }
+} catch (Exception $e) {}
+
+// Course mix for pie / bar charts
+$chartByCourse = [];
+try {
+    $stmt = $pdo->prepare("
+        SELECT COALESCE(NULLIF(TRIM(course), ''), 'Other') AS label,
+               COUNT(*) AS students,
+               COALESCE(SUM(CASE WHEN status = 'Active' THEN fees_paid ELSE 0 END), 0) AS collected
+        FROM admissions
+        WHERE atc_id = ?
+        GROUP BY label
+        ORDER BY students DESC
+        LIMIT 8
+    ");
+    $stmt->execute([$atcId]);
+    $chartByCourse = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+} catch (Exception $e) {
+    $chartByCourse = [];
+}
+
+// Fee payment status pie fallback data
+$chartFeeStatus = ['Paid' => 0, 'Partial' => 0, 'Pending' => 0];
+try {
+    $stmt = $pdo->prepare("
+        SELECT
+            SUM(CASE WHEN fees_pending <= 0 AND fees_paid > 0 THEN 1 ELSE 0 END) AS paid,
+            SUM(CASE WHEN fees_paid > 0 AND fees_pending > 0 THEN 1 ELSE 0 END) AS partial,
+            SUM(CASE WHEN COALESCE(fees_paid, 0) <= 0 THEN 1 ELSE 0 END) AS pending
+        FROM admissions
+        WHERE atc_id = ? AND status = 'Active'
+    ");
+    $stmt->execute([$atcId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $chartFeeStatus = [
+        'Paid' => (int)($row['paid'] ?? 0),
+        'Partial' => (int)($row['partial'] ?? 0),
+        'Pending' => (int)($row['pending'] ?? 0),
+    ];
 } catch (Exception $e) {}
 
 $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInquiries) * 100, 1) : 0;
@@ -1753,79 +1792,183 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
         loadChartJs(function () {
         Chart.defaults.font.family = "'Sora', 'Inter', sans-serif";
         Chart.defaults.font.weight = 600;
+        Chart.defaults.color = '#64748b';
 
-        // ── Enhanced Admissions Chart ──
-        (function () {
-            var el = document.getElementById('admissionsChart');
-            if (!el) return;
-            const ctx = el.getContext('2d');
-            const grad = ctx.createLinearGradient(0, 0, 0, 280);
-            grad.addColorStop(0, 'rgba(37, 99, 235, 0.9)');
+        const palette = ['#4361ee', '#0d9488', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16', '#ec4899'];
+        const CHART = {
+            pieLabels: <?= json_encode(array_values($pieLabels ?? []), JSON_UNESCAPED_UNICODE) ?>,
+            pieData: <?= json_encode(array_values($pieData ?? [])) ?>,
+            barLabels: <?= json_encode(array_values($barLabels ?? []), JSON_UNESCAPED_UNICODE) ?>,
+            barData: <?= json_encode(array_values($barData ?? [])) ?>,
+            lineLabels: <?= json_encode(array_values($monthlyLabels ?? []), JSON_UNESCAPED_UNICODE) ?>,
+            lineAdm: <?= json_encode(array_values($monthlyData ?? [])) ?>,
+            lineRev: <?= json_encode(array_values($revenueData ?? [])) ?>,
+        };
+
+        const pieEl = document.getElementById('atcPieChart');
+        if (pieEl && CHART.pieData.length) {
+            new Chart(pieEl, {
+                type: 'pie',
+                data: {
+                    labels: CHART.pieLabels,
+                    datasets: [{
+                        data: CHART.pieData,
+                        backgroundColor: palette.slice(0, CHART.pieData.length),
+                        borderWidth: 2,
+                        borderColor: '#fff',
+                        hoverOffset: 6,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 12, padding: 12, font: { size: 11, weight: 700 } },
+                        },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            cornerRadius: 10,
+                            padding: 10,
+                            callbacks: {
+                                label: (c) => {
+                                    const total = c.dataset.data.reduce((a, b) => a + b, 0) || 1;
+                                    const pct = Math.round((c.parsed / total) * 100);
+                                    return ` ${c.label}: ${c.parsed} (${pct}%)`;
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+        }
+
+        const barEl = document.getElementById('atcBarChart');
+        if (barEl && CHART.barData.length) {
+            const ctx = barEl.getContext('2d');
+            const grad = ctx.createLinearGradient(0, 0, 0, 260);
+            grad.addColorStop(0, 'rgba(67, 97, 238, 0.95)');
             grad.addColorStop(1, 'rgba(56, 189, 248, 0.55)');
-            new Chart(ctx, {
+            new Chart(barEl, {
                 type: 'bar',
                 data: {
-                    labels: <?= json_encode($monthlyLabels ?: ['No data']) ?>,
+                    labels: CHART.barLabels,
                     datasets: [{
-                        label: 'Admissions', data: <?= json_encode($monthlyData ?: [0]) ?>,
-                        backgroundColor: grad, hoverBackgroundColor: 'rgba(37,99,235,1)',
-                        borderRadius: 10, borderSkipped: false, maxBarThickness: 48
-                    }]
+                        label: 'Fees collected',
+                        data: CHART.barData,
+                        backgroundColor: grad,
+                        borderRadius: 8,
+                        maxBarThickness: 42,
+                    }],
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
+                    responsive: true,
+                    maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: '#1e293b', titleFont: { weight: 800, size: 13 }, bodyFont: { size: 12 },
-                            padding: { x: 14, y: 10 }, cornerRadius: 10, displayColors: false,
-                            callbacks: { label: c => c.parsed.y + ' admission' + (c.parsed.y !== 1 ? 's' : '') }
-                        }
+                            backgroundColor: '#0f172a',
+                            cornerRadius: 10,
+                            padding: 10,
+                            callbacks: {
+                                label: (c) => ' ₹' + Number(c.parsed.y || 0).toLocaleString('en-IN'),
+                            },
+                        },
                     },
                     scales: {
-                        y: { beginAtZero: true, ticks: { stepSize: 1, color: '#9ca3af', font: { size: 11 } }, grid: { color: '#f1f5f9', drawBorder: false } },
-                        x: { ticks: { color: '#6b7280', font: { size: 11, weight: 700 } }, grid: { display: false } }
-                    }
-                }
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: (v) => '₹' + Number(v).toLocaleString('en-IN'),
+                                font: { size: 10 },
+                            },
+                            grid: { color: '#f1f5f9', drawBorder: false },
+                        },
+                        x: {
+                            ticks: { font: { size: 10, weight: 700 }, maxRotation: 35, minRotation: 0 },
+                            grid: { display: false },
+                        },
+                    },
+                },
             });
-        })();
+        }
 
-        // ── Enhanced Revenue Chart ──
-        (function () {
-            var el = document.getElementById('revenueChart');
-            if (!el) return;
-            const ctx = el.getContext('2d');
-            const grad = ctx.createLinearGradient(0, 0, 0, 280);
-            grad.addColorStop(0, 'rgba(37, 99, 235, 0.28)');
-            grad.addColorStop(1, 'rgba(37, 99, 235, 0.02)');
-            new Chart(ctx, {
+        const lineEl = document.getElementById('atcLineChart');
+        if (lineEl && CHART.lineLabels.length) {
+            new Chart(lineEl, {
                 type: 'line',
                 data: {
-                    labels: <?= json_encode($revenueLabels ?: ['No data']) ?>,
-                    datasets: [{
-                        label: 'Revenue (₹)', data: <?= json_encode($revenueData ?: [0]) ?>,
-                        borderColor: '#2563eb', backgroundColor: grad, borderWidth: 3,
-                        pointBackgroundColor: '#fff', pointBorderColor: '#2563eb', pointBorderWidth: 2.5,
-                        pointRadius: 5, pointHoverRadius: 8, fill: true, tension: 0.4
-                    }]
+                    labels: CHART.lineLabels,
+                    datasets: [
+                        {
+                            label: 'Admissions',
+                            data: CHART.lineAdm,
+                            borderColor: '#4361ee',
+                            backgroundColor: 'rgba(67, 97, 238, 0.12)',
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'Fee revenue (₹)',
+                            data: CHART.lineRev,
+                            borderColor: '#0d9488',
+                            backgroundColor: 'rgba(13, 148, 136, 0.08)',
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            yAxisID: 'y1',
+                        },
+                    ],
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: { display: false },
+                        legend: {
+                            position: 'top',
+                            align: 'end',
+                            labels: { boxWidth: 12, padding: 14, font: { size: 11, weight: 700 } },
+                        },
                         tooltip: {
-                            backgroundColor: '#1e293b', titleFont: { weight: 800, size: 13 }, bodyFont: { size: 12 },
-                            padding: { x: 14, y: 10 }, cornerRadius: 10, displayColors: false,
-                            callbacks: { label: c => '₹' + c.parsed.y.toLocaleString('en-IN') }
-                        }
+                            backgroundColor: '#0f172a',
+                            cornerRadius: 10,
+                            padding: 10,
+                        },
                     },
                     scales: {
-                        y: { beginAtZero: true, ticks: { color: '#9ca3af', font: { size: 11 }, callback: v => '₹' + v.toLocaleString('en-IN') }, grid: { color: '#f1f5f9', drawBorder: false } },
-                        x: { ticks: { color: '#6b7280', font: { size: 11, weight: 700 } }, grid: { display: false } }
-                    }
-                }
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            beginAtZero: true,
+                            title: { display: true, text: 'Admissions', font: { size: 11, weight: 700 } },
+                            ticks: { stepSize: 1, font: { size: 10 } },
+                            grid: { color: '#f1f5f9', drawBorder: false },
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: true,
+                            title: { display: true, text: 'Fees ₹', font: { size: 11, weight: 700 } },
+                            ticks: {
+                                callback: (v) => '₹' + Number(v).toLocaleString('en-IN'),
+                                font: { size: 10 },
+                            },
+                            grid: { drawOnChartArea: false },
+                        },
+                        x: {
+                            ticks: { font: { size: 11, weight: 700 } },
+                            grid: { display: false },
+                        },
+                    },
+                },
             });
-        })();
+        }
         });
 
         (function () {

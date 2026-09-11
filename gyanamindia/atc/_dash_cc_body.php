@@ -328,25 +328,58 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <?php endif; ?>
                 </div>
 
-                <!-- Charts -->
-                <div class="cc-grid cc-grid-2">
-                    <div class="cc-card">
-                        <div class="cc-card-pad" style="padding-bottom:0">
-                            <div class="cc-card-head">
-                                <?= cc_png('icon-admissions.png', 'xl', 'Monthly admissions') ?>
-                            <h3>Monthly Admissions</h3>
-                            </div>
-                        </div>
-                        <div class="cc-chart-wrap"><canvas id="admissionsChart"></canvas></div>
+                <!-- Analytics Overview (pie / bar / line — same pattern as Admin) -->
+                <?php
+                $pieLabels = array_column($chartByCourse, 'label');
+                $pieData = array_map('intval', array_column($chartByCourse, 'students'));
+                if (array_sum($pieData) <= 0) {
+                    $pieLabels = array_keys(array_filter($chartFeeStatus));
+                    $pieData = array_values(array_filter($chartFeeStatus));
+                    $pieTitle = 'Fee Status';
+                    $pieSub = 'Active students by fee payment status';
+                } else {
+                    $pieTitle = 'Students by Course';
+                    $pieSub = 'Admissions mix at your centre';
+                }
+                $barLabels = array_map(static function ($r) {
+                    $n = (string)($r['label'] ?? 'Course');
+                    return mb_strlen($n) > 18 ? (mb_substr($n, 0, 16) . '…') : $n;
+                }, $chartByCourse);
+                $barData = array_map(static function ($r) {
+                    return round((float)($r['collected'] ?? 0), 0);
+                }, $chartByCourse);
+                ?>
+                <div class="cc-analytics-head">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                    Analytics Overview
+                </div>
+                <div class="cc-analytics-grid">
+                    <div class="cc-analytics-card">
+                        <h3><?= htmlspecialchars($pieTitle) ?></h3>
+                        <div class="cc-analytics-sub"><?= htmlspecialchars($pieSub) ?></div>
+                        <?php if (!empty($pieData) && array_sum($pieData) > 0): ?>
+                        <div class="cc-analytics-canvas"><canvas id="atcPieChart"></canvas></div>
+                        <?php else: ?>
+                        <div class="cc-analytics-empty">No course data yet</div>
+                        <?php endif; ?>
                     </div>
-                    <div class="cc-card">
-                        <div class="cc-card-pad" style="padding-bottom:0">
-                            <div class="cc-card-head">
-                                <?= cc_png('icon-share-revenue.png', 'xl', 'Revenue') ?>
-                            <h3>Revenue</h3>
-                            </div>
-                        </div>
-                        <div class="cc-chart-wrap"><canvas id="revenueChart"></canvas></div>
+                    <div class="cc-analytics-card span-2">
+                        <h3>Fees by Course</h3>
+                        <div class="cc-analytics-sub">Collected fees (active students) by course</div>
+                        <?php if (!empty($barData) && array_sum($barData) > 0): ?>
+                        <div class="cc-analytics-canvas"><canvas id="atcBarChart"></canvas></div>
+                        <?php else: ?>
+                        <div class="cc-analytics-empty">No fee collection data yet</div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="cc-analytics-card span-full">
+                        <h3>Monthly Trend</h3>
+                        <div class="cc-analytics-sub">Admissions &amp; fee revenue — last 6 months</div>
+                        <?php if (!empty($monthlyLabels)): ?>
+                        <div class="cc-analytics-canvas tall"><canvas id="atcLineChart"></canvas></div>
+                        <?php else: ?>
+                        <div class="cc-analytics-empty">No monthly trend data yet</div>
+                        <?php endif; ?>
                     </div>
                 </div>
 
