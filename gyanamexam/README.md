@@ -50,4 +50,4 @@ k6 run -e BASE_URL=http://127.0.0.1:8000/api/v1 \
 
 ## Admin
 
-Live monitoring polls every 10s (cached ~3s server-side). Extend time uses `examConfigId`. Results API supports `?page=&per_page=&q=`.
+Live monitoring polls every 30s (cached ~15s server-side). Student heartbeat ~90s with stampede; autosave ~50–95s; proctor events coalesced. Extend time uses `examConfigId`. Results API supports `?page=&per_page=&q=`.

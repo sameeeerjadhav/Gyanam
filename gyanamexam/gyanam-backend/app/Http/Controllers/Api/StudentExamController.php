@@ -79,7 +79,8 @@ class StudentExamController extends Controller
     public function getQuestions(Request $request, $examId)
     {
         $student = $request->user();
-        $exam    = ExamConfig::with('questionBank.questions')->findOrFail($examId);
+        // Avoid eager-loading the full bank on every start — use shared bank cache below
+        $exam = ExamConfig::findOrFail($examId);
 
         $pivot = $student->exams()
             ->where('exam_config_id', $examId)
@@ -134,12 +135,21 @@ class StudentExamController extends Controller
                 return $ordered;
             });
         } else {
-            $questions = Cache::remember($cacheKey, $ttl, function () use ($exam) {
-                $qs = $exam->questionBank->questions->toArray();
+            $questions = Cache::remember($cacheKey, $ttl, function () use ($exam, $examId) {
+                $bankQs = Cache::remember("exam_bank_qs:{$examId}", 300, function () use ($examId) {
+                    $full = ExamConfig::with('questionBank.questions')->findOrFail($examId);
+                    $collection = $full->questionBank?->questions;
+                    if (!$collection) {
+                        return [];
+                    }
+                    return $collection->map(fn ($q) => $q->toArray())->values()->all();
+                });
+                $qs = $bankQs;
                 if ($exam->randomize_questions) {
+                    $qs = $bankQs;
                     shuffle($qs);
                 }
-                return array_slice($qs, 0, $exam->total_questions);
+                return array_slice($qs, 0, (int) $exam->total_questions);
             });
         }
 
@@ -283,9 +293,7 @@ class StudentExamController extends Controller
             ]
         );
 
-        if ($session) {
-            $this->liveSessions->touch((int) $student->id, (int) $examId);
-        }
+        // Heartbeat already covers liveness — skip extra touch() write here
 
         return response()->json([
             'ok'             => true,
@@ -306,11 +314,27 @@ class StudentExamController extends Controller
         ]);
 
         $student = $request->user();
+        $type = (string) $data['event_type'];
+
+        // Drop duplicate noisy events (devtools / copy spam) within a short window
+        $dropTtl = match ($type) {
+            'auto_submit', 'tab_switch_exceeded' => 0,
+            'devtools' => 45,
+            'copy_paste', 'right_click' => 20,
+            'fullscreen_exit', 'fullscreen_required' => 20,
+            default => 15,
+        };
+        if ($dropTtl > 0) {
+            $key = "proc_evt:{$student->id}:{$examId}:{$type}";
+            if (!Cache::add($key, 1, $dropTtl)) {
+                return response()->json(['ok' => true, 'dropped' => true]);
+            }
+        }
 
         ProctoringEvent::create([
             'student_id'     => $student->id,
             'exam_config_id' => $examId,
-            'event_type'     => $data['event_type'],
+            'event_type'     => $type,
             'message'        => $data['message'] ?? null,
             'meta'           => $data['meta'] ?? null,
             'created_at'     => now(),

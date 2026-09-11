@@ -93,14 +93,22 @@ Route::prefix('v1')->group(function () {
         Route::get ('/me',                              [AuthController::class, 'studentMe']);
         Route::get ('/exams',                           [StudentExamController::class, 'myExams']);
         Route::get ('/history',                         [StudentExamController::class, 'myHistory']);
-        Route::get ('/exam/{examId}/questions',         [StudentExamController::class, 'getQuestions']);
-        Route::post('/exam/{examId}/heartbeat',         [StudentExamController::class, 'heartbeat']);
-        Route::post('/exam/{examId}/answers',           [StudentExamController::class, 'saveAnswers']);
-        Route::post('/exam/{examId}/proctoring-events', [StudentExamController::class, 'logProctoringEvent']);
-        Route::post('/exam/{examId}/proctor-photo',     [StudentExamController::class, 'uploadProctorPhoto']);
-        Route::post('/exam/{examId}/proctor-signal',    [StudentExamController::class, 'proctorSignal']);
-        Route::get ('/exam/{examId}/proctor-signal',    [StudentExamController::class, 'getProctorSignal']);
-        Route::post('/exam/{examId}/submit',            [StudentExamController::class, 'submit']);
+        Route::get ('/exam/{examId}/questions',         [StudentExamController::class, 'getQuestions'])
+            ->middleware('throttle:exam-paper');
+        Route::post('/exam/{examId}/heartbeat',         [StudentExamController::class, 'heartbeat'])
+            ->middleware('throttle:exam-heartbeat');
+        Route::post('/exam/{examId}/answers',           [StudentExamController::class, 'saveAnswers'])
+            ->middleware('throttle:exam-answers');
+        Route::post('/exam/{examId}/proctoring-events', [StudentExamController::class, 'logProctoringEvent'])
+            ->middleware('throttle:exam-proctor');
+        Route::post('/exam/{examId}/proctor-photo',     [StudentExamController::class, 'uploadProctorPhoto'])
+            ->middleware('throttle:exam-proctor');
+        Route::post('/exam/{examId}/proctor-signal',    [StudentExamController::class, 'proctorSignal'])
+            ->middleware('throttle:exam-proctor');
+        Route::get ('/exam/{examId}/proctor-signal',    [StudentExamController::class, 'getProctorSignal'])
+            ->middleware('throttle:exam-proctor');
+        Route::post('/exam/{examId}/submit',            [StudentExamController::class, 'submit'])
+            ->middleware('throttle:exam-submit');
         Route::get ('/result/{submissionId}',           [StudentExamController::class, 'submissionResult']);
         Route::post('/flags',                           [QuestionFlagController::class, 'store']);
     });

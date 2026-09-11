@@ -243,9 +243,13 @@ export class PreExamGate {
       return;
     }
 
+    const srcW = video.videoWidth;
+    const srcH = video.videoHeight;
+    const maxEdge = 640;
+    const scale = Math.min(1, maxEdge / Math.max(srcW, srcH));
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = Math.max(1, Math.round(srcW * scale));
+    canvas.height = Math.max(1, Math.round(srcH * scale));
     const ctx = canvas.getContext('2d');
     // Mirror to match preview
     ctx.translate(canvas.width, 0);
@@ -253,7 +257,14 @@ export class PreExamGate {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     try {
-      this.capturedPhoto = canvas.toDataURL('image/jpeg', 0.92);
+      // Prefer smaller JPEG for shared-hosting upload limits (~600KB server cap)
+      let quality = 0.7;
+      let dataUrl = canvas.toDataURL('image/jpeg', quality);
+      while (dataUrl.length > 180000 && quality > 0.4) {
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+      this.capturedPhoto = dataUrl;
     } catch (e) {
       this._setError('Could not capture photo. Please try again.');
       return;

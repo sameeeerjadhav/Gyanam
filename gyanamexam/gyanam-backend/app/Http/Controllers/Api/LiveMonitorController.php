@@ -27,7 +27,7 @@ class LiveMonitorController extends Controller
             $centre = $user->isAdmin() ? null : $user->centre_id;
             $cacheKey = 'live_active:' . ($centre ?? 'all');
 
-            $sessions = cache()->remember($cacheKey, 3, function () use ($centre) {
+            $sessions = cache()->remember($cacheKey, 15, function () use ($centre) {
                 return $this->liveSessions->activeSessions($centre)->values()->all();
             });
 
