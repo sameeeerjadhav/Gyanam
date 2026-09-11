@@ -201,10 +201,6 @@ if ($_sidebarInitials === '') {
     </nav>
 
     <div class="sidebar-footer">
-        <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Collapse sidebar">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
-            <span class="collapse-text">Collapse</span>
-        </button>
         <span class="sidebar-version">Developed By Sameer & Yuvraj</span>
     </div>
 </aside>
@@ -330,17 +326,6 @@ if ($_sidebarInitials === '') {
     white-space: nowrap;
     flex-shrink: 0;
 }
-.sidebar.collapsed .atc-sidebar-brand {
-    justify-content: center;
-    padding: 1rem 0.5rem;
-}
-.sidebar.collapsed .atc-sidebar-brand .brand-info {
-    display: none;
-}
-.sidebar.collapsed .atc-sidebar-brand .atc-brand-logo img {
-    max-width: 40px;
-    max-height: 40px;
-}
 
 /* Zoom / narrow sidebar: keep brand readable */
 @media (max-width: 1100px) {
@@ -355,17 +340,14 @@ if ($_sidebarInitials === '') {
 </style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var sidebar = document.getElementById('sidebar');
+    if (sidebar) sidebar.classList.remove('collapsed');
+    try {
+        localStorage.removeItem('sidebar_collapsed');
+        localStorage.removeItem('sidebar-collapsed');
+    } catch (e) {}
     var activeLink = document.querySelector('.sidebar-nav .nav-link.active');
     if (activeLink) activeLink.scrollIntoView({ block: 'center', behavior: 'instant' });
-    var collapseBtn = document.getElementById('sidebarCollapseBtn');
-    var sidebar = document.getElementById('sidebar');
-    if (collapseBtn && sidebar) {
-        if (localStorage.getItem('sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
-        collapseBtn.addEventListener('click', function() {
-            sidebar.classList.toggle('collapsed');
-            localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
-        });
-    }
     var hamburger = document.getElementById('hamburgerBtn');
     var overlay = document.getElementById('sidebarOverlay');
     if (hamburger && sidebar) {

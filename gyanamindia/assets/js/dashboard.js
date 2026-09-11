@@ -21,20 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    /* ---- Sidebar Collapse (Desktop) ---- */
-    const collapseBtn = document.getElementById('sidebarCollapseBtn');
-    if (sidebar && collapseBtn) {
-        // Restore saved state
-        if (localStorage.getItem('sidebar-collapsed') === 'true') {
-            sidebar.classList.add('collapsed');
-        }
-
-        collapseBtn.addEventListener('click', () => {
-            sidebar.classList.toggle('collapsed');
-            const isCollapsed = sidebar.classList.contains('collapsed');
-            localStorage.setItem('sidebar-collapsed', isCollapsed);
-        });
-    }
+    /* ---- Sidebar Collapse (Desktop) removed — sidebar stays expanded ---- */
 
     /* ---- Count-Up Animation for Stat Values ---- */
     const statValues = document.querySelectorAll('.stat-value[data-count]');

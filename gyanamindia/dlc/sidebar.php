@@ -56,27 +56,20 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     </nav>
 
     <div class="sidebar-footer">
-        <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Collapse sidebar">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
-            <span class="collapse-text">Collapse</span>
-        </button>
         <span class="sidebar-version">Developed by Sameer & Yuvraj</span>
     </div>
 </aside>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var sidebar = document.getElementById('sidebar');
+    if (sidebar) sidebar.classList.remove('collapsed');
+    try {
+        localStorage.removeItem('sidebar_collapsed');
+        localStorage.removeItem('sidebar-collapsed');
+    } catch (e) {}
     var activeLink = document.querySelector('.sidebar-nav .nav-link.active');
     if (activeLink) activeLink.scrollIntoView({ block: 'center', behavior: 'instant' });
-    var collapseBtn = document.getElementById('sidebarCollapseBtn');
-    var sidebar = document.getElementById('sidebar');
-    if (collapseBtn && sidebar) {
-        if (localStorage.getItem('sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
-        collapseBtn.addEventListener('click', function() {
-            sidebar.classList.toggle('collapsed');
-            localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
-        });
-    }
     var hamburger = document.getElementById('hamburgerBtn');
     var overlay = document.getElementById('sidebarOverlay');
     if (hamburger && sidebar) {
