@@ -192,7 +192,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 /* ── Fetch inquiries (paginated) ── */
 $statusFilter = $_GET['status'] ?? 'all';
+$searchTerm  = trim((string)($_GET['search'] ?? ''));
+$typeFilter  = trim((string)($_GET['type'] ?? ''));
 $validStatuses = ['New','Contacted','Converted','Closed'];
+$validTypes = ['Walk-in','Telephonic','Online','Reference'];
+if ($typeFilter !== '' && !in_array($typeFilter, $validTypes, true)) {
+    $typeFilter = '';
+}
 $pagerParams = paginationParams(25);
 
 $inqWhere = [];
@@ -206,6 +212,18 @@ if ($statusFilter !== 'all' && in_array($statusFilter, $validStatuses)) {
     $inqParams[] = $statusFilter;
 } else {
     $inqWhere[] = "status != 'Converted'";
+}
+if ($typeFilter !== '') {
+    $inqWhere[] = 'inquiry_type = ?';
+    $inqParams[] = $typeFilter;
+}
+if ($searchTerm !== '') {
+    $inqWhere[] = '(CONCAT(COALESCE(first_name,\'\'),\' \',COALESCE(last_name,\'\')) LIKE ?
+        OR mobile LIKE ?
+        OR COALESCE(interested_course,\'\') LIKE ?
+        OR COALESCE(email,\'\') LIKE ?)';
+    $like = '%' . $searchTerm . '%';
+    array_push($inqParams, $like, $like, $like, $like);
 }
 $inqWhereSql = $inqWhere ? (' WHERE ' . implode(' AND ', $inqWhere)) : '';
 
@@ -346,24 +364,25 @@ function fullName(array $r): string {
 
         <?php if ($pageMode !== 'add'): ?>
         <!-- Status Tabs -->
+        <?php $inqQs = ($searchTerm !== '' ? '&search=' . urlencode($searchTerm) : '') . ($typeFilter !== '' ? '&type=' . urlencode($typeFilter) : ''); ?>
         <div class="inq-status-tabs">
-            <a href="?status=all" class="inq-status-tab <?= $statusFilter==='all'?'active':'' ?>">
+            <a href="?status=all<?= $inqQs ?>" class="inq-status-tab <?= $statusFilter==='all'?'active':'' ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
                 All Inquiries <span class="tab-count"><?= $statusCounts['all'] ?></span>
             </a>
-            <a href="?status=New" class="inq-status-tab <?= $statusFilter==='New'?'active':'' ?>">
+            <a href="?status=New<?= $inqQs ?>" class="inq-status-tab <?= $statusFilter==='New'?'active':'' ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 New <span class="tab-count cnt-new"><?= $statusCounts['New'] ?></span>
             </a>
-            <a href="?status=Contacted" class="inq-status-tab <?= $statusFilter==='Contacted'?'active':'' ?>">
+            <a href="?status=Contacted<?= $inqQs ?>" class="inq-status-tab <?= $statusFilter==='Contacted'?'active':'' ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                 Contacted <span class="tab-count cnt-contacted"><?= $statusCounts['Contacted'] ?></span>
             </a>
-            <a href="?status=Converted" class="inq-status-tab <?= $statusFilter==='Converted'?'active':'' ?>">
+            <a href="?status=Converted<?= $inqQs ?>" class="inq-status-tab <?= $statusFilter==='Converted'?'active':'' ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                 Converted <span class="tab-count cnt-converted"><?= $statusCounts['Converted'] ?></span>
             </a>
-            <a href="?status=Closed" class="inq-status-tab <?= $statusFilter==='Closed'?'active':'' ?>">
+            <a href="?status=Closed<?= $inqQs ?>" class="inq-status-tab <?= $statusFilter==='Closed'?'active':'' ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                 Closed <span class="tab-count cnt-not-interested"><?= $statusCounts['Closed'] ?></span>
             </a>
@@ -373,16 +392,17 @@ function fullName(array $r): string {
         <?php if ($pageMode !== 'add'): ?>
         <!-- Toolbar -->
         <div class="inq-toolbar">
-            <div class="inq-search-box">
+            <form method="GET" id="inqSearchForm" class="inq-search-box" style="margin:0">
+                <input type="hidden" name="status" value="<?= htmlspecialchars($statusFilter) ?>">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                <input type="text" id="searchInput" placeholder="Search by name, mobile, course…">
-            </div>
-            <select class="inq-filter-select" id="typeFilter">
-                <option value="">All Types</option>
-                <option value="Walk-in">Walk-in</option>
-                <option value="Telephonic">Telephonic</option>
-                <option value="Online">Online</option>
-                <option value="Reference">Reference</option>
+                <input type="search" id="searchInput" name="search" placeholder="Search by name, mobile, course…" value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off" aria-label="Search inquiries">
+            </form>
+            <select class="inq-filter-select" id="typeFilter" name="type" form="inqSearchForm">
+                <option value="" <?= $typeFilter === '' ? 'selected' : '' ?>>All Types</option>
+                <option value="Walk-in" <?= $typeFilter === 'Walk-in' ? 'selected' : '' ?>>Walk-in</option>
+                <option value="Telephonic" <?= $typeFilter === 'Telephonic' ? 'selected' : '' ?>>Telephonic</option>
+                <option value="Online" <?= $typeFilter === 'Online' ? 'selected' : '' ?>>Online</option>
+                <option value="Reference" <?= $typeFilter === 'Reference' ? 'selected' : '' ?>>Reference</option>
             </select>
             <!-- Export buttons -->
             <div class="export-btn-group">
@@ -835,27 +855,20 @@ function fullName(array $r): string {
 </div>
 
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/live-filter.js"></script>
 <script>
 let deleteTargetId = null;
 
-/* ── Search & Type Filter ── */
-const searchInputEl = document.getElementById('searchInput');
-const typeFilterEl = document.getElementById('typeFilter');
-if (searchInputEl) searchInputEl.addEventListener('input', filterTable);
-if (typeFilterEl) typeFilterEl.addEventListener('change', filterTable);
-
-function filterTable() {
-    const tableBodyRows = document.querySelectorAll('#inquiryTable tbody tr');
-    if (!tableBodyRows.length || !searchInputEl || !typeFilterEl) return;
-
-    const term = searchInputEl.value.toLowerCase();
-    const type = typeFilterEl.value;
-    tableBodyRows.forEach(row => {
-        const textMatch = !term || row.textContent.toLowerCase().includes(term);
-        const typeMatch = !type || (row.dataset.type || '') === type;
-        row.style.display = (textMatch && typeMatch) ? '' : 'none';
-    });
-}
+GyanamLiveFilter({
+    mode: 'server',
+    form: '#inqSearchForm',
+    input: '#searchInput',
+    searchParam: 'search',
+    debounceMs: 450,
+    allValue: '',
+    keepParams: ['status'],
+    reloadSelects: ['#typeFilter'],
+});
 
 /* ── Open Add Modal ── */
 function openAddModal() {

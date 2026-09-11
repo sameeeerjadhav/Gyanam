@@ -210,6 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // Fetch telephonic inquiries for this ATC (paginated; exclude converted by default)
 $statusFilter = $_GET['status'] ?? 'all';
+$searchTerm  = trim((string)($_GET['search'] ?? ''));
 $pagerParams  = paginationParams(25);
 
 $telWhere = [];
@@ -223,6 +224,14 @@ if ($statusFilter !== 'all') {
     $telParams[] = $statusFilter;
 } else {
     $telWhere[] = "status != 'Converted'";
+}
+if ($searchTerm !== '') {
+    $telWhere[] = '(CONCAT(COALESCE(first_name,\'\'),\' \',COALESCE(last_name,\'\')) LIKE ?
+        OR mobile LIKE ?
+        OR COALESCE(interested_course,\'\') LIKE ?
+        OR COALESCE(comment,\'\') LIKE ?)';
+    $like = '%' . $searchTerm . '%';
+    array_push($telParams, $like, $like, $like, $like);
 }
 $telWhereSql = $telWhere ? (' WHERE ' . implode(' AND ', $telWhere)) : '';
 
@@ -517,20 +526,21 @@ foreach ($counts as $count) {
             </div>
 
             <!-- Status Tabs -->
+            <?php $searchQs = $searchTerm !== '' ? '&search=' . urlencode($searchTerm) : ''; ?>
             <div class="status-tabs">
-                <a href="?status=all" class="status-tab <?= $statusFilter === 'all' ? 'active' : '' ?>">
+                <a href="?status=all<?= $searchQs ?>" class="status-tab <?= $statusFilter === 'all' ? 'active' : '' ?>">
                     All <span class="tab-count"><?= $statusCounts['all'] ?></span>
                 </a>
-                <a href="?status=New" class="status-tab <?= $statusFilter === 'New' ? 'active' : '' ?>">
+                <a href="?status=New<?= $searchQs ?>" class="status-tab <?= $statusFilter === 'New' ? 'active' : '' ?>">
                     New <span class="tab-count"><?= $statusCounts['New'] ?></span>
                 </a>
-                <a href="?status=Contacted" class="status-tab <?= $statusFilter === 'Contacted' ? 'active' : '' ?>">
+                <a href="?status=Contacted<?= $searchQs ?>" class="status-tab <?= $statusFilter === 'Contacted' ? 'active' : '' ?>">
                     Contacted <span class="tab-count"><?= $statusCounts['Contacted'] ?></span>
                 </a>
-                <a href="?status=Converted" class="status-tab <?= $statusFilter === 'Converted' ? 'active' : '' ?>">
+                <a href="?status=Converted<?= $searchQs ?>" class="status-tab <?= $statusFilter === 'Converted' ? 'active' : '' ?>">
                     Converted <span class="tab-count"><?= $statusCounts['Converted'] ?></span>
                 </a>
-                <a href="?status=Closed" class="status-tab <?= $statusFilter === 'Closed' ? 'active' : '' ?>">
+                <a href="?status=Closed<?= $searchQs ?>" class="status-tab <?= $statusFilter === 'Closed' ? 'active' : '' ?>">
                     Closed <span class="tab-count"><?= $statusCounts['Closed'] ?></span>
                 </a>
             </div>
@@ -549,10 +559,11 @@ foreach ($counts as $count) {
                         <button class="exp-btn exp-pdf"   onclick="exportPDF()">📑 PDF</button>
                         <button class="exp-btn exp-print" onclick="printInquiries()">🖨️ Print</button>
                     </div>
-                    <div class="tel-search">
+                    <form method="GET" id="telSearchForm" class="tel-search" style="margin:0">
+                        <input type="hidden" name="status" value="<?= htmlspecialchars($statusFilter) ?>">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                        <input type="text" id="searchInput" placeholder="Search inquiries...">
-                    </div>
+                        <input type="search" id="searchInput" name="search" placeholder="Search inquiries..." value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off" aria-label="Search inquiries">
+                    </form>
                     <a class="btn-add" href="?mode=add" style="text-decoration:none;display:inline-flex;align-items:center;gap:.5rem;">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         Add Inquiry
@@ -1322,19 +1333,16 @@ input[type="tel"] {
 .tel-add-subtitle { font-size:.8rem; color:var(--text-muted); margin-top:.2rem; }
 </style>
 
+<script src="../assets/js/live-filter.js"></script>
 <script>
-// Search functionality
-const searchInput = document.getElementById('searchInput');
-if (searchInput) {
-    searchInput.addEventListener('input', function(e) {
-        const searchTerm = e.target.value.toLowerCase();
-        const rows = document.querySelectorAll('#inquiryTable tbody tr');
-        rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            row.style.display = text.includes(searchTerm) ? '' : 'none';
-        });
-    });
-}
+GyanamLiveFilter({
+    mode: 'server',
+    form: '#telSearchForm',
+    input: '#searchInput',
+    searchParam: 'search',
+    debounceMs: 450,
+    keepParams: ['status'],
+});
 
 // Open add modal
 function openAddModal() {

@@ -399,10 +399,10 @@ $qsSearch = $searchTerm !== '' ? '&search=' . urlencode($searchTerm) : '';
 
                 <!-- Search -->
                 <div style="margin-left:auto; display:flex; align-items:center;">
-                    <form method="GET" class="search-bar" style="display:flex;align-items:center">
+                    <form method="GET" id="courseSearchForm" class="search-bar" style="display:flex;align-items:center">
                         <input type="hidden" name="type" value="<?= htmlspecialchars($typeFilter) ?>">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                        <input type="text" name="search" id="searchInput" placeholder="Search courses…" value="<?= htmlspecialchars($searchTerm) ?>">
+                        <input type="search" name="search" id="searchInput" placeholder="Search courses…" value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off" aria-label="Search courses">
                     </form>
                 </div>
             </div>
@@ -534,10 +534,15 @@ $qsSearch = $searchTerm !== '' ? '&search=' . urlencode($searchTerm) : '';
 </div>
 
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/live-filter.js"></script>
 <script>
-// Search submits via Enter (form GET). Keep live filter within current page as bonus.
-document.getElementById('searchInput')?.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') this.form?.submit();
+GyanamLiveFilter({
+    mode: 'server',
+    form: '#courseSearchForm',
+    input: '#searchInput',
+    searchParam: 'search',
+    debounceMs: 400,
+    keepParams: ['type'],
 });
 
 // ── Fee change handler ────────────────────────────────────────────────────────

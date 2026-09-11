@@ -599,12 +599,12 @@ if ($filtered) {
 
                         <div class="filter-group" style="flex:1.3">
                             <label class="filter-label" for="search">Search</label>
-                            <input type="text" name="search" id="search" class="filter-input"
+                            <input type="search" name="search" id="search" class="filter-input"
                                    placeholder="Name, Reg ID or Mobile…"
-                                   value="<?= htmlspecialchars($filterSearch) ?>">
+                                   value="<?= htmlspecialchars($filterSearch) ?>" autocomplete="off" aria-label="Search students">
                         </div>
 
-                        <button type="submit" class="btn-filter">
+                        <button type="submit" class="btn-filter" id="studentsFilterBtn">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                             Filter Students
                         </button>
@@ -971,6 +971,19 @@ function printStudents() {
     w.focus();
     setTimeout(() => { w.print(); w.close(); }, 400);
 }
+</script>
+<script src="../assets/js/live-filter.js"></script>
+<script>
+GyanamLiveFilter({
+    mode: 'server',
+    form: '#filterForm',
+    input: '#search',
+    button: '#studentsFilterBtn',
+    searchParam: 'search',
+    debounceMs: 450,
+    allValue: '',
+    reloadSelects: ['#dlc_id', '#atc_id', '#course'],
+});
 </script>
 </body>
 </html>
