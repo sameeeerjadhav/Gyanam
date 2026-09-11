@@ -1,0 +1,71 @@
+/* DLC dashboard — Analytics Overview (matches Admin / ATC) */
+.dlc-analytics-head {
+  margin: 1.25rem 0 1rem;
+  padding-bottom: .5rem;
+  border-bottom: 1.5px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.dlc-analytics-head svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.dlc-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0 0 1.25rem;
+}
+.dlc-analytics-card {
+  background: #fff;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.05);
+  padding: 1rem 1.15rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.dlc-analytics-card.span-2 { grid-column: span 2; }
+.dlc-analytics-card.span-full { grid-column: 1 / -1; }
+.dlc-analytics-card h3 {
+  margin: 0 0 .15rem;
+  font-size: .92rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -.01em;
+}
+.dlc-analytics-sub {
+  font-size: .72rem;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: .85rem;
+}
+.dlc-analytics-canvas {
+  position: relative;
+  height: 260px;
+  width: 100%;
+  flex: 1;
+}
+.dlc-analytics-canvas.tall { height: 280px; }
+.dlc-analytics-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 260px;
+  color: #94a3b8;
+  font-size: .84rem;
+  font-weight: 600;
+}
+@media (max-width: 1100px) {
+  .dlc-analytics-grid { grid-template-columns: 1fr; }
+  .dlc-analytics-card.span-2,
+  .dlc-analytics-card.span-full { grid-column: auto; }
+}
