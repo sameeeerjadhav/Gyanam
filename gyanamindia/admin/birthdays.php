@@ -71,27 +71,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
-// Fetch birthdays (manual entries)
+// Fetch birthdays (manual entries) — status/month filtered live client-side
 $statusFilter = $_GET['status'] ?? 'all';
 $monthFilter = $_GET['month'] ?? 'all';
 
 $sql = "SELECT b.*, u.name as created_by_name, 'manual' as type
         FROM birthdays b 
         LEFT JOIN users u ON b.created_by = u.id 
-        WHERE 1=1";
+        WHERE 1=1
+        ORDER BY MONTH(b.birth_date), DAY(b.birth_date)";
 $params = [];
-
-if ($statusFilter !== 'all') {
-    $sql .= " AND b.status = ?";
-    $params[] = $statusFilter;
-}
-
-if ($monthFilter !== 'all') {
-    $sql .= " AND MONTH(b.birth_date) = ?";
-    $params[] = $monthFilter;
-}
-
-$sql .= " ORDER BY MONTH(b.birth_date), DAY(b.birth_date)";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
@@ -107,13 +96,9 @@ $atcBdSql = "SELECT
     'Active' as status,
     'atc' as type
     FROM atc_centers
-    WHERE dob IS NOT NULL AND status = 'Active'";
+    WHERE dob IS NOT NULL AND status = 'Active'
+    ORDER BY MONTH(dob), DAY(dob)";
 $atcBdParams = [];
-if ($monthFilter !== 'all') {
-    $atcBdSql .= " AND MONTH(dob) = ?";
-    $atcBdParams[] = $monthFilter;
-}
-$atcBdSql .= " ORDER BY MONTH(dob), DAY(dob)";
 $stmt = $pdo->prepare($atcBdSql);
 $stmt->execute($atcBdParams);
 $atcBirthdays = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -128,13 +113,9 @@ $dlcBdSql = "SELECT
     'Active' as status,
     'dlc' as type
     FROM dlc_offices
-    WHERE dob IS NOT NULL AND status = 'Active'";
+    WHERE dob IS NOT NULL AND status = 'Active'
+    ORDER BY MONTH(dob), DAY(dob)";
 $dlcBdParams = [];
-if ($monthFilter !== 'all') {
-    $dlcBdSql .= " AND MONTH(dob) = ?";
-    $dlcBdParams[] = $monthFilter;
-}
-$dlcBdSql .= " ORDER BY MONTH(dob), DAY(dob)";
 $stmt = $pdo->prepare($dlcBdSql);
 $stmt->execute($dlcBdParams);
 $dlcBirthdays = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1001,13 +982,13 @@ $todayBirthdays = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <!-- Toolbar -->
             <div class="toolbar">
                 <div class="toolbar-left">
-                    <form method="GET" style="display: contents;">
-                        <select name="status" class="select-sm" onchange="this.form.submit()">
+                    <form method="GET" id="bdayFilterForm" style="display: contents;">
+                        <select name="status" id="bdayStatusFilter" class="select-sm">
                             <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>All Status</option>
                             <option value="Active" <?= $statusFilter === 'Active' ? 'selected' : '' ?>>Active</option>
                             <option value="Inactive" <?= $statusFilter === 'Inactive' ? 'selected' : '' ?>>Inactive</option>
                         </select>
-                        <select name="month" class="select-sm" onchange="this.form.submit()">
+                        <select name="month" id="bdayMonthFilter" class="select-sm">
                             <option value="all" <?= $monthFilter === 'all' ? 'selected' : '' ?>>All Months</option>
                             <?php 
                             $months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -1018,6 +999,7 @@ $todayBirthdays = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php endforeach; ?>
                         </select>
                     </form>
+                    <span class="toolbar-count" id="bdayListCount" style="margin-left:.5rem"><?= count($birthdays) ?> shown</span>
                 </div>
                 <div class="toolbar-right">
                     <button class="btn-primary" onclick="openAddModal()">
@@ -1072,8 +1054,19 @@ $todayBirthdays = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     'dlc' => '🏢 DLC Office',
                                     default => ''
                                 };
+                                $bMonth = (string)(int)$birthDate->format('n');
+                                $searchHay = strtolower(trim(implode(' ', array_filter([
+                                    $birthday['person_name'] ?? '',
+                                    $birthday['mobile'] ?? '',
+                                    $birthday['description'] ?? '',
+                                    $birthday['status'] ?? '',
+                                    $birthday['type'] ?? '',
+                                ]))));
                             ?>
-                                <tr class="<?= $isToday ? 'birthday-today' : '' ?>">
+                                <tr class="live-row <?= $isToday ? 'birthday-today' : '' ?>"
+                                    data-search="<?= htmlspecialchars($searchHay, ENT_QUOTES) ?>"
+                                    data-status="<?= htmlspecialchars($birthday['status'] ?? '', ENT_QUOTES) ?>"
+                                    data-month="<?= htmlspecialchars($bMonth, ENT_QUOTES) ?>">
                                     <td>
                                         <div class="person-cell">
                                             <?= $isToday ? '<span class="person-emoji">🎂</span>' : '' ?>
@@ -1347,6 +1340,22 @@ Team Gyanam India`;
     // Open in new window
     window.open(whatsappUrl, '_blank', 'width=600,height=600');
 }
+</script>
+<script src="../assets/js/live-filter.js"></script>
+<script>
+GyanamLiveFilter({
+    form: '#bdayFilterForm',
+    tbody: 'table.data-table tbody',
+    rowSelector: 'tr.live-row',
+    countEl: '#bdayListCount',
+    countFormat: (n) => n + ' shown',
+    searchParam: false,
+    emptyColspan: 8,
+    filters: [
+        { select: '#bdayStatusFilter', attr: 'data-status', param: 'status', allValue: 'all' },
+        { select: '#bdayMonthFilter', attr: 'data-month', param: 'month', allValue: 'all' },
+    ],
+});
 </script>
 
 </body>

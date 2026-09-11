@@ -57,10 +57,7 @@ if (in_array($filterStatus, ['Pending','Approved','Rejected'])) {
 if ($filterAtc) {
     $where .= ' AND r.atc_id = ?'; $params[] = $filterAtc;
 }
-if ($search) {
-    $where .= ' AND (r.student_name LIKE ? OR r.roll_no LIKE ? OR r.course LIKE ?)';
-    $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%";
-}
+// Search is live client-side
 
 $requests = [];
 try {
@@ -239,19 +236,19 @@ try {
         </div>
 
         <!-- Filters -->
-        <form method="GET" class="dc-filters">
+        <form method="GET" class="dc-filters" id="dcFilterForm">
             <a href="?status=Pending" class="dc-filter-btn <?= $filterStatus === 'Pending' ? 'active' : '' ?>">⏳ Pending <strong>(<?= $counts['Pending'] ?>)</strong></a>
             <a href="?status=Approved" class="dc-filter-btn approved <?= $filterStatus === 'Approved' ? 'active' : '' ?>">✅ Approved</a>
             <a href="?status=Rejected" class="dc-filter-btn rejected <?= $filterStatus === 'Rejected' ? 'active' : '' ?>">❌ Rejected</a>
             <input type="hidden" name="status" value="<?= htmlspecialchars($filterStatus) ?>">
-            <select name="atc_id" class="dc-select" onchange="this.form.submit()">
+            <select name="atc_id" id="dcAtcFilter" class="dc-select">
                 <option value="0">All ATC Centers</option>
                 <?php foreach ($atcList as $atc): ?>
                 <option value="<?= $atc['id'] ?>" <?= $filterAtc == $atc['id'] ? 'selected' : '' ?>><?= htmlspecialchars($atc['name']) ?></option>
                 <?php endforeach; ?>
             </select>
-            <input type="text" name="q" class="dc-search-input" placeholder="Search student / roll no / course…" value="<?= htmlspecialchars($search) ?>">
-            <button type="submit" style="padding:.5rem .9rem;background:var(--dc-violet);color:#fff;border:none;border-radius:9px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;">Search</button>
+            <input type="search" name="q" id="dcSearchInput" class="dc-search-input" placeholder="Search student / roll no / course…" value="<?= htmlspecialchars($search) ?>" autocomplete="off">
+            <button type="button" id="dcSearchBtn" style="padding:.5rem .9rem;background:var(--dc-violet);color:#fff;border:none;border-radius:9px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;">Search</button>
             <?php if ($search || $filterAtc): ?>
             <a href="?status=<?= urlencode($filterStatus) ?>" style="padding:.5rem .9rem;border:1.5px solid var(--border-color);border-radius:9px;font-size:.82rem;font-weight:700;color:var(--text-secondary);text-decoration:none;">Clear</a>
             <?php endif; ?>
@@ -262,7 +259,7 @@ try {
             <div class="dc-card-head">
                 <div class="dc-card-head-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
                 <div class="dc-card-head-title"><?= $filterStatus ?> Requests</div>
-                <div class="dc-card-head-count"><?= count($requests) ?></div>
+                <div class="dc-card-head-count" id="dcListCount"><?= count($requests) ?></div>
             </div>
             <div style="overflow-x:auto;">
                 <table class="dc-table">
@@ -289,8 +286,18 @@ try {
                             </div>
                         </td></tr>
                     <?php else: ?>
-                        <?php foreach ($requests as $i => $req): ?>
-                        <tr>
+                        <?php foreach ($requests as $i => $req):
+                            $dcHay = strtolower(trim(implode(' ', array_filter([
+                                $req['student_name'] ?? '',
+                                $req['roll_no'] ?? '',
+                                $req['course'] ?? '',
+                                $req['atc_name'] ?? '',
+                                $req['cert_type'] ?? '',
+                                $req['reason'] ?? '',
+                                $req['remarks'] ?? '',
+                            ]))));
+                        ?>
+                        <tr class="live-row" data-search="<?= htmlspecialchars($dcHay, ENT_QUOTES) ?>">
                             <td style="color:var(--text-secondary);font-size:.8rem;"><?= $i + 1 ?></td>
                             <td>
                                 <div class="student-name"><?= htmlspecialchars($req['student_name']) ?></div>
@@ -445,6 +452,21 @@ function dcToast(msg, type='success') {
     document.getElementById('dcToastWrap').appendChild(t);
     setTimeout(() => t.remove(), 3500);
 }
+</script>
+<script src="../assets/js/live-filter.js"></script>
+<script>
+GyanamLiveFilter({
+    input: '#dcSearchInput',
+    button: '#dcSearchBtn',
+    form: '#dcFilterForm',
+    tbody: 'table.dc-table tbody',
+    rowSelector: 'tr.live-row',
+    countEl: '#dcListCount',
+    countFormat: (n) => String(n),
+    searchParam: 'q',
+    emptyColspan: 9,
+    reloadSelects: ['#dcAtcFilter'],
+});
 </script>
 </body>
 </html>
