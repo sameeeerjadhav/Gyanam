@@ -466,17 +466,20 @@ try {
     }
 } catch (Exception $e) {}
 
-// Extend charts to 6 months (fill missing months with 0) — matches Admin analytics
+// Monthly trend series — always build 12 months; UI toggles 6 vs 12
+$monthlyLabels12 = [];
+$monthlyData12 = [];
+$revenueData12 = [];
+$monthlyLabels = [];
+$monthlyData = [];
+$revenueLabels = [];
+$revenueData = [];
 try {
-    $monthlyLabels = [];
-    $monthlyData = [];
-    $revenueLabels = [];
-    $revenueData = [];
     $mapAdm = [];
     $mapRev = [];
     $stmt = $pdo->prepare("
         SELECT DATE_FORMAT(admission_date,'%Y-%m') AS sk, COUNT(*) AS cnt
-        FROM admissions WHERE atc_id = ? AND admission_date >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
+        FROM admissions WHERE atc_id = ? AND admission_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
         GROUP BY sk
     ");
     $stmt->execute([$atcId]);
@@ -486,21 +489,25 @@ try {
     $stmt = $pdo->prepare("
         SELECT DATE_FORMAT(fp.payment_date,'%Y-%m') AS sk, COALESCE(SUM(fp.amount),0) AS total
         FROM fee_payments fp JOIN admissions a ON fp.admission_id = a.id
-        WHERE a.atc_id = ? AND fp.payment_date >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
+        WHERE a.atc_id = ? AND fp.payment_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
         GROUP BY sk
     ");
     $stmt->execute([$atcId]);
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $mapRev[$r['sk']] = (float)$r['total'];
     }
-    for ($i = 5; $i >= 0; $i--) {
+    for ($i = 11; $i >= 0; $i--) {
         $sk = date('Y-m', strtotime("-{$i} months"));
         $label = date('M Y', strtotime($sk . '-01'));
-        $monthlyLabels[] = $label;
-        $monthlyData[] = $mapAdm[$sk] ?? 0;
-        $revenueLabels[] = $label;
-        $revenueData[] = $mapRev[$sk] ?? 0;
+        $monthlyLabels12[] = $label;
+        $monthlyData12[] = $mapAdm[$sk] ?? 0;
+        $revenueData12[] = $mapRev[$sk] ?? 0;
     }
+    // Default view: last 6 months
+    $monthlyLabels = array_slice($monthlyLabels12, -6);
+    $monthlyData = array_slice($monthlyData12, -6);
+    $revenueLabels = $monthlyLabels;
+    $revenueData = array_slice($revenueData12, -6);
 } catch (Exception $e) {}
 
 // Course mix for pie / bar charts
@@ -1796,14 +1803,37 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
 
         const palette = ['#4361ee', '#0d9488', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16', '#ec4899'];
         const CHART = {
+            pieMode: <?= json_encode($pieMode ?? 'course') ?>,
             pieLabels: <?= json_encode(array_values($pieLabels ?? []), JSON_UNESCAPED_UNICODE) ?>,
             pieData: <?= json_encode(array_values($pieData ?? [])) ?>,
             barLabels: <?= json_encode(array_values($barLabels ?? []), JSON_UNESCAPED_UNICODE) ?>,
+            barFullLabels: <?= json_encode(array_values($barFullLabels ?? []), JSON_UNESCAPED_UNICODE) ?>,
             barData: <?= json_encode(array_values($barData ?? [])) ?>,
-            lineLabels: <?= json_encode(array_values($monthlyLabels ?? []), JSON_UNESCAPED_UNICODE) ?>,
-            lineAdm: <?= json_encode(array_values($monthlyData ?? [])) ?>,
-            lineRev: <?= json_encode(array_values($revenueData ?? [])) ?>,
+            line6: {
+                labels: <?= json_encode(array_values(array_slice($monthlyLabels12 ?? [], -6)), JSON_UNESCAPED_UNICODE) ?>,
+                adm: <?= json_encode(array_values(array_slice($monthlyData12 ?? [], -6))) ?>,
+                rev: <?= json_encode(array_values(array_slice($revenueData12 ?? [], -6))) ?>,
+            },
+            line12: {
+                labels: <?= json_encode(array_values($monthlyLabels12 ?? []), JSON_UNESCAPED_UNICODE) ?>,
+                adm: <?= json_encode(array_values($monthlyData12 ?? [])) ?>,
+                rev: <?= json_encode(array_values($revenueData12 ?? [])) ?>,
+            },
         };
+
+        function studentsUrlFromPieLabel(label) {
+            const params = new URLSearchParams();
+            if (CHART.pieMode === 'fees') {
+                const map = { Paid: 'paid', Partial: 'partial', Pending: 'pending' };
+                params.set('fees', map[label] || 'all');
+                params.set('status', 'Active');
+            } else if (label && label !== 'Other') {
+                params.set('course', String(label));
+            } else {
+                params.set('status', 'Active');
+            }
+            return 'students.php?' + params.toString();
+        }
 
         const pieEl = document.getElementById('atcPieChart');
         if (pieEl && CHART.pieData.length) {
@@ -1822,10 +1852,25 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    onHover: (evt, els) => {
+                        evt.native.target.style.cursor = els.length ? 'pointer' : 'default';
+                    },
+                    onClick: (evt, els) => {
+                        if (!els.length) return;
+                        const idx = els[0].index;
+                        const label = CHART.pieLabels[idx];
+                        if (!label) return;
+                        window.location.href = studentsUrlFromPieLabel(label);
+                    },
                     plugins: {
                         legend: {
                             position: 'bottom',
                             labels: { boxWidth: 12, padding: 12, font: { size: 11, weight: 700 } },
+                            onClick: (e, item, legend) => {
+                                // Override default hide/show — navigate instead
+                                const label = legend.chart.data.labels[item.index];
+                                if (label) window.location.href = studentsUrlFromPieLabel(label);
+                            },
                         },
                         tooltip: {
                             backgroundColor: '#0f172a',
@@ -1835,7 +1880,7 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
                                 label: (c) => {
                                     const total = c.dataset.data.reduce((a, b) => a + b, 0) || 1;
                                     const pct = Math.round((c.parsed / total) * 100);
-                                    return ` ${c.label}: ${c.parsed} (${pct}%)`;
+                                    return ` ${c.label}: ${c.parsed} (${pct}%) · click to open`;
                                 },
                             },
                         },
@@ -1865,6 +1910,22 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    onHover: (evt, els) => {
+                        evt.native.target.style.cursor = els.length ? 'pointer' : 'default';
+                    },
+                    onClick: (evt, els) => {
+                        if (!els.length) return;
+                        const idx = els[0].index;
+                        const full = (CHART.barFullLabels[idx] || CHART.barLabels[idx] || '').trim();
+                        if (!full) return;
+                        const params = new URLSearchParams();
+                        if (full === 'Other') {
+                            params.set('status', 'Active');
+                        } else {
+                            params.set('course', full);
+                        }
+                        window.location.href = 'students.php?' + params.toString();
+                    },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -1872,7 +1933,7 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
                             cornerRadius: 10,
                             padding: 10,
                             callbacks: {
-                                label: (c) => ' ₹' + Number(c.parsed.y || 0).toLocaleString('en-IN'),
+                                label: (c) => ' ₹' + Number(c.parsed.y || 0).toLocaleString('en-IN') + ' · click to open',
                             },
                         },
                     },
@@ -1895,15 +1956,16 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
         }
 
         const lineEl = document.getElementById('atcLineChart');
-        if (lineEl && CHART.lineLabels.length) {
-            new Chart(lineEl, {
+        let atcLineChart = null;
+        if (lineEl && CHART.line6.labels.length) {
+            atcLineChart = new Chart(lineEl, {
                 type: 'line',
                 data: {
-                    labels: CHART.lineLabels,
+                    labels: CHART.line6.labels,
                     datasets: [
                         {
                             label: 'Admissions',
-                            data: CHART.lineAdm,
+                            data: CHART.line6.adm,
                             borderColor: '#4361ee',
                             backgroundColor: 'rgba(67, 97, 238, 0.12)',
                             fill: true,
@@ -1914,7 +1976,7 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
                         },
                         {
                             label: 'Fee revenue (₹)',
-                            data: CHART.lineRev,
+                            data: CHART.line6.rev,
                             borderColor: '#0d9488',
                             backgroundColor: 'rgba(13, 148, 136, 0.08)',
                             fill: true,
@@ -1967,6 +2029,26 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
                         },
                     },
                 },
+            });
+
+            const rangeWrap = document.getElementById('atcChartRange');
+            const lineSub = document.getElementById('atcLineSub');
+            rangeWrap?.querySelectorAll('.cc-period-pill').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const months = btn.dataset.months === '12' ? 12 : 6;
+                    rangeWrap.querySelectorAll('.cc-period-pill').forEach((b) => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const series = months === 12 ? CHART.line12 : CHART.line6;
+                    atcLineChart.data.labels = series.labels;
+                    atcLineChart.data.datasets[0].data = series.adm;
+                    atcLineChart.data.datasets[1].data = series.rev;
+                    atcLineChart.update();
+                    if (lineSub) {
+                        lineSub.textContent = months === 12
+                            ? 'Admissions & fee revenue — last 12 months'
+                            : 'Admissions & fee revenue — last 6 months';
+                    }
+                });
             });
         }
         });

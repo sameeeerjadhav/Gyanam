@@ -330,12 +330,70 @@
 .cc-analytics-canvas.tall { height: 280px; }
 .cc-analytics-empty {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: .45rem;
   height: 260px;
   color: #94a3b8;
   font-size: .84rem;
   font-weight: 600;
+  text-align: center;
+  padding: 1rem;
+}
+.cc-analytics-empty strong {
+  display: block;
+  color: #64748b;
+  font-size: .92rem;
+  font-weight: 800;
+}
+.cc-analytics-empty span {
+  max-width: 22rem;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.cc-analytics-empty .cc-btn {
+  margin-top: .35rem;
+}
+.cc-analytics-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  flex-wrap: wrap;
+  margin-bottom: .35rem;
+}
+.cc-analytics-card-top .cc-analytics-sub {
+  margin-bottom: 0;
+}
+.cc-period-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+.cc-period-pill {
+  height: 34px;
+  padding: 0 .85rem;
+  border-radius: 999px;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  color: #64748b;
+  font-family: inherit;
+  font-size: .75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.cc-period-pill:hover {
+  border-color: #c7d2fe;
+  color: #4338ca;
+  background: #eef2ff;
+}
+.cc-period-pill.active {
+  border-color: #4361ee;
+  background: #4361ee;
+  color: #fff;
 }
 @media (max-width: 1100px) {
   .cc-analytics-grid { grid-template-columns: 1fr; }
