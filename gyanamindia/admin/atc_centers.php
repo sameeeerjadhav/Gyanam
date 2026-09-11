@@ -401,7 +401,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 // Fetch ATC centers with statistics
-$searchTerm = $_GET['search'] ?? '';
+$searchTerm = trim($_GET['search'] ?? '');
 $dlcFilter = $_GET['dlc'] ?? 'all';
 $statusFilter = $_GET['status'] ?? 'all';
 
@@ -426,12 +426,7 @@ $sql = "SELECT
         WHERE 1=1";
 $params = [];
 
-if ($searchTerm) {
-    $sql .= " AND (atc.name LIKE ? OR atc.district LIKE ? OR dlc.name LIKE ?)";
-    $searchParam = "%$searchTerm%";
-    $params = array_merge($params, [$searchParam, $searchParam, $searchParam]);
-}
-
+// Live search filters client-side; keep status + DLC on the server
 if ($dlcFilter !== 'all') {
     $sql .= " AND atc.dlc_id = ?";
     $params[] = $dlcFilter;
@@ -447,11 +442,6 @@ $countSql = "SELECT COUNT(*) FROM atc_centers atc
              LEFT JOIN dlc_offices dlc ON atc.dlc_id = dlc.id
              WHERE 1=1";
 $countParams = [];
-if ($searchTerm) {
-    $countSql .= " AND (atc.name LIKE ? OR atc.district LIKE ? OR dlc.name LIKE ?)";
-    $sp = "%$searchTerm%";
-    $countParams = [$sp, $sp, $sp];
-}
 if ($dlcFilter !== 'all') {
     $countSql .= " AND atc.dlc_id = ?";
     $countParams[] = $dlcFilter;
@@ -462,7 +452,8 @@ if ($statusFilter !== 'all') {
 }
 $countStmt = $pdo->prepare($countSql);
 $countStmt->execute($countParams);
-$pager = paginationMeta((int)$countStmt->fetchColumn(), paginationParams(25));
+// Load a large page so live search can filter the full status/DLC set
+$pager = paginationMeta((int)$countStmt->fetchColumn(), paginationParams(500));
 
 $sql .= " GROUP BY atc.id ORDER BY atc.name ASC
           LIMIT {$pager['per_page']} OFFSET {$pager['offset']}";
@@ -997,22 +988,40 @@ try {
         }
 
         .btn-search {
-            padding: .65rem 1.125rem;
-            background: var(--surface);
-            border: 1.5px solid var(--border);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .4rem;
+            height: 40px;
+            padding: 0 1.1rem;
+            background: linear-gradient(135deg, #4361ee, #3730a3);
+            border: none;
             border-radius: var(--r-md);
-            font-size: .85rem;
-            font-weight: 600;
+            font-size: .82rem;
+            font-weight: 700;
             font-family: var(--font);
-            color: var(--text-2);
+            color: #fff;
             cursor: pointer;
-            transition: all var(--t);
+            box-shadow: 0 3px 10px rgba(67, 97, 238, .22);
+            transition: transform var(--t), box-shadow var(--t);
         }
 
         .btn-search:hover {
-            border-color: var(--brand);
-            color: var(--brand);
-            background: var(--brand-light);
+            transform: translateY(-1px);
+            box-shadow: 0 5px 14px rgba(67, 97, 238, .32);
+            color: #fff;
+            background: linear-gradient(135deg, #4361ee, #3730a3);
+            border: none;
+        }
+
+        .btn-search svg {
+            width: 15px;
+            height: 15px;
+            flex-shrink: 0;
+        }
+
+        .atc-table tbody tr.atc-row-hidden {
+            display: none;
         }
 
         /* ── Table ── */
@@ -2233,12 +2242,12 @@ try {
                 <div class="toolbar">
                     <div class="toolbar-left">
                         <span class="toolbar-title">ATCs List</span>
-                        <span class="toolbar-count"><?= count($atcCenters) ?> shown</span>
+                        <span class="toolbar-count" id="atcListCount"><?= count($atcCenters) ?> shown</span>
                     </div>
                     <div class="toolbar-right">
-                        <form method="GET" style="display:contents;">
-                            <input type="hidden" name="status" value="<?= $statusFilter ?>">
-                            <select name="dlc" class="select-sm" onchange="this.form.submit()">
+                        <form method="GET" id="atcFilterForm" style="display:contents;" onsubmit="return false;">
+                            <input type="hidden" name="status" value="<?= htmlspecialchars($statusFilter) ?>">
+                            <select name="dlc" id="atcDlcFilter" class="select-sm">
                                 <option value="all">All DLC Offices</option>
                                 <?php foreach ($dlcOffices as $dlc): ?>
                                     <option value="<?= $dlc['id'] ?>" <?= $dlcFilter == $dlc['id'] ? 'selected' : '' ?>>
@@ -2253,10 +2262,13 @@ try {
                                     <circle cx="11" cy="11" r="8" />
                                     <path d="m21 21-4.35-4.35" />
                                 </svg>
-                                <input type="text" name="search" class="search-input" placeholder="Search centers…"
-                                    value="<?= htmlspecialchars($searchTerm) ?>">
+                                <input type="search" name="search" id="atcSearchInput" class="search-input" placeholder="Search centers…"
+                                    value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off" aria-label="Search ATC centers">
                             </div>
-                            <button type="submit" class="btn-search">Search</button>
+                            <button type="button" class="btn-search" id="atcSearchBtn" title="Search centers">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                                Search
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -2327,13 +2339,26 @@ try {
 
                                     $initial = strtoupper(substr($atc['name'], 0, 1));
                                     $statusClass = strtolower($atc['status']) === 'active' ? 'status-active' : 'status-inactive';
+                                    $atcCodeDisp = $atc['atc_code'] ?: date('Y') . str_pad($atc['id'], 5, '0', STR_PAD_LEFT);
+                                    $searchHay = strtolower(trim(implode(' ', array_filter([
+                                        $atc['name'] ?? '',
+                                        $atcCodeDisp,
+                                        $atc['district'] ?? '',
+                                        $atc['city'] ?? '',
+                                        $atc['taluka'] ?? '',
+                                        $atc['state'] ?? '',
+                                        $atc['center_type'] ?? '',
+                                        $atc['dlc_name'] ?? '',
+                                        $atc['contact_person'] ?? '',
+                                        $atc['mobile'] ?? '',
+                                    ]))));
                                     ?>
-                                    <tr>
+                                    <tr class="atc-data-row" data-search="<?= htmlspecialchars($searchHay, ENT_QUOTES) ?>">
                                         <td>
                                             <!-- ATC Code -->
                                             <span
                                                 style="display:inline-flex;align-items:center;padding:.3rem .7rem;background:linear-gradient(135deg,#eff6ff,#ede9fe);border:1px solid #c7d2fe;border-radius:99px;font-size:.78rem;font-weight:800;color:#4361ee;letter-spacing:.03em;font-family:var(--mono);">
-                                                <?= htmlspecialchars($atc['atc_code'] ?: date('Y') . str_pad($atc['id'], 5, '0', STR_PAD_LEFT)) ?>
+                                                <?= htmlspecialchars($atcCodeDisp) ?>
                                             </span>
                                         </td>
                                         <td>
@@ -2670,6 +2695,74 @@ Best Regards,
             const url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(msg);
             window.open(url, '_blank');
         }
+
+        /* ── Live ATC search (filters table as you type) ── */
+        (function initLiveAtcSearch() {
+            const input = document.getElementById('atcSearchInput');
+            const btn = document.getElementById('atcSearchBtn');
+            const countEl = document.getElementById('atcListCount');
+            const dlcSel = document.getElementById('atcDlcFilter');
+            const tbody = document.querySelector('.atc-table tbody');
+            if (!input || !tbody) return;
+
+            const rows = () => Array.from(tbody.querySelectorAll('tr.atc-data-row'));
+            let emptyRow = tbody.querySelector('tr.atc-live-empty');
+            if (!emptyRow) {
+                emptyRow = document.createElement('tr');
+                emptyRow.className = 'atc-live-empty';
+                emptyRow.innerHTML = '<td colspan="8"><div class="empty-state"><div class="empty-title">No ATCs match your search</div><div class="empty-sub">Try a different name, code, district, or DLC.</div></div></td>';
+                emptyRow.hidden = true;
+                tbody.appendChild(emptyRow);
+            }
+
+            function syncUrl(q) {
+                try {
+                    const url = new URL(window.location.href);
+                    if (q) url.searchParams.set('search', q);
+                    else url.searchParams.delete('search');
+                    url.searchParams.delete('page');
+                    history.replaceState(null, '', url.pathname + url.search);
+                } catch (_) { /* ignore */ }
+            }
+
+            function applyFilter() {
+                const q = (input.value || '').trim().toLowerCase();
+                let visible = 0;
+                rows().forEach((tr) => {
+                    const hay = (tr.getAttribute('data-search') || '').toLowerCase();
+                    const show = !q || hay.includes(q);
+                    tr.classList.toggle('atc-row-hidden', !show);
+                    if (show) visible += 1;
+                });
+                if (countEl) countEl.textContent = visible + ' shown';
+                const hasDataRows = rows().length > 0;
+                emptyRow.hidden = !hasDataRows || visible > 0;
+                syncUrl((input.value || '').trim());
+            }
+
+            let timer = null;
+            input.addEventListener('input', () => {
+                clearTimeout(timer);
+                timer = setTimeout(applyFilter, 120);
+            });
+            input.addEventListener('search', applyFilter);
+            btn?.addEventListener('click', () => { applyFilter(); input.focus(); });
+
+            // DLC still reloads server-side (changes the loaded set)
+            dlcSel?.addEventListener('change', () => {
+                const url = new URL(window.location.href);
+                const dlc = dlcSel.value || 'all';
+                if (dlc === 'all') url.searchParams.delete('dlc');
+                else url.searchParams.set('dlc', dlc);
+                const q = (input.value || '').trim();
+                if (q) url.searchParams.set('search', q);
+                else url.searchParams.delete('search');
+                url.searchParams.delete('page');
+                window.location.href = url.pathname + url.search;
+            });
+
+            if ((input.value || '').trim()) applyFilter();
+        })();
     </script>
 
 </body>
