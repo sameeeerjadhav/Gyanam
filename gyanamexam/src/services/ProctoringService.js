@@ -28,6 +28,8 @@ class ProctoringService {
     this._onAutoSubmit = null; // callback when limit exceeded
     this._devtoolsCheckInterval = null;
     this._fullscreenWarningShown = false;
+    this._lastEmitAt = {};
+    this._devtoolsOpen = false;
   }
 
   /**
@@ -285,21 +287,22 @@ class ProctoringService {
   // ─── DevTools Detection ─────────────────────────────────────────────────────
 
   _setupDevToolsDetection() {
-    let prevWidth = window.outerWidth;
-    let prevHeight = window.outerHeight;
-
     this._devtoolsCheckInterval = setInterval(() => {
       if (!this.active) return;
 
       const widthDiff = window.outerWidth - window.innerWidth;
       const heightDiff = window.outerHeight - window.innerHeight;
+      const open = widthDiff > 200 || heightDiff > 200;
 
-      // Heuristic: if the difference is large, devtools might be open
-      if (widthDiff > 200 || heightDiff > 200) {
+      if (open) {
+        this._devtoolsOpen = true;
+        // Poll every 3s; _triggerViolation coalesces to ≤1 POST / 60s
         this._triggerViolation(
           'devtools',
           'Developer tools detected. Please close them immediately to continue the exam.'
         );
+      } else {
+        this._devtoolsOpen = false;
       }
     }, 3000);
   }
@@ -339,6 +342,24 @@ class ProctoringService {
   // ─── Violation Handling ─────────────────────────────────────────────────────
 
   _triggerViolation(type, message) {
+    // Coalesce noisy event types so ~100 clients cannot flood the API/DB
+    const minGapMs = ({
+      devtools: 60000,
+      copy_paste: 15000,
+      right_click: 15000,
+      fullscreen_exit: 20000,
+      fullscreen_required: 20000,
+      tab_switch: 2000,
+      tab_switch_exceeded: 0,
+      auto_submit: 0,
+    })[type] ?? 15000;
+
+    const now = Date.now();
+    if (minGapMs > 0 && this._lastEmitAt[type] && (now - this._lastEmitAt[type]) < minGapMs) {
+      return;
+    }
+    this._lastEmitAt[type] = now;
+
     const entry = {
       type,
       message,
@@ -346,6 +367,9 @@ class ProctoringService {
       tabSwitchCount: this.tabSwitchCount,
     };
     this.warnings.push(entry);
+    if (this.warnings.length > 50) {
+      this.warnings = this.warnings.slice(-50);
+    }
 
     if (this._onViolation) {
       this._onViolation(type, message, this.tabSwitchCount, this.settings.tab_switch_limit);
@@ -360,6 +384,8 @@ class ProctoringService {
 
   destroy() {
     this.active = false;
+    this._lastEmitAt = {};
+    this._devtoolsOpen = false;
 
     // Remove all event listeners
     this._listeners.forEach(([event, handler, target]) => {

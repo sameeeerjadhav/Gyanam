@@ -19,7 +19,7 @@ const STUDENT_PASS = __ENV.STUDENT_PASS || 'password';
 const EXAM_ID = __ENV.EXAM_ID || '1';
 const THINK = Number(__ENV.THINK_SECONDS || 5);
 const HEARTBEATS = Number(__ENV.HEARTBEATS || 2); // short loop for CI; raise for soak
-const HB_GAP = Number(__ENV.HB_GAP || 75); // matches production 75s heartbeat
+const HB_GAP = Number(__ENV.HB_GAP || 90); // matches production ~90s heartbeat
 
 const errRate = new Rate('errors');
 const hbTrend = new Trend('heartbeat_ms');

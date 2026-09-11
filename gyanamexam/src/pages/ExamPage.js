@@ -264,8 +264,8 @@ class ExamPage {
     this._dirty = true;
     this._persistLocalDraft();
     if (this._autosaveTimer) clearTimeout(this._autosaveTimer);
-    // Debounce + jitter so many clients don't sync in the same second
-    const delay = 45000 + Math.floor(Math.random() * 15000);
+    // Debounce + jitter — answers live in localStorage until then
+    const delay = 50000 + Math.floor(Math.random() * 20000);
     this._autosaveTimer = setTimeout(() => this._flushAutosave(), delay);
   }
 
@@ -275,11 +275,11 @@ class ExamPage {
     const tick = () => {
       if (this.isSubmitting) return;
       if (this._dirty) this._flushAutosave();
-      // ~60–80s with jitter
-      const next = 60000 + Math.floor(Math.random() * 20000);
+      // ~70–95s with jitter (avoid dual-fire with debounce)
+      const next = 70000 + Math.floor(Math.random() * 25000);
       this._autosaveTimeout = setTimeout(tick, next);
     };
-    this._autosaveTimeout = setTimeout(tick, 60000 + Math.floor(Math.random() * 20000));
+    this._autosaveTimeout = setTimeout(tick, 70000 + Math.floor(Math.random() * 25000));
   }
 
   async _flushAutosave() {
@@ -851,12 +851,12 @@ class ExamPage {
 
     const scheduleNext = () => {
       if (this.isSubmitting) return;
-      // Base ~75s, spread clients ±20s so they don't align
-      const gap = 75000 + stampedeDelayMs(seed + String(Date.now() % 7), 20000, 3000) - 10000;
+      // Base ~90s, spread clients ±20s so they don't align (~100 concurrent safe)
+      const gap = 90000 + stampedeDelayMs(seed + String(Date.now() % 7), 20000, 3000) - 10000;
       this._heartbeatTimeout = setTimeout(async () => {
         await sendBeat();
         scheduleNext();
-      }, Math.max(45000, gap));
+      }, Math.max(60000, gap));
     };
 
     // First beat also staggered (0–12s) to avoid post-start pile-up

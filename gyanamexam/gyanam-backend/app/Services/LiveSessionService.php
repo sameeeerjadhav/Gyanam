@@ -69,7 +69,7 @@ class LiveSessionService
         }
     }
 
-    public function touch(int $studentId, int $examConfigId): ?LiveExamSession
+    public function touch(int $studentId, int $examConfigId, int $minIntervalSeconds = 45): ?LiveExamSession
     {
         $session = LiveExamSession::where('student_id', $studentId)
             ->where('exam_config_id', $examConfigId)
@@ -77,6 +77,14 @@ class LiveSessionService
 
         if (!$session) {
             return null;
+        }
+
+        // Skip redundant UPDATEs when recently touched (cuts write load under ~100 heartbeats)
+        if ($minIntervalSeconds > 0
+            && $session->last_seen_at
+            && $session->last_seen_at->gt(now()->subSeconds($minIntervalSeconds))
+        ) {
+            return $session;
         }
 
         $session->last_seen_at = now();
