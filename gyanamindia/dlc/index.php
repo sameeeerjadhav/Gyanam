@@ -69,6 +69,8 @@ if ($dlcId) {
         $shareSummary = calculateDlcShareSummary($pdo, (int)$dlcId, false);
     } catch (Exception $e) {}
 }
+
+include __DIR__ . '/_load_analytics_charts.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -79,6 +81,7 @@ if ($dlcId) {
     <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <link rel="stylesheet" href="../assets/css/dlc-dash.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
 </head>
@@ -183,10 +186,14 @@ if ($dlcId) {
                     <p>Analytics and performance</p>
                 </a>
             </div>
+
+            <?php include __DIR__ . '/_render_analytics_overview.php'; ?>
+
         </div>
     </main>
 </div>
 
 <script src="../assets/js/dashboard.js"></script>
+<?php include __DIR__ . '/_render_analytics_charts_js.php'; ?>
 </body>
 </html>
