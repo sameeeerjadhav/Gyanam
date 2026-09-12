@@ -101,8 +101,9 @@ foreach ($items as $it) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
 <title>Dispatch Receipt — <?= htmlspecialchars($dispatch['dispatch_id']) ?> | Gyanam India Educational Services</title>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Sora', sans-serif; background: #e8e8e8; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 1.5rem 1rem; }

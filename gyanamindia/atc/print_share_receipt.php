@@ -80,7 +80,8 @@ $txnDate = date('d M Y, h:i A', strtotime($txnSource));
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receipt <?= $receiptNo ?> - Gyanam India Educational Services</title>
+        <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
+<title>Receipt <?= $receiptNo ?> - Gyanam India Educational Services</title>
     <style>
         @page { size: A4; margin: 15mm; }
         body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #111827; margin: 0; padding: 0; line-height: 1.5; }

@@ -403,14 +403,14 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Exam Schedules — ATC Login | Gyanam India</title>
+    <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
     <?php if (file_exists(__DIR__ . '/../assets/css/notifications.css')): ?>
         <link rel="stylesheet" href="../assets/css/notifications.css">
     <?php endif; ?>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="icon"
+<link rel="icon"
         href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E">
     <style>
         :root {
@@ -431,7 +431,7 @@ try {
             --es-shadow-lg: 0 12px 40px rgba(0,0,0,.1);
         }
 
-        .page-content { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        .page-content { font-family: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif; }
 
         /* KPI */
         .es-kpi {
@@ -534,7 +534,7 @@ try {
             border-radius: 10px;
             font-size: .82rem;
             font-weight: 600;
-            font-family: 'Inter', inherit;
+            font-family: 'Sora', inherit;
             outline: none;
             background: #fff;
             color: #374151;
@@ -552,7 +552,7 @@ try {
             border: 1.5px solid #e5e7eb;
             border-radius: 10px;
             font-size: .82rem;
-            font-family: 'Inter', inherit;
+            font-family: 'Sora', inherit;
             outline: none;
             width: 240px;
             transition: all .2s;
@@ -590,7 +590,7 @@ try {
             border-radius: 9px;
             background: transparent;
             cursor: pointer;
-            font-family: 'Inter', inherit;
+            font-family: 'Sora', inherit;
             transition: all .2s;
             text-decoration: none
         }
@@ -814,7 +814,7 @@ try {
             background: #fff;
             color: #4b5563;
             transition: all .2s cubic-bezier(.4,0,.2,1);
-            font-family: 'Inter', inherit;
+            font-family: 'Sora', inherit;
             white-space: nowrap
         }
 
@@ -911,7 +911,7 @@ try {
             border: 1.5px solid #c7d2fe;
             border-radius: 8px;
             font-size: .8rem;
-            font-family: 'Inter', inherit;
+            font-family: 'Sora', inherit;
             background: #fff
         }
 
@@ -928,7 +928,7 @@ try {
             font-size: .78rem;
             font-weight: 700;
             cursor: pointer;
-            font-family: 'Inter', inherit;
+            font-family: 'Sora', inherit;
             transition: all .2s
         }
 
@@ -1104,7 +1104,7 @@ try {
             border: 1.5px solid #e5e7eb;
             border-radius: 10px;
             font-size: .85rem;
-            font-family: 'Inter', inherit;
+            font-family: 'Sora', inherit;
             outline: none;
             box-sizing: border-box;
             color: #374151;
@@ -1962,7 +1962,7 @@ try {
             const icon = type === 'success'
                 ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg>'
                 : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
-            t.style.cssText = `display:flex;align-items:center;gap:.55rem;background:${bg};color:#fff;padding:.85rem 1.35rem;border-radius:12px;font-size:.84rem;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.18);animation:esSlideUp .3s cubic-bezier(.4,0,.2,1);max-width:400px;font-family:'Inter',sans-serif;letter-spacing:-.01em`;
+            t.style.cssText = `display:flex;align-items:center;gap:.55rem;background:${bg};color:#fff;padding:.85rem 1.35rem;border-radius:12px;font-size:.84rem;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.18);animation:esSlideUp .3s cubic-bezier(.4,0,.2,1);max-width:400px;font-family:'Sora',sans-serif;letter-spacing:-.01em`;
             t.innerHTML = icon + '<span>' + msg + '</span>';
             document.getElementById('esToastWrap').appendChild(t);
             setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 3000);
