@@ -832,20 +832,69 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: .4rem;
-        padding: .55rem .65rem .7rem;
+        padding: .5rem .55rem .6rem;
         flex: 1;
         align-content: start;
     }
-    .cal-qa-grid .cc-btn {
-        height: 32px;
-        font-size: .72rem;
-        padding: 0 .4rem;
+    .cal-qa-item {
+        display: flex;
+        align-items: center;
+        gap: .45rem;
+        padding: .42rem .5rem;
+        border-radius: 8px;
+        border: 1px solid #e8edf5;
+        background: #f8fafc;
+        text-decoration: none;
+        color: #0f172a;
+        transition: background .15s, border-color .15s, box-shadow .15s;
+        min-height: 40px;
+    }
+    .cal-qa-item:hover {
+        background: #fff;
+        border-color: #c7d2fe;
+        box-shadow: 0 1px 4px rgba(79, 70, 229, .08);
+    }
+    .cal-qa-item .qa-ico {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        text-align: center;
-        text-decoration: none;
+        flex-shrink: 0;
+        background: #eef2ff;
+        color: #4f46e5;
     }
+    .cal-qa-item .qa-ico svg { width: 14px; height: 14px; }
+    .cal-qa-item .qa-ico.green { background: #ecfdf5; color: #059669; }
+    .cal-qa-item .qa-ico.amber { background: #fffbeb; color: #d97706; }
+    .cal-qa-item .qa-ico.rose { background: #fff1f2; color: #e11d48; }
+    .cal-qa-item .qa-ico.sky { background: #f0f9ff; color: #0284c7; }
+    .cal-qa-item .qa-ico.violet { background: #f5f3ff; color: #7c3aed; }
+    .cal-qa-item .qa-text {
+        display: flex;
+        flex-direction: column;
+        gap: .05rem;
+        min-width: 0;
+        line-height: 1.15;
+    }
+    .cal-qa-item .qa-label {
+        font-size: .72rem;
+        font-weight: 800;
+        letter-spacing: -.01em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .cal-qa-item .qa-hint {
+        font-size: .58rem;
+        font-weight: 600;
+        color: #94a3b8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .cal-qa-item:hover .qa-hint { color: #64748b; }
     .cal-bday-side .bday-row {
         padding: .35rem .65rem;
         gap: .45rem;
@@ -1223,14 +1272,38 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         <span>Quick Actions</span>
                     </div>
                     <div class="cal-qa-grid">
-                        <a class="cc-btn" href="dlc_offices.php">DLCs</a>
-                        <a class="cc-btn" href="atc_centers.php">ATCs</a>
-                        <a class="cc-btn" href="students.php">Students</a>
-                        <a class="cc-btn" href="reports.php">Reports</a>
-                        <a class="cc-btn" href="share_payments.php">Shares</a>
-                        <a class="cc-btn" href="announcements.php">Banners</a>
-                        <a class="cc-btn" href="dispatches.php">Dispatches</a>
-                        <a class="cc-btn" href="material_requirements.php">Materials</a>
+                        <a class="cal-qa-item" href="dlc_offices.php">
+                            <span class="qa-ico"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg></span>
+                            <span class="qa-text"><span class="qa-label">DLC Offices</span><span class="qa-hint">Manage districts</span></span>
+                        </a>
+                        <a class="cal-qa-item" href="atc_centers.php">
+                            <span class="qa-ico green"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                            <span class="qa-text"><span class="qa-label">ATC Centers</span><span class="qa-hint">Training centres</span></span>
+                        </a>
+                        <a class="cal-qa-item" href="students.php">
+                            <span class="qa-ico sky"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></span>
+                            <span class="qa-text"><span class="qa-label">Students</span><span class="qa-hint">Search &amp; records</span></span>
+                        </a>
+                        <a class="cal-qa-item" href="reports.php">
+                            <span class="qa-ico violet"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+                            <span class="qa-text"><span class="qa-label">Reports</span><span class="qa-hint">Share &amp; status</span></span>
+                        </a>
+                        <a class="cal-qa-item" href="share_payments.php">
+                            <span class="qa-ico amber"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+                            <span class="qa-text"><span class="qa-label">Share Payments</span><span class="qa-hint">HO collections</span></span>
+                        </a>
+                        <a class="cal-qa-item" href="announcements.php">
+                            <span class="qa-ico rose"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+                            <span class="qa-text"><span class="qa-label">Banners</span><span class="qa-hint">Announcements</span></span>
+                        </a>
+                        <a class="cal-qa-item" href="dispatches.php">
+                            <span class="qa-ico"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
+                            <span class="qa-text"><span class="qa-label">Dispatches</span><span class="qa-hint">Track deliveries</span></span>
+                        </a>
+                        <a class="cal-qa-item" href="material_requirements.php">
+                            <span class="qa-ico green"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
+                            <span class="qa-text"><span class="qa-label">Materials</span><span class="qa-hint">ATC requirements</span></span>
+                        </a>
                     </div>
                 </div>
             </div>
