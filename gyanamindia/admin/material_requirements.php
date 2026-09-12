@@ -414,6 +414,19 @@ function mrQs(string $base, array $extra = []): string {
     }
     return $parts ? ('?' . implode('&', $parts)) : '?';
 }
+
+/** Deep-link to admin students: search by unique reg / GYANAM{id}, scoped by ATC. */
+function mrStudentUrl(array $s): string {
+    $reg = trim((string)($s['registration_id'] ?? ''));
+    if ($reg === '') {
+        $reg = 'GYANAM' . (int)($s['id'] ?? 0);
+    }
+    $params = ['search' => $reg];
+    if (!empty($s['atc_id'])) {
+        $params['atc_id'] = (int)$s['atc_id'];
+    }
+    return 'students.php?' . http_build_query($params);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -517,6 +530,15 @@ function mrQs(string $base, array $extra = []): string {
 .mr-tbl tbody tr:hover { background:#f8faff }
 .mr-tbl tbody tr:last-child { border-bottom:none }
 .mr-tbl td { padding:.85rem 1rem;vertical-align:middle }
+.btn-view-stu {
+  display:inline-flex;align-items:center;gap:.35rem;
+  height:30px;padding:0 .7rem;border-radius:8px;
+  border:1.5px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;
+  font:700 .72rem inherit;text-decoration:none;white-space:nowrap;
+  transition:background .12s,border-color .12s;
+}
+.btn-view-stu:hover { background:#dbeafe;border-color:#93c5fd;color:#1e40af }
+.btn-view-stu svg { width:13px;height:13px;flex-shrink:0 }
 .atc-chip { display:inline-block;font-size:.72rem;font-weight:700;color:#4338ca;background:#eef2ff;border:1px solid #c7d2fe;padding:.15rem .5rem;border-radius:6px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
 
 .mat-pills { display:flex;flex-wrap:wrap;gap:.4rem }
@@ -839,6 +861,7 @@ function mrQs(string $base, array $extra = []): string {
                         <th>Course</th>
                         <th>Admission</th>
                         <th>Materials needed</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -863,6 +886,12 @@ function mrQs(string $base, array $extra = []): string {
                             </span>
                             <?php endif; endforeach; ?>
                         </div>
+                    </td>
+                    <td>
+                        <a class="btn-view-stu" href="<?= htmlspecialchars(mrStudentUrl($s)) ?>" title="Open on Students page">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            View student
+                        </a>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -890,6 +919,7 @@ function mrQs(string $base, array $extra = []): string {
                         <th>Registration ID</th>
                         <th>Course</th>
                         <th>Materials sent</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -913,6 +943,12 @@ function mrQs(string $base, array $extra = []): string {
                             </span>
                             <?php endforeach; ?>
                         </div>
+                    </td>
+                    <td>
+                        <a class="btn-view-stu" href="<?= htmlspecialchars(mrStudentUrl($s)) ?>" title="Open on Students page">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            View student
+                        </a>
                     </td>
                 </tr>
                 <?php endforeach; ?>
