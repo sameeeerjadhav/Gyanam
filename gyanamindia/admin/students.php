@@ -78,24 +78,42 @@ if ($filtered) {
 
     $exactAdmissionId = null;
     if ($filterSearch !== '') {
-        if (preg_match('/^GYANAM\s*(\d+)$/i', $filterSearch, $m)) {
-            $exactAdmissionId = (int)$m[1];
-        } elseif (ctype_digit($filterSearch)) {
-            $exactAdmissionId = (int)$filterSearch;
-        }
+        $q = trim($filterSearch);
 
-        if ($exactAdmissionId !== null && $exactAdmissionId > 0) {
-            // Deep-link / exact reg: match by admission id only (fast + reliable)
-            $where[]  = 'a.id = ?';
-            $params[] = $exactAdmissionId;
+        // Exact branded reg: GYANAM7 / GIIT3 / GIES1 → match registration_id / roll_no
+        // (NOT admissions.id — sequence ≠ primary key)
+        if (preg_match('/^(GYANAM|GIIT|GIES)\s*(\d+)$/i', $q, $m)) {
+            $canonical = strtoupper($m[1]) . $m[2];
+            $where[] = '(UPPER(REPLACE(TRIM(a.registration_id), \' \', \'\')) = ?
+                        OR UPPER(REPLACE(TRIM(a.roll_no), \' \', \'\')) = ?)';
+            $params[] = $canonical;
+            $params[] = $canonical;
+        } elseif (preg_match('/^(GYANAM|GIIT|GIES)$/i', $q, $m)) {
+            // Prefix-only: "GYANAM" / "GIIT" → all IDs in that series
+            $prefix = strtoupper($m[1]) . '%';
+            $where[] = '(a.registration_id LIKE ? OR a.roll_no LIKE ?)';
+            $params[] = $prefix;
+            $params[] = $prefix;
+        } elseif (ctype_digit($q)) {
+            // Bare number: admission id OR GYANAM# / GIIT# / GIES#
+            $n = (int)$q;
+            $where[] = '(a.id = ?
+                        OR UPPER(REPLACE(TRIM(a.registration_id), \' \', \'\')) IN (?, ?, ?)
+                        OR UPPER(REPLACE(TRIM(a.roll_no), \' \', \'\')) IN (?, ?, ?))';
+            $params[] = $n;
+            $params[] = 'GYANAM' . $n;
+            $params[] = 'GIIT' . $n;
+            $params[] = 'GIES' . $n;
+            $params[] = 'GYANAM' . $n;
+            $params[] = 'GIIT' . $n;
+            $params[] = 'GIES' . $n;
         } else {
-            $like = '%' . $filterSearch . '%';
+            $like = '%' . $q . '%';
             $where[] = "(CONCAT(a.first_name,' ',COALESCE(a.middle_name,''),' ',a.last_name) LIKE ?
                            OR a.roll_no LIKE ?
                            OR a.registration_id LIKE ?
-                           OR a.mobile LIKE ?
-                           OR CONCAT('GYANAM', a.id) LIKE ?)";
-            $params = array_merge($params, [$like, $like, $like, $like, $like]);
+                           OR a.mobile LIKE ?)";
+            $params = array_merge($params, [$like, $like, $like, $like]);
         }
     }
 
@@ -115,6 +133,7 @@ if ($filtered) {
                        a.course, a.admission_date, a.mobile, a.photo,
                        atc.id AS atc_id,
                        atc.name AS atc_name,
+                       atc.center_type AS center_type,
                        dlc.name AS dlc_name";
         $fromWhere = "FROM admissions a
                 LEFT JOIN atc_centers atc ON atc.id = a.atc_id
@@ -140,12 +159,18 @@ if ($filtered) {
                 $stmt->execute($params);
                 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             } catch (Throwable $e2) {
-                $sql = "SELECT {$selectBase},
-                               CONCAT('GYANAM', a.id) AS registration_id,
-                               '' AS atc_code,
-                               '' AS material_type,
-                               0 AS ho_share_paid
-                        {$fromWhere}";
+                $sql = "SELECT a.id, a.roll_no,
+                               CONCAT(a.first_name,' ',COALESCE(NULLIF(TRIM(a.middle_name),''),''),' ',a.last_name) AS student_name,
+                               a.course, a.admission_date, a.mobile, a.photo,
+                               atc.id AS atc_id, atc.name AS atc_name, dlc.name AS dlc_name,
+                               a.registration_id, '' AS atc_code, '' AS center_type,
+                               '' AS material_type, 0 AS ho_share_paid
+                        FROM admissions a
+                        LEFT JOIN atc_centers atc ON atc.id = a.atc_id
+                        LEFT JOIN dlc_offices dlc ON dlc.id = atc.dlc_id
+                        WHERE " . implode(' AND ', $where) . "
+                        ORDER BY a.admission_date DESC, a.first_name ASC, a.last_name ASC
+                        LIMIT {$pager['per_page']} OFFSET {$pager['offset']}";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute($params);
                 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -238,14 +263,7 @@ if ($filtered) {
             $admId = (int)$r['id'];
             $r['share_paid'] = isset($paidMap[$admId]) || !empty($r['ho_share_paid']);
             $r['exam_passed'] = !empty($examPassMap[$admId]);
-            $reg = trim((string)($r['registration_id'] ?? ''));
-            if ($reg === '') {
-                $reg = trim((string)($r['roll_no'] ?? ''));
-            }
-            if ($reg === '') {
-                $reg = 'GYANAM' . $admId;
-            }
-            $r['cert_reg_id'] = $reg;
+            $r['cert_reg_id'] = admissionDisplayRegistrationId($r);
             $matType = trim((string)($r['material_type'] ?? ''));
             if ($matType !== '' && strcasecmp($matType, 'With Material') !== 0) {
                 $r['materials_status'] = 'n_a';
@@ -327,71 +345,69 @@ if ($filtered) {
     .page-header-title { font-size: 1.375rem; font-weight: 800; color: #0f1523 !important; letter-spacing: -.03em; z-index: 10; position: relative; }
     .page-header-subtitle { font-size: .8125rem; color: var(--text-3); margin-top: .15rem; }
 
-    /* ── Filter card ── */
+    /* ── Filter card (compact toolbar) ── */
     .filter-card {
-        background: var(--surface); border-radius: var(--r-xl);
+        background: var(--surface); border-radius: 12px;
         border: 1px solid var(--border); box-shadow: var(--shadow-sm);
-        padding: 1.375rem 1.5rem; margin-bottom: 1.5rem;
+        padding: .65rem .85rem; margin-bottom: 1rem;
     }
-    .filter-card-title {
-        font-size: .8rem; font-weight: 700; color: var(--text-3);
-        text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1rem;
+    .filter-card-title { display: none; }
+    .filter-row { display: flex; align-items: center; gap: .45rem .5rem; flex-wrap: wrap; }
+    .filter-group { display: flex; flex-direction: column; gap: 0; flex: 0 1 auto; min-width: 0; }
+    .filter-group--search { flex: 1 1 160px; min-width: 140px; }
+    .filter-label {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
     }
-    .filter-row { display: flex; align-items: center; gap: .875rem; flex-wrap: wrap; }
-    .filter-group { display: flex; flex-direction: column; gap: .35rem; flex: 1; min-width: 160px; }
-    .filter-label { font-size: .76rem; font-weight: 700; color: var(--text-2); }
     .filter-select, .filter-input {
-        padding: .72rem 2.25rem .72rem .875rem; border: 1.5px solid var(--border);
-        border-radius: var(--r-md); font-size: .875rem; font-family: var(--font);
-        font-weight: 500; background: var(--surface-raised); color: var(--text);
+        height: 34px; padding: 0 .65rem; border: 1.5px solid var(--border);
+        border-radius: 8px; font-size: .8rem; font-family: var(--font);
+        font-weight: 600; background: #fff; color: var(--text);
         outline: none; transition: border-color .18s, box-shadow .18s;
         appearance: none; -webkit-appearance: none;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238896a5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-        background-repeat: no-repeat; background-position: right .625rem center; background-size: 14px;
-        width: 100%;
+        background-repeat: no-repeat; background-position: right .5rem center; background-size: 12px;
+        max-width: 160px; min-width: 0;
     }
     .filter-input {
-        background-image: none;
-        padding: .72rem .875rem;
+        background-image: none; padding: 0 .65rem; max-width: none; width: 100%;
     }
     .filter-select:focus, .filter-input:focus {
         border-color: var(--indigo); box-shadow: 0 0 0 3px rgba(79,110,247,.1);
     }
+    .filter-actions { display: flex; gap: .4rem; align-items: center; flex: 0 0 auto; margin-left: auto; }
     .btn-filter {
-        display: inline-flex; align-items: center; gap: .5rem;
-        padding: .78rem 1.5rem;
-        background: linear-gradient(135deg, var(--indigo), var(--indigo-dark));
-        border: none; border-radius: var(--r-md); color: white;
-        font-size: .875rem; font-weight: 700; font-family: var(--font);
-        cursor: pointer; white-space: nowrap;
-        box-shadow: 0 4px 14px rgba(79,110,247,.3);
-        transition: all .2s ease; align-self: flex-end; margin-top: 1.1rem;
+        display: inline-flex; align-items: center; gap: .35rem;
+        height: 34px; padding: 0 .9rem;
+        background: #4f46e5; border: none; border-radius: 8px; color: white;
+        font-size: .78rem; font-weight: 800; font-family: var(--font);
+        cursor: pointer; white-space: nowrap; box-shadow: none; margin-top: 0; align-self: auto;
     }
-    .btn-filter:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79,110,247,.35); }
-    .btn-filter svg { width: 15px; height: 15px; }
+    .btn-filter:hover { background: #4338ca; transform: none; box-shadow: none; }
+    .btn-filter svg { width: 13px; height: 13px; }
     .btn-clear {
-        display: inline-flex; align-items: center; gap: .4rem;
-        padding: .78rem 1.1rem;
-        background: var(--surface); border: 1.5px solid var(--border);
-        border-radius: var(--r-md); color: var(--text-2);
-        font-size: .875rem; font-weight: 600; font-family: var(--font);
+        display: inline-flex; align-items: center; gap: .3rem;
+        height: 34px; padding: 0 .75rem;
+        background: #fff; border: 1.5px solid var(--border);
+        border-radius: 8px; color: var(--text-2);
+        font-size: .78rem; font-weight: 700; font-family: var(--font);
         cursor: pointer; white-space: nowrap; transition: all .18s;
-        text-decoration: none; align-self: flex-end; margin-top: 1.1rem;
+        text-decoration: none; margin-top: 0; align-self: auto;
     }
     .btn-clear:hover { border-color: var(--indigo); color: var(--indigo); background: var(--indigo-soft); }
-    .btn-clear svg { width: 14px; height: 14px; }
+    .btn-clear svg { width: 13px; height: 13px; }
 
     /* Active filters row */
     .active-filters {
-        display: flex; align-items: center; gap: .5rem;
-        flex-wrap: wrap; margin-top: .875rem; padding-top: .875rem;
+        display: flex; align-items: center; gap: .4rem;
+        flex-wrap: wrap; margin-top: .55rem; padding-top: .55rem;
         border-top: 1px solid var(--border);
     }
-    .active-filters-label { font-size: .76rem; font-weight: 700; color: var(--text-3); }
+    .active-filters-label { font-size: .72rem; font-weight: 700; color: var(--text-3); }
     .filter-chip {
         display: inline-flex; align-items: center; gap: .35rem;
-        padding: .25rem .75rem; border-radius: var(--r-full);
-        font-size: .75rem; font-weight: 700;
+        padding: .2rem .65rem; border-radius: var(--r-full);
+        font-size: .72rem; font-weight: 700;
         background: var(--indigo-soft); color: var(--indigo);
         border: 1px solid rgba(79,110,247,.2);
     }
@@ -502,11 +518,16 @@ if ($filtered) {
     .empty-sub   { font-size: .875rem; color: var(--text-3); line-height: 1.55; }
 
     /* ── Responsive ── */
-    @media (max-width: 1024px) { .filter-row { gap: .6rem; } }
+    @media (max-width: 1024px) {
+        .filter-select { max-width: none; }
+        .filter-actions { margin-left: 0; }
+    }
     @media (max-width: 768px) {
-        .filter-row { flex-direction: column; }
-        .filter-group { min-width: unset; }
-        .btn-filter, .btn-clear { align-self: stretch; justify-content: center; }
+        .filter-row { flex-direction: column; align-items: stretch; }
+        .filter-group, .filter-group--search { flex: 1 1 100%; }
+        .filter-select, .filter-input { max-width: none; width: 100%; }
+        .filter-actions { width: 100%; margin-left: 0; }
+        .btn-filter, .btn-clear { flex: 1; justify-content: center; }
         .page-header-block { flex-direction: column; align-items: flex-start; gap: 1rem; }
         .data-table { display: block; overflow-x: auto; }
     }
@@ -579,8 +600,8 @@ if ($filtered) {
                     <div class="filter-row">
                         <div class="filter-group">
                             <label class="filter-label" for="dlc_id">DLC Office</label>
-                            <select name="dlc_id" id="dlc_id" class="filter-select" onchange="filterATCByDLC()">
-                                <option value="">— All DLCs —</option>
+                            <select name="dlc_id" id="dlc_id" class="filter-select" onchange="filterATCByDLC()" title="DLC Office" aria-label="DLC Office">
+                                <option value="">All DLCs</option>
                                 <?php foreach ($dlcOffices as $d): ?>
                                     <option value="<?= $d['id'] ?>" <?= $filterDlc === (int)$d['id'] ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($d['name']) ?>
@@ -591,8 +612,8 @@ if ($filtered) {
 
                         <div class="filter-group">
                             <label class="filter-label" for="atc_id">ATC Center</label>
-                            <select name="atc_id" id="atc_id" class="filter-select">
-                                <option value="">— All ATCs —</option>
+                            <select name="atc_id" id="atc_id" class="filter-select" title="ATC Center" aria-label="ATC Center">
+                                <option value="">All ATCs</option>
                                 <?php foreach ($atcCenters as $a):
                                     $hideAtc = $filterDlc !== null && (int)$a['dlc_id'] !== $filterDlc;
                                 ?>
@@ -606,10 +627,10 @@ if ($filtered) {
                             </select>
                         </div>
 
-                        <div class="filter-group" style="flex:1.4">
+                        <div class="filter-group">
                             <label class="filter-label" for="course">Course</label>
-                            <select name="course" id="course" class="filter-select">
-                                <option value="">— All Courses —</option>
+                            <select name="course" id="course" class="filter-select" title="Course" aria-label="Course">
+                                <option value="">All Courses</option>
                                 <?php foreach ($courseList as $c): ?>
                                     <option value="<?= htmlspecialchars($c) ?>" <?= $filterCourse === $c ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($c) ?>
@@ -618,24 +639,25 @@ if ($filtered) {
                             </select>
                         </div>
 
-                        <div class="filter-group" style="flex:1.3">
+                        <div class="filter-group filter-group--search">
                             <label class="filter-label" for="search">Search</label>
                             <input type="search" name="search" id="search" class="filter-input"
-                                   placeholder="Name, Reg ID or Mobile…"
+                                   placeholder="Name, GYANAM# / GIIT#, mobile…"
                                    value="<?= htmlspecialchars($filterSearch) ?>" autocomplete="off" aria-label="Search students">
                         </div>
 
-                        <button type="submit" class="btn-filter" id="studentsFilterBtn">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                            Filter Students
-                        </button>
-
-                        <?php if ($filtered): ?>
-                        <a href="students.php" class="btn-clear">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            Clear
-                        </a>
-                        <?php endif; ?>
+                        <div class="filter-actions">
+                            <button type="submit" class="btn-filter" id="studentsFilterBtn">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                                Apply
+                            </button>
+                            <?php if ($filtered): ?>
+                            <a href="students.php" class="btn-clear">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                Clear
+                            </a>
+                            <?php endif; ?>
+                        </div>
                     </div>
 
                     <?php if ($filtered): ?>
@@ -740,10 +762,7 @@ if ($filtered) {
                             $initials = 'ST';
                         }
                         $admDate  = $s['admission_date'] ? date('d M Y', strtotime($s['admission_date'])) : '—';
-                        $displayReg = trim((string)($s['cert_reg_id'] ?? ''));
-                        if ($displayReg === '') {
-                            $displayReg = 'GYANAM' . (int)$s['id'];
-                        }
+                        $displayReg = admissionDisplayRegistrationId($s);
                     ?>
                     <tr>
                         <!-- Photo + Name -->
@@ -828,7 +847,7 @@ if ($filtered) {
                         <td>
                             <?php if (!empty($s['exam_passed'])): ?>
                                 <a class="btn-cert-dl"
-                                   href="generate_course_certificate.php?reg_id=<?= urlencode($s['cert_reg_id']) ?>&preview=1"
+                                   href="generate_course_certificate.php?reg_id=<?= urlencode($displayReg) ?>&preview=1"
                                    target="_blank" rel="noopener"
                                    title="Download / print certificate">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
