@@ -415,17 +415,19 @@ function mrQs(string $base, array $extra = []): string {
     return $parts ? ('?' . implode('&', $parts)) : '?';
 }
 
-/** Deep-link to admin students: search by unique reg / GYANAM{id}, scoped by ATC. */
+/** Deep-link to admin students: search by unique reg / GYANAM{id}. */
 function mrStudentUrl(array $s): string {
     $reg = trim((string)($s['registration_id'] ?? ''));
     if ($reg === '') {
         $reg = 'GYANAM' . (int)($s['id'] ?? 0);
     }
-    $params = ['search' => $reg];
-    if (!empty($s['atc_id'])) {
-        $params['atc_id'] = (int)$s['atc_id'];
+    // Prefer exact GYANAM{id} when reg is empty or already that form — students.php
+    // treats GYANAM\d+ as an exact admission lookup (avoids broad LIKE timeouts).
+    $id = (int)($s['id'] ?? 0);
+    if ($id > 0 && ($reg === '' || preg_match('/^GYANAM\s*\d+$/i', $reg))) {
+        $reg = 'GYANAM' . $id;
     }
-    return 'students.php?' . http_build_query($params);
+    return 'students.php?' . http_build_query(['search' => $reg]);
 }
 ?>
 <!DOCTYPE html>
