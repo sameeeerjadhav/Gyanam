@@ -1093,17 +1093,12 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
 
         <div class="page-content cc-dash">
 
-            <!-- ═══ Banners (ATC-style full width) ═══ -->
+            <!-- ═══ Banners (only when uploaded) ═══ -->
+            <?php if (!empty($activeBanners)): ?>
             <div class="admin-banner-slot">
-                <?php if (!empty($activeBanners)): ?>
-                    <?php $imgPrefix = '../uploads/announcements/'; include __DIR__ . '/../includes/banner_carousel.php'; ?>
-                <?php else: ?>
-                    <a class="admin-banner-empty" href="announcements.php">
-                        <strong>Dashboard Banners</strong>
-                        <span>Upload banners in Dashboard Banners to show them here.</span>
-                    </a>
-                <?php endif; ?>
+                <?php $imgPrefix = '../uploads/announcements/'; include __DIR__ . '/../includes/banner_carousel.php'; ?>
             </div>
+            <?php endif; ?>
 
             <!-- Row 1: Logins & exams -->
             <div class="cc-grid cc-grid-4">
