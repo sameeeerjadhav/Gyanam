@@ -448,51 +448,57 @@ function mrStudentUrl(array $s): string {
 .mr-stat-lbl { font-size:.7rem;font-weight:700;color:#64748b;margin-top:.15rem }
 
 .mr-filter {
-  display:flex;
-  flex-wrap:wrap;
-  align-items:center;
-  gap:.45rem .5rem;
-  margin-bottom:1rem;
-  background:#fff;
-  padding:.65rem .85rem;
-  border-radius:12px;
-  border:1.5px solid var(--border-color,#e5e7eb);
-  box-shadow:0 1px 4px rgba(0,0,0,.03);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.35fr) auto;
+  gap: .55rem;
+  align-items: end;
+  margin-bottom: 1rem;
+  background: #fff;
+  padding: .75rem .9rem;
+  border-radius: 12px;
+  border: 1.5px solid var(--border-color,#e5e7eb);
+  box-shadow: 0 1px 4px rgba(0,0,0,.03);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
-.mr-filter > input[type="hidden"] { display:none }
+.mr-filter > input[type="hidden"] { display: none; }
 .mf-grp {
-  display:flex;
-  flex-direction:column;
-  gap:0;
-  min-width:0;
-  flex:0 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: .22rem;
+  min-width: 0;
+  width: 100%;
 }
 .mf-grp label {
-  position:absolute;
-  width:1px;height:1px;padding:0;margin:-1px;
-  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  position: static;
+  width: auto; height: auto; padding: 0; margin: 0;
+  overflow: visible; clip: auto; white-space: nowrap; border: 0;
+  font-size: .65rem; font-weight: 800; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: .04em;
 }
 .mf-grp select, .mf-grp input {
-  height:34px;padding:0 .65rem;border:1.5px solid #e5e7eb;border-radius:8px;
-  font-family:inherit;font-size:.8rem;font-weight:600;outline:none;background:#fff;
-  color:#0f172a;min-width:0;
+  height: 36px; width: 100%; max-width: 100%;
+  padding: 0 .65rem; border: 1.5px solid #e5e7eb; border-radius: 8px;
+  font-family: inherit; font-size: .8rem; font-weight: 600; outline: none; background: #fff;
+  color: #0f172a; min-width: 0; box-sizing: border-box;
 }
-.mf-grp select { max-width:160px }
-.mf-grp--search { flex:1 1 160px; min-width:140px }
-.mf-grp--search input { width:100%; max-width:none }
-.mf-grp select:focus, .mf-grp input:focus { border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12) }
-.mf-actions { display:flex;gap:.4rem;align-items:center;flex:0 0 auto;margin-left:auto }
+.mf-grp select { padding-right: 1.75rem; }
+.mf-grp--search { min-width: 0; }
+.mf-grp--search input { width: 100%; max-width: none; }
+.mf-grp select:focus, .mf-grp input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+.mf-actions { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; min-width: 0; }
 .btn-go {
-  height:34px;padding:0 .9rem;background:#4f46e5;color:#fff;border:none;
-  border-radius:8px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;font-size:.78rem;
+  height: 36px; padding: 0 .9rem; background: #4f46e5; color: #fff; border: none;
+  border-radius: 8px; font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap; font-size: .78rem;
 }
-.btn-go:hover { background:#4338ca }
+.btn-go:hover { background: #4338ca; }
 .btn-clear {
-  height:34px;padding:0 .75rem;border:1.5px solid #e5e7eb;background:#fff;color:#64748b;
-  border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;font-size:.78rem;text-decoration:none;
-  display:inline-flex;align-items:center;
+  height: 36px; padding: 0 .75rem; border: 1.5px solid #e5e7eb; background: #fff; color: #64748b;
+  border-radius: 8px; font-weight: 700; cursor: pointer; font-family: inherit; font-size: .78rem; text-decoration: none;
+  display: inline-flex; align-items: center;
 }
-.btn-clear:hover { background:#f8fafc;color:#334155 }
+.btn-clear:hover { background: #f8fafc; color: #334155 }
 
 .mr-tabs { display:flex;gap:.5rem;margin-bottom:1.15rem;flex-wrap:wrap }
 .mr-tab {
@@ -516,8 +522,8 @@ function mrStudentUrl(array $s): string {
 .btn-print { display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1rem;border-radius:10px;border:1.5px solid #c4b5fd;background:#f5f3ff;color:#6d28d9;font:700 .8rem inherit;cursor:pointer;transition:all .15s;white-space:nowrap }
 .btn-print:hover { background:#ede9fe;transform:translateY(-1px) }
 
-.mr-tbl-wrap { background:#fff;border:1.5px solid #e5e7eb;border-radius:16px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.03) }
-.mr-tbl { width:100%;border-collapse:collapse;font-size:.84rem }
+.mr-tbl-wrap { background:#fff;border:1.5px solid #e5e7eb;border-radius:16px;overflow-x:auto;overflow-y:hidden;box-shadow:0 1px 6px rgba(0,0,0,.03);max-width:100%;-webkit-overflow-scrolling:touch }
+.mr-tbl { width:100%;min-width:880px;border-collapse:collapse;font-size:.84rem }
 .mr-tbl thead { background:#f8fafc }
 .mr-tbl th { padding:.85rem 1rem;text-align:left;font-size:.68rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #e5e7eb;white-space:nowrap }
 .mr-tbl tbody tr { border-bottom:1px solid #f1f5f9;transition:background .12s }
@@ -587,15 +593,22 @@ function mrStudentUrl(array $s): string {
 .pd-footer .sign-sub { font-size:6pt; color:#9ca3af }
 .pd-footer-center { text-align:center; font-size:6.5pt; color:#9ca3af; line-height:1.6 }
 
+@media (max-width:1400px) {
+  .mr-filter { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.3fr) auto; }
+}
+@media (max-width:1200px) {
+  .mr-filter { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mf-grp--search, .mf-actions { grid-column: 1 / -1; }
+  .btn-go, .btn-clear { flex: 1; justify-content: center; }
+}
 @media (max-width:900px) {
-  .mf-grp select { max-width:none }
-  .mf-actions { margin-left:0 }
+  .mr-filter { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mf-grp--search, .mf-actions { grid-column: 1 / -1; }
 }
 @media (max-width:600px) {
   .mr-stats { grid-template-columns:1fr 1fr }
-  .mf-grp, .mf-grp--search { flex:1 1 100% }
-  .mf-grp select, .mf-grp--search input { max-width:none; width:100% }
-  .mf-actions { width:100% }
+  .mr-filter { grid-template-columns: 1fr; }
+  .mf-grp, .mf-grp--search, .mf-actions { grid-column: 1 / -1; }
   .btn-go, .btn-clear { flex:1; justify-content:center }
 }
 </style>
