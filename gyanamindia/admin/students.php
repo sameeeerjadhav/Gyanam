@@ -57,191 +57,211 @@ $filtered = $formSubmitted; // "All DLC / All ATC / All Course" still loads ever
 $students   = [];
 $totalCount = 0;
 
+$listError = '';
 if ($filtered) {
-    $where  = ['a.status = ?'];
-    $params = ['Active'];
-
-    // Apply DLC and ATC together (AND) so both constraints are respected
-    if ($filterDlc !== null) {
-        $where[]  = 'atc.dlc_id = ?';
-        $params[] = $filterDlc;
-    }
-    if ($filterAtc !== null) {
-        $where[]  = 'a.atc_id = ?';
-        $params[] = $filterAtc;
-    }
-    if ($filterCourse !== '') {
-        $where[]  = 'a.course = ?';
-        $params[] = $filterCourse;
-    }
-
-    if ($filterSearch !== '') {
-        $like = '%' . $filterSearch . '%';
-        $searchSql = "(CONCAT(a.first_name,' ',COALESCE(a.middle_name,''),' ',a.last_name) LIKE ?
-                       OR a.roll_no LIKE ?
-                       OR a.registration_id LIKE ?
-                       OR a.mobile LIKE ?
-                       OR CONCAT('GYANAM', a.id) LIKE ?)";
-        $params = array_merge($params, [$like, $like, $like, $like, $like]);
-
-        // Also match bare numeric id / GYANAM123
-        $idMatch = null;
-        if (preg_match('/^GYANAM\s*(\d+)$/i', $filterSearch, $m)) {
-            $idMatch = (int)$m[1];
-        } elseif (ctype_digit($filterSearch)) {
-            $idMatch = (int)$filterSearch;
-        }
-        if ($idMatch !== null && $idMatch > 0) {
-            $searchSql = '(' . $searchSql . ' OR a.id = ?)';
-            $params[] = $idMatch;
-        }
-        $where[] = $searchSql;
-    }
-
-    // Count + paginate
-    $countSql = "SELECT COUNT(*) FROM admissions a
-                 LEFT JOIN atc_centers atc ON atc.id = a.atc_id
-                 LEFT JOIN dlc_offices dlc ON dlc.id = atc.dlc_id
-                 WHERE " . implode(' AND ', $where);
-    $countStmt = $pdo->prepare($countSql);
-    $countStmt->execute($params);
-    $pager = paginationMeta((int)$countStmt->fetchColumn(), paginationParams(25));
-    $totalCount = $pager['total'];
-
-    // Try with ho_share_paid column; fall back if it doesn't exist
     try {
-        $sql = "SELECT a.id, a.roll_no, a.registration_id,
-                       CONCAT(a.first_name,' ',COALESCE(NULLIF(TRIM(a.middle_name),''),''),' ',a.last_name) AS student_name,
-                       a.course, a.admission_date, a.mobile, a.photo,
-                       COALESCE(a.material_type, '') AS material_type,
-                       COALESCE(a.ho_share_paid,0) AS ho_share_paid,
-                       atc.id  AS atc_id,
-                       atc.name AS atc_name,
-                       atc.atc_code AS atc_code,
-                       dlc.name AS dlc_name
-                FROM admissions a
-                LEFT JOIN atc_centers atc ON atc.id = a.atc_id
-                LEFT JOIN dlc_offices dlc ON dlc.id = atc.dlc_id
-                WHERE " . implode(' AND ', $where) . "
-                ORDER BY a.admission_date DESC, student_name ASC
-                LIMIT {$pager['per_page']} OFFSET {$pager['offset']}";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Exception $e) {
-        // ho_share_paid / material_type may not exist — retry without them
-        $sql = "SELECT a.id, a.roll_no, a.registration_id,
-                       CONCAT(a.first_name,' ',COALESCE(NULLIF(TRIM(a.middle_name),''),''),' ',a.last_name) AS student_name,
-                       a.course, a.admission_date, a.mobile, a.photo,
-                       '' AS material_type,
-                       0 AS ho_share_paid,
-                       atc.id  AS atc_id,
-                       atc.name AS atc_name,
-                       atc.atc_code AS atc_code,
-                       dlc.name AS dlc_name
-                FROM admissions a
-                LEFT JOIN atc_centers atc ON atc.id = a.atc_id
-                LEFT JOIN dlc_offices dlc ON dlc.id = atc.dlc_id
-                WHERE " . implode(' AND ', $where) . "
-                ORDER BY a.admission_date DESC, student_name ASC
-                LIMIT {$pager['per_page']} OFFSET {$pager['offset']}";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
+        $where  = ['a.status = ?'];
+        $params = ['Active'];
 
-    // ── Resolve share paid status via share_payments JSON ──────────────────
-    $atcIds  = array_values(array_unique(array_filter(array_map('intval', array_column($rows, 'atc_id')))));
-    $paidMap = [];
+        // Apply DLC and ATC together (AND) so both constraints are respected
+        if ($filterDlc !== null) {
+            $where[]  = 'atc.dlc_id = ?';
+            $params[] = $filterDlc;
+        }
+        if ($filterAtc !== null) {
+            $where[]  = 'a.atc_id = ?';
+            $params[] = $filterAtc;
+        }
+        if ($filterCourse !== '') {
+            $where[]  = 'a.course = ?';
+            $params[] = $filterCourse;
+        }
 
-    if (!empty($atcIds)) {
-        $placeholders = implode(',', array_fill(0, count($atcIds), '?'));
-        $spStmt = $pdo->prepare(
-            "SELECT student_ids FROM share_payments
-             WHERE atc_id IN ($placeholders) AND status = 'Completed'"
-        );
-        $spStmt->execute($atcIds);
-        foreach ($spStmt->fetchAll(PDO::FETCH_COLUMN) as $json) {
-            $ids = json_decode($json, true);
-            if (is_array($ids)) {
-                foreach ($ids as $sid) $paidMap[(int)$sid] = true;
+        if ($filterSearch !== '') {
+            // Exact GYANAM{id} / bare id → precise match (View student deep-links)
+            $idMatch = null;
+            if (preg_match('/^GYANAM\s*(\d+)$/i', $filterSearch, $m)) {
+                $idMatch = (int)$m[1];
+            } elseif (ctype_digit($filterSearch)) {
+                $idMatch = (int)$filterSearch;
+            }
+
+            if ($idMatch !== null && $idMatch > 0) {
+                $where[]  = '(a.id = ? OR a.registration_id = ? OR a.registration_id = ? OR CONCAT(\'GYANAM\', a.id) = ?)';
+                $params[] = $idMatch;
+                $params[] = $filterSearch;
+                $params[] = 'GYANAM' . $idMatch;
+                $params[] = 'GYANAM' . $idMatch;
+            } else {
+                $like = '%' . $filterSearch . '%';
+                $where[] = "(CONCAT(a.first_name,' ',COALESCE(a.middle_name,''),' ',a.last_name) LIKE ?
+                               OR a.roll_no LIKE ?
+                               OR a.registration_id LIKE ?
+                               OR a.mobile LIKE ?
+                               OR CONCAT('GYANAM', a.id) LIKE ?)";
+                $params = array_merge($params, [$like, $like, $like, $like, $like]);
             }
         }
-    }
 
-    // ── Exam pass map (portal + exam_schedules) per ATC on this page ───────
-    $examPassMap = [];
-    $atcCodes = [];
-    foreach ($rows as $r) {
-        $aid = (int)($r['atc_id'] ?? 0);
-        if ($aid > 0 && !isset($atcCodes[$aid])) {
-            $atcCodes[$aid] = trim((string)($r['atc_code'] ?? ''));
-        }
-    }
-    foreach ($atcCodes as $atcId => $atcCode) {
-        foreach (atcMainExamPassAdmissionMap($pdo, $atcId, $atcCode) as $admId => $ok) {
-            if ($ok) {
-                $examPassMap[(int)$admId] = true;
-            }
-        }
-    }
+        // Count + paginate
+        $countSql = "SELECT COUNT(*) FROM admissions a
+                     LEFT JOIN atc_centers atc ON atc.id = a.atc_id
+                     LEFT JOIN dlc_offices dlc ON dlc.id = atc.dlc_id
+                     WHERE " . implode(' AND ', $where);
+        $countStmt = $pdo->prepare($countSql);
+        $countStmt->execute($params);
+        $pager = paginationMeta((int)$countStmt->fetchColumn(), paginationParams(25));
+        $totalCount = $pager['total'];
 
-    // ── Kit material dispatch status (Book / T-Shirt) ──────────────────────
-    $kitDispatched = [];
-    $admIds = array_values(array_unique(array_map(static fn($r) => (int)$r['id'], $rows)));
-    if (!empty($admIds)) {
-        ensureDispatchTables($pdo);
-        $ph = implode(',', array_fill(0, count($admIds), '?'));
+        // Try with ho_share_paid column; fall back if it doesn't exist
         try {
-            $diStmt = $pdo->prepare("
-                SELECT DISTINCT admission_id
-                FROM dispatch_items
-                WHERE admission_id IN ($ph)
-                  AND item_type IN ('Book', 'T-Shirt')
-                  AND status = 'Dispatched'
-            ");
-            $diStmt->execute($admIds);
-            foreach ($diStmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
-                $kitDispatched[(int)$id] = true;
-            }
-        } catch (Exception $e) {}
-        try {
-            $legStmt = $pdo->prepare("
-                SELECT DISTINCT admission_id
-                FROM material_dispatch_students
-                WHERE admission_id IN ($ph)
-            ");
-            $legStmt->execute($admIds);
-            foreach ($legStmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
-                $kitDispatched[(int)$id] = true;
-            }
-        } catch (Exception $e) {}
-    }
+            $sql = "SELECT a.id, a.roll_no, a.registration_id,
+                           CONCAT(a.first_name,' ',COALESCE(NULLIF(TRIM(a.middle_name),''),''),' ',a.last_name) AS student_name,
+                           a.course, a.admission_date, a.mobile, a.photo,
+                           COALESCE(a.material_type, '') AS material_type,
+                           COALESCE(a.ho_share_paid,0) AS ho_share_paid,
+                           atc.id  AS atc_id,
+                           atc.name AS atc_name,
+                           atc.atc_code AS atc_code,
+                           dlc.name AS dlc_name
+                    FROM admissions a
+                    LEFT JOIN atc_centers atc ON atc.id = a.atc_id
+                    LEFT JOIN dlc_offices dlc ON dlc.id = atc.dlc_id
+                    WHERE " . implode(' AND ', $where) . "
+                    ORDER BY a.admission_date DESC, student_name ASC
+                    LIMIT {$pager['per_page']} OFFSET {$pager['offset']}";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            // ho_share_paid / material_type may not exist — retry without them
+            $sql = "SELECT a.id, a.roll_no, a.registration_id,
+                           CONCAT(a.first_name,' ',COALESCE(NULLIF(TRIM(a.middle_name),''),''),' ',a.last_name) AS student_name,
+                           a.course, a.admission_date, a.mobile, a.photo,
+                           '' AS material_type,
+                           0 AS ho_share_paid,
+                           atc.id  AS atc_id,
+                           atc.name AS atc_name,
+                           atc.atc_code AS atc_code,
+                           dlc.name AS dlc_name
+                    FROM admissions a
+                    LEFT JOIN atc_centers atc ON atc.id = a.atc_id
+                    LEFT JOIN dlc_offices dlc ON dlc.id = atc.dlc_id
+                    WHERE " . implode(' AND ', $where) . "
+                    ORDER BY a.admission_date DESC, student_name ASC
+                    LIMIT {$pager['per_page']} OFFSET {$pager['offset']}";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
 
-    // Merge enrichment into each row
-    foreach ($rows as &$r) {
-        $admId = (int)$r['id'];
-        $r['share_paid'] = isset($paidMap[$admId]) || !empty($r['ho_share_paid']);
-        $r['exam_passed'] = !empty($examPassMap[$admId]);
-        $reg = trim((string)($r['registration_id'] ?? ''));
-        if ($reg === '') {
-            $reg = trim((string)($r['roll_no'] ?? ''));
+        // ── Resolve share paid status via share_payments JSON ──────────────────
+        $atcIds  = array_values(array_unique(array_filter(array_map('intval', array_column($rows, 'atc_id')))));
+        $paidMap = [];
+
+        if (!empty($atcIds)) {
+            $placeholders = implode(',', array_fill(0, count($atcIds), '?'));
+            $spStmt = $pdo->prepare(
+                "SELECT student_ids FROM share_payments
+                 WHERE atc_id IN ($placeholders) AND status = 'Completed'"
+            );
+            $spStmt->execute($atcIds);
+            foreach ($spStmt->fetchAll(PDO::FETCH_COLUMN) as $json) {
+                $ids = json_decode($json, true);
+                if (is_array($ids)) {
+                    foreach ($ids as $sid) $paidMap[(int)$sid] = true;
+                }
+            }
         }
-        if ($reg === '') {
-            $reg = 'GYANAM' . $admId;
+
+        // ── Exam pass map (portal + exam_schedules) per ATC on this page ───────
+        $examPassMap = [];
+        $atcCodes = [];
+        foreach ($rows as $r) {
+            $aid = (int)($r['atc_id'] ?? 0);
+            if ($aid > 0 && !isset($atcCodes[$aid])) {
+                $atcCodes[$aid] = trim((string)($r['atc_code'] ?? ''));
+            }
         }
-        $r['cert_reg_id'] = $reg;
-        $matType = trim((string)($r['material_type'] ?? ''));
-        if ($matType !== '' && strcasecmp($matType, 'With Material') !== 0) {
-            $r['materials_status'] = 'n_a';
-        } elseif (!empty($kitDispatched[$admId])) {
-            $r['materials_status'] = 'dispatched';
-        } else {
-            $r['materials_status'] = 'not_dispatched';
+        try {
+            foreach ($atcCodes as $atcId => $atcCode) {
+                foreach (atcMainExamPassAdmissionMap($pdo, (int)$atcId, (string)$atcCode) as $admId => $ok) {
+                    if ($ok) {
+                        $examPassMap[(int)$admId] = true;
+                    }
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('admin/students exam map: ' . $e->getMessage());
         }
+
+        // ── Kit material dispatch status (Book / T-Shirt) ──────────────────────
+        $kitDispatched = [];
+        $admIds = array_values(array_unique(array_map(static function ($r) {
+            return (int)$r['id'];
+        }, $rows)));
+        if (!empty($admIds)) {
+            try {
+                ensureDispatchTables($pdo);
+            } catch (Throwable $e) {}
+            $ph = implode(',', array_fill(0, count($admIds), '?'));
+            try {
+                $diStmt = $pdo->prepare("
+                    SELECT DISTINCT admission_id
+                    FROM dispatch_items
+                    WHERE admission_id IN ($ph)
+                      AND item_type IN ('Book', 'T-Shirt')
+                      AND status = 'Dispatched'
+                ");
+                $diStmt->execute($admIds);
+                foreach ($diStmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
+                    $kitDispatched[(int)$id] = true;
+                }
+            } catch (Exception $e) {}
+            try {
+                $legStmt = $pdo->prepare("
+                    SELECT DISTINCT admission_id
+                    FROM material_dispatch_students
+                    WHERE admission_id IN ($ph)
+                ");
+                $legStmt->execute($admIds);
+                foreach ($legStmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
+                    $kitDispatched[(int)$id] = true;
+                }
+            } catch (Exception $e) {}
+        }
+
+        // Merge enrichment into each row
+        foreach ($rows as &$r) {
+            $admId = (int)$r['id'];
+            $r['share_paid'] = isset($paidMap[$admId]) || !empty($r['ho_share_paid']);
+            $r['exam_passed'] = !empty($examPassMap[$admId]);
+            $reg = trim((string)($r['registration_id'] ?? ''));
+            if ($reg === '') {
+                $reg = trim((string)($r['roll_no'] ?? ''));
+            }
+            if ($reg === '') {
+                $reg = 'GYANAM' . $admId;
+            }
+            $r['cert_reg_id'] = $reg;
+            $matType = trim((string)($r['material_type'] ?? ''));
+            if ($matType !== '' && strcasecmp($matType, 'With Material') !== 0) {
+                $r['materials_status'] = 'n_a';
+            } elseif (!empty($kitDispatched[$admId])) {
+                $r['materials_status'] = 'dispatched';
+            } else {
+                $r['materials_status'] = 'not_dispatched';
+            }
+        }
+        unset($r);
+        $students = $rows;
+    } catch (Throwable $e) {
+        error_log('admin/students list: ' . $e->getMessage());
+        $listError = 'Could not load students for these filters. Please try again or clear filters.';
+        $students = [];
+        $totalCount = 0;
+        $pager = paginationMeta(0, paginationParams(25));
     }
-    unset($r);
-    $students = $rows;
 } else {
     $pager = paginationMeta(0, paginationParams(25));
 }
@@ -544,6 +564,12 @@ if ($filtered) {
 
         <div class="page-content">
 
+            <?php if ($listError !== ''): ?>
+            <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:var(--r-lg);padding:.75rem 1.1rem;font-size:.84rem;font-weight:700;color:#b91c1c;margin-bottom:1.25rem;">
+                <?= htmlspecialchars($listError) ?>
+            </div>
+            <?php endif; ?>
+
             <!-- Optional Top Count -->
             <?php if ($filtered && $totalCount > 0): ?>
             <div style="background:var(--indigo-soft);border:1px solid rgba(79,110,247,.2);border-radius:var(--r-lg);padding:.6rem 1.1rem;font-size:.83rem;font-weight:700;color:var(--indigo);margin-bottom:1.5rem;display:inline-block;">
@@ -703,9 +729,21 @@ if ($filtered) {
                     </thead>
                     <tbody>
                     <?php foreach ($students as $s):
-                        $name   = trim(preg_replace('/\s+/', ' ', $s['student_name']));
-                        $parts  = array_filter(explode(' ', $name));
-                        $initials = substr(implode('', array_map(function($w){ return strtoupper($w[0]); }, $parts)), 0, 2);
+                        $name   = trim(preg_replace('/\s+/', ' ', (string)($s['student_name'] ?? '')));
+                        $parts  = array_values(array_filter(explode(' ', $name), static function ($w) {
+                            return $w !== '';
+                        }));
+                        $initials = '';
+                        foreach ($parts as $w) {
+                            $ch = function_exists('mb_substr') ? mb_substr($w, 0, 1) : substr($w, 0, 1);
+                            if ($ch !== '') {
+                                $initials .= strtoupper($ch);
+                            }
+                            if (strlen($initials) >= 2) break;
+                        }
+                        if ($initials === '') {
+                            $initials = 'ST';
+                        }
                         $admDate  = $s['admission_date'] ? date('d M Y', strtotime($s['admission_date'])) : '—';
                         $displayReg = trim((string)($s['cert_reg_id'] ?? ''));
                         if ($displayReg === '') {
@@ -929,16 +967,22 @@ function printStudents() {
     const { headers, rows } = getTableData();
     if (!rows.length) { alert('No student data to print.'); return; }
 
-    const filterInfo = <?= json_encode(
-        ($filterDlc || $filterAtc || $filterCourse || $filterSearch)
-            ? array_values(array_filter([
-                $filterDlc  ? ('DLC: ' . (($dlcOffices[array_search($filterDlc, array_column($dlcOffices,'id'))]['name'] ?? '') ?: (string)$filterDlc)) : null,
-                $filterAtc  ? ('ATC: ' . (($atcCenters[array_search($filterAtc, array_column($atcCenters,'id'))]['name'] ?? '') ?: (string)$filterAtc)) : null,
-                $filterCourse !== '' ? ('Course: ' . $filterCourse) : null,
-                $filterSearch ? ('Search: "' . $filterSearch . '"') : null,
-            ]))
-            : []
-    ) ?>;
+    const filterInfo = <?= json_encode(array_values(array_filter([
+        $filterDlc ? ('DLC: ' . (function () use ($dlcOffices, $filterDlc) {
+            foreach ($dlcOffices as $d) {
+                if ((int)$d['id'] === (int)$filterDlc) return (string)$d['name'];
+            }
+            return (string)$filterDlc;
+        })()) : null,
+        $filterAtc ? ('ATC: ' . (function () use ($atcCenters, $filterAtc) {
+            foreach ($atcCenters as $a) {
+                if ((int)$a['id'] === (int)$filterAtc) return (string)$a['name'];
+            }
+            return (string)$filterAtc;
+        })()) : null,
+        $filterCourse !== '' ? ('Course: ' . $filterCourse) : null,
+        $filterSearch !== '' ? ('Search: "' . $filterSearch . '"') : null,
+    ])), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
 
     const now = new Date().toLocaleString('en-IN', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
     const filterLine = filterInfo.length ? '<p style="margin:.2rem 0 0;font-size:12px;color:#64748b">Filters: ' + filterInfo.join(' &nbsp;|&nbsp; ') + '</p>' : '';

@@ -2448,21 +2448,25 @@ function atcMainExamPassAdmissionMap(PDO $pdo, int $atcId, string $atcCode = '')
 
     if ($atcCode !== '' && function_exists('examIntegrationReady') && examIntegrationReady()
         && function_exists('fetchAllExamResultsComplete') && function_exists('examSubmissionPassRecord')) {
-        $res = fetchAllExamResultsComplete();
-        if (!empty($res['success']) && !empty($res['data']['submissions'])) {
-            foreach ($res['data']['submissions'] as $sub) {
-                if (($sub['centre_name'] ?? '') !== $atcCode) {
-                    continue;
-                }
-                $rec = examSubmissionPassRecord($sub);
-                if (!$rec) {
-                    continue;
-                }
-                $key = strtoupper(trim((string)($rec['identifier'] ?? '')));
-                if ($key !== '' && isset($byReg[$key])) {
-                    $map[$byReg[$key]] = true;
+        try {
+            $res = fetchAllExamResultsComplete();
+            if (!empty($res['success']) && !empty($res['data']['submissions'])) {
+                foreach ($res['data']['submissions'] as $sub) {
+                    if (($sub['centre_name'] ?? '') !== $atcCode) {
+                        continue;
+                    }
+                    $rec = examSubmissionPassRecord($sub);
+                    if (!$rec) {
+                        continue;
+                    }
+                    $key = strtoupper(trim((string)($rec['identifier'] ?? '')));
+                    if ($key !== '' && isset($byReg[$key])) {
+                        $map[$byReg[$key]] = true;
+                    }
                 }
             }
+        } catch (Throwable $e) {
+            error_log('atcMainExamPassAdmissionMap exam API: ' . $e->getMessage());
         }
     }
 
