@@ -441,35 +441,48 @@ function mrQs(string $base, array $extra = []): string {
 .mr-stat-lbl { font-size:.7rem;font-weight:700;color:#64748b;margin-top:.15rem }
 
 .mr-filter {
-  display:grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) auto;
-  gap:.75rem 1rem;
-  align-items:end;
-  margin-bottom:1.25rem;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:.45rem .5rem;
+  margin-bottom:1rem;
   background:#fff;
-  padding:1.1rem 1.25rem;
-  border-radius:16px;
+  padding:.65rem .85rem;
+  border-radius:12px;
   border:1.5px solid var(--border-color,#e5e7eb);
-  box-shadow:0 1px 6px rgba(0,0,0,.04);
+  box-shadow:0 1px 4px rgba(0,0,0,.03);
 }
-.mf-grp { display:flex;flex-direction:column;gap:.28rem;min-width:0 }
-.mf-grp label { font-size:.7rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em }
+.mr-filter > input[type="hidden"] { display:none }
+.mf-grp {
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  min-width:0;
+  flex:0 1 auto;
+}
+.mf-grp label {
+  position:absolute;
+  width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
 .mf-grp select, .mf-grp input {
-  height:40px;padding:0 .8rem;border:1.5px solid #e5e7eb;border-radius:10px;
-  font-family:inherit;font-size:.84rem;font-weight:600;outline:none;background:#fff;width:100%;
-  color:#0f172a;
+  height:34px;padding:0 .65rem;border:1.5px solid #e5e7eb;border-radius:8px;
+  font-family:inherit;font-size:.8rem;font-weight:600;outline:none;background:#fff;
+  color:#0f172a;min-width:0;
 }
+.mf-grp select { max-width:160px }
+.mf-grp--search { flex:1 1 160px; min-width:140px }
+.mf-grp--search input { width:100%; max-width:none }
 .mf-grp select:focus, .mf-grp input:focus { border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12) }
-.mf-actions { display:flex;gap:.5rem;align-items:center;flex-wrap:wrap }
+.mf-actions { display:flex;gap:.4rem;align-items:center;flex:0 0 auto;margin-left:auto }
 .btn-go {
-  height:40px;padding:0 1.15rem;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;
-  border-radius:10px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;font-size:.84rem;
-  box-shadow:0 2px 8px rgba(99,102,241,.25);
+  height:34px;padding:0 .9rem;background:#4f46e5;color:#fff;border:none;
+  border-radius:8px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;font-size:.78rem;
 }
-.btn-go:hover { filter:brightness(1.05) }
+.btn-go:hover { background:#4338ca }
 .btn-clear {
-  height:40px;padding:0 1rem;border:1.5px solid #e5e7eb;background:#fff;color:#64748b;
-  border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:.82rem;text-decoration:none;
+  height:34px;padding:0 .75rem;border:1.5px solid #e5e7eb;background:#fff;color:#64748b;
+  border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;font-size:.78rem;text-decoration:none;
   display:inline-flex;align-items:center;
 }
 .btn-clear:hover { background:#f8fafc;color:#334155 }
@@ -559,12 +572,15 @@ function mrQs(string $base, array $extra = []): string {
 .pd-footer-center { text-align:center; font-size:6.5pt; color:#9ca3af; line-height:1.6 }
 
 @media (max-width:900px) {
-  .mr-filter { grid-template-columns:1fr 1fr }
-  .mf-actions { grid-column:1 / -1 }
+  .mf-grp select { max-width:none }
+  .mf-actions { margin-left:0 }
 }
 @media (max-width:600px) {
-  .mr-filter { grid-template-columns:1fr }
   .mr-stats { grid-template-columns:1fr 1fr }
+  .mf-grp, .mf-grp--search { flex:1 1 100% }
+  .mf-grp select, .mf-grp--search input { max-width:none; width:100% }
+  .mf-actions { width:100% }
+  .btn-go, .btn-clear { flex:1; justify-content:center }
 }
 </style>
 </head>
@@ -698,7 +714,7 @@ function mrQs(string $base, array $extra = []): string {
             <input type="hidden" name="tab" value="<?= htmlspecialchars($tab) ?>">
             <div class="mf-grp">
                 <label for="dlc_id">DLC Office</label>
-                <select name="dlc_id" id="dlc_id">
+                <select name="dlc_id" id="dlc_id" title="DLC Office" aria-label="DLC Office">
                     <option value="">All DLCs</option>
                     <?php foreach ($dlcList as $d): ?>
                     <option value="<?= (int)$d['id'] ?>" <?= $filterDlc === (int)$d['id'] ? 'selected' : '' ?>><?= htmlspecialchars($d['name']) ?></option>
@@ -707,7 +723,7 @@ function mrQs(string $base, array $extra = []): string {
             </div>
             <div class="mf-grp">
                 <label for="atc_id">ATC Center</label>
-                <select name="atc_id" id="atc_id">
+                <select name="atc_id" id="atc_id" title="ATC Center" aria-label="ATC Center">
                     <option value="">All ATCs</option>
                     <?php foreach ($atcList as $a):
                         $hide = $filterDlc && (int)($a['dlc_id'] ?? 0) !== $filterDlc;
@@ -723,7 +739,7 @@ function mrQs(string $base, array $extra = []): string {
             </div>
             <div class="mf-grp">
                 <label for="course">Course</label>
-                <select name="course" id="course">
+                <select name="course" id="course" title="Course" aria-label="Course">
                     <option value="">All Courses</option>
                     <?php foreach ($courseOptions as $c): ?>
                     <option value="<?= htmlspecialchars($c) ?>" <?= $filterCourse === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
@@ -732,19 +748,19 @@ function mrQs(string $base, array $extra = []): string {
             </div>
             <div class="mf-grp">
                 <label for="mat_type">Material</label>
-                <select name="mat_type" id="mat_type">
+                <select name="mat_type" id="mat_type" title="Material type" aria-label="Material type">
                     <option value="all" <?= $filterMatType === 'all' ? 'selected' : '' ?>>All types</option>
                     <option value="Book" <?= $filterMatType === 'Book' ? 'selected' : '' ?>>Books</option>
                     <option value="T-Shirt" <?= $filterMatType === 'T-Shirt' ? 'selected' : '' ?>>T-Shirts</option>
                     <option value="Certificate" <?= $filterMatType === 'Certificate' ? 'selected' : '' ?>>Certificates</option>
                 </select>
             </div>
-            <div class="mf-grp" style="grid-column: span 1; min-width:180px">
+            <div class="mf-grp mf-grp--search">
                 <label for="search">Search</label>
-                <input type="search" name="search" id="search" placeholder="Name, roll, reg, ATC…" value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off">
+                <input type="search" name="search" id="search" placeholder="Search name, roll, reg, ATC…" value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off" aria-label="Search">
             </div>
             <div class="mf-actions">
-                <button type="submit" class="btn-go" id="mrFilterBtn">Apply filters</button>
+                <button type="submit" class="btn-go" id="mrFilterBtn">Apply</button>
                 <?php if ($filterDlc || $filterAtc || $filterCourse !== '' || $filterMatType !== 'all' || $searchTerm !== ''): ?>
                 <a class="btn-clear" href="material_requirements.php?tab=<?= urlencode($tab) ?>">Clear</a>
                 <?php endif; ?>
