@@ -671,37 +671,37 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .bday-tag { display:inline-block; margin-top:.2rem; font-size:.72rem; font-weight:600; background:var(--surface-3); color:var(--text-3); padding:.1rem .5rem; border-radius:99px; }
     .bday-wish { margin-left: auto; font-size: 1.3rem; }
 
-    /* Calendar + month birthdays — compact */
+    /* Calendar + month birthdays */
     .cal-bday-wrap {
         display: grid;
-        grid-template-columns: 1.15fr .85fr;
-        gap: .75rem;
+        grid-template-columns: 1.2fr .8fr;
+        gap: 1rem;
         margin: 1rem 0;
-        align-items: start;
+        align-items: stretch;
     }
     .cal-card, .cal-bday-side {
         background: #fff;
         border: 1px solid var(--border);
-        border-radius: 12px;
-        box-shadow: 0 1px 6px rgba(0,0,0,.04);
+        border-radius: 14px;
+        box-shadow: 0 1px 8px rgba(0,0,0,.05);
         overflow: hidden;
     }
-    .cal-card { padding: .7rem .8rem .65rem; }
+    .cal-card { padding: .9rem 1rem .85rem; }
     .cal-nav {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: .45rem;
+        margin-bottom: .55rem;
     }
     .cal-nav h3 {
         margin: 0;
-        font-size: .88rem;
+        font-size: 1rem;
         font-weight: 800;
         color: var(--text);
         letter-spacing: -.01em;
     }
     .cal-nav-btn {
-        width: 26px; height: 26px;
+        width: 30px; height: 30px;
         border-radius: 50%;
         border: 1px solid #e5e7eb;
         background: #fff;
@@ -713,31 +713,31 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         transition: background .15s, color .15s, border-color .15s;
     }
     .cal-nav-btn:hover { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
-    .cal-nav-btn svg { width: 13px; height: 13px; }
+    .cal-nav-btn svg { width: 14px; height: 14px; }
     .cal-weekdays, .cal-days {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
-        gap: 2px;
+        gap: 3px;
     }
     .cal-weekdays span {
         text-align: center;
-        font-size: .62rem;
+        font-size: .68rem;
         font-weight: 700;
         color: #94a3b8;
-        padding: .15rem 0;
+        padding: .2rem 0;
         text-transform: uppercase;
     }
     .cal-day {
         position: relative;
-        height: 28px;
+        height: 36px;
         min-height: 0;
         aspect-ratio: auto;
-        border-radius: 7px;
+        border-radius: 8px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        font-size: .74rem;
+        font-size: .8rem;
         font-weight: 700;
         color: #334155;
         cursor: default;
@@ -810,11 +810,17 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         flex-shrink: 0;
     }
     .cal-bday-side-head .ico svg { width: 12px; height: 12px; }
+    .cal-bday-side {
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+    }
     .cal-bday-side-body {
         padding: .25rem 0;
-        max-height: 210px;
+        flex: 1;
+        max-height: 280px;
         overflow-y: auto;
-        min-height: 0;
+        min-height: 160px;
     }
     .cal-bday-side .bday-row {
         padding: .45rem .8rem;
@@ -1100,6 +1106,48 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             </div>
             <?php endif; ?>
 
+            <!-- ═══ Calendar + Birthdays (top of dashboard) ═══ -->
+            <div class="rpt-section" style="margin-top:.25rem">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Calendar &amp; Birthdays
+            </div>
+            <div class="cal-bday-wrap" style="margin-top:0;margin-bottom:1.25rem">
+                <div class="cal-card">
+                    <div class="cal-nav">
+                        <button type="button" class="cal-nav-btn" id="calPrev" aria-label="Previous month">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                        </button>
+                        <h3 id="calTitle">—</h3>
+                        <button type="button" class="cal-nav-btn" id="calNext" aria-label="Next month">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
+                    </div>
+                    <div class="cal-weekdays">
+                        <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+                    </div>
+                    <div class="cal-days" id="calDays"></div>
+                    <div class="cal-legend">
+                        <span><i class="lg-holiday"></i> Holiday</span>
+                        <span><i class="lg-today"></i> Today</span>
+                        <span><i class="lg-bday"></i> Birthday</span>
+                    </div>
+                </div>
+                <div class="cal-bday-side">
+                    <div class="cal-bday-side-head">
+                        <span class="ico">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </span>
+                        <span id="calBdayTitle">Birthdays</span>
+                    </div>
+                    <div class="cal-bday-side-body" id="calBdayList"></div>
+                </div>
+            </div>
+
+            <div class="rpt-section" style="margin-top:.15rem">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                Overview
+            </div>
+
             <!-- Row 1: Logins & exams -->
             <div class="cc-grid cc-grid-4">
                 <div class="cc-card cc-card-pad">
@@ -1136,6 +1184,10 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
             </div>
 
+            <div class="rpt-section" style="margin-top:1.1rem">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Students &amp; Pipeline
+            </div>
             <!-- Row 2: Pipeline -->
             <div class="cc-grid cc-grid-4">
                 <div class="cc-card cc-card-pad clickable" onclick="openDetailModal('inquiries')" title="View inquiries">
@@ -1172,6 +1224,10 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
             </div>
 
+            <div class="rpt-section" style="margin-top:1.1rem">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Certificates &amp; Dispatches
+            </div>
             <!-- Row 3: Ops -->
             <div class="cc-grid cc-grid-4">
                 <a class="cc-card cc-card-pad" href="print_certificates.php" style="text-decoration:none;color:inherit">
@@ -1208,6 +1264,10 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </a>
             </div>
 
+            <div class="rpt-section" style="margin-top:1.1rem">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                Materials &amp; Share
+            </div>
             <!-- Row 4: Materials + Share -->
             <div class="cc-grid cc-grid-4">
                 <a class="cc-card cc-card-pad" href="dispatches.php?view=pending" style="text-decoration:none;color:inherit">
@@ -1412,39 +1472,6 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
             </div>
             <?php endif; ?>
-
-            <!-- ═══ Calendar + Birthdays ═══ -->
-            <div class="cal-bday-wrap">
-                <div class="cal-card">
-                    <div class="cal-nav">
-                        <button type="button" class="cal-nav-btn" id="calPrev" aria-label="Previous month">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-                        </button>
-                        <h3 id="calTitle">—</h3>
-                        <button type="button" class="cal-nav-btn" id="calNext" aria-label="Next month">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                        </button>
-                    </div>
-                    <div class="cal-weekdays">
-                        <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
-                    </div>
-                    <div class="cal-days" id="calDays"></div>
-                    <div class="cal-legend">
-                        <span><i class="lg-holiday"></i> Holiday</span>
-                        <span><i class="lg-today"></i> Today</span>
-                        <span><i class="lg-bday"></i> Birthday</span>
-                    </div>
-                </div>
-                <div class="cal-bday-side">
-                    <div class="cal-bday-side-head">
-                        <span class="ico">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </span>
-                        <span id="calBdayTitle">Birthdays</span>
-                    </div>
-                    <div class="cal-bday-side-body" id="calBdayList"></div>
-                </div>
-            </div>
 
             <!-- ═══ DLC SHARE TABLE ═══ -->
             <div class="rpt-section">
