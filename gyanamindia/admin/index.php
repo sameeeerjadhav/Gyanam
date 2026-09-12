@@ -671,16 +671,16 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .bday-tag { display:inline-block; margin-top:.2rem; font-size:.72rem; font-weight:600; background:var(--surface-3); color:var(--text-3); padding:.1rem .5rem; border-radius:99px; }
     .bday-wish { margin-left: auto; font-size: 1.3rem; }
 
-    /* Calendar + month birthdays — compact */
+    /* Calendar + birthdays + quick actions — compact row */
     .cal-bday-wrap {
         display: grid;
-        grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+        grid-template-columns: minmax(0, 300px) minmax(0, 1fr) minmax(0, 1fr);
         gap: .65rem;
         margin: .65rem 0 1rem;
-        align-items: start;
-        max-width: 720px;
+        align-items: stretch;
+        max-width: none;
     }
-    .cal-card, .cal-bday-side {
+    .cal-card, .cal-bday-side, .cal-qa-side {
         background: #fff;
         border: 1px solid var(--border);
         border-radius: 10px;
@@ -811,11 +811,11 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         flex-shrink: 0;
     }
     .cal-bday-side-head .ico svg { width: 10px; height: 10px; }
-    .cal-bday-side {
+    .cal-bday-side,
+    .cal-qa-side {
         display: flex;
         flex-direction: column;
         min-height: 0;
-        align-self: stretch;
     }
     .cal-bday-side-body {
         padding: .15rem 0;
@@ -823,6 +823,28 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         max-height: 168px;
         overflow-y: auto;
         min-height: 0;
+    }
+    .cal-qa-side .cal-bday-side-head .ico {
+        background: #eef2ff;
+        color: #4f46e5;
+    }
+    .cal-qa-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .4rem;
+        padding: .55rem .65rem .7rem;
+        flex: 1;
+        align-content: start;
+    }
+    .cal-qa-grid .cc-btn {
+        height: 32px;
+        font-size: .72rem;
+        padding: 0 .4rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        text-decoration: none;
     }
     .cal-bday-side .bday-row {
         padding: .35rem .65rem;
@@ -849,11 +871,17 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         min-height: 80px;
     }
     .cal-bday-empty .cake { font-size: 1rem; }
-    @media (max-width: 900px) {
+    @media (max-width: 1100px) {
         .cal-bday-wrap {
-            grid-template-columns: 1fr;
-            max-width: 100%;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         }
+        .cal-qa-side { grid-column: 1 / -1; }
+        .cal-qa-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 700px) {
+        .cal-bday-wrap { grid-template-columns: 1fr; }
+        .cal-qa-side { grid-column: auto; }
+        .cal-qa-grid { grid-template-columns: 1fr 1fr; }
         .cal-bday-side-body { max-height: 120px; }
     }
 
@@ -1152,10 +1180,10 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
             </div>
 
-            <!-- ═══ Calendar + Birthdays (after overview) ═══ -->
+            <!-- ═══ Calendar + Birthdays + Quick Actions ═══ -->
             <div class="rpt-section" style="margin-top:1.1rem">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                Calendar &amp; Birthdays
+                Calendar, Birthdays &amp; Quick Actions
             </div>
             <div class="cal-bday-wrap" style="margin-top:0;margin-bottom:.85rem">
                 <div class="cal-card">
@@ -1186,6 +1214,24 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         <span id="calBdayTitle">Birthdays</span>
                     </div>
                     <div class="cal-bday-side-body" id="calBdayList"></div>
+                </div>
+                <div class="cal-qa-side">
+                    <div class="cal-bday-side-head">
+                        <span class="ico">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        </span>
+                        <span>Quick Actions</span>
+                    </div>
+                    <div class="cal-qa-grid">
+                        <a class="cc-btn" href="dlc_offices.php">DLCs</a>
+                        <a class="cc-btn" href="atc_centers.php">ATCs</a>
+                        <a class="cc-btn" href="students.php">Students</a>
+                        <a class="cc-btn" href="reports.php">Reports</a>
+                        <a class="cc-btn" href="share_payments.php">Shares</a>
+                        <a class="cc-btn" href="announcements.php">Banners</a>
+                        <a class="cc-btn" href="dispatches.php">Dispatches</a>
+                        <a class="cc-btn" href="material_requirements.php">Materials</a>
+                    </div>
                 </div>
             </div>
 
@@ -1310,8 +1356,8 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
             </div>
 
-            <!-- Row 5: Share today + summary + network + quick actions -->
-            <div class="cc-grid cc-grid-4">
+            <!-- Row 5: Share today + summary + network -->
+            <div class="cc-grid cc-grid-3">
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
                         <?= cc_png('icon-today-share.png', 'xl', "Today's share") ?>
@@ -1336,20 +1382,6 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                     <div class="cc-kv"><span class="k">DLC Offices</span><span class="v"><?= (int)$totalDLC ?></span></div>
                     <div class="cc-kv"><span class="k">ATC Centers</span><span class="v blue"><?= (int)$totalATC ?></span></div>
                     <div class="cc-kv"><span class="k">Total Logins</span><span class="v"><?= (int)$totalUsers ?></span></div>
-                </div>
-                <div class="cc-card cc-card-pad">
-                    <div class="cc-card-head">
-                        <?= cc_png('icon-dispatch.png', 'xl', 'Quick actions') ?>
-                        <h3>Quick Actions</h3>
-                    </div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem">
-                        <a class="cc-btn" href="dlc_offices.php" style="text-align:center">DLCs</a>
-                        <a class="cc-btn" href="atc_centers.php" style="text-align:center">ATCs</a>
-                        <a class="cc-btn" href="students.php" style="text-align:center">Students</a>
-                        <a class="cc-btn" href="reports.php" style="text-align:center">Reports</a>
-                        <a class="cc-btn" href="share_payments.php" style="text-align:center">Shares</a>
-                        <a class="cc-btn" href="announcements.php" style="text-align:center">Banners</a>
-                    </div>
                 </div>
             </div>
 
