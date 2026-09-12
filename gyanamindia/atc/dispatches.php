@@ -459,7 +459,7 @@ $kpiPending = count($pendingStudents) + count($approvedDupCerts);
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                                     View
                                 </button>
-                                <a href="dispatch_receipt.php?id=<?= $d['id'] ?>" target="_blank" class="btn-action print">
+                                <a href="dispatch_receipt.php?id=<?= (int)$d['id'] ?>&v=tabular3" target="_blank" class="btn-action print">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                                     Print Receipt
                                 </a>

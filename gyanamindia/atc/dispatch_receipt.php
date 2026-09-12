@@ -121,12 +121,19 @@ $dispatchDate = !empty($dispatch['dispatch_date'])
     : '—';
 $hasCost = $totalCost > 0;
 $colspanItems = $hasCost ? 8 : 6;
+
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
 <title>Dispatch Receipt — <?= htmlspecialchars($dispatch['dispatch_id']) ?> | Gyanam India</title>
 <style>
@@ -299,6 +306,7 @@ body {
 <div class="no-print">
   <button type="button" class="btn-print" onclick="window.print()">Print Receipt</button>
   <a href="dispatches.php">Back to Dispatches</a>
+  <span style="align-self:center;font-size:11px;color:#555;margin-left:6px">Tabular format · rev <?= htmlspecialchars(substr(hash_file('sha1', __FILE__), 0, 8)) ?></span>
 </div>
 
 <div class="sheet">
