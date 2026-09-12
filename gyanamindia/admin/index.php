@@ -1106,44 +1106,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             </div>
             <?php endif; ?>
 
-            <!-- ═══ Calendar + Birthdays (top of dashboard) ═══ -->
             <div class="rpt-section" style="margin-top:.25rem">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                Calendar &amp; Birthdays
-            </div>
-            <div class="cal-bday-wrap" style="margin-top:0;margin-bottom:1.25rem">
-                <div class="cal-card">
-                    <div class="cal-nav">
-                        <button type="button" class="cal-nav-btn" id="calPrev" aria-label="Previous month">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-                        </button>
-                        <h3 id="calTitle">—</h3>
-                        <button type="button" class="cal-nav-btn" id="calNext" aria-label="Next month">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                        </button>
-                    </div>
-                    <div class="cal-weekdays">
-                        <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
-                    </div>
-                    <div class="cal-days" id="calDays"></div>
-                    <div class="cal-legend">
-                        <span><i class="lg-holiday"></i> Holiday</span>
-                        <span><i class="lg-today"></i> Today</span>
-                        <span><i class="lg-bday"></i> Birthday</span>
-                    </div>
-                </div>
-                <div class="cal-bday-side">
-                    <div class="cal-bday-side-head">
-                        <span class="ico">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </span>
-                        <span id="calBdayTitle">Birthdays</span>
-                    </div>
-                    <div class="cal-bday-side-body" id="calBdayList"></div>
-                </div>
-            </div>
-
-            <div class="rpt-section" style="margin-top:.15rem">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
                 Overview
             </div>
@@ -1181,6 +1144,43 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                     </div>
                     <div class="cc-metric-value orange"><?= (int)$pendingExam ?></div>
                     <div class="cc-metric-label">Yet to appear (main exam)</div>
+                </div>
+            </div>
+
+            <!-- ═══ Calendar + Birthdays (after overview) ═══ -->
+            <div class="rpt-section" style="margin-top:1.1rem">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Calendar &amp; Birthdays
+            </div>
+            <div class="cal-bday-wrap" style="margin-top:0;margin-bottom:1.25rem">
+                <div class="cal-card">
+                    <div class="cal-nav">
+                        <button type="button" class="cal-nav-btn" id="calPrev" aria-label="Previous month">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                        </button>
+                        <h3 id="calTitle">—</h3>
+                        <button type="button" class="cal-nav-btn" id="calNext" aria-label="Next month">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
+                    </div>
+                    <div class="cal-weekdays">
+                        <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+                    </div>
+                    <div class="cal-days" id="calDays"></div>
+                    <div class="cal-legend">
+                        <span><i class="lg-holiday"></i> Holiday</span>
+                        <span><i class="lg-today"></i> Today</span>
+                        <span><i class="lg-bday"></i> Birthday</span>
+                    </div>
+                </div>
+                <div class="cal-bday-side">
+                    <div class="cal-bday-side-head">
+                        <span class="ico">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </span>
+                        <span id="calBdayTitle">Birthdays</span>
+                    </div>
+                    <div class="cal-bday-side-body" id="calBdayList"></div>
                 </div>
             </div>
 
