@@ -564,12 +564,6 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
     <link rel="stylesheet" href="../assets/css/atc-dash-cc.css">
-    <link rel="preload" as="style"
-        href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
-        onload="this.onload=null;this.rel='stylesheet'">
-    <noscript>
-        <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-    </noscript>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
     <style>
@@ -1797,7 +1791,7 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
         }
 
         loadChartJs(function () {
-        Chart.defaults.font.family = "'Sora', 'Inter', sans-serif";
+        Chart.defaults.font.family = "'Sora', 'Sora', sans-serif";
         Chart.defaults.font.weight = 600;
         Chart.defaults.color = '#64748b';
 

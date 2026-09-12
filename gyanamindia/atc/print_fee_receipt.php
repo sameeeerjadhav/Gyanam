@@ -128,14 +128,14 @@ if (strpos($logoUrl, '../uploads/atc_logos/') === 0) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
 <title>Fee Receipt &mdash; <?= htmlspecialchars($thisPayment['receipt_no']) ?></title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ── Screen layout ── */
 body {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Sora', sans-serif;
     background: #eef0f8;
     color: #1e293b;
     min-height: 100vh;
