@@ -671,37 +671,38 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .bday-tag { display:inline-block; margin-top:.2rem; font-size:.72rem; font-weight:600; background:var(--surface-3); color:var(--text-3); padding:.1rem .5rem; border-radius:99px; }
     .bday-wish { margin-left: auto; font-size: 1.3rem; }
 
-    /* Calendar + month birthdays */
+    /* Calendar + month birthdays — compact */
     .cal-bday-wrap {
         display: grid;
-        grid-template-columns: 1.2fr .8fr;
-        gap: 1rem;
-        margin: 1rem 0;
-        align-items: stretch;
+        grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+        gap: .65rem;
+        margin: .65rem 0 1rem;
+        align-items: start;
+        max-width: 720px;
     }
     .cal-card, .cal-bday-side {
         background: #fff;
         border: 1px solid var(--border);
-        border-radius: 14px;
-        box-shadow: 0 1px 8px rgba(0,0,0,.05);
+        border-radius: 10px;
+        box-shadow: 0 1px 4px rgba(0,0,0,.04);
         overflow: hidden;
     }
-    .cal-card { padding: .9rem 1rem .85rem; }
+    .cal-card { padding: .55rem .6rem .5rem; }
     .cal-nav {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: .55rem;
+        margin-bottom: .3rem;
     }
     .cal-nav h3 {
         margin: 0;
-        font-size: 1rem;
+        font-size: .8rem;
         font-weight: 800;
         color: var(--text);
         letter-spacing: -.01em;
     }
     .cal-nav-btn {
-        width: 30px; height: 30px;
+        width: 24px; height: 24px;
         border-radius: 50%;
         border: 1px solid #e5e7eb;
         background: #fff;
@@ -713,31 +714,31 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         transition: background .15s, color .15s, border-color .15s;
     }
     .cal-nav-btn:hover { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
-    .cal-nav-btn svg { width: 14px; height: 14px; }
+    .cal-nav-btn svg { width: 12px; height: 12px; }
     .cal-weekdays, .cal-days {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
-        gap: 3px;
+        gap: 1px;
     }
     .cal-weekdays span {
         text-align: center;
-        font-size: .68rem;
+        font-size: .58rem;
         font-weight: 700;
         color: #94a3b8;
-        padding: .2rem 0;
+        padding: .1rem 0;
         text-transform: uppercase;
     }
     .cal-day {
         position: relative;
-        height: 36px;
+        height: 24px;
         min-height: 0;
         aspect-ratio: auto;
-        border-radius: 8px;
+        border-radius: 5px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        font-size: .8rem;
+        font-size: .68rem;
         font-weight: 700;
         color: #334155;
         cursor: default;
@@ -751,7 +752,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
     .cal-day.is-today {
         background: #6366f1;
         color: #fff;
-        box-shadow: 0 2px 8px rgba(99, 102, 241, .3);
+        box-shadow: 0 1px 4px rgba(99, 102, 241, .25);
     }
     .cal-day.is-holiday:not(.is-today) {
         border-color: #c4b5fd;
@@ -763,93 +764,97 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         outline-offset: 0;
     }
     .cal-dot {
-        width: 4px; height: 4px;
+        width: 3px; height: 3px;
         border-radius: 50%;
         background: #ec4899;
-        margin-top: 1px;
+        margin-top: 0;
         position: absolute;
-        bottom: 3px;
+        bottom: 2px;
     }
     .cal-day.is-today .cal-dot { background: #fda4af; }
     .cal-legend {
         display: flex;
         flex-wrap: wrap;
-        gap: .4rem .75rem;
-        margin-top: .5rem;
-        padding-top: .45rem;
+        gap: .25rem .55rem;
+        margin-top: .35rem;
+        padding-top: .3rem;
         border-top: 1px solid #f1f5f9;
-        font-size: .65rem;
+        font-size: .58rem;
         font-weight: 700;
         color: #64748b;
     }
-    .cal-legend span { display: inline-flex; align-items: center; gap: .3rem; }
+    .cal-legend span { display: inline-flex; align-items: center; gap: .25rem; }
     .lg-holiday {
-        width: 9px; height: 9px; border-radius: 2px;
+        width: 8px; height: 8px; border-radius: 2px;
         border: 1.5px solid #c4b5fd; background: #f5f3ff;
     }
     .lg-today {
-        width: 9px; height: 9px; border-radius: 2px; background: #6366f1;
+        width: 8px; height: 8px; border-radius: 2px; background: #6366f1;
     }
     .lg-bday {
-        width: 6px; height: 6px; border-radius: 50%; background: #ec4899;
+        width: 5px; height: 5px; border-radius: 50%; background: #ec4899;
     }
     .cal-bday-side-head {
         display: flex;
         align-items: center;
-        gap: .4rem;
-        padding: .65rem .8rem;
+        gap: .35rem;
+        padding: .45rem .65rem;
         border-bottom: 1px solid #f1f5f9;
         font-weight: 800;
-        font-size: .82rem;
+        font-size: .75rem;
         color: var(--text);
     }
     .cal-bday-side-head .ico {
-        width: 22px; height: 22px; border-radius: 50%;
+        width: 18px; height: 18px; border-radius: 50%;
         background: #fce7f3; color: #db2777;
         display: inline-flex; align-items: center; justify-content: center;
         flex-shrink: 0;
     }
-    .cal-bday-side-head .ico svg { width: 12px; height: 12px; }
+    .cal-bday-side-head .ico svg { width: 10px; height: 10px; }
     .cal-bday-side {
         display: flex;
         flex-direction: column;
-        min-height: 100%;
+        min-height: 0;
+        align-self: stretch;
     }
     .cal-bday-side-body {
-        padding: .25rem 0;
+        padding: .15rem 0;
         flex: 1;
-        max-height: 280px;
+        max-height: 168px;
         overflow-y: auto;
-        min-height: 160px;
+        min-height: 0;
     }
     .cal-bday-side .bday-row {
-        padding: .45rem .8rem;
-        gap: .55rem;
+        padding: .35rem .65rem;
+        gap: .45rem;
     }
     .cal-bday-side .bday-avatar {
-        width: 28px !important;
-        height: 28px !important;
-        font-size: .72rem !important;
+        width: 24px !important;
+        height: 24px !important;
+        font-size: .65rem !important;
     }
-    .cal-bday-side .bday-name { font-size: .8rem; }
-    .cal-bday-side .bday-tag { font-size: .65rem; }
+    .cal-bday-side .bday-name { font-size: .74rem; }
+    .cal-bday-side .bday-tag { font-size: .6rem; }
     .cal-bday-empty {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: .3rem;
-        padding: 1.25rem .75rem;
+        gap: .2rem;
+        padding: .75rem .5rem;
         color: #94a3b8;
         font-weight: 600;
-        font-size: .78rem;
+        font-size: .72rem;
         text-align: center;
-        min-height: 120px;
+        min-height: 80px;
     }
-    .cal-bday-empty .cake { font-size: 1.15rem; }
+    .cal-bday-empty .cake { font-size: 1rem; }
     @media (max-width: 900px) {
-        .cal-bday-wrap { grid-template-columns: 1fr; }
-        .cal-bday-side-body { max-height: 160px; }
+        .cal-bday-wrap {
+            grid-template-columns: 1fr;
+            max-width: 100%;
+        }
+        .cal-bday-side-body { max-height: 120px; }
     }
 
     /* Detail modal */
@@ -1152,7 +1157,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                 Calendar &amp; Birthdays
             </div>
-            <div class="cal-bday-wrap" style="margin-top:0;margin-bottom:1.25rem">
+            <div class="cal-bday-wrap" style="margin-top:0;margin-bottom:.85rem">
                 <div class="cal-card">
                     <div class="cal-nav">
                         <button type="button" class="cal-nav-btn" id="calPrev" aria-label="Previous month">
