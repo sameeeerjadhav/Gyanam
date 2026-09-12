@@ -161,6 +161,29 @@ function generateNextRollNoSimple(
 }
 
 /**
+ * Display / deep-link registration id for an admission row.
+ * Prefers stored registration_id, then roll_no, then branded fallback (GYANAM# / GIIT#).
+ *
+ * @param array<string,mixed> $row
+ */
+function admissionDisplayRegistrationId(array $row): string {
+    $reg = trim((string)($row['registration_id'] ?? ''));
+    if ($reg !== '') {
+        return $reg;
+    }
+    $roll = trim((string)($row['roll_no'] ?? ''));
+    if ($roll !== '') {
+        return $roll;
+    }
+    $prefix = studentIdPrefixForCourse(
+        isset($row['course_type']) ? (string)$row['course_type'] : null,
+        isset($row['course']) ? (string)$row['course'] : null,
+        isset($row['center_type']) ? (string)$row['center_type'] : null
+    );
+    return $prefix . (int)($row['id'] ?? 0);
+}
+
+/**
  * Allow one student (same roll/registration) to hold multiple course admission rows.
  */
 function ensureAdmissionsAllowMultiCourse(PDO $pdo): void {

@@ -90,7 +90,7 @@ if (!empty($scopeAtcIds)) {
                    TRIM(CONCAT(a.first_name,' ',COALESCE(NULLIF(TRIM(a.middle_name),''),''),' ',a.last_name)) AS student_name,
                    a.course, a.uniform_size, a.material_language, a.material_type, a.admission_date,
                    COALESCE(a.ho_share_paid, 0) AS ho_share_paid,
-                   atc.name AS atc_name, atc.atc_code
+                   atc.name AS atc_name, atc.atc_code, atc.center_type
             FROM admissions a
             INNER JOIN atc_centers atc ON atc.id = a.atc_id
             WHERE a.atc_id IN ($phAtc)
@@ -106,7 +106,7 @@ if (!empty($scopeAtcIds)) {
                    TRIM(CONCAT(a.first_name,' ',COALESCE(NULLIF(TRIM(a.middle_name),''),''),' ',a.last_name)) AS student_name,
                    a.course, a.uniform_size, a.material_language, a.material_type, a.admission_date,
                    0 AS ho_share_paid,
-                   atc.name AS atc_name, atc.atc_code
+                   atc.name AS atc_name, atc.atc_code, atc.center_type
             FROM admissions a
             INNER JOIN atc_centers atc ON atc.id = a.atc_id
             WHERE a.atc_id IN ($phAtc)
@@ -415,10 +415,10 @@ function mrQs(string $base, array $extra = []): string {
     return $parts ? ('?' . implode('&', $parts)) : '?';
 }
 
-/** Deep-link to admin students by admission id (GYANAM{id}). */
+/** Deep-link to admin students by stored / branded registration id. */
 function mrStudentUrl(array $s): string {
     return 'students.php?' . http_build_query([
-        'search' => 'GYANAM' . (int)($s['id'] ?? 0),
+        'search' => admissionDisplayRegistrationId($s),
     ]);
 }
 ?>
@@ -690,7 +690,7 @@ function mrStudentUrl(array $s): string {
                     <td style="color:#9ca3af;font-weight:700;text-align:center"><?= $idx + 1 ?></td>
                     <?php if ($showAtcCol): ?><td><?= htmlspecialchars($s['atc_name'] ?? '—') ?></td><?php endif; ?>
                     <td><strong><?= htmlspecialchars($s['student_name']) ?></strong></td>
-                    <td style="font-family:monospace;font-size:7.5pt"><?= htmlspecialchars($s['registration_id'] ?: 'GYANAM'.$s['id']) ?></td>
+                    <td style="font-family:monospace;font-size:7.5pt"><?= htmlspecialchars(admissionDisplayRegistrationId($s)) ?></td>
                     <td style="font-family:monospace;font-size:7.5pt;color:#6b7280"><?= htmlspecialchars($s['roll_no'] ?? '—') ?></td>
                     <td style="color:#6b7280"><?= htmlspecialchars($s['course'] ?? '—') ?></td>
                     <td>
@@ -869,7 +869,7 @@ function mrStudentUrl(array $s): string {
                         <div style="font-weight:800;font-size:.88rem"><?= htmlspecialchars($s['student_name']) ?></div>
                         <div style="font-size:.7rem;color:#94a3b8"><?= htmlspecialchars($s['roll_no'] ?? '') ?></div>
                     </td>
-                    <td><code style="font-size:.78rem;background:#f1f5f9;padding:.15rem .4rem;border-radius:4px"><?= htmlspecialchars($s['registration_id'] ?: 'GYANAM' . $s['id']) ?></code></td>
+                    <td><code style="font-size:.78rem;background:#f1f5f9;padding:.15rem .4rem;border-radius:4px"><?= htmlspecialchars(admissionDisplayRegistrationId($s)) ?></code></td>
                     <td style="font-weight:700;font-size:.82rem;color:#4361ee"><?= htmlspecialchars($s['course'] ?? '—') ?></td>
                     <td style="font-size:.82rem;color:#64748b"><?= !empty($s['admission_date']) ? date('d M Y', strtotime($s['admission_date'])) : '—' ?></td>
                     <td>
@@ -927,7 +927,7 @@ function mrStudentUrl(array $s): string {
                         <div style="font-weight:800;font-size:.88rem"><?= htmlspecialchars($s['student_name']) ?></div>
                         <div style="font-size:.7rem;color:#94a3b8"><?= htmlspecialchars($s['roll_no'] ?? '') ?></div>
                     </td>
-                    <td><code style="font-size:.78rem;background:#f1f5f9;padding:.15rem .4rem;border-radius:4px"><?= htmlspecialchars($s['registration_id'] ?: 'GYANAM' . $s['id']) ?></code></td>
+                    <td><code style="font-size:.78rem;background:#f1f5f9;padding:.15rem .4rem;border-radius:4px"><?= htmlspecialchars(admissionDisplayRegistrationId($s)) ?></code></td>
                     <td style="font-weight:700;font-size:.82rem;color:#4361ee"><?= htmlspecialchars($s['course'] ?? '—') ?></td>
                     <td>
                         <div class="mat-pills">
