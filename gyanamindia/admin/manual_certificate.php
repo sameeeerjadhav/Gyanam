@@ -31,6 +31,8 @@ try {
 }
 
 $filterAtcId = (int)($_GET['atc_id'] ?? 0);
+$filterCourseType = trim((string)($_GET['course_type'] ?? ''));
+$filterCourseName = trim((string)($_GET['course_name'] ?? ''));
 $selectedAtc = null;
 foreach ($atcs as $a) {
     if ((int)$a['id'] === $filterAtcId) {
@@ -42,7 +44,7 @@ foreach ($atcs as $a) {
 $students = [];
 if ($filterAtcId > 0) {
     try {
-        $stmt = $pdo->prepare("
+        $sql = "
             SELECT
                 a.id,
                 a.roll_no,
@@ -64,12 +66,46 @@ if ($filterAtcId > 0) {
             LEFT JOIN courses c ON c.course_name = a.course AND c.status = 'Active'
             LEFT JOIN atc_centers atc ON atc.id = a.atc_id
             WHERE a.atc_id = ? AND a.status = 'Active'
-            ORDER BY a.roll_no ASC, a.id DESC
-        ");
-        $stmt->execute([$filterAtcId]);
+        ";
+        $params = [$filterAtcId];
+        if ($filterCourseType !== '') {
+            $sql .= ' AND UPPER(TRIM(COALESCE(c.course_type, \'\'))) = ?';
+            $params[] = strtoupper($filterCourseType);
+        }
+        if ($filterCourseName !== '') {
+            $sql .= ' AND a.course = ?';
+            $params[] = $filterCourseName;
+        }
+        $sql .= ' ORDER BY a.roll_no ASC, a.id DESC';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         $students = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     } catch (Exception $e) {
         $students = [];
+    }
+}
+
+$courseTypes = function_exists('masterCourseTypes') ? masterCourseTypes() : ['IT', 'Typing', 'Abacus', 'Vedic Maths'];
+$courseNames = [];
+if ($filterAtcId > 0) {
+    try {
+        $cnSql = "
+            SELECT DISTINCT a.course
+            FROM admissions a
+            LEFT JOIN courses c ON c.course_name = a.course AND c.status = 'Active'
+            WHERE a.atc_id = ? AND a.status = 'Active' AND a.course IS NOT NULL AND a.course != ''
+        ";
+        $cnParams = [$filterAtcId];
+        if ($filterCourseType !== '') {
+            $cnSql .= ' AND UPPER(TRIM(COALESCE(c.course_type, \'\'))) = ?';
+            $cnParams[] = strtoupper($filterCourseType);
+        }
+        $cnSql .= ' ORDER BY a.course ASC';
+        $cnSt = $pdo->prepare($cnSql);
+        $cnSt->execute($cnParams);
+        $courseNames = $cnSt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    } catch (Exception $e) {
+        $courseNames = [];
     }
 }
 
@@ -90,10 +126,14 @@ foreach ($students as $s) {
     }
     $atcCity = trim((string)($s['atc_city'] ?? $s['atc_district'] ?? ''));
     $conducted = trim((string)($s['atc_name'] ?? '')) . ($atcCity !== '' ? ', ' . $atcCity : '');
+    $speeds = typingMarksheetSpeedDefaults($s['course'] ?? '');
+    $isTyping = isTypingCourse($s['course_type'] ?? null, $s['course'] ?? null);
+    $typingSaved = $isTyping ? getAdmissionTypingMarks($pdo, (int)$s['id'], $speeds['wpm'], $speeds['kph']) : null;
     $studentOptions[] = [
         'id' => (int)$s['id'],
         'name' => $fullName,
         'course' => (string)($s['course'] ?? ''),
+        'course_type' => (string)($s['course_type'] ?? ''),
         'reg_id' => $regId,
         'roll_no' => (string)($s['roll_no'] ?? ''),
         'mobile' => (string)($s['mobile'] ?? ''),
@@ -102,8 +142,14 @@ foreach ($students as $s) {
         'admission_date' => !empty($s['admission_date']) ? date('d M Y', strtotime($s['admission_date'])) : '',
         'conducted_at' => $conducted,
         'is_it' => isGiitItCourse($s['course_type'] ?? null, $s['course'] ?? null),
+        'is_typing' => $isTyping,
+        'wpm' => $speeds['wpm'],
+        'kph' => $speeds['kph'],
+        'typing_by_key' => $typingSaved['by_key'] ?? new stdClass(),
     ];
 }
+
+$typingPartsJson = typingMarksheetParticulars(30, 9000);
 
 $conductedPreview = '';
 if ($selectedAtc) {
@@ -187,6 +233,7 @@ if ($selectedAtc) {
             padding: 1rem 1.1rem; margin-top: .25rem;
         }
         .marks-box label { color: #3730a3; }
+        #typingFields { grid-template-columns: 1fr; }
         .empty-state {
             color: #64748b; font-weight: 600; font-size: .9rem; padding: .5rem 0;
         }
@@ -226,17 +273,43 @@ if ($selectedAtc) {
                 </div>
 
                 <div class="manual-card">
-                    <h3>1. Select ATC</h3>
-                    <form method="get" class="form-field">
-                        <label>ATC centre <span class="req">*</span></label>
-                        <select name="atc_id" onchange="this.form.submit()">
-                            <option value="">Select ATC</option>
-                            <?php foreach ($atcs as $a): ?>
-                                <option value="<?= (int)$a['id'] ?>" <?= $filterAtcId === (int)$a['id'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars(trim(($a['name'] ?? '') . ' (' . ($a['atc_code'] ?? '') . ')')) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                    <h3>1. Select ATC &amp; filters</h3>
+                    <form method="get" class="detail-fields">
+                        <div class="form-field full">
+                            <label>ATC centre <span class="req">*</span></label>
+                            <select name="atc_id" onchange="this.form.submit()">
+                                <option value="">Select ATC</option>
+                                <?php foreach ($atcs as $a): ?>
+                                    <option value="<?= (int)$a['id'] ?>" <?= $filterAtcId === (int)$a['id'] ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars(trim(($a['name'] ?? '') . ' (' . ($a['atc_code'] ?? '') . ')')) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <?php if ($filterAtcId > 0): ?>
+                        <div class="form-field">
+                            <label>Course type</label>
+                            <select name="course_type" onchange="this.form.submit()">
+                                <option value="">All types</option>
+                                <?php foreach ($courseTypes as $ct): ?>
+                                    <option value="<?= htmlspecialchars($ct) ?>" <?= strcasecmp($filterCourseType, $ct) === 0 ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($ct) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label>Course name</label>
+                            <select name="course_name" onchange="this.form.submit()">
+                                <option value="">All courses</option>
+                                <?php foreach ($courseNames as $cn): ?>
+                                    <option value="<?= htmlspecialchars((string)$cn) ?>" <?= $filterCourseName === (string)$cn ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars((string)$cn) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <?php endif; ?>
                     </form>
                     <?php if ($conductedPreview !== ''): ?>
                         <span class="meta-chip" style="margin-top:1rem;margin-bottom:0">Conducted at: <?= htmlspecialchars($conductedPreview) ?></span>
@@ -314,6 +387,10 @@ if ($selectedAtc) {
                                     </div>
                                     <div class="form-hint" style="margin-bottom:.75rem">IT total = Exam/40 + ATC/60 (auto-filled below).</div>
                                 </div>
+                                <div id="typingMarksWrap" style="display:none;margin-bottom:.75rem">
+                                    <div class="form-hint" style="margin-bottom:.65rem">Typing particulars (same maxes for all typing courses). Total auto-fills below.</div>
+                                    <div id="typingFields" class="detail-fields"></div>
+                                </div>
                                 <div class="form-field">
                                     <label>Total marks / score (40–100) <span class="req">*</span></label>
                                     <input type="number" name="score" id="scoreInput" min="40" max="100" required placeholder="Enter marks" disabled>
@@ -347,6 +424,7 @@ if ($selectedAtc) {
 <script src="../assets/js/dashboard.js"></script>
 <script>
 const students = <?= json_encode($studentOptions, JSON_UNESCAPED_UNICODE) ?>;
+const typingPartsBase = <?= json_encode($typingPartsJson, JSON_UNESCAPED_UNICODE) ?>;
 const byId = {};
 students.forEach(s => { byId[String(s.id)] = s; });
 
@@ -357,6 +435,8 @@ const scoreInput = document.getElementById('scoreInput');
 const exam40Input = document.getElementById('exam40Input');
 const atc60Input = document.getElementById('atc60Input');
 const itMarksWrap = document.getElementById('itMarksWrap');
+const typingMarksWrap = document.getElementById('typingMarksWrap');
+const typingFields = document.getElementById('typingFields');
 const scoreHint = document.getElementById('scoreHint');
 const actionBtns = [
     document.getElementById('btnPreviewCert'),
@@ -367,6 +447,17 @@ const actionBtns = [
 const photoPreview = document.getElementById('photoPreview');
 const photoPlaceholder = document.getElementById('photoPlaceholder');
 
+function typingPartsForStudent(s) {
+    const wpm = s.wpm || 30;
+    const kph = s.kph || 9000;
+    return typingPartsBase.map(p => {
+        let label = p.label;
+        if (p.key === 'typing_speed') label = 'Computer Typing Speed @ ' + wpm + ' WPM English';
+        if (p.key === 'data_entry') label = 'Data Entry Speed (Key depressed per hour) ' + kph + ' KPH';
+        return { key: p.key, label, max: p.max };
+    });
+}
+
 function syncItTotal() {
     if (!exam40Input || !atc60Input || !scoreInput) return;
     const e = parseInt(exam40Input.value, 10);
@@ -376,9 +467,51 @@ function syncItTotal() {
     }
 }
 
-function setEnabled(on, isIt) {
+function syncTypingTotal() {
+    if (!typingFields || !scoreInput) return;
+    const inputs = typingFields.querySelectorAll('input[data-typing-key]');
+    let sum = 0;
+    let allFilled = inputs.length > 0;
+    inputs.forEach(inp => {
+        const v = parseInt(inp.value, 10);
+        if (Number.isNaN(v)) allFilled = false;
+        else sum += v;
+    });
+    if (allFilled) scoreInput.value = String(Math.max(0, Math.min(100, sum)));
+}
+
+function buildTypingFields(s) {
+    if (!typingFields) return;
+    typingFields.innerHTML = '';
+    const parts = typingPartsForStudent(s);
+    const saved = s.typing_by_key || {};
+    parts.forEach(p => {
+        const wrap = document.createElement('div');
+        wrap.className = 'form-field';
+        const lab = document.createElement('label');
+        lab.innerHTML = p.label + ' <span class="req">*</span> <span style="font-weight:600;color:#64748b">(max ' + p.max + ')</span>';
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.name = 'typing_marks[' + p.key + ']';
+        inp.min = '0';
+        inp.max = String(p.max);
+        inp.required = true;
+        inp.dataset.typingKey = p.key;
+        if (saved[p.key] !== undefined && saved[p.key] !== null && saved[p.key] !== '') {
+            inp.value = String(saved[p.key]);
+        }
+        inp.addEventListener('input', syncTypingTotal);
+        wrap.appendChild(lab);
+        wrap.appendChild(inp);
+        typingFields.appendChild(wrap);
+    });
+    syncTypingTotal();
+}
+
+function setEnabled(on, isIt, isTyping) {
     if (!scoreInput) return;
     if (itMarksWrap) itMarksWrap.style.display = isIt ? 'block' : 'none';
+    if (typingMarksWrap) typingMarksWrap.style.display = isTyping ? 'block' : 'none';
     if (exam40Input) {
         exam40Input.disabled = !on || !isIt;
         exam40Input.required = !!(on && isIt);
@@ -389,12 +522,14 @@ function setEnabled(on, isIt) {
         atc60Input.required = !!(on && isIt);
         if (!isIt) atc60Input.value = '';
     }
-    scoreInput.disabled = !on || !!isIt;
-    scoreInput.readOnly = !!isIt;
+    if (!isTyping && typingFields) typingFields.innerHTML = '';
+    const autoTotal = !!(isIt || isTyping);
+    scoreInput.disabled = !on || autoTotal;
+    scoreInput.readOnly = autoTotal;
     if (scoreHint) {
-        scoreHint.textContent = isIt
-            ? 'IT total is Exam/40 + ATC/60 (read-only).'
-            : 'Only this field is entered by Admin. Grade is calculated from the score.';
+        if (isIt) scoreHint.textContent = 'IT total is Exam/40 + ATC/60 (read-only).';
+        else if (isTyping) scoreHint.textContent = 'Typing total is sum of particulars (read-only).';
+        else scoreHint.textContent = 'Only this field is entered by Admin. Grade is calculated from the score.';
     }
     actionBtns.forEach(btn => { if (btn) btn.disabled = !on; });
 }
@@ -408,7 +543,7 @@ if (select) {
         if (!s) {
             panel.style.display = 'none';
             admissionId.value = '';
-            setEnabled(false, false);
+            setEnabled(false, false, false);
             return;
         }
         admissionId.value = String(s.id);
@@ -428,9 +563,13 @@ if (select) {
             photoPlaceholder.style.display = 'flex';
         }
         panel.style.display = 'block';
-        setEnabled(true, !!s.is_it);
+        if (s.is_typing) buildTypingFields(s);
+        setEnabled(true, !!s.is_it, !!s.is_typing);
         if (s.is_it && exam40Input) exam40Input.focus();
-        else scoreInput.focus();
+        else if (s.is_typing) {
+            const first = typingFields.querySelector('input');
+            if (first) first.focus();
+        } else scoreInput.focus();
     });
 }
 </script>

@@ -152,6 +152,10 @@ if ($_sidebarInitials === '') {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h6M7 16h8"/></svg>
                 <span>IT Internal Marks</span>
             </a>
+            <a href="typing_marks.php" class="nav-link <?= $currentPage === 'typing_marks.php' ? 'active' : '' ?>" data-tooltip="Typing Marks">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+                <span>Typing Marks</span>
+            </a>
 
             <a href="completion_certificate.php" class="nav-link <?= $currentPage === 'completion_certificate.php' ? 'active' : '' ?>" data-tooltip="Completion Certificate">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>

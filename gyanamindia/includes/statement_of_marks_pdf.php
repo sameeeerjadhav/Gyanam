@@ -36,6 +36,10 @@ function outputStatementOfMarksPdf(array $d): ?string
     $isItSplit = !empty($d['is_it_split']) && !$isTyping;
     $exam40 = max(0, min(40, (int)($d['exam_40'] ?? 0)));
     $atc60 = max(0, min(60, (int)($d['atc_60'] ?? 0)));
+    $typingObtained = null;
+    if (!empty($d['typing_obtained']) && is_array($d['typing_obtained'])) {
+        $typingObtained = array_map('intval', array_values($d['typing_obtained']));
+    }
     $wpm = max(1, (int)($d['wpm'] ?? 30));
     $kph = max(1, (int)($d['kph'] ?? 9000));
     $preview = !empty($d['preview']);
@@ -285,7 +289,14 @@ function outputStatementOfMarksPdf(array $d): ?string
     if ($isTyping) {
         $parts = typingMarksheetParticulars($wpm, $kph);
         $maxes = array_map(static fn($p) => (int)$p['max'], $parts);
-        $obtained = allocateScoreAcrossMaxes($score, $maxes);
+        if (is_array($typingObtained) && count($typingObtained) === count($parts)) {
+            $obtained = [];
+            foreach ($parts as $i => $p) {
+                $obtained[$i] = max(0, min((int)$p['max'], (int)($typingObtained[$i] ?? 0)));
+            }
+        } else {
+            $obtained = allocateScoreAcrossMaxes($score, $maxes);
+        }
         $n = count($parts);
         $rh = $marksBodyH / max(1, $n);
         for ($i = 0; $i < $n; $i++) {
