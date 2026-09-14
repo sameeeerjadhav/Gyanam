@@ -299,7 +299,7 @@ function outputStatementOfMarksPdf(array $d): void
         $sigW2 *= $scale;
         $sigTotalW = $sigW1 + $sigGap + $sigW2;
     }
-    $sigY = $sy + 4.0;
+    $sigY = $sy + ($isTyping ? 3.0 : 4.0);
     $sigX = $sx + ($rightW - $sigTotalW) / 2;
     if (is_file($signPljPath)) {
         try {
@@ -313,7 +313,13 @@ function outputStatementOfMarksPdf(array $d): void
         } catch (Exception $e) {
         }
     }
-    $textY = $sigY + $sigH + 2.0;
+
+    // Typing marksheet: push signatory label down (signatures stay top, seal stays bottom)
+    if ($isTyping) {
+        $textY = $sy + max($sigY + $sigH + 6.0, $sh * 0.48);
+    } else {
+        $textY = $sigY + $sigH + 2.0;
+    }
     $pdf->SetTextColor(0, 0, 0);
     $pdf->SetFont('Times', 'B', $FONT);
     $pdf->SetXY($sx + 1, $textY);
@@ -324,10 +330,10 @@ function outputStatementOfMarksPdf(array $d): void
 
     $textBottom = $textY + 4.5 + 4.0;
     $boxBottom = $sy + $sh;
-    $sealPadTop = 1.0;
+    $sealPadTop = $isTyping ? 1.5 : 1.0;
     $sealPadBottom = 1.5;
-    $sealAvailH = max(14.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
-    $sealSize = min(32.0, $rightW - 5.0, $sealAvailH);
+    $sealAvailH = max(12.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
+    $sealSize = min($isTyping ? 28.0 : 32.0, $rightW - 5.0, $sealAvailH);
     $sealX = $sx + ($rightW - $sealSize) / 2;
     $sealY = $textBottom + $sealPadTop + max(0.0, ($sealAvailH - $sealSize) / 2);
     if (is_file($sealPath)) {
