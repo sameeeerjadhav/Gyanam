@@ -95,7 +95,7 @@ if (!$eligibility['eligible']) {
 }
 
 $examPass = $eligibility['exam'];
-$score    = (int)($examPass['score'] ?? 0);
+$score    = (int)($examPass['composed_total'] ?? $examPass['score'] ?? 0);
 $examDate = (string)($examPass['exam_date'] ?? date('Y-m-d'));
 
 // ── Build dynamic values ──────────────────────────────────────────────────────
@@ -130,6 +130,7 @@ if (!$duration) $duration = '3 months';  // safe fallback
 $durationLine = 'The course duration is ' . $duration;
 
 // 5. Grade from score — bands match GIIT template footer (A++ … C)
+// IT: composed_total already preferred above; otherwise portal %
 $grade = courseExamGradeFromScore($score);
 if ($grade === 'Fail') {
     http_response_code(400);

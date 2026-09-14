@@ -2848,6 +2848,38 @@ function validateCourseCertificateRequest(PDO $pdo, array $student, string $role
         ];
     }
 
+    $courseName = trim((string)($student['course'] ?? ''));
+    $courseType = $student['course_type'] ?? null;
+    if ($courseType === null && $courseName !== '') {
+        try {
+            $ctSt = $pdo->prepare("SELECT course_type FROM courses WHERE status = 'Active' AND course_name = ? LIMIT 1");
+            $ctSt->execute([$courseName]);
+            $courseType = $ctSt->fetchColumn() ?: null;
+        } catch (Exception $e) {
+        }
+    }
+
+    if (function_exists('isGiitItCourse') && isGiitItCourse($courseType, $courseName)) {
+        $atcRow = getAdmissionAtcMarks($pdo, $admissionId);
+        if ($atcRow === null) {
+            return [
+                'eligible' => false,
+                'message'  => 'ATC internal marks (out of 60) are required before an IT certificate can be issued.',
+                'exam'     => $examPass,
+            ];
+        }
+        $composed = composeItCertificateScores($examPass, (int)$atcRow['atc_marks']);
+        if (!$composed['complete'] || $composed['grade'] === 'Fail') {
+            return [
+                'eligible' => false,
+                'message'  => 'Combined IT marks (Exam/40 + ATC/60) are incomplete or below passing grade.',
+                'exam'     => $examPass,
+            ];
+        }
+        $examPass['it_scores'] = $composed;
+        $examPass['composed_total'] = (int)$composed['total'];
+    }
+
     return ['eligible' => true, 'message' => 'OK', 'exam' => $examPass];
 }
 
@@ -3276,6 +3308,174 @@ function isTypingCourse(?string $courseType, ?string $courseName = null): bool
     }
     $name = strtolower(trim((string)$courseName));
     return $name !== '' && (bool)preg_match('/\btyping\b/i', $name);
+}
+
+/**
+ * GIIT IT courses use Exam(/40) + ATC(/60) = 100. Typing / Abacus excluded.
+ */
+function isGiitItCourse(?string $courseType, ?string $courseName = null): bool
+{
+    if (isTypingCourse($courseType, $courseName)) {
+        return false;
+    }
+    return strtoupper(trim((string)$courseType)) === 'IT';
+}
+
+/** Scale exam correct/total into marks out of 40. */
+function scaleExamMarksTo40(int $correct, int $total): int
+{
+    $correct = max(0, $correct);
+    $total = max(0, $total);
+    if ($total <= 0) {
+        return 0;
+    }
+    if ($total === 40) {
+        return max(0, min(40, $correct));
+    }
+    return max(0, min(40, (int)round(($correct / $total) * 40)));
+}
+
+function ensureAdmissionAtcMarksSchema(PDO $pdo): void
+{
+    if (isSchemaFlagSet('schema_admission_atc_marks_v1')) {
+        return;
+    }
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS admission_atc_marks (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                admission_id INT NOT NULL,
+                atc_id INT NULL,
+                atc_marks TINYINT UNSIGNED NOT NULL DEFAULT 0,
+                updated_by_user_id INT NULL,
+                updated_by_role VARCHAR(40) NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uniq_admission (admission_id),
+                KEY idx_atc (atc_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+        markSchemaFlag('schema_admission_atc_marks_v1');
+    } catch (Exception $e) {
+        // leave unset so next request retries
+    }
+}
+
+/**
+ * @return array{admission_id:int,atc_id:?int,atc_marks:int,updated_at:?string}|null
+ */
+function getAdmissionAtcMarks(PDO $pdo, int $admissionId): ?array
+{
+    if ($admissionId <= 0) {
+        return null;
+    }
+    ensureAdmissionAtcMarksSchema($pdo);
+    try {
+        $st = $pdo->prepare('SELECT admission_id, atc_id, atc_marks, updated_at FROM admission_atc_marks WHERE admission_id = ? LIMIT 1');
+        $st->execute([$admissionId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            return null;
+        }
+        return [
+            'admission_id' => (int)$row['admission_id'],
+            'atc_id' => isset($row['atc_id']) ? (int)$row['atc_id'] : null,
+            'atc_marks' => (int)$row['atc_marks'],
+            'updated_at' => $row['updated_at'] ?? null,
+        ];
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
+/**
+ * @return array<int,int> admission_id => atc_marks
+ */
+function getAdmissionAtcMarksMap(PDO $pdo, array $admissionIds): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $admissionIds))));
+    if ($ids === []) {
+        return [];
+    }
+    ensureAdmissionAtcMarksSchema($pdo);
+    $map = [];
+    try {
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $st = $pdo->prepare("SELECT admission_id, atc_marks FROM admission_atc_marks WHERE admission_id IN ($placeholders)");
+        $st->execute($ids);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $map[(int)$row['admission_id']] = (int)$row['atc_marks'];
+        }
+    } catch (Exception $e) {
+    }
+    return $map;
+}
+
+function upsertAdmissionAtcMarks(
+    PDO $pdo,
+    int $admissionId,
+    int $atcMarks,
+    ?int $atcId = null,
+    ?int $updatedByUserId = null,
+    ?string $updatedByRole = null
+): bool {
+    if ($admissionId <= 0) {
+        return false;
+    }
+    $atcMarks = max(0, min(60, $atcMarks));
+    ensureAdmissionAtcMarksSchema($pdo);
+    try {
+        $st = $pdo->prepare("
+            INSERT INTO admission_atc_marks (admission_id, atc_id, atc_marks, updated_by_user_id, updated_by_role)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                atc_id = VALUES(atc_id),
+                atc_marks = VALUES(atc_marks),
+                updated_by_user_id = VALUES(updated_by_user_id),
+                updated_by_role = VALUES(updated_by_role),
+                updated_at = CURRENT_TIMESTAMP
+        ");
+        $st->execute([
+            $admissionId,
+            $atcId,
+            $atcMarks,
+            $updatedByUserId,
+            $updatedByRole !== null ? substr($updatedByRole, 0, 40) : null,
+        ]);
+        return true;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+/**
+ * Compose IT certificate scores from exam(/40) + ATC(/60).
+ *
+ * @param array|null $examPass from examSubmissionPassRecord / fetchStudentPassingExamResult
+ * @return array{exam_40:int,atc_60:?int,total:?int,grade:string,complete:bool,exam_pct:int}
+ */
+function composeItCertificateScores(?array $examPass, ?int $atcMarks): array
+{
+    $examPct = (int)($examPass['score'] ?? 0);
+    $exam40 = isset($examPass['exam_40'])
+        ? max(0, min(40, (int)$examPass['exam_40']))
+        : scaleExamMarksTo40(
+            (int)($examPass['correct_answers'] ?? 0),
+            (int)($examPass['total_questions'] ?? 0)
+        );
+    $hasAtc = $atcMarks !== null;
+    $atc60 = $hasAtc ? max(0, min(60, (int)$atcMarks)) : null;
+    $complete = $examPass !== null && $hasAtc;
+    $total = $complete ? ($exam40 + (int)$atc60) : null;
+    $grade = ($total !== null) ? courseExamGradeFromScore((int)$total) : '';
+    return [
+        'exam_40' => $exam40,
+        'atc_60' => $atc60,
+        'total' => $total,
+        'grade' => $grade,
+        'complete' => $complete,
+        'exam_pct' => $examPct,
+    ];
 }
 
 /**

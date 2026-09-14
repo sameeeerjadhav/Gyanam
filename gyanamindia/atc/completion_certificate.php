@@ -305,7 +305,7 @@ a.btn-generate { text-decoration:none; }
                         <th>Photo</th>
                         <th>Exam</th>
                         <th>Certificate</th>
-                        <th>Marksheet</th>
+                        <th>IT Marks</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -381,13 +381,9 @@ a.btn-generate { text-decoration:none; }
                             </span>
                         </td>
                         <td>
-                            <?php if ($examPassed || ($s['exam_status'] ?? '') === 'Failed'): ?>
-                            <a class="btn-generate" href="../admin/generate_marksheet.php?reg_id=<?= urlencode($regIdForCert) ?>&preview=1" target="_blank" rel="noopener">
-                                Marksheet
+                            <a class="btn-generate" href="it_internal_marks.php">
+                                Enter /60
                             </a>
-                            <?php else: ?>
-                            <span class="btn-generate disabled" title="Available after exam">Marksheet</span>
-                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>
