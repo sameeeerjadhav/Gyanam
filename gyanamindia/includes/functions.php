@@ -64,6 +64,8 @@ function baseURL(): string {
  * GYANAM series: GYANAM1, GYANAM2, …
  * GIIT (IT) series: GIIT20261, GIIT20262, … (year + sequence)
  */
+
+/**
  * Look up courses.course_type by course name.
  */
 function lookupCourseTypeByName(PDO $pdo, string $courseName): string {
