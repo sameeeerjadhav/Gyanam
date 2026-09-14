@@ -337,10 +337,10 @@ if ($selStudent && function_exists('examIntegrationReady') && examIntegrationRea
 }
 
 $marksBrand = strtolower(trim((string)($_GET['marks_brand'] ?? 'auto')));
-if ($marksBrand !== 'it' && $marksBrand !== 'abacus') {
+if ($marksBrand !== 'it' && $marksBrand !== 'abacus' && $marksBrand !== 'typing') {
     $marksBrand = 'auto';
 }
-$marksQs = ['sample' => '1', 'preview' => '1', 'v' => '8'];
+$marksQs = ['sample' => '1', 'preview' => '1', 'v' => '9'];
 if ($tryReg !== '') {
     $marksQs['reg_id'] = $tryReg;
 }
@@ -351,6 +351,12 @@ if ($marksBrand !== 'auto') {
     $marksQs['brand'] = $marksBrand;
 }
 $marksPreviewUrl = 'generate_marksheet.php?' . http_build_query($marksQs);
+
+$typingMarksQs = ['sample' => '1', 'preview' => '1', 'brand' => 'typing', 'v' => '9'];
+if ($selAtcId > 0) {
+    $typingMarksQs['atc_id'] = $selAtcId;
+}
+$typingMarksPreviewUrl = 'generate_marksheet.php?' . http_build_query($typingMarksQs);
 
 $tplBase = __DIR__ . '/../assets/templates/';
 $templateFiles = [
@@ -392,13 +398,22 @@ $docSections['certificates_pdf']['items'][] = [
 
 $docSections['certificates_pdf']['items'][] = [
     'name'        => 'Statement of Marks (Marksheet)',
-    'desc'        => 'MCCE layout with Gyanam logo and stamp. Review uses dummy marks (82 / A+) so you can check layout without an exam result. Live print still needs a real exam.',
+    'desc'        => 'MCCE-style grid with GIIT / Gyanam branding. IT & Abacus use overall marks; typing courses use the detailed particulars table. Dummy marks for layout review.',
     'live'        => 'admin/print_certificates.php · atc/exam_results.php · atc/completion_certificate.php',
     'preview_url' => $marksPreviewUrl,
     'preview_note'=> $tryReg !== ''
         ? 'Dummy marks on the selected student/ATC. Open full preview for A4.'
         : 'Dummy student + selected ATC. Open full preview for A4.',
     'code'        => 'admin/generate_marksheet.php',
+];
+
+$docSections['certificates_pdf']['items'][] = [
+    'name'        => 'Typing Statement of Marks',
+    'desc'        => 'Same MCCE layout as the typing sample: speed / data entry / e-mail / letter / statement / basics rows, GIIT header & seal, Title Case name, GIIT{year}# student ID.',
+    'live'        => 'admin/generate_marksheet.php?brand=typing (auto when course type/name is Typing)',
+    'preview_url' => $typingMarksPreviewUrl,
+    'preview_note'=> 'Sample typing student @ 83 / A+. Uses selected ATC when available.',
+    'code'        => 'admin/generate_marksheet.php · includes/statement_of_marks_pdf.php',
 ];
 
 foreach ($authVariants as $v) {
@@ -553,6 +568,7 @@ $pageTitle = 'Review Documents (TEMP)';
                 <select name="marks_brand">
                     <option value="auto" <?= $marksBrand === 'auto' ? 'selected' : '' ?>>Auto (from course)</option>
                     <option value="it" <?= $marksBrand === 'it' ? 'selected' : '' ?>>GIIT (IT sample)</option>
+                    <option value="typing" <?= $marksBrand === 'typing' ? 'selected' : '' ?>>GIIT Typing sample</option>
                     <option value="abacus" <?= $marksBrand === 'abacus' ? 'selected' : '' ?>>Gyanam Abacus sample</option>
                 </select>
             </div>

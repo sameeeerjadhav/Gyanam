@@ -3202,6 +3202,93 @@ function formatPersonNameTitleCase(string $name): string
     return ucwords(strtolower($name));
 }
 
+/** Whether a course should use the typing Statement of Marks particulars table. */
+function isTypingCourse(?string $courseType, ?string $courseName = null): bool
+{
+    $ct = strtolower(trim((string)$courseType));
+    if ($ct === 'typing' || str_contains($ct, 'typing')) {
+        return true;
+    }
+    $name = strtolower(trim((string)$courseName));
+    return $name !== '' && (bool)preg_match('/\btyping\b/i', $name);
+}
+
+/**
+ * @return array{wpm:int,kph:int}
+ */
+function typingMarksheetSpeedDefaults(?string $courseName = null): array
+{
+    $wpm = 30;
+    $kph = 9000;
+    if (preg_match('/(\d+)\s*wpm/i', (string)$courseName, $m)) {
+        $wpm = max(1, (int)$m[1]);
+    }
+    if (preg_match('/(\d+)\s*kph/i', (string)$courseName, $m)) {
+        $kph = max(1, (int)$m[1]);
+    }
+    return ['wpm' => $wpm, 'kph' => $kph];
+}
+
+/**
+ * Typing marksheet particular rows (max marks sum to 100), MCCE-style.
+ *
+ * @return list<array{label:string,max:int}>
+ */
+function typingMarksheetParticulars(int $wpm = 30, int $kph = 9000): array
+{
+    return [
+        ['label' => "Computer Typing Speed @ {$wpm} WPM English", 'max' => 20],
+        ['label' => "Data Entry Speed (Key depressed per hour) {$kph} KPH", 'max' => 30],
+        ['label' => 'E-Mail', 'max' => 5],
+        ['label' => 'Letter', 'max' => 15],
+        ['label' => 'Statement', 'max' => 10],
+        ['label' => 'Computer Basics & Fundamentals', 'max' => 20],
+    ];
+}
+
+function typingMarksheetDefaultContents(int $wpm = 30): string
+{
+    return "Introduction of Computers & Windows, Internet & its uses, Practice of English Keyboard & Typing with {$wpm} WPM";
+}
+
+/**
+ * Spread an overall score (0–100) across component maxes so the parts sum to $totalScore.
+ *
+ * @param list<int> $maxes
+ * @return list<int>
+ */
+function allocateScoreAcrossMaxes(int $totalScore, array $maxes): array
+{
+    $n = count($maxes);
+    if ($n === 0) {
+        return [];
+    }
+    $totalMax = array_sum($maxes);
+    if ($totalMax <= 0) {
+        return array_fill(0, $n, 0);
+    }
+    $totalScore = max(0, min($totalMax, $totalScore));
+    $raw = [];
+    $fracs = [];
+    foreach ($maxes as $i => $max) {
+        $exact = $totalScore * ($max / $totalMax);
+        $raw[$i] = (int)floor($exact);
+        $fracs[$i] = $exact - $raw[$i];
+    }
+    $remain = $totalScore - array_sum($raw);
+    arsort($fracs);
+    foreach (array_keys($fracs) as $i) {
+        if ($remain <= 0) {
+            break;
+        }
+        if ($raw[$i] < (int)$maxes[$i]) {
+            $raw[$i]++;
+            $remain--;
+        }
+    }
+    return array_values($raw);
+}
+
 /**
  * Generate a QR for $url and draw it on the PDF as black modules only
  * (no white background card). Returns null (no temp file to clean).
