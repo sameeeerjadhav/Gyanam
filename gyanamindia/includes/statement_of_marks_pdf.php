@@ -201,8 +201,9 @@ function outputStatementOfMarksPdf(array $d): void
 
     $colW = $tw / 4;
     $unit = $tw / 28;
-    $gw = 4 * $unit;
-    $labelW = 7 * $unit;
+    $gw = 4 * $unit; // legend: A++ | A+ | A | … — each 4 units
+    // Label / Particulars width = A++ + A+ so the Particulars|Marks line meets A+ right edge
+    $labelW = 8 * $unit;
     $valW = $tw - $labelW;
     $pW = $labelW;
 
@@ -251,11 +252,11 @@ function outputStatementOfMarksPdf(array $d): void
     $cell($x + $labelW, $contentY, $valW, $contentH, $contents, false, 'C', $FONT, '', true);
 
     $marksY = $contentY + $contentH;
-    $mW = 5 * $unit;
+    $mW = 4 * $unit; // was 5; reduced so Particulars can span to A+ end
     $pctW = 4 * $unit;
     $gW = 4 * $unit;
     $rightW = 8 * $unit;
-    $leftW = $pW + $mW + $pctW + $gW;
+    $leftW = $pW + $mW + $pctW + $gW; // 8+4+4+4=20, +right 8 = 28 units
 
     $cell($x, $marksY, $pW, $marksHdrH, 'Particulars', true, 'C', $FONT, 'B');
     $cell($x + $pW, $marksY, $mW, $marksHdrH, 'Marks', true, 'C', $FONT, 'B');
