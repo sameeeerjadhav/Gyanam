@@ -129,21 +129,21 @@ function outputStatementOfMarksPdf(array $d): void
         $pdf->Cell($innerW, $lineH, $text, 0, 0, $align);
     };
 
-    $barH = 9.0;
-    $legHdrH = 9.0;
-    $legValH = 11.0;
+    $barH = 8.5;
+    $legHdrH = 8.5;
+    $legValH = 10.5;
     $legendTotal = $legHdrH + $legValH;
 
-    // Compact header (leave more room for even grid rows)
-    $headerGap = 1.5;
+    // Header sized so the grid below can mirror MCCE row balance
+    $headerGap = 1.2;
     if ($brand === 'abacus') {
-        $headerImgW = 68.0;
-        $headerImgH = 22.0;
+        $headerImgW = 66.0;
+        $headerImgH = 20.0;
         $headerImgX = $x + ($tw - $headerImgW) / 2;
         $headerImgPath = $abacusLogoPath;
     } else {
-        $headerImgW = $tw * 0.62;
-        $headerImgH = min(28.0, $headerImgW * (520.0 / 1280.0));
+        $headerImgW = $tw * 0.58;
+        $headerImgH = min(26.0, $headerImgW * (520.0 / 1280.0));
         $headerImgX = $x + ($tw - $headerImgW) / 2;
         $headerImgPath = $headerBannerPath;
     }
@@ -151,31 +151,49 @@ function outputStatementOfMarksPdf(array $d): void
 
     $gridStart = $top + $headerBodyH + $barH;
     $gridEnd = $bottom - $legendTotal;
-    $stretchH = max(120.0, $gridEnd - $gridStart);
+    $stretchH = max(130.0, $gridEnd - $gridStart);
 
     /*
-     * MCCE-like distribution: compact meta + info rows, larger equal marks rows.
-     * Typing: 6 particulars; IT: 2 (max / obtained).
+     * MCCE proportions: each particular row ≈ Name of Student row height.
+     * Leftover is shared across sections — never dumped only into marks.
      */
-    $metaHdrH = 8.5;
-    $metaValH = 9.5;
-    $infoH = 11.0;          // student / ATC — same height
-    $courseH = $isTyping ? 14.0 : 11.0; // 2-line course title
-    $contentH = 13.5;
-    $marksHdrH = 8.5;
-    $fixedTop = $metaHdrH + $metaValH + $infoH + $infoH + $courseH + $contentH + $marksHdrH;
-    $marksBodyH = max(48.0, $stretchH - $fixedTop);
+    if ($isTyping) {
+        // metaHdr1 + metaVal1.1 + stu1.2 + atc1.2 + course1.45 + content1.45 + marksHdr1 + 6*1.2
+        $u = $stretchH / 15.6;
+        $metaHdrH = 1.0 * $u;
+        $metaValH = 1.1 * $u;
+        $infoH = 1.2 * $u;
+        $courseH = 1.45 * $u;
+        $contentH = 1.45 * $u;
+        $marksHdrH = 1.0 * $u;
+        $marksBodyH = 7.2 * $u; // 6 × 1.2
+    } else {
+        $u = $stretchH / 11.4;
+        $metaHdrH = 1.0 * $u;
+        $metaValH = 1.1 * $u;
+        $infoH = 1.25 * $u;
+        $courseH = 1.25 * $u;
+        $contentH = 1.5 * $u;
+        $marksHdrH = 1.0 * $u;
+        $marksBodyH = 3.1 * $u;
+    }
 
-    // If leftover exists (taller page), grow marks body only — keeps upper rows MCCE-tight
-    $used = $fixedTop + $marksBodyH;
-    if ($used < $stretchH) {
-        $marksBodyH += ($stretchH - $used);
+    $planned = $metaHdrH + $metaValH + (2 * $infoH) + $courseH + $contentH + $marksHdrH + $marksBodyH;
+    $delta = $stretchH - $planned;
+    if (abs($delta) > 0.05) {
+        $metaHdrH += $delta * 0.08;
+        $metaValH += $delta * 0.09;
+        $infoH += $delta * 0.11;   // ×2 rows ≈ 0.22
+        $courseH += $delta * 0.12;
+        $contentH += $delta * 0.12;
+        $marksHdrH += $delta * 0.08;
+        $marksBodyH += $delta * 0.29;
     }
 
     $colW = $tw / 4;
     $unit = $tw / 28;
     $gw = 4 * $unit;
-    $labelW = 7 * $unit; // ~1/4 width, matches MCCE label column
+    $labelW = 7 * $unit;
     $valW = $tw - $labelW;
     $pW = $labelW;
 

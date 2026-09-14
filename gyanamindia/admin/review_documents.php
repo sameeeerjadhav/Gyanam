@@ -340,7 +340,7 @@ $marksBrand = strtolower(trim((string)($_GET['marks_brand'] ?? 'auto')));
 if ($marksBrand !== 'it' && $marksBrand !== 'abacus' && $marksBrand !== 'typing') {
     $marksBrand = 'auto';
 }
-$marksQs = ['sample' => '1', 'preview' => '1', 'v' => '10'];
+$marksQs = ['sample' => '1', 'preview' => '1', 'v' => '11'];
 if ($tryReg !== '') {
     $marksQs['reg_id'] = $tryReg;
 }
@@ -352,7 +352,7 @@ if ($marksBrand !== 'auto') {
 }
 $marksPreviewUrl = 'generate_marksheet.php?' . http_build_query($marksQs);
 
-$typingMarksQs = ['sample' => '1', 'preview' => '1', 'brand' => 'typing', 'v' => '10'];
+$typingMarksQs = ['sample' => '1', 'preview' => '1', 'brand' => 'typing', 'v' => '11'];
 if ($selAtcId > 0) {
     $typingMarksQs['atc_id'] = $selAtcId;
 }
