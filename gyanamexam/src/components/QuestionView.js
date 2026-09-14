@@ -77,10 +77,19 @@ export class QuestionView {
     questionDiv.setAttribute('role', 'region');
     questionDiv.setAttribute('aria-label', `Question ${questionNumber}`);
 
-    // Question text (sanitized) - now directly at the top of the card
+    // Question text (sanitized) - English on top, Marathi below when present
     const questionText = document.createElement('div');
-    questionText.style.cssText = 'margin-bottom:1.75rem;font-size:1.1rem;font-weight:500;line-height:1.7;color:#0f172a';
-    questionText.innerHTML = this._sanitizeText(question.text);
+    questionText.style.cssText = 'margin-bottom:1.75rem;line-height:1.7;color:#0f172a';
+    const enLine = document.createElement('div');
+    enLine.style.cssText = 'font-size:1.1rem;font-weight:600';
+    enLine.innerHTML = this._sanitizeText(question.text);
+    questionText.appendChild(enLine);
+    if (question.text_mr && String(question.text_mr).trim() !== '') {
+      const mrLine = document.createElement('div');
+      mrLine.style.cssText = 'font-size:1.02rem;font-weight:500;color:#334155;margin-top:0.45rem';
+      mrLine.innerHTML = this._sanitizeText(question.text_mr);
+      questionText.appendChild(mrLine);
+    }
     questionDiv.appendChild(questionText);
 
     // Render options based on question type
@@ -187,8 +196,16 @@ export class QuestionView {
       badge.textContent = optionLabel;
 
       const text = document.createElement('span');
-      text.style.cssText = 'color:#1e293b;font-weight:500;font-size:0.92rem;line-height:1.4;flex:1';
-      text.innerHTML = this._sanitizeText(option.text);
+      text.style.cssText = 'color:#1e293b;font-weight:500;font-size:0.92rem;line-height:1.45;flex:1;display:flex;flex-direction:column;gap:0.2rem';
+      const enOpt = document.createElement('span');
+      enOpt.innerHTML = this._sanitizeText(option.text);
+      text.appendChild(enOpt);
+      if (option.text_mr && String(option.text_mr).trim() !== '') {
+        const mrOpt = document.createElement('span');
+        mrOpt.style.cssText = 'color:#475569;font-weight:500;font-size:0.88rem';
+        mrOpt.innerHTML = this._sanitizeText(option.text_mr);
+        text.appendChild(mrOpt);
+      }
 
       label.appendChild(input);
       label.appendChild(badge);

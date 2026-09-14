@@ -190,6 +190,7 @@ class StudentExamController extends Controller
         $safeQuestions = array_map(fn ($q) => [
             'id'      => $q['id'],
             'text'    => $q['text'],
+            'text_mr' => $q['text_mr'] ?? null,
             'options' => $q['options'],
         ], $questions);
 

@@ -198,15 +198,18 @@ class QuestionBankController extends Controller
     {
         $bank = $this->findVisible($request, $bankId);
         $data = $request->validate([
-            'text'           => 'required|string',
-            'options'        => 'required|array|min:2',
-            'options.*.id'   => 'required|string',
-            'options.*.text' => 'required|string',
-            'correct_answer' => 'required|string',
+            'text'              => 'required|string',
+            'text_mr'           => 'nullable|string',
+            'options'           => 'required|array|min:2',
+            'options.*.id'      => 'required|string',
+            'options.*.text'    => 'required|string',
+            'options.*.text_mr' => 'nullable|string',
+            'correct_answer'    => 'required|string',
         ]);
 
         $q = $bank->questions()->create([
             'text'           => $data['text'],
+            'text_mr'        => $data['text_mr'] ?? null,
             'options'        => $data['options'],
             'correct_answer' => $data['correct_answer'],
             'order'          => $bank->questions()->count(),
@@ -220,9 +223,13 @@ class QuestionBankController extends Controller
         $this->findVisible($request, $bankId);
         $q    = Question::where('question_bank_id', $bankId)->findOrFail($questionId);
         $data = $request->validate([
-            'text'           => 'sometimes|string',
-            'options'        => 'sometimes|array',
-            'correct_answer' => 'sometimes|string',
+            'text'              => 'sometimes|string',
+            'text_mr'           => 'nullable|string',
+            'options'           => 'sometimes|array',
+            'options.*.id'      => 'required_with:options|string',
+            'options.*.text'    => 'required_with:options|string',
+            'options.*.text_mr' => 'nullable|string',
+            'correct_answer'    => 'sometimes|string',
         ]);
         $q->update($data);
         return response()->json($q);
@@ -246,34 +253,158 @@ class QuestionBankController extends Controller
         $bank = $this->findVisible($request, $bankId);
         $request->validate(['csv' => 'required|string']);
 
-        $lines  = array_filter(explode("\n", trim($request->csv)));
+        $lines  = array_filter(explode("\n", str_replace("\r\n", "\n", trim($request->csv))));
         $added  = 0;
         $errors = [];
 
         foreach ($lines as $i => $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
             $cols = str_getcsv($line);
-            // Expected: Question,OptionA,OptionB,OptionC,OptionD,CorrectLetter(A/B/C/D)
-            if (count($cols) < 6) { $errors[] = "Row " . ($i+1) . ": need 6 columns"; continue; }
+            $cols = array_map(static fn ($c) => trim((string)$c), $cols);
 
-            [$text, $a, $b, $c, $d, $correct] = $cols;
-            $correctId = strtolower(trim($correct)); // a/b/c/d
-            if (!in_array($correctId, ['a','b','c','d'])) { $errors[] = "Row " . ($i+1) . ": correct must be a/b/c/d"; continue; }
+            // Skip header rows
+            $first = strtolower($cols[0] ?? '');
+            if (in_array($first, ['question', 'question en', 'question_en', 'quee', 'qno'], true)) {
+                continue;
+            }
+
+            $parsed = $this->parseImportRow($cols);
+            if ($parsed === null) {
+                $errors[] = 'Row ' . ($i + 1) . ': need English 6-col or bilingual 11-col format (see template)';
+                continue;
+            }
+            if ($parsed['text'] === '') {
+                $errors[] = 'Row ' . ($i + 1) . ': English question text is required';
+                continue;
+            }
+
+            $parsed['correct'] = $this->resolveCorrectAnswer($parsed['correct'], $parsed['options'], $cols);
+
+            if (!in_array($parsed['correct'], ['a', 'b', 'c', 'd'], true)) {
+                $errors[] = 'Row ' . ($i + 1) . ': correct must be a/b/c/d (or match an option text)';
+                continue;
+            }
 
             $bank->questions()->create([
-                'text'           => trim($text),
-                'options'        => [
-                    ['id'=>'a','text'=>trim($a)],
-                    ['id'=>'b','text'=>trim($b)],
-                    ['id'=>'c','text'=>trim($c)],
-                    ['id'=>'d','text'=>trim($d)],
-                ],
-                'correct_answer' => $correctId,
+                'text'           => $parsed['text'],
+                'text_mr'        => $parsed['text_mr'] !== '' ? $parsed['text_mr'] : null,
+                'options'        => $parsed['options'],
+                'correct_answer' => $parsed['correct'],
                 'order'          => $bank->questions()->count(),
             ]);
             $added++;
         }
 
-        return response()->json(['added' => $added, 'errors' => $errors]);
+        return response()->json([
+            'added'   => $added,
+            'skipped' => count($errors),
+            'errors'  => $errors,
+        ]);
+    }
+
+    /**
+     * Parse English-only (6 cols) or bilingual EN+MR (11 cols) CSV row.
+     *
+     * English: Question, Option A, Option B, Option C, Option D, Correct
+     * Bilingual: Question EN, Question MR, Option A EN, Option A MR, … Option D MR, Correct
+     *
+     * @param  list<string> $cols
+     * @return array{text:string,text_mr:string,options:list<array{id:string,text:string,text_mr:?string}>,correct:string}|null
+     */
+    private function parseImportRow(array $cols): ?array
+    {
+        $n = count($cols);
+        if ($n >= 11) {
+            return [
+                'text' => $cols[0],
+                'text_mr' => $cols[1],
+                'options' => [
+                    ['id' => 'a', 'text' => $this->nonEmptyOption($cols[2]), 'text_mr' => $cols[3] !== '' ? $cols[3] : null],
+                    ['id' => 'b', 'text' => $this->nonEmptyOption($cols[4]), 'text_mr' => $cols[5] !== '' ? $cols[5] : null],
+                    ['id' => 'c', 'text' => $this->nonEmptyOption($cols[6]), 'text_mr' => $cols[7] !== '' ? $cols[7] : null],
+                    ['id' => 'd', 'text' => $this->nonEmptyOption($cols[8]), 'text_mr' => $cols[9] !== '' ? $cols[9] : null],
+                ],
+                'correct' => $this->normalizeCorrectLetter($cols[10]),
+            ];
+        }
+        if ($n >= 6) {
+            return [
+                'text' => $cols[0],
+                'text_mr' => '',
+                'options' => [
+                    ['id' => 'a', 'text' => $this->nonEmptyOption($cols[1]), 'text_mr' => null],
+                    ['id' => 'b', 'text' => $this->nonEmptyOption($cols[2]), 'text_mr' => null],
+                    ['id' => 'c', 'text' => $this->nonEmptyOption($cols[3]), 'text_mr' => null],
+                    ['id' => 'd', 'text' => $this->nonEmptyOption($cols[4]), 'text_mr' => null],
+                ],
+                'correct' => $this->normalizeCorrectLetter($cols[5]),
+            ];
+        }
+        return null;
+    }
+
+    private function nonEmptyOption(string $text): string
+    {
+        $t = trim($text);
+        return $t !== '' ? $t : '—';
+    }
+
+    private function normalizeCorrectLetter(string $raw): string
+    {
+        $s = strtolower(trim(preg_replace('/^option\s*/i', '', $raw) ?? ''));
+        if ($s === '') {
+            return '';
+        }
+        // Only treat as letter when the whole token is a/b/c/d (not "Alt + E", "Credit Note", …)
+        if (in_array($s, ['a', 'b', 'c', 'd'], true)) {
+            return $s;
+        }
+        return $s;
+    }
+
+    /**
+     * Accept a/b/c/d or option text (EN/MR) matching OpAns-style answers.
+     *
+     * @param  list<array{id:string,text:string,text_mr:?string}> $options
+     * @param  list<string> $cols
+     */
+    private function resolveCorrectAnswer(string $parsedCorrect, array $options, array $cols): string
+    {
+        if (in_array($parsedCorrect, ['a', 'b', 'c', 'd'], true)) {
+            return $parsedCorrect;
+        }
+
+        $candidates = [];
+        if (isset($cols[10])) {
+            $candidates[] = $cols[10];
+        }
+        if (isset($cols[5]) && count($cols) < 11) {
+            $candidates[] = $cols[5];
+        }
+        $candidates[] = $parsedCorrect;
+
+        foreach ($candidates as $raw) {
+            $needle = strtolower(trim((string) $raw));
+            if ($needle === '') {
+                continue;
+            }
+            if (in_array($needle, ['a', 'b', 'c', 'd'], true)) {
+                return $needle;
+            }
+            foreach ($options as $opt) {
+                if (strtolower(trim($opt['text'])) === $needle) {
+                    return $opt['id'];
+                }
+                if (!empty($opt['text_mr']) && strtolower(trim((string) $opt['text_mr'])) === $needle) {
+                    return $opt['id'];
+                }
+            }
+        }
+
+        return $parsedCorrect;
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

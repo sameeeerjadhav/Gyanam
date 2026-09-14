@@ -318,9 +318,12 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
               ${questions.map((q, i) => `
               <tr>
                 <td style="font-weight:600;color:var(--text-muted)">${i + 1}</td>
-                <td style="max-width:300px;line-height:1.5">${q.text}</td>
+                <td style="max-width:300px;line-height:1.5">
+                  <div>${q.text}</div>
+                  ${q.text_mr ? `<div style="margin-top:0.25rem;color:var(--text-muted);font-size:0.88rem">${q.text_mr}</div>` : ''}
+                </td>
                 <td style="font-size:0.8rem;color:var(--text-muted);max-width:240px">
-                  ${q.options.map(o => '<span style="display:inline-block;background:var(--gray-50);border:1px solid var(--gray-200);padding:0.15rem 0.4rem;border-radius:4px;margin:0.1rem">' + o.id.toUpperCase() + ': ' + o.text + '</span>').join(' ')}
+                  ${q.options.map(o => '<span style="display:inline-block;background:var(--gray-50);border:1px solid var(--gray-200);padding:0.15rem 0.4rem;border-radius:4px;margin:0.1rem">' + o.id.toUpperCase() + ': ' + o.text + (o.text_mr ? ' / ' + o.text_mr : '') + '</span>').join(' ')}
                 </td>
                 <td><span class="badge badge-green">${q.options.find(o => o.id === q.correct_answer)?.text || q.correct_answer}</span></td>
                 <td>
@@ -467,7 +470,7 @@ function showNewBankModal(ApiClient, currentUser, bank = null, courses = []) {
 function showQuestionModal(ApiClient, bankId, question = null, bank = null, currentUser, onSaveCallback = null) {
   getOverlay().style.display = 'flex';
   document.getElementById('modal-box').innerHTML = `
-    <div class="modal-card" style="max-width:620px;width:95vw;padding:0">
+    <div class="modal-card" style="max-width:680px;width:95vw;padding:0">
       <div class="modal-header" style="background:linear-gradient(135deg,#059669,#047857);padding:1.25rem 1.5rem">
         <div style="display:flex;align-items:center;gap:0.75rem">
           <div style="width:36px;height:36px;background:rgba(255,255,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center">
@@ -482,26 +485,27 @@ function showQuestionModal(ApiClient, bankId, question = null, bank = null, curr
       </div>
       <div style="padding:1.25rem 1.5rem">
         <div class="form-group">
-          <label class="form-label">Question Text *</label>
-          <textarea id="q-text" class="form-textarea" style="min-height:80px">${question?.text || ''}</textarea>
+          <label class="form-label">Question (English) *</label>
+          <textarea id="q-text" class="form-textarea" style="min-height:70px">${question?.text || ''}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Question (Marathi) — optional bilingual</label>
+          <textarea id="q-text-mr" class="form-textarea" style="min-height:70px" placeholder="मराठी प्रश्न">${question?.text_mr || ''}</textarea>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
-          <div class="form-group">
-            <label class="form-label" style="display:flex;align-items:center;gap:0.35rem"><span style="width:20px;height:20px;border-radius:50%;background:#dbeafe;color:#2563eb;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700">A</span> Option A *</label>
-            <input id="q-a" class="form-input" value="${question?.options?.find(o => o.id === 'a')?.text || ''}" placeholder="Enter option A">
-          </div>
-          <div class="form-group">
-            <label class="form-label" style="display:flex;align-items:center;gap:0.35rem"><span style="width:20px;height:20px;border-radius:50%;background:#dbeafe;color:#2563eb;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700">B</span> Option B *</label>
-            <input id="q-b" class="form-input" value="${question?.options?.find(o => o.id === 'b')?.text || ''}" placeholder="Enter option B">
-          </div>
-          <div class="form-group">
-            <label class="form-label" style="display:flex;align-items:center;gap:0.35rem"><span style="width:20px;height:20px;border-radius:50%;background:#dbeafe;color:#2563eb;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700">C</span> Option C *</label>
-            <input id="q-c" class="form-input" value="${question?.options?.find(o => o.id === 'c')?.text || ''}" placeholder="Enter option C">
-          </div>
-          <div class="form-group">
-            <label class="form-label" style="display:flex;align-items:center;gap:0.35rem"><span style="width:20px;height:20px;border-radius:50%;background:#dbeafe;color:#2563eb;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700">D</span> Option D *</label>
-            <input id="q-d" class="form-input" value="${question?.options?.find(o => o.id === 'd')?.text || ''}" placeholder="Enter option D">
-          </div>
+          ${['a','b','c','d'].map((x, i) => {
+            const opt = question?.options?.find(o => o.id === x);
+            const letter = x.toUpperCase();
+            return `
+          <div class="form-group" style="grid-column:1/-1;border:1px solid #e2e8f0;border-radius:10px;padding:0.75rem">
+            <label class="form-label" style="display:flex;align-items:center;gap:0.35rem;margin-bottom:0.45rem">
+              <span style="width:20px;height:20px;border-radius:50%;background:#dbeafe;color:#2563eb;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700">${letter}</span>
+              Option ${letter}
+            </label>
+            <input id="q-${x}" class="form-input" value="${(opt?.text || '').replace(/"/g, '&quot;')}" placeholder="English option ${letter} *" style="margin-bottom:0.4rem">
+            <input id="q-${x}-mr" class="form-input" value="${(opt?.text_mr || '').replace(/"/g, '&quot;')}" placeholder="मराठी पर्याय ${letter} (optional)">
+          </div>`;
+          }).join('')}
         </div>
         <div class="form-group">
           <label class="form-label">Correct Answer *</label>
@@ -521,12 +525,18 @@ function showQuestionModal(ApiClient, bankId, question = null, bank = null, curr
 
   window.saveQuestion = async (bankId, qId) => {
     const text = document.getElementById('q-text').value.trim();
-    const opts = ['a', 'b', 'c', 'd'].map(x => ({ id: x, text: document.getElementById('q-' + x).value.trim() }));
+    const text_mr = (document.getElementById('q-text-mr')?.value || '').trim();
+    const opts = ['a', 'b', 'c', 'd'].map(x => ({
+      id: x,
+      text: document.getElementById('q-' + x).value.trim(),
+      text_mr: (document.getElementById('q-' + x + '-mr')?.value || '').trim() || null,
+    }));
     const ans = document.getElementById('q-ans').value;
-    if (!text || opts.some(o => !o.text)) { modalService.toast('Please fill all fields', 'error'); return; }
+    if (!text || opts.some(o => !o.text)) { modalService.toast('Please fill English question and all options', 'error'); return; }
     try {
-      if (qId) { await ApiClient.updateQuestion(bankId, qId, { text, options: opts, correct_answer: ans }); }
-      else { await ApiClient.addQuestion(bankId, { text, options: opts, correct_answer: ans }); }
+      const payload = { text, text_mr: text_mr || null, options: opts, correct_answer: ans };
+      if (qId) { await ApiClient.updateQuestion(bankId, qId, payload); }
+      else { await ApiClient.addQuestion(bankId, payload); }
       window.closeModal();
       modalService.toast(qId ? 'Question updated!' : 'Question added!', 'success');
       if (onSaveCallback) { onSaveCallback(); }
@@ -576,13 +586,19 @@ async function showImportQuestionsModal(ApiClient) {
         <!-- CSV Tab -->
         <div id="import-panel-csv">
           <div class="form-group">
-            <label class="form-label" style="display:flex;justify-content:space-between">
+            <label class="form-label" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.35rem">
               <span>CSV Content</span>
-              <button onclick="downloadCSVTemplate()" style="font-size:0.75rem;color:#2563eb;background:none;border:none;cursor:pointer;font-weight:600">⬇ Download Template</button>
+              <span>
+                <button onclick="downloadCSVTemplate('en')" style="font-size:0.75rem;color:#2563eb;background:none;border:none;cursor:pointer;font-weight:600">⬇ English Template</button>
+                <button onclick="downloadCSVTemplate('bilingual')" style="font-size:0.75rem;color:#047857;background:none;border:none;cursor:pointer;font-weight:600;margin-left:0.35rem">⬇ EN+MR Template</button>
+              </span>
             </label>
-            <textarea id="csv-content" class="form-textarea" style="min-height:160px;font-family:monospace;font-size:0.82rem" placeholder="Question,Option A,Option B,Option C,Option D,correct&#10;What is 2+2?,1,2,3,4,b&#10;Capital of India?,Chennai,Delhi,Mumbai,Pune,b"></textarea>
+            <textarea id="csv-content" class="form-textarea" style="min-height:160px;font-family:monospace;font-size:0.82rem" placeholder="Question EN,Question MR,Option A EN,Option A MR,...Correct&#10;Which key exports?,एक्सपोर्ट...,Ctrl + E,कंट्रोल + E,...,c"></textarea>
           </div>
-          <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.75rem">Columns: <code style="background:var(--gray-100);padding:0.1rem 0.3rem;border-radius:3px">Question, Option A, Option B, Option C, Option D, Correct (a/b/c/d)</code></p>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.55">
+            <p style="margin:0 0 0.35rem"><strong>English only (6 cols):</strong> <code style="background:var(--gray-100);padding:0.1rem 0.3rem;border-radius:3px">Question, Option A, Option B, Option C, Option D, Correct</code></p>
+            <p style="margin:0"><strong>English + Marathi (11 cols):</strong> <code style="background:var(--gray-100);padding:0.1rem 0.3rem;border-radius:3px">Question EN, Question MR, Option A EN, Option A MR, Option B EN, Option B MR, Option C EN, Option C MR, Option D EN, Option D MR, Correct</code> — Correct = a/b/c/d (or English answer text)</p>
+          </div>
         </div>
 
         <!-- Excel Tab -->
@@ -590,13 +606,14 @@ async function showImportQuestionsModal(ApiClient) {
           <div id="excel-drop-zone" style="border:2px dashed var(--gray-300);border-radius:10px;padding:2rem;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--gray-50)" onclick="document.getElementById('excel-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#2563eb';this.style.background='#eff6ff'" ondragleave="this.style.borderColor='var(--gray-300)';this.style.background='var(--gray-50)'" ondrop="handleExcelDrop(event)">
             <div style="font-size:2.5rem;margin-bottom:0.5rem">📊</div>
             <p style="font-weight:600;margin-bottom:0.25rem">Drop your Excel file here</p>
-            <p style="font-size:0.82rem;color:var(--text-muted)">.xlsx or .xls — or click to browse</p>
+            <p style="font-size:0.82rem;color:var(--text-muted)">.xlsx / .xls — clean template or TallyPrime-style QueE/QueM sheet</p>
             <input id="excel-file-input" type="file" accept=".xlsx,.xls" style="display:none" onchange="handleExcelFile(this.files[0])">
           </div>
           <div id="excel-preview" style="display:none;margin-top:0.75rem"></div>
-          <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.75rem">
-            Columns (Row 1 = header, data from Row 2): <code style="background:var(--gray-100);padding:0.1rem 0.3rem;border-radius:3px">Question | Option A | Option B | Option C | Option D | Correct</code>
-            <button onclick="downloadExcelTemplate()" style="margin-left:0.5rem;font-size:0.75rem;color:#2563eb;background:none;border:none;cursor:pointer;font-weight:600">⬇ Download Excel Template</button>
+          <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.55">
+            Supports: English 6-col · bilingual 11-col · TallyPrime layout (<code>QueE / QueM / OpE1–4 / OpM1–4 / OpAns</code>).
+            <button onclick="downloadExcelTemplate('en')" style="margin-left:0.35rem;font-size:0.75rem;color:#2563eb;background:none;border:none;cursor:pointer;font-weight:600">⬇ EN Excel</button>
+            <button onclick="downloadExcelTemplate('bilingual')" style="margin-left:0.25rem;font-size:0.75rem;color:#047857;background:none;border:none;cursor:pointer;font-weight:600">⬇ EN+MR Excel</button>
           </p>
         </div>
 
@@ -645,18 +662,122 @@ async function showImportQuestionsModal(ApiClient) {
     const el = document.getElementById(containerId);
     if (!rows || rows.length === 0) { el.style.display = 'none'; return; }
     const preview = rows.slice(0, 5);
+    const bilingual = preview.some(r => r.length >= 11);
     el.style.display = '';
     el.innerHTML = `
       <div style="border-radius:8px;overflow:hidden;border:1px solid var(--gray-200)">
-        <div style="background:var(--gray-50);padding:0.5rem 0.75rem;font-size:0.78rem;font-weight:600;color:var(--text-secondary)">Preview — first ${preview.length} of ${rows.length} rows</div>
-        <div class="table-wrap" style="max-height:160px;overflow-y:auto">
+        <div style="background:var(--gray-50);padding:0.5rem 0.75rem;font-size:0.78rem;font-weight:600;color:var(--text-secondary)">Preview — first ${preview.length} of ${rows.length} rows ${bilingual ? '(EN+MR)' : '(EN)'}</div>
+        <div class="table-wrap" style="max-height:200px;overflow-y:auto">
           <table style="font-size:0.78rem">
-            <thead><tr><th>#</th><th>Question</th><th>A</th><th>B</th><th>C</th><th>D</th><th>Ans</th></tr></thead>
-            <tbody>${preview.map((r, i) => '<tr><td>' + (i+1) + '</td><td style="max-width:200px">' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td><td>' + r[4] + '</td><td><strong>' + r[5] + '</strong></td></tr>').join('')}</tbody>
+            <thead><tr><th>#</th><th>Question EN</th>${bilingual ? '<th>Question MR</th>' : ''}<th>A</th><th>B</th><th>C</th><th>D</th><th>Ans</th></tr></thead>
+            <tbody>${preview.map((r, i) => {
+              if (r.length >= 11) {
+                return '<tr><td>' + (i+1) + '</td><td style="max-width:160px">' + esc(r[0]) + '</td><td style="max-width:160px">' + esc(r[1]) + '</td><td>' + esc(r[2]) + '</td><td>' + esc(r[4]) + '</td><td>' + esc(r[6]) + '</td><td>' + esc(r[8]) + '</td><td><strong>' + esc(r[10]) + '</strong></td></tr>';
+              }
+              return '<tr><td>' + (i+1) + '</td><td style="max-width:200px">' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td>' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td><td>' + esc(r[4]) + '</td><td><strong>' + esc(r[5]) + '</strong></td></tr>';
+            }).join('')}</tbody>
           </table>
         </div>
       </div>`;
     document.getElementById('import-row-count').textContent = rows.length + ' row(s) ready to import';
+  }
+
+  function esc(v) {
+    return String(v ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function csvEscape(v) {
+    return '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  }
+
+  function rowsToCSV(rows) {
+    return rows.map(r => r.map(csvEscape).join(',')).join('\n');
+  }
+
+  function normalizeAnsLetter(raw, optionTexts) {
+    const s = String(raw ?? '').trim().toLowerCase().replace(/^option\s*/i, '');
+    if (['a', 'b', 'c', 'd'].includes(s)) return s;
+    const needle = s;
+    for (let i = 0; i < optionTexts.length; i++) {
+      if (String(optionTexts[i] || '').trim().toLowerCase() === needle) return 'abcd'.charAt(i);
+    }
+    return '';
+  }
+
+  function fillOpt(en) {
+    const t = String(en ?? '').trim();
+    return t || '—';
+  }
+
+  /** Detect & normalize Excel rows → EN 6-col or EN+MR 11-col arrays */
+  function normalizeExcelDataRows(allRows) {
+    if (!allRows || allRows.length < 2) return [];
+    const header = (allRows[0] || []).map(h => String(h ?? '').trim());
+    const lower = header.map(h => h.toLowerCase());
+    const dataRows = allRows.slice(1).filter(r => r && r.some(c => String(c ?? '').trim() !== ''));
+
+    const idx = (name) => lower.indexOf(name.toLowerCase());
+    const isTally = idx('quee') >= 0 && (idx('ope1') >= 0 || idx('opans') >= 0);
+
+    if (isTally) {
+      // Fixed layout matching Questionpaper_TallyPrime.xlsx:
+      // Qno, QueM?, QueE, QueM, OpM1, OpE1, spacer, OpM2, OpE2, spacer, OpM3, OpE3, spacer, OpM4, OpE4, OpAns, Topic
+      const iQueE = idx('quee') >= 0 ? idx('quee') : 2;
+      const quemIdxs = lower.map((h, i) => (h === 'quem' ? i : -1)).filter(i => i >= 0);
+      const iQueM = quemIdxs.find(i => i > iQueE) ?? quemIdxs[quemIdxs.length - 1] ?? (iQueE + 1);
+      const pairs = [
+        { e: idx('ope1') >= 0 ? idx('ope1') : 5, m: 4 },
+        { e: idx('ope2') >= 0 ? idx('ope2') : 8, m: 7 },
+        { e: idx('ope3') >= 0 ? idx('ope3') : 11, m: 10 },
+        { e: idx('ope4') >= 0 ? idx('ope4') : 14, m: 13 },
+      ];
+      // Prefer OpM column immediately before each OpE when header is messy
+      pairs.forEach((p, n) => {
+        const before = p.e - 1;
+        if (before >= 0 && /^opm/i.test(header[before] || '')) p.m = before;
+        else if (n === 0 && idx('opm1') >= 0) p.m = idx('opm1');
+      });
+      const iAns = idx('opans') >= 0 ? idx('opans') : 15;
+
+      return dataRows.map(r => {
+        const text = String(r[iQueE] ?? '').trim();
+        const textMr = String(r[iQueM] ?? '').trim();
+        if (!text) return null;
+        const enOpts = pairs.map(p => fillOpt(r[p.e]));
+        const mrOpts = pairs.map(p => String(r[p.m] ?? '').trim());
+        const correct = normalizeAnsLetter(r[iAns], enOpts);
+        return [text, textMr, enOpts[0], mrOpts[0], enOpts[1], mrOpts[1], enOpts[2], mrOpts[2], enOpts[3], mrOpts[3], correct];
+      }).filter(Boolean);
+    }
+
+    // Clean bilingual 11-col (header starts with Question EN / Question,…)
+    const firstData = dataRows[0] || [];
+    const looksBilingual = firstData.length >= 11 || lower.some(h => h.includes('question mr') || h.includes('option a mr') || h === 'question_mr');
+    if (looksBilingual || (firstData.length >= 11 && String(firstData[1] || '').trim() !== '' && !/^[abcd]$/i.test(String(firstData[5] || '').trim()))) {
+      return dataRows.map(r => {
+        const text = String(r[0] ?? '').trim();
+        if (!text || /^question/i.test(text)) return null;
+        const enOpts = [fillOpt(r[2]), fillOpt(r[4]), fillOpt(r[6]), fillOpt(r[8])];
+        const correct = normalizeAnsLetter(r[10], enOpts);
+        return [
+          text,
+          String(r[1] ?? '').trim(),
+          enOpts[0], String(r[3] ?? '').trim(),
+          enOpts[1], String(r[5] ?? '').trim(),
+          enOpts[2], String(r[7] ?? '').trim(),
+          enOpts[3], String(r[9] ?? '').trim(),
+          correct,
+        ];
+      }).filter(Boolean);
+    }
+
+    // English-only 6-col
+    return dataRows.map(r => {
+      const text = String(r[0] ?? '').trim();
+      if (!text || /^question$/i.test(text)) return null;
+      const enOpts = [fillOpt(r[1]), fillOpt(r[2]), fillOpt(r[3]), fillOpt(r[4])];
+      return [text, enOpts[0], enOpts[1], enOpts[2], enOpts[3], normalizeAnsLetter(r[5], enOpts)];
+    }).filter(Boolean);
   }
 
   // ── Excel file handling ────────────────────────────────────────────────────
@@ -674,7 +795,6 @@ async function showImportQuestionsModal(ApiClient) {
     dropZone.innerHTML = '<div style="font-size:1.5rem">⏳</div><p style="font-weight:600">Reading ' + file.name + '...</p>';
 
     try {
-      // Load SheetJS dynamically if not already loaded
       if (!window.XLSX) {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
@@ -688,26 +808,15 @@ async function showImportQuestionsModal(ApiClient) {
       const workbook = window.XLSX.read(arrayBuffer, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      const normalized = normalizeExcelDataRows(rows);
 
-      // Skip header row (row 0), validate data rows
-      const dataRows = rows.slice(1).filter(r => r[0] && r[0].toString().trim());
-      if (dataRows.length === 0) {
-        dropZone.innerHTML = '<div style="font-size:1.5rem">⚠️</div><p>No data found. Make sure Row 1 is the header and data starts from Row 2.</p>';
+      if (normalized.length === 0) {
+        dropZone.innerHTML = '<div style="font-size:1.5rem">⚠️</div><p>No data found. Use English, EN+MR template, or TallyPrime QueE/QueM sheet.</p>';
         return;
       }
 
-      // Normalize — map to [question, a, b, c, d, correct]
-      const normalized = dataRows.map(r => [
-        String(r[0] || '').trim(),
-        String(r[1] || '').trim(),
-        String(r[2] || '').trim(),
-        String(r[3] || '').trim(),
-        String(r[4] || '').trim(),
-        String(r[5] || '').trim().toLowerCase().replace(/option\s*/i, '').charAt(0),
-      ]);
-
-      _parsedCSV = normalized.map(r => r.map(v => '"' + v.replace(/"/g, '""') + '"').join(',')).join('\n');
-      dropZone.innerHTML = '<div style="font-size:1.5rem">✅</div><p style="font-weight:600;color:#16a34a">' + file.name + ' — ' + normalized.length + ' questions parsed</p>';
+      _parsedCSV = rowsToCSV(normalized);
+      dropZone.innerHTML = '<div style="font-size:1.5rem">✅</div><p style="font-weight:600;color:#16a34a">' + file.name + ' — ' + normalized.length + ' questions parsed' + (normalized[0].length >= 11 ? ' (EN+MR)' : ' (EN)') + '</p>';
       showPreview(normalized, 'excel-preview');
 
     } catch (err) {
@@ -733,17 +842,27 @@ async function showImportQuestionsModal(ApiClient) {
       if (!Array.isArray(data)) throw new Error('JSON must be an array of question objects.');
 
       const normalized = data.map((item, i) => {
-        const q = item.question || item.text || item.Question || '';
+        const q = item.question || item.text || item.Question || item.question_en || '';
+        const qMr = item.question_mr || item.text_mr || item.Question_MR || '';
         const a = item.a || item.A || item.option_a || item.optionA || '';
         const b = item.b || item.B || item.option_b || item.optionB || '';
         const c = item.c || item.C || item.option_c || item.optionC || '';
         const d = item.d || item.D || item.option_d || item.optionD || '';
-        const ans = (item.correct || item.answer || item.correct_answer || 'a').toString().toLowerCase().charAt(0);
+        const aMr = item.a_mr || item.option_a_mr || '';
+        const bMr = item.b_mr || item.option_b_mr || '';
+        const cMr = item.c_mr || item.option_c_mr || '';
+        const dMr = item.d_mr || item.option_d_mr || '';
+        const ansRaw = (item.correct || item.answer || item.correct_answer || 'a');
         if (!q) throw new Error('Row ' + (i+1) + ' has no question text.');
-        return [q, a, b, c, d, ans];
+        const enOpts = [fillOpt(a), fillOpt(b), fillOpt(c), fillOpt(d)];
+        const ans = normalizeAnsLetter(ansRaw, enOpts);
+        if (qMr || aMr || bMr || cMr || dMr) {
+          return [q, qMr, enOpts[0], aMr, enOpts[1], bMr, enOpts[2], cMr, enOpts[3], dMr, ans];
+        }
+        return [q, enOpts[0], enOpts[1], enOpts[2], enOpts[3], ans];
       });
 
-      _parsedCSV = normalized.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
+      _parsedCSV = rowsToCSV(normalized);
       dropZone.innerHTML = '<div style="font-size:1.5rem">✅</div><p style="font-weight:600;color:#16a34a">' + file.name + ' — ' + normalized.length + ' questions parsed</p>';
       showPreview(normalized, 'json-preview');
 
@@ -753,35 +872,57 @@ async function showImportQuestionsModal(ApiClient) {
   };
 
   // ── Template downloads ─────────────────────────────────────────────────────
-  window.downloadCSVTemplate = () => {
-    const content = 'Question,Option A,Option B,Option C,Option D,Correct\n'
-      + '"What is 2 + 2?","1","2","3","4","d"\n'
-      + '"Capital of India?","Chennai","Delhi","Mumbai","Pune","b"\n'
-      + '"Which is a programming language?","Excel","Python","Word","Paint","b"';
-    const blob = new Blob([content], { type: 'text/csv' });
+  window.downloadCSVTemplate = (mode = 'en') => {
+    let content;
+    let filename;
+    if (mode === 'bilingual') {
+      filename = 'question_bank_bilingual_en_mr.csv';
+      content = 'Question EN,Question MR,Option A EN,Option A MR,Option B EN,Option B MR,Option C EN,Option C MR,Option D EN,Option D MR,Correct\n'
+        + '"Which Shortcut Key Used For Export File?","एक्सपोर्ट फाइलसाठी कोणती शॉर्टकट की वापरली जाते?","Ctrl + E","कंट्रोल + E","Shift + E","शिफ्ट + E","Alt + E","अल्टर + E","none of the above","वरीलपैकी काहीही नाही","c"\n'
+        + '"Can We Add Discount Column In Voucher?","आपण व्हाउचरमध्ये डिस्काउंट कॉलम जोडू शकतो का?","Yes","होय","No","नाही","—","","—","","a"';
+    } else {
+      filename = 'question_bank_template.csv';
+      content = 'Question,Option A,Option B,Option C,Option D,Correct\n'
+        + '"What is 2 + 2?","1","2","3","4","d"\n'
+        + '"Capital of India?","Chennai","Delhi","Mumbai","Pune","b"\n'
+        + '"Which is a programming language?","Excel","Python","Word","Paint","b"';
+    }
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'question_bank_template.csv';
+    a.download = filename;
     a.click();
   };
 
-  window.downloadExcelTemplate = async () => {
+  window.downloadExcelTemplate = async (mode = 'en') => {
     if (!window.XLSX) {
       const s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
       document.head.appendChild(s);
       await new Promise(r => s.onload = r);
     }
-    const ws = window.XLSX.utils.aoa_to_sheet([
-      ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct'],
-      ['What is 2 + 2?', '1', '2', '3', '4', 'd'],
-      ['Capital of India?', 'Chennai', 'Delhi', 'Mumbai', 'Pune', 'b'],
-      ['Which is a programming language?', 'Excel', 'Python', 'Word', 'Paint', 'b'],
-    ]);
-    ws['!cols'] = [{ wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 8 }];
+    let aoa;
+    let filename;
+    if (mode === 'bilingual') {
+      filename = 'question_bank_bilingual_en_mr.xlsx';
+      aoa = [
+        ['Question EN', 'Question MR', 'Option A EN', 'Option A MR', 'Option B EN', 'Option B MR', 'Option C EN', 'Option C MR', 'Option D EN', 'Option D MR', 'Correct'],
+        ['Which Shortcut Key Used For Export File?', 'एक्सपोर्ट फाइलसाठी कोणती शॉर्टकट की वापरली जाते?', 'Ctrl + E', 'कंट्रोल + E', 'Shift + E', 'शिफ्ट + E', 'Alt + E', 'अल्टर + E', 'none of the above', 'वरीलपैकी काहीही नाही', 'c'],
+        ['Can We Add Discount Column In Voucher?', 'आपण व्हाउचरमध्ये डिस्काउंट कॉलम जोडू शकतो का?', 'Yes', 'होय', 'No', 'नाही', '—', '', '—', '', 'a'],
+      ];
+    } else {
+      filename = 'question_bank_template.xlsx';
+      aoa = [
+        ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct'],
+        ['What is 2 + 2?', '1', '2', '3', '4', 'd'],
+        ['Capital of India?', 'Chennai', 'Delhi', 'Mumbai', 'Pune', 'b'],
+        ['Which is a programming language?', 'Excel', 'Python', 'Word', 'Paint', 'b'],
+      ];
+    }
+    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'Questions');
-    window.XLSX.writeFile(wb, 'question_bank_template.xlsx');
+    window.XLSX.writeFile(wb, filename);
   };
 
   // ── Unified Import Submit ──────────────────────────────────────────────────
@@ -789,17 +930,13 @@ async function showImportQuestionsModal(ApiClient) {
     const bankId = document.getElementById('import-bank-id').value;
     if (!bankId) { modalService.toast('Please select a Question Bank first.', 'error'); return; }
 
-    // Determine active tab
     const csvPanel  = document.getElementById('import-panel-csv');
-    const excelPanel = document.getElementById('import-panel-excel');
     let csv = '';
 
     if (csvPanel.style.display !== 'none') {
-      // CSV paste mode
       csv = document.getElementById('csv-content').value.trim();
       if (!csv) { modalService.toast('Paste CSV content first.', 'error'); return; }
     } else {
-      // Excel or JSON mode — use parsed CSV
       if (!_parsedCSV) {
         modalService.toast('Upload and parse a file first.', 'error');
         return;
@@ -815,7 +952,8 @@ async function showImportQuestionsModal(ApiClient) {
         body: JSON.stringify({ csv }),
       });
       window.closeModal();
-      modalService.toast('✅ Imported ' + result.added + ' questions. Skipped ' + result.skipped + ' rows.', 'success');
+      const skipped = Array.isArray(result.errors) ? result.errors.length : (result.skipped || 0);
+      modalService.toast('✅ Imported ' + result.added + ' questions. Skipped ' + skipped + ' rows.', 'success');
     } catch (e) {
       modalService.toast('Import failed: ' + e.message, 'error');
       btn.disabled = false; btn.textContent = 'Import Questions';

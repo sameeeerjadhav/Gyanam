@@ -9,7 +9,7 @@ class Question extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['question_bank_id', 'text', 'options', 'correct_answer', 'order'];
+    protected $fillable = ['question_bank_id', 'text', 'text_mr', 'options', 'correct_answer', 'order'];
 
     protected $casts = ['options' => 'array'];
 
