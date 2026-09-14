@@ -7,10 +7,11 @@
  *   student_id:string, full_name:string, atc_name:string, course_name:string,
  *   course_contents:string, duration:string, month_year:string, center_code:string,
  *   score:int, grade:string, brand:string, is_typing?:bool, wpm?:int, kph?:int,
- *   preview?:bool, filename?:string
+ *   preview?:bool, filename?:string, return_string?:bool
  * } $d
+ * @return string|null PDF bytes when return_string is true; otherwise outputs and exits.
  */
-function outputStatementOfMarksPdf(array $d): void
+function outputStatementOfMarksPdf(array $d): ?string
 {
     if (!class_exists(\setasign\Fpdi\Fpdi::class, false)) {
         $autoload = __DIR__ . '/../assets/fpdi/fpdi_autoload.php';
@@ -381,6 +382,10 @@ function outputStatementOfMarksPdf(array $d): void
     for ($i = 0; $i < 7; $i++) {
         $cell($x + $i * $gw, $legY, $gw, $legHdrH, $grades[$i], true, 'C', $FONT, 'B');
         $cell($x + $i * $gw, $legY + $legHdrH, $gw, $legValH, $bands[$i], false, 'C', $FONT, '');
+    }
+
+    if (!empty($d['return_string'])) {
+        return $pdf->Output('S');
     }
 
     if (ob_get_level()) {
