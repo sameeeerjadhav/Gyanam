@@ -21,6 +21,7 @@ ensureDualMaterialCourseSchema($pdo);
 ensureCourseMaterialItemsSchema($pdo);
 ensureInventoryTables($pdo);
 ensureCourseAtcVisibilitySchema($pdo);
+ensureCourseNameColumnWidth($pdo);
 $globalTshirtId = ensureGlobalTshirtCourseMarkerItem($pdo);
 
 $mode = $_GET['action'] ?? 'add'; // add | edit
@@ -187,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             $selectedAtcPost = [];
         }
 
-        $courseName = trim($_POST['course_name'] ?? '');
+        $courseName = normalizeCourseNameInput((string)($_POST['course_name'] ?? ''));
         if (!$courseName) throw new Exception('Course name is required');
 
         $courseContent = trim($_POST['course_content'] ?? '');
@@ -536,9 +537,10 @@ $materialOption = $isEdit
                     <div class="field-grid">
                         <div class="full">
                             <label for="course_name">Course Name <span class="field-req">*</span></label>
-                            <input type="text" class="field-input" id="course_name" name="course_name" required maxlength="100"
-                                   placeholder="e.g. Abacus Level 1, DCA, Vedic Maths"
-                                   value="<?= $courseNameVal ?>">
+                            <textarea class="field-input" id="course_name" name="course_name" required maxlength="500" rows="3"
+                                      placeholder="e.g. Computer Typing &amp; Data Entry Course (Beginner-English)&#10;Typing Speed - 30 WPM Key depressed per hour - 9000 KPH"
+                                      style="min-height:4.5rem;resize:vertical;line-height:1.4;padding:.65rem .75rem"><?= $courseNameVal ?></textarea>
+                            <div class="field-hint">Up to 500 characters. For typing courses, put the speed / KPH line on the second row.</div>
                         </div>
 
                         <div>

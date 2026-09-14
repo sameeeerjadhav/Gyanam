@@ -37,7 +37,12 @@ function outputStatementOfMarksPdf(array $d): void
     $filename = (string)($d['filename'] ?? ('Marksheet_' . preg_replace('/[^A-Za-z0-9_\-]/', '_', $studentId) . '.pdf'));
 
     if ($isTyping) {
-        $courseDisplay = $courseName . "\nTyping Speed - {$wpm} WPM Key depressed per hour - {$kph} KPH";
+        // Use stored multi-line course name as-is when speed line is already included
+        if (preg_match('/\b(wpm|kph|typing\s*speed|key\s*depressed)\b/i', $courseName)) {
+            $courseDisplay = $courseName;
+        } else {
+            $courseDisplay = $courseName . "\nTyping Speed - {$wpm} WPM Key depressed per hour - {$kph} KPH";
+        }
         if (trim($contents) === '' || $contents === '—') {
             $contents = typingMarksheetDefaultContents($wpm);
         }
