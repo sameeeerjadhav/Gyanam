@@ -307,8 +307,39 @@ function outputStatementOfMarksPdf(array $d): void
         $sigW2 *= $scale;
         $sigTotalW = $sigW1 + $sigGap + $sigW2;
     }
-    $sigY = $sy + ($isTyping ? 3.0 : 4.0);
+
+    $labelBlockH = 9.0;
+    $sealPrefer = $isTyping ? 26.0 : 30.0;
+    $boxBottom = $sy + $sh;
     $sigX = $sx + ($rightW - $sigTotalW) / 2;
+
+    if ($isTyping) {
+        // Pack signatures + signatory text + seal toward the bottom of the right cell
+        $blockH = $sigH + 2.0 + $labelBlockH + 1.2 + $sealPrefer + 1.5;
+        $blockTop = max($sy + 2.0, $boxBottom - $blockH);
+        $sigY = $blockTop;
+        $textY = $sigY + $sigH + 2.0;
+        $textBottom = $textY + $labelBlockH;
+        $sealSize = min($sealPrefer, $rightW - 5.0, max(12.0, $boxBottom - $textBottom - 2.5));
+        $sealX = $sx + ($rightW - $sealSize) / 2;
+        $sealY = $boxBottom - 1.5 - $sealSize;
+        // Keep signatory text above seal with a small gap
+        if ($textBottom + 1.0 > $sealY) {
+            $textY = max($sigY + $sigH + 1.5, $sealY - $labelBlockH - 1.0);
+            $textBottom = $textY + $labelBlockH;
+        }
+    } else {
+        $sigY = $sy + 4.0;
+        $textY = $sigY + $sigH + 2.0;
+        $textBottom = $textY + $labelBlockH;
+        $sealPadTop = 1.2;
+        $sealPadBottom = 1.5;
+        $sealAvailH = max(10.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
+        $sealSize = min($sealPrefer, $rightW - 5.0, $sealAvailH);
+        $sealX = $sx + ($rightW - $sealSize) / 2;
+        $sealY = $textBottom + $sealPadTop + max(0.0, ($sealAvailH - $sealSize) / 2);
+    }
+
     if (is_file($signPljPath)) {
         try {
             $pdf->Image($signPljPath, $sigX, $sigY, $sigW1, $sigH);
@@ -322,17 +353,6 @@ function outputStatementOfMarksPdf(array $d): void
         }
     }
 
-    // Typing: signatory lower in the box (still inside). Keep seal visible below it.
-    $labelBlockH = 9.0;
-    $sealPrefer = $isTyping ? 26.0 : 30.0;
-    $boxBottom = $sy + $sh;
-    if ($isTyping) {
-        $minTextY = $sigY + $sigH + 5.0;
-        $maxTextY = $boxBottom - $sealPrefer - $labelBlockH - 3.0;
-        $textY = max($minTextY, min($sy + $sh * 0.52, $maxTextY));
-    } else {
-        $textY = $sigY + $sigH + 2.0;
-    }
     $pdf->SetTextColor(0, 0, 0);
     $pdf->SetFont('Times', 'B', $FONT);
     $pdf->SetXY($sx + 1, $textY);
@@ -340,14 +360,6 @@ function outputStatementOfMarksPdf(array $d): void
     $pdf->SetFont('Times', '', 8.5);
     $pdf->SetXY($sx + 1, $textY + 4.5);
     $pdf->Cell($rightW - 2, 4.0, 'Gyanam India Educational Services', 0, 0, 'C');
-
-    $textBottom = $textY + $labelBlockH;
-    $sealPadTop = 1.2;
-    $sealPadBottom = 1.5;
-    $sealAvailH = max(10.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
-    $sealSize = min($sealPrefer, $rightW - 5.0, $sealAvailH);
-    $sealX = $sx + ($rightW - $sealSize) / 2;
-    $sealY = $textBottom + $sealPadTop + max(0.0, ($sealAvailH - $sealSize) / 2);
     if (is_file($sealPath)) {
         try {
             $pdf->Image($sealPath, $sealX, $sealY, $sealSize, $sealSize);
