@@ -1009,6 +1009,71 @@ function courseVisibilitySql(?string $centerType, string $column = 'c.course_typ
 }
 
 /**
+ * Normalize course name for storage (keeps intentional line breaks for typing titles).
+ */
+function normalizeCourseNameInput(string $name): string
+{
+    $name = str_replace(["\r\n", "\r"], "\n", $name);
+    $name = preg_replace('/[^\S\n]+/u', ' ', $name) ?? $name;
+    $name = preg_replace("/\n{3,}/", "\n\n", $name) ?? $name;
+    return trim($name);
+}
+
+/** Encode course name for HTML option/input value (preserves line breaks). */
+function courseNameForHtmlAttr(string $name): string
+{
+    return str_replace(["\r\n", "\r", "\n"], '&#10;', htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+}
+
+/** Single-line label for dropdowns / compact UI. */
+function courseNameForHtmlText(string $name): string
+{
+    return htmlspecialchars(trim(preg_replace('/\s+/u', ' ', $name) ?? $name), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+/**
+ * Widen course name columns so long typing titles fit
+ * (e.g. course + "Typing Speed - 30 WPM … 9000 KPH").
+ */
+function ensureCourseNameColumnWidth(PDO $pdo): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    try {
+        $widen = static function (PDO $pdo, string $table, string $column) {
+            $st = $pdo->query("SHOW COLUMNS FROM `{$table}` LIKE " . $pdo->quote($column));
+            $col = $st ? $st->fetch(PDO::FETCH_ASSOC) : null;
+            if (!$col) {
+                return;
+            }
+            $type = strtolower((string)($col['Type'] ?? ''));
+            if (preg_match('/^varchar\((\d+)\)$/', $type, $m) && (int)$m[1] >= 500) {
+                return;
+            }
+            if (str_starts_with($type, 'text') || str_starts_with($type, 'mediumtext') || str_starts_with($type, 'longtext')) {
+                return;
+            }
+            $pdo->exec("ALTER TABLE `{$table}` MODIFY COLUMN `{$column}` VARCHAR(500) NOT NULL DEFAULT ''");
+        };
+        $widen($pdo, 'courses', 'course_name');
+        try {
+            $widen($pdo, 'admissions', 'course');
+        } catch (Throwable $e) {
+            // admissions.course may already be TEXT / different nullability
+            try {
+                $pdo->exec("ALTER TABLE admissions MODIFY COLUMN course VARCHAR(500) NULL");
+            } catch (Throwable $e2) {
+            }
+        }
+    } catch (Throwable $e) {
+        // non-fatal
+    }
+}
+
+/**
  * Ensure courses.visibility_scope + course_atc_visibility mapping table.
  */
 function ensureCourseAtcVisibilitySchema(PDO $pdo): void {

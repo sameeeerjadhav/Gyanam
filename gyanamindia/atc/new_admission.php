@@ -1653,11 +1653,11 @@ function inqFullName(array $r): string {
                                 <select class="adm-input" id="course" name="course" required onchange="toggleUniformSize(); updateCourseFee(this);">
                                     <option value="">— Select Course —</option>
                                     <?php foreach ($courseSelectOptions as $opt): ?>
-                                        <option value="<?= htmlspecialchars($opt['course_name']) ?>"
+                                        <option value="<?= courseNameForHtmlAttr((string)$opt['course_name']) ?>"
                                                 data-fee="<?= floatval($opt['fee']) ?>"
                                                 data-material="<?= htmlspecialchars($opt['material_type']) ?>"
                                                 data-language="<?= htmlspecialchars($opt['language'] ?? 'English') ?>">
-                                            <?= htmlspecialchars($opt['label']) ?>
+                                            <?= courseNameForHtmlText((string)($opt['label'] ?? $opt['course_name'])) ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -2323,11 +2323,11 @@ textarea.adm-input {
                             <select class="cvt-select" id="convert_course" name="course" required onchange="calcFees(event); toggleConvertUniformSize(); syncConvertMaterial(this);">
                                 <option value="">— Select Course —</option>
                                 <?php foreach ($courseSelectOptions as $opt): ?>
-                                    <option value="<?= htmlspecialchars($opt['course_name']) ?>"
+                                    <option value="<?= courseNameForHtmlAttr((string)$opt['course_name']) ?>"
                                             data-fees="<?= $opt['fee'] ?>"
                                             data-material="<?= htmlspecialchars($opt['material_type']) ?>"
                                             data-language="<?= htmlspecialchars($opt['language'] ?? 'English') ?>">
-                                        <?= htmlspecialchars($opt['label']) ?>
+                                        <?= courseNameForHtmlText((string)($opt['label'] ?? $opt['course_name'])) ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>

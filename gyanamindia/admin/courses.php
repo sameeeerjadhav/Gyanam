@@ -15,6 +15,7 @@ requireLogin(['Admin']);
 $pdo = getDBConnection();
 $userName = sanitize(getUserName());
 ensureDualMaterialCourseSchema($pdo);
+ensureCourseNameColumnWidth($pdo);
 
 // ── AJAX handlers ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -43,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Without Material', ?, ?)
                 ");
                 $stmt->execute([
-                    trim($_POST['course_name']),
+                    normalizeCourseNameInput((string)($_POST['course_name'] ?? '')),
                     $courseType,
                     $_POST['duration'] ?? null,
                     trim($_POST['course_content'] ?? ''),
@@ -87,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     WHERE id = ?
                 ");
                 $stmt->execute([
-                    trim($_POST['course_name']),
+                    normalizeCourseNameInput((string)($_POST['course_name'] ?? '')),
                     $courseType,
                     $_POST['duration'] ?? null,
                     trim($_POST['course_content'] ?? ''),
@@ -833,7 +834,7 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                         ?>
                         <tr class="course-data-row" data-search="<?= htmlspecialchars($searchHay, ENT_QUOTES) ?>">
                             <td>
-                                <div class="cell-name"><?= htmlspecialchars($c['course_name']) ?></div>
+                                <div class="cell-name" style="white-space:pre-line"><?= htmlspecialchars($c['course_name']) ?></div>
                                 <?php if (!empty($c['course_content'])): ?>
                                     <div class="cell-sub"><?= htmlspecialchars(substr($c['course_content'],0,55)) ?><?= strlen($c['course_content'])>55?'…':'' ?></div>
                                 <?php endif; ?>
@@ -874,7 +875,7 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                                     <button class="btn-icon" onclick="location.href='course_form.php?action=edit&id=<?= $c['id'] ?>'" title="Edit">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                     </button>
-                                    <button class="btn-icon danger" onclick="deleteCourse(<?= $c['id'] ?>, '<?= htmlspecialchars($c['course_name'],ENT_QUOTES) ?>')" title="Delete">
+                                    <button class="btn-icon danger" onclick="deleteCourse(<?= $c['id'] ?>, '<?= htmlspecialchars(preg_replace('/\s+/', ' ', (string)$c['course_name']), ENT_QUOTES) ?>')" title="Delete">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                                     </button>
                                 </div>
@@ -917,7 +918,10 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                     <div class="field-grid">
                         <div class="full">
                             <label class="field-label" for="course_name">Course Name <span class="field-req">*</span></label>
-                            <input type="text" class="field-input" id="course_name" name="course_name" required maxlength="100" placeholder="e.g. Abacus Level 1, DCA, Vedic Maths">
+                            <textarea class="field-input" id="course_name" name="course_name" required maxlength="500" rows="3"
+                                      placeholder="e.g. Computer Typing &amp; Data Entry Course (Beginner-English)&#10;Typing Speed - 30 WPM Key depressed per hour - 9000 KPH"
+                                      style="min-height:4.5rem;resize:vertical;line-height:1.4;padding:.65rem .75rem"></textarea>
+                            <div class="field-hint">Up to 500 characters. For typing, put the speed line on the second row.</div>
                         </div>
                         <div>
                             <label class="field-label" for="course_type">Visible to center type <span class="field-req">*</span></label>

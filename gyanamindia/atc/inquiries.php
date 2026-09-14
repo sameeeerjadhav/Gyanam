@@ -730,7 +730,7 @@ function fullName(array $r): string {
                                 <?php endforeach; ?>
                                 <option value="Custom">Other / Custom</option>
                             </select>
-                            <input type="text" class="inq-form-input" id="custom_course" name="custom_course" maxlength="100" placeholder="Type custom course" style="display:none; margin-top:0.4rem;" autocomplete="off">
+                            <input type="text" id="custom_course" name="custom_course" maxlength="500" placeholder="Type custom course" style="display:none; margin-top:0.4rem;" autocomplete="off" class="inq-form-input">
                         </div>
                         <div class="inq-form-group">
                             <label class="inq-form-label">Inquiry Type</label>

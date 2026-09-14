@@ -634,7 +634,7 @@ foreach ($counts as $count) {
                                     <?php endforeach; ?>
                                     <option value="Other">Other / Custom</option>
                                 </select>
-                                <input type="text" id="page_custom_course_tel" maxlength="100" placeholder="Type course name" style="display:none;margin-top:.4rem;padding:.7rem .9rem;border:1.5px solid var(--border-color);border-radius:var(--radius-md);font-size:.88rem;width:100%;" autocomplete="off">
+                                <input type="text" id="page_custom_course_tel" maxlength="500" placeholder="Type course name" style="display:none;margin-top:.4rem;padding:.7rem .9rem;border:1.5px solid var(--border-color);border-radius:var(--radius-md);font-size:.88rem;width:100%;" autocomplete="off">
                             </div>
                         </div>
                     </div>
@@ -806,8 +806,8 @@ foreach ($counts as $count) {
                                 <?php endforeach; ?>
                                 <option value="Other">Other / Custom</option>
                             </select>
-                            <input type="text" id="custom_course_tel" name="custom_course_tel" maxlength="100"
-                                   placeholder="Type course name" style="display:none;margin-top:.4rem;padding:.7rem .9rem;border:1.5px solid var(--border-color);border-radius:var(--radius-md);font-size:.88rem;width:100%;" autocomplete="off">
+                            <input type="text" id="custom_course_tel" name="custom_course_tel" maxlength="500"
+                                   placeholder="Type course name (long titles OK)" style="display:none;margin-top:.4rem;padding:.7rem .9rem;border:1.5px solid var(--border-color);border-radius:var(--radius-md);font-size:.88rem;width:100%;" autocomplete="off">
                         </div>
                         
                         <div class="form-field">
