@@ -80,14 +80,26 @@ if ($filtered) {
     if ($filterSearch !== '') {
         $q = trim($filterSearch);
 
-        // Exact branded reg: GYANAM7 / GIIT3 / GIES1 → match registration_id / roll_no
+        // Exact branded reg: GYANAM7 / GIIT3 / GIIT20261 / GIES1
         // (NOT admissions.id — sequence ≠ primary key)
         if (preg_match('/^(GYANAM|GIIT|GIES)\s*(\d+)$/i', $q, $m)) {
-            $canonical = strtoupper($m[1]) . $m[2];
-            $where[] = '(UPPER(REPLACE(TRIM(a.registration_id), \' \', \'\')) = ?
-                        OR UPPER(REPLACE(TRIM(a.roll_no), \' \', \'\')) = ?)';
-            $params[] = $canonical;
-            $params[] = $canonical;
+            $prefix = strtoupper($m[1]);
+            $canonical = $prefix . $m[2];
+            $ids = [$canonical];
+            // Legacy GIIT1 also matches year form GIIT20261 (and vice versa via LIKE below)
+            if ($prefix === 'GIIT' && function_exists('parseGiitRegistrationId')) {
+                $parsed = parseGiitRegistrationId($canonical);
+                if ($parsed && $parsed['year'] === null) {
+                    $ids[] = formatGiitRegistrationId($parsed['seq']);
+                } elseif ($parsed && $parsed['year'] !== null) {
+                    $ids[] = 'GIIT' . $parsed['seq'];
+                }
+            }
+            $ids = array_values(array_unique($ids));
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            $where[] = "(UPPER(REPLACE(TRIM(a.registration_id), ' ', '')) IN ($ph)
+                        OR UPPER(REPLACE(TRIM(a.roll_no), ' ', '')) IN ($ph))";
+            $params = array_merge($params, $ids, $ids);
         } elseif (preg_match('/^(GYANAM|GIIT|GIES)$/i', $q, $m)) {
             // Prefix-only: "GYANAM" / "GIIT" → all IDs in that series
             $prefix = strtoupper($m[1]) . '%';
@@ -95,17 +107,20 @@ if ($filtered) {
             $params[] = $prefix;
             $params[] = $prefix;
         } elseif (ctype_digit($q)) {
-            // Bare number: admission id OR GYANAM# / GIIT# / GIES#
+            // Bare number: admission id OR GYANAM# / GIIT# / GIIT{year}# / GIES#
             $n = (int)$q;
+            $giitYear = 'GIIT' . (function_exists('giitRegistrationYear') ? giitRegistrationYear() : (int)date('Y')) . $n;
             $where[] = '(a.id = ?
-                        OR UPPER(REPLACE(TRIM(a.registration_id), \' \', \'\')) IN (?, ?, ?)
-                        OR UPPER(REPLACE(TRIM(a.roll_no), \' \', \'\')) IN (?, ?, ?))';
+                        OR UPPER(REPLACE(TRIM(a.registration_id), \' \', \'\')) IN (?, ?, ?, ?)
+                        OR UPPER(REPLACE(TRIM(a.roll_no), \' \', \'\')) IN (?, ?, ?, ?))';
             $params[] = $n;
             $params[] = 'GYANAM' . $n;
             $params[] = 'GIIT' . $n;
+            $params[] = $giitYear;
             $params[] = 'GIES' . $n;
             $params[] = 'GYANAM' . $n;
             $params[] = 'GIIT' . $n;
+            $params[] = $giitYear;
             $params[] = 'GIES' . $n;
         } else {
             $like = '%' . $q . '%';
@@ -679,7 +694,7 @@ if ($filtered) {
                         <div class="filter-group filter-group--search">
                             <label class="filter-label" for="search">Search</label>
                             <input type="search" name="search" id="search" class="filter-input"
-                                   placeholder="Name, GYANAM# / GIIT#, mobile…"
+                                   placeholder="Name, GYANAM# / GIIT2026#, mobile…"
                                    value="<?= htmlspecialchars($filterSearch) ?>" autocomplete="off" aria-label="Search students">
                         </div>
 
