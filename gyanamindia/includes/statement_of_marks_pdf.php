@@ -199,13 +199,14 @@ function outputStatementOfMarksPdf(array $d): void
         $marksBodyH += $delta * 0.29;
     }
 
-    $colW = $tw / 4;
     $unit = $tw / 28;
     $gw = 4 * $unit; // legend: A++ | A+ | A | … — each 4 units
     // Label / Particulars width = A++ + A+ so the Particulars|Marks line meets A+ right edge
     $labelW = 8 * $unit;
     $valW = $tw - $labelW;
     $pW = $labelW;
+    // Meta row: Month & Year matches labelW; Center Code shrunk so totals stay 28 units
+    $metaColWs = [8 * $unit, 7 * $unit, 5 * $unit, 8 * $unit];
 
     if (is_file($headerImgPath)) {
         try {
@@ -227,9 +228,12 @@ function outputStatementOfMarksPdf(array $d): void
     $infoY = $barY + $barH;
     $headers = ['Month & Year of Exam', 'Course Duration', 'Center Code', 'Student ID'];
     $values = [$monthYear, $duration, $centerCode, $studentId];
+    $metaX = $x;
     for ($i = 0; $i < 4; $i++) {
-        $cell($x + $i * $colW, $infoY, $colW, $metaHdrH, $headers[$i], true, 'C', $FONT, 'B', true);
-        $cell($x + $i * $colW, $infoY + $metaHdrH, $colW, $metaValH, $values[$i], false, 'C', $FONT, 'B');
+        $cw = $metaColWs[$i];
+        $cell($metaX, $infoY, $cw, $metaHdrH, $headers[$i], true, 'C', $FONT, 'B', true);
+        $cell($metaX, $infoY + $metaHdrH, $cw, $metaValH, $values[$i], false, 'C', $FONT, 'B');
+        $metaX += $cw;
     }
 
     $rowsY = $infoY + $metaHdrH + $metaValH;
