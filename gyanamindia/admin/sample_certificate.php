@@ -43,7 +43,22 @@ try {
 
 $filterAtcId = (int)($_GET['atc_id'] ?? 0);
 $filterCourseId = (int)($_GET['course_id'] ?? 0);
+$filterCourseType = trim((string)($_GET['course_type'] ?? ''));
 $q = trim((string)($_GET['q'] ?? ''));
+
+$courseTypes = [];
+foreach ($courses as $c) {
+    $t = trim((string)($c['course_type'] ?? ''));
+    if ($t !== '') {
+        $courseTypes[$t] = true;
+    }
+}
+$courseTypes = array_keys($courseTypes);
+natcasesort($courseTypes);
+$courseTypes = array_values($courseTypes);
+if ($filterCourseType !== '' && !in_array($filterCourseType, $courseTypes, true)) {
+    $filterCourseType = '';
+}
 
 $students = [];
 try {
@@ -236,18 +251,40 @@ foreach ($students as $s) {
                         <?php if (empty($courses)): ?>
                             <p class="form-hint">No active courses found. Add courses first.</p>
                         <?php else: ?>
+                            <div class="form-row" style="margin-bottom:.9rem">
+                                <div class="form-field" style="margin:0">
+                                    <label>Filter by course type</label>
+                                    <select id="courseTypeFilter" onchange="filterCourseSelect()">
+                                        <option value="">All types</option>
+                                        <?php foreach ($courseTypes as $ct): ?>
+                                            <option value="<?= htmlspecialchars($ct) ?>" <?= $filterCourseType === $ct ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($ct) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-field" style="margin:0">
+                                    <label>&nbsp;</label>
+                                    <p class="form-hint" style="margin:0;padding-top:.55rem">Narrows the course list below.</p>
+                                </div>
+                            </div>
                             <div class="form-field">
                                 <label>Course <span class="req">*</span></label>
                                 <select name="course_id" id="courseId" required>
                                     <option value="">Select course</option>
                                     <?php foreach ($courses as $c): ?>
+                                        <?php
+                                        $cType = trim((string)($c['course_type'] ?? ''));
+                                        $typeMismatch = $filterCourseType !== '' && strcasecmp($cType, $filterCourseType) !== 0;
+                                        ?>
                                         <option value="<?= (int)$c['id'] ?>"
-                                            data-type="<?= htmlspecialchars((string)($c['course_type'] ?? '')) ?>"
+                                            data-type="<?= htmlspecialchars($cType) ?>"
                                             data-duration="<?= htmlspecialchars((string)($c['duration'] ?? '')) ?>"
-                                            <?= $filterCourseId === (int)$c['id'] ? 'selected' : '' ?>>
+                                            <?= $typeMismatch ? 'hidden' : '' ?>
+                                            <?= !$typeMismatch && $filterCourseId === (int)$c['id'] ? 'selected' : '' ?>>
                                             <?= htmlspecialchars((string)$c['course_name']) ?>
-                                            <?php if (!empty($c['course_type'])): ?>
-                                                (<?= htmlspecialchars((string)$c['course_type']) ?>)
+                                            <?php if ($cType !== ''): ?>
+                                                (<?= htmlspecialchars($cType) ?>)
                                             <?php endif; ?>
                                         </option>
                                     <?php endforeach; ?>
@@ -385,6 +422,26 @@ foreach ($students as $s) {
         }
     };
 
+    window.filterCourseSelect = function () {
+        if (!courseSel) return;
+        const typeFilter = (document.getElementById('courseTypeFilter').value || '').trim().toLowerCase();
+        const selected = courseSel.value;
+        let stillVisible = false;
+        const opts = courseSel.options;
+        for (let i = 1; i < opts.length; i++) {
+            const t = (opts[i].dataset.type || '').trim().toLowerCase();
+            const hide = typeFilter !== '' && t !== typeFilter;
+            opts[i].hidden = hide;
+            if (!hide && opts[i].value === selected) {
+                stillVisible = true;
+            }
+        }
+        if (selected && !stillVisible) {
+            courseSel.value = '';
+            courseSel.dispatchEvent(new Event('change'));
+        }
+    };
+
     window.filterStudentSelect = function () {
         const q = (document.getElementById('studentSearch').value || '').toLowerCase().trim();
         const opts = admissionSel.options;
@@ -398,10 +455,14 @@ foreach ($students as $s) {
         const atc = document.getElementById('atcFilter').value || '0';
         const q = document.getElementById('studentSearch').value || '';
         const course = courseSel ? courseSel.value : '';
+        const courseType = document.getElementById('courseTypeFilter')
+            ? (document.getElementById('courseTypeFilter').value || '')
+            : '';
         const params = new URLSearchParams();
         if (atc !== '0') params.set('atc_id', atc);
         if (q) params.set('q', q);
         if (course) params.set('course_id', course);
+        if (courseType) params.set('course_type', courseType);
         window.location = 'sample_certificate.php?' + params.toString();
     };
 
@@ -427,6 +488,7 @@ foreach ($students as $s) {
             hint.textContent = [type ? ('Type: ' + type) : '', dur ? ('Duration: ' + dur) : '']
                 .filter(Boolean).join(' · ') || 'This course name appears on both PDF pages.';
         });
+        filterCourseSelect();
         courseSel.dispatchEvent(new Event('change'));
     }
 })();
