@@ -3334,7 +3334,7 @@ function courseCertificateOverlayLayout(): array
         'cert_y' => 226.0,
         'date_y' => 234.0,
         'photo_x' => 162.0,
-        'photo_y' => 110.0,
+        'photo_y' => 118.0,
         'photo_w' => 28.0,
         'photo_h' => 34.0,
         'qr_x' => 168.0,
