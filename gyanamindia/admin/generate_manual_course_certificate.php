@@ -93,6 +93,29 @@ if ($fullName === '' || $courseName === '') {
     die('<b>Error:</b> Student name and course are required. Select a student from the list.');
 }
 
+// Typing manual: particulars → total
+$rawTyping = $src['typing_marks'] ?? null;
+if (is_array($rawTyping) && isTypingCourse($courseType, $courseName)) {
+    $speedsT = typingMarksheetSpeedDefaults($courseName);
+    if (!upsertAdmissionTypingMarks(
+        $pdo,
+        $admissionId,
+        $rawTyping,
+        $studentAtcId ?: null,
+        (int)($_SESSION['user_id'] ?? 0) ?: null,
+        'Admin',
+        $speedsT['wpm'],
+        $speedsT['kph']
+    )) {
+        http_response_code(400);
+        die('<b>Error:</b> Invalid typing particulars marks.');
+    }
+    $savedT = getAdmissionTypingMarks($pdo, $admissionId, $speedsT['wpm'], $speedsT['kph']);
+    if ($savedT) {
+        $score = (int)$savedT['total'];
+    }
+}
+
 // IT manual: prefer Exam/40 + ATC/60 when provided
 $exam40Manual = isset($src['exam_40']) ? (int)$src['exam_40'] : null;
 $atc60Manual = isset($src['atc_marks']) ? (int)$src['atc_marks'] : null;

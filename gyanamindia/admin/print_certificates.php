@@ -132,8 +132,9 @@ try {
 }
 
 $marksMap = getAdmissionAtcMarksMap($pdo, array_column($students, 'id'));
+$typingMap = getAdmissionTypingMarksMap($pdo, array_column($students, 'id'));
 
-// Tag each student with pass status + score/date + IT composition
+// Tag each student with pass status + score/date + IT / Typing composition
 foreach ($students as &$s) {
     $regId = $s['registration_id'] ?: ('GYANAM' . $s['id']);
     $passData = $passedIdentifiers[$regId] ?? null;
@@ -143,9 +144,24 @@ foreach ($students as &$s) {
     $s['exam_title']   = $passData['exam_title'] ?? '';
     $s['exam_40']      = isset($passData['exam_40']) ? (int)$passData['exam_40'] : null;
     $s['is_it']        = isGiitItCourse($s['course_type'] ?? null, $s['course'] ?? null);
+    $s['is_typing']    = isTypingCourse($s['course_type'] ?? null, $s['course'] ?? null);
     $admId = (int)$s['id'];
     $s['atc_marks'] = array_key_exists($admId, $marksMap) ? $marksMap[$admId] : null;
-    if ($s['is_it']) {
+    $s['typing_total'] = null;
+    if ($s['is_typing']) {
+        $t = $typingMap[$admId] ?? null;
+        if ($t !== null) {
+            $s['typing_total'] = (int)$t['total'];
+            $s['total_marks'] = (int)$t['total'];
+            $s['grade'] = $t['grade'];
+            $s['print_ready'] = $t['grade'] !== 'Fail' && (int)$t['total'] >= 40;
+        } else {
+            $s['total_marks'] = null;
+            $s['grade'] = '';
+            $s['print_ready'] = false;
+        }
+        $s['it_complete'] = false;
+    } elseif ($s['is_it']) {
         $composed = composeItCertificateScores($passData, $s['atc_marks']);
         $s['exam_40'] = $composed['exam_40'];
         $s['total_marks'] = $composed['total'];
@@ -476,6 +492,8 @@ $returnQs = http_build_query(array_filter([
                         <span class="course-tag"><?= htmlspecialchars($s['course'] ?: '—') ?></span>
                         <?php if (!empty($s['is_it'])): ?>
                             <div class="atc-tag">IT · 40+60</div>
+                        <?php elseif (!empty($s['is_typing'])): ?>
+                            <div class="atc-tag">Typing particulars</div>
                         <?php elseif (!empty($s['course_type'])): ?>
                             <div class="atc-tag"><?= htmlspecialchars((string)$s['course_type']) ?></div>
                         <?php endif; ?>
@@ -533,6 +551,8 @@ $returnQs = http_build_query(array_filter([
                         <span class="status-badge badge-none"><span class="status-dot"></span>Not Connected</span>
                         <?php elseif (!empty($s['print_ready'])): ?>
                         <span class="status-badge badge-pass"><span class="status-dot"></span>Ready</span>
+                        <?php elseif (!empty($s['is_typing']) && empty($s['print_ready'])): ?>
+                        <span class="status-badge badge-pending"><span class="status-dot"></span>Need Typing Marks</span>
                         <?php elseif ($s['exam_passed'] && !empty($s['is_it']) && $s['atc_marks'] === null): ?>
                         <span class="status-badge badge-pending"><span class="status-dot"></span>Need ATC /60</span>
                         <?php elseif ($s['exam_passed']): ?>
@@ -554,9 +574,10 @@ $returnQs = http_build_query(array_filter([
                         </a>
                         <?php else: ?>
                         <span class="btn-cert-disabled" title="<?php
-                            if (!$integrationReady) echo 'Exam portal not connected';
+                            if (!$integrationReady && empty($s['is_typing'])) echo 'Exam portal not connected';
+                            elseif (!empty($s['is_typing']) && empty($s['print_ready'])) echo 'Enter typing particulars marks first';
                             elseif (!empty($s['is_it']) && $s['exam_passed'] && $s['atc_marks'] === null) echo 'Enter ATC marks out of 60 first';
-                            elseif (!$s['exam_passed']) echo 'Student has not passed the main exam yet';
+                            elseif (!$s['exam_passed'] && empty($s['is_typing'])) echo 'Student has not passed the main exam yet';
                             else echo 'Not eligible';
                         ?>">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>

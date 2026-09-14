@@ -2811,6 +2811,50 @@ function validateCourseCertificateRequest(PDO $pdo, array $student, string $role
         ];
     }
 
+    $courseName = trim((string)($student['course'] ?? ''));
+    $courseType = $student['course_type'] ?? null;
+    if ($courseType === null && $courseName !== '') {
+        try {
+            $ctSt = $pdo->prepare("SELECT course_type FROM courses WHERE status = 'Active' AND course_name = ? LIMIT 1");
+            $ctSt->execute([$courseName]);
+            $courseType = $ctSt->fetchColumn() ?: null;
+        } catch (Exception $e) {
+        }
+    }
+
+    // Typing: ATC-entered particulars (sum /100) — no exam portal required
+    if (isTypingCourse($courseType, $courseName)) {
+        $speeds = typingMarksheetSpeedDefaults($courseName);
+        $typing = getAdmissionTypingMarks($pdo, $admissionId, $speeds['wpm'], $speeds['kph']);
+        if ($typing === null) {
+            return [
+                'eligible' => false,
+                'message'  => 'Typing particulars marks are required before a certificate can be issued.',
+                'exam'     => null,
+            ];
+        }
+        if ($typing['grade'] === 'Fail' || (int)$typing['total'] < 40) {
+            return [
+                'eligible' => false,
+                'message'  => 'Typing total marks are below the minimum passing grade (40).',
+                'exam'     => null,
+            ];
+        }
+        return [
+            'eligible' => true,
+            'message'  => 'OK',
+            'exam'     => [
+                'identifier' => trim((string)($student['registration_id'] ?? $student['roll_no'] ?? '')),
+                'score' => (int)$typing['total'],
+                'exam_date' => date('Y-m-d'),
+                'exam_title' => 'Typing Assessment',
+                'submitted_at' => $typing['updated_at'] ?? null,
+                'composed_total' => (int)$typing['total'],
+                'typing_marks' => $typing,
+            ],
+        ];
+    }
+
     if (!function_exists('examIntegrationReady') || !examIntegrationReady()) {
         return [
             'eligible' => false,
@@ -2846,17 +2890,6 @@ function validateCourseCertificateRequest(PDO $pdo, array $student, string $role
             'message'  => 'Exam score is below the minimum passing grade (40%).',
             'exam'     => null,
         ];
-    }
-
-    $courseName = trim((string)($student['course'] ?? ''));
-    $courseType = $student['course_type'] ?? null;
-    if ($courseType === null && $courseName !== '') {
-        try {
-            $ctSt = $pdo->prepare("SELECT course_type FROM courses WHERE status = 'Active' AND course_name = ? LIMIT 1");
-            $ctSt->execute([$courseName]);
-            $courseType = $ctSt->fetchColumn() ?: null;
-        } catch (Exception $e) {
-        }
     }
 
     if (function_exists('isGiitItCourse') && isGiitItCourse($courseType, $courseName)) {
@@ -3497,23 +3530,209 @@ function typingMarksheetSpeedDefaults(?string $courseName = null): array
 /**
  * Typing marksheet particular rows (max marks sum to 100), MCCE-style.
  *
- * @return list<array{label:string,max:int}>
+ * @return list<array{key:string,label:string,max:int}>
  */
 function typingMarksheetParticulars(int $wpm = 30, int $kph = 9000): array
 {
     return [
-        ['label' => "Computer Typing Speed @ {$wpm} WPM English", 'max' => 20],
-        ['label' => "Data Entry Speed (Key depressed per hour) {$kph} KPH", 'max' => 30],
-        ['label' => 'E-Mail', 'max' => 5],
-        ['label' => 'Letter', 'max' => 15],
-        ['label' => 'Statement', 'max' => 10],
-        ['label' => 'Computer Basics & Fundamentals', 'max' => 20],
+        ['key' => 'typing_speed', 'label' => "Computer Typing Speed @ {$wpm} WPM English", 'max' => 20],
+        ['key' => 'data_entry', 'label' => "Data Entry Speed (Key depressed per hour) {$kph} KPH", 'max' => 30],
+        ['key' => 'email', 'label' => 'E-Mail', 'max' => 5],
+        ['key' => 'letter', 'label' => 'Letter', 'max' => 15],
+        ['key' => 'statement', 'label' => 'Statement', 'max' => 10],
+        ['key' => 'basics', 'label' => 'Computer Basics & Fundamentals', 'max' => 20],
     ];
 }
 
 function typingMarksheetDefaultContents(int $wpm = 30): string
 {
     return "Introduction of Computers & Windows, Internet & its uses, Practice of English Keyboard & Typing with {$wpm} WPM";
+}
+
+function ensureAdmissionTypingMarksSchema(PDO $pdo): void
+{
+    if (isSchemaFlagSet('schema_admission_typing_marks_v1')) {
+        return;
+    }
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS admission_typing_marks (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                admission_id INT NOT NULL,
+                atc_id INT NULL,
+                marks_json TEXT NOT NULL,
+                total_marks TINYINT UNSIGNED NOT NULL DEFAULT 0,
+                updated_by_user_id INT NULL,
+                updated_by_role VARCHAR(40) NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uniq_admission (admission_id),
+                KEY idx_atc (atc_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+        markSchemaFlag('schema_admission_typing_marks_v1');
+    } catch (Exception $e) {
+    }
+}
+
+/**
+ * Normalize typing particular marks from request/DB.
+ *
+ * @param array<string,mixed> $raw keyed by particular key or numeric index
+ * @return array{obtained:list<int>,by_key:array<string,int>,total:int,complete:bool,grade:string}|null null if invalid
+ */
+function normalizeTypingParticularMarks(array $raw, int $wpm = 30, int $kph = 9000): ?array
+{
+    $parts = typingMarksheetParticulars($wpm, $kph);
+    $byKey = [];
+    $obtained = [];
+    foreach ($parts as $i => $p) {
+        $key = (string)$p['key'];
+        $max = (int)$p['max'];
+        $val = null;
+        if (array_key_exists($key, $raw)) {
+            $val = $raw[$key];
+        } elseif (array_key_exists((string)$i, $raw)) {
+            $val = $raw[(string)$i];
+        } elseif (array_key_exists($i, $raw)) {
+            $val = $raw[$i];
+        }
+        if ($val === null || $val === '') {
+            return null;
+        }
+        $n = (int)$val;
+        if ($n < 0 || $n > $max) {
+            return null;
+        }
+        $byKey[$key] = $n;
+        $obtained[] = $n;
+    }
+    $total = array_sum($obtained);
+    return [
+        'obtained' => $obtained,
+        'by_key' => $byKey,
+        'total' => $total,
+        'complete' => true,
+        'grade' => courseExamGradeFromScore($total),
+    ];
+}
+
+/**
+ * @return array{admission_id:int,atc_id:?int,by_key:array<string,int>,obtained:list<int>,total:int,grade:string,updated_at:?string}|null
+ */
+function getAdmissionTypingMarks(PDO $pdo, int $admissionId, int $wpm = 30, int $kph = 9000): ?array
+{
+    if ($admissionId <= 0) {
+        return null;
+    }
+    ensureAdmissionTypingMarksSchema($pdo);
+    try {
+        $st = $pdo->prepare('SELECT admission_id, atc_id, marks_json, total_marks, updated_at FROM admission_typing_marks WHERE admission_id = ? LIMIT 1');
+        $st->execute([$admissionId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            return null;
+        }
+        $decoded = json_decode((string)($row['marks_json'] ?? ''), true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+        $norm = normalizeTypingParticularMarks($decoded, $wpm, $kph);
+        if ($norm === null) {
+            return null;
+        }
+        return [
+            'admission_id' => (int)$row['admission_id'],
+            'atc_id' => isset($row['atc_id']) ? (int)$row['atc_id'] : null,
+            'by_key' => $norm['by_key'],
+            'obtained' => $norm['obtained'],
+            'total' => (int)$norm['total'],
+            'grade' => $norm['grade'],
+            'updated_at' => $row['updated_at'] ?? null,
+        ];
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
+/**
+ * @return array<int,array{total:int,by_key:array<string,int>,obtained:list<int>,grade:string}>
+ */
+function getAdmissionTypingMarksMap(PDO $pdo, array $admissionIds, int $wpm = 30, int $kph = 9000): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $admissionIds))));
+    if ($ids === []) {
+        return [];
+    }
+    ensureAdmissionTypingMarksSchema($pdo);
+    $map = [];
+    try {
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $st = $pdo->prepare("SELECT admission_id, marks_json, total_marks FROM admission_typing_marks WHERE admission_id IN ($placeholders)");
+        $st->execute($ids);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $decoded = json_decode((string)($row['marks_json'] ?? ''), true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+            $norm = normalizeTypingParticularMarks($decoded, $wpm, $kph);
+            if ($norm === null) {
+                continue;
+            }
+            $map[(int)$row['admission_id']] = [
+                'total' => (int)$norm['total'],
+                'by_key' => $norm['by_key'],
+                'obtained' => $norm['obtained'],
+                'grade' => $norm['grade'],
+            ];
+        }
+    } catch (Exception $e) {
+    }
+    return $map;
+}
+
+function upsertAdmissionTypingMarks(
+    PDO $pdo,
+    int $admissionId,
+    array $rawMarks,
+    ?int $atcId = null,
+    ?int $updatedByUserId = null,
+    ?string $updatedByRole = null,
+    int $wpm = 30,
+    int $kph = 9000
+): bool {
+    if ($admissionId <= 0) {
+        return false;
+    }
+    $norm = normalizeTypingParticularMarks($rawMarks, $wpm, $kph);
+    if ($norm === null) {
+        return false;
+    }
+    ensureAdmissionTypingMarksSchema($pdo);
+    try {
+        $st = $pdo->prepare("
+            INSERT INTO admission_typing_marks (admission_id, atc_id, marks_json, total_marks, updated_by_user_id, updated_by_role)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                atc_id = VALUES(atc_id),
+                marks_json = VALUES(marks_json),
+                total_marks = VALUES(total_marks),
+                updated_by_user_id = VALUES(updated_by_user_id),
+                updated_by_role = VALUES(updated_by_role),
+                updated_at = CURRENT_TIMESTAMP
+        ");
+        $st->execute([
+            $admissionId,
+            $atcId,
+            json_encode($norm['by_key'], JSON_UNESCAPED_UNICODE),
+            (int)$norm['total'],
+            $updatedByUserId,
+            $updatedByRole !== null ? substr($updatedByRole, 0, 40) : null,
+        ]);
+        return true;
+    } catch (Exception $e) {
+        return false;
+    }
 }
 
 /**

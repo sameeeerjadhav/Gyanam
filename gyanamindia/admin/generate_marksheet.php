@@ -116,6 +116,35 @@ if (!$student) {
 }
 
 $lookupId = trim((string)($student['registration_id'] ?? '')) ?: trim((string)($student['roll_no'] ?? $regId));
+$fullName = trim(
+    ($student['first_name'] ?? '') . ' ' .
+    (!empty($student['middle_name']) ? $student['middle_name'] . ' ' : '') .
+    ($student['last_name'] ?? '')
+);
+$courseName = trim($student['course'] ?? 'N/A');
+if (empty($student['course_type']) && $courseName !== '' && $courseName !== 'N/A') {
+    try {
+        $ctSt = $pdo->prepare("SELECT course_type, course_content, duration FROM courses WHERE status = 'Active' AND (course_name = ? OR ? LIKE CONCAT(course_name, '%')) LIMIT 1");
+        $ctSt->execute([$courseName, $courseName]);
+        $crow = $ctSt->fetch(PDO::FETCH_ASSOC);
+        if ($crow) {
+            $student['course_type'] = $crow['course_type'] ?? $student['course_type'];
+            if (empty($student['course_content'])) {
+                $student['course_content'] = $crow['course_content'] ?? '';
+            }
+            if (empty($student['course_duration'])) {
+                $student['course_duration'] = $crow['duration'] ?? '';
+            }
+        }
+    } catch (Exception $e) {
+    }
+}
+
+$isTypingEarly = isTypingCourse($student['course_type'] ?? null, $courseName);
+if ($isSample && $forceBrand === 'typing') {
+    $isTypingEarly = true;
+}
+
 $exam = null;
 if ($isSample) {
     $exam = [
@@ -126,6 +155,14 @@ if ($isSample) {
         'correct_answers' => $forceBrand === 'typing' ? 83 : 32,
         'total_questions' => $forceBrand === 'typing' ? 100 : 40,
         'exam_40'         => $forceBrand === 'typing' ? 33 : 32,
+    ];
+} elseif ($isTypingEarly) {
+    // Typing marksheet uses ATC-entered particulars — exam portal optional
+    $exam = [
+        'identifier' => $lookupId,
+        'score'      => 0,
+        'exam_date'  => date('Y-m-d'),
+        'result'     => 'pass',
     ];
 } else {
     if (!function_exists('examIntegrationReady') || !examIntegrationReady()) {
@@ -147,7 +184,6 @@ if ($isSample) {
             }
             $rec = examSubmissionPassRecord($sub);
             if (!$rec) {
-                // allow latest non-pass for marksheet preview of failed? Plan requires pass for IT. Keep best any:
                 $correct = (int)($sub['correct_answers'] ?? $sub['correct'] ?? 0);
                 $total = (int)($sub['total_questions'] ?? $sub['total'] ?? 0);
                 $rec = [
@@ -181,30 +217,6 @@ if ($resultFlag === 'absent' || $resultFlag === 'ab') {
     $grade = 'AB';
 } else {
     $grade = courseExamGradeFromScore($score);
-}
-
-$fullName = trim(
-    ($student['first_name'] ?? '') . ' ' .
-    (!empty($student['middle_name']) ? $student['middle_name'] . ' ' : '') .
-    ($student['last_name'] ?? '')
-);
-$courseName = trim($student['course'] ?? 'N/A');
-if (empty($student['course_type']) && $courseName !== '' && $courseName !== 'N/A') {
-    try {
-        $ctSt = $pdo->prepare("SELECT course_type, course_content, duration FROM courses WHERE status = 'Active' AND (course_name = ? OR ? LIKE CONCAT(course_name, '%')) LIMIT 1");
-        $ctSt->execute([$courseName, $courseName]);
-        $crow = $ctSt->fetch(PDO::FETCH_ASSOC);
-        if ($crow) {
-            $student['course_type'] = $crow['course_type'] ?? $student['course_type'];
-            if (empty($student['course_content'])) {
-                $student['course_content'] = $crow['course_content'] ?? '';
-            }
-            if (empty($student['course_duration'])) {
-                $student['course_duration'] = $crow['duration'] ?? '';
-            }
-        }
-    } catch (Exception $e) {
-    }
 }
 
 $isItSplit = false;
@@ -275,6 +287,24 @@ if ($isTyping && ($contents === '—' || $contents === '')) {
     $contents = typingMarksheetDefaultContents($speeds['wpm']);
 }
 
+$typingObtained = null;
+if ($isTyping && !$isSample) {
+    $admissionId = (int)($student['id'] ?? 0);
+    $typingRow = getAdmissionTypingMarks($pdo, $admissionId, $speeds['wpm'], $speeds['kph']);
+    if ($typingRow === null) {
+        http_response_code(403);
+        die('<b>Marksheet not available:</b> Typing particulars marks must be entered by ATC/Admin first.');
+    }
+    $score = (int)$typingRow['total'];
+    $grade = $typingRow['grade'];
+    $typingObtained = $typingRow['obtained'];
+} elseif ($isTyping && $isSample && $forceBrand === 'typing') {
+    $typingObtained = allocateScoreAcrossMaxes($score, array_map(
+        static fn($p) => (int)$p['max'],
+        typingMarksheetParticulars($speeds['wpm'], $speeds['kph'])
+    ));
+}
+
 outputStatementOfMarksPdf([
     'student_id'      => $studentId,
     'full_name'       => $fullName,
@@ -291,6 +321,7 @@ outputStatementOfMarksPdf([
     'is_it_split'     => $isItSplit && !$isTyping,
     'exam_40'         => $exam40,
     'atc_60'          => $atc60,
+    'typing_obtained' => $typingObtained,
     'wpm'             => $speeds['wpm'],
     'kph'             => $speeds['kph'],
     'preview'         => isset($_GET['preview']),

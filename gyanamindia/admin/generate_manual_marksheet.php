@@ -27,6 +27,13 @@ $atc60Pre = isset($src['atc_marks']) ? (int)$src['atc_marks'] : null;
 if ($exam40Pre !== null && $atc60Pre !== null) {
     $score = max(0, min(40, $exam40Pre)) + max(0, min(60, $atc60Pre));
 }
+$rawTypingPre = $src['typing_marks'] ?? null;
+if (is_array($rawTypingPre)) {
+    $normPre = normalizeTypingParticularMarks($rawTypingPre);
+    if ($normPre !== null) {
+        $score = (int)$normPre['total'];
+    }
+}
 
 if ($score < 40 || $score > 100) {
     http_response_code(400);
@@ -124,7 +131,46 @@ if ($isTyping && ($contents === '—' || $contents === '')) {
 $isItSplit = false;
 $exam40 = 0;
 $atc60 = 0;
-if (isGiitItCourse($student['course_type'] ?? null, $courseName)) {
+$typingObtained = null;
+if (isTypingCourse($student['course_type'] ?? null, $courseName)) {
+    $rawTyping = $src['typing_marks'] ?? null;
+    if (is_array($rawTyping)) {
+        $speedsT = typingMarksheetSpeedDefaults($courseName);
+        if (upsertAdmissionTypingMarks(
+            $pdo,
+            $admissionId,
+            $rawTyping,
+            (int)($student['atc_id'] ?? 0) ?: null,
+            (int)($_SESSION['user_id'] ?? 0) ?: null,
+            'Admin',
+            $speedsT['wpm'],
+            $speedsT['kph']
+        )) {
+            $savedT = getAdmissionTypingMarks($pdo, $admissionId, $speedsT['wpm'], $speedsT['kph']);
+            if ($savedT) {
+                $score = (int)$savedT['total'];
+                $grade = $savedT['grade'];
+                $typingObtained = $savedT['obtained'];
+            }
+        }
+    } else {
+        $speedsT = typingMarksheetSpeedDefaults($courseName);
+        $savedT = getAdmissionTypingMarks($pdo, $admissionId, $speedsT['wpm'], $speedsT['kph']);
+        if ($savedT) {
+            $score = (int)$savedT['total'];
+            $grade = $savedT['grade'];
+            $typingObtained = $savedT['obtained'];
+        }
+    }
+    if ($typingObtained === null) {
+        http_response_code(400);
+        die('<b>Error:</b> Enter all typing particulars marks.');
+    }
+    if ($grade === 'Fail') {
+        http_response_code(400);
+        die('<b>Error:</b> Typing total marks are below passing grade.');
+    }
+} elseif (isGiitItCourse($student['course_type'] ?? null, $courseName)) {
     $exam40In = isset($src['exam_40']) ? (int)$src['exam_40'] : null;
     $atc60In = isset($src['atc_marks']) ? (int)$src['atc_marks'] : null;
     if ($atc60In === null) {
@@ -170,6 +216,7 @@ outputStatementOfMarksPdf([
     'is_it_split'     => $isItSplit,
     'exam_40'         => $exam40,
     'atc_60'          => $atc60,
+    'typing_obtained' => $typingObtained,
     'wpm'             => $speeds['wpm'],
     'kph'             => $speeds['kph'],
     'preview'         => $preview,
