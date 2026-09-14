@@ -37,7 +37,6 @@ function outputStatementOfMarksPdf(array $d): void
     $filename = (string)($d['filename'] ?? ('Marksheet_' . preg_replace('/[^A-Za-z0-9_\-]/', '_', $studentId) . '.pdf'));
 
     if ($isTyping) {
-        // Use stored multi-line course name as-is when speed line is already included
         if (preg_match('/\b(wpm|kph|typing\s*speed|key\s*depressed)\b/i', $courseName)) {
             $courseDisplay = $courseName;
         } else {
@@ -49,6 +48,8 @@ function outputStatementOfMarksPdf(array $d): void
     } else {
         $courseDisplay = $courseName;
     }
+    $courseDisplay = str_replace(["\r\n", "\r"], "\n", trim($courseDisplay));
+    $contents = preg_replace('/\s+/u', ' ', trim($contents)) ?? $contents;
 
     $signatory = $brand === 'abacus'
         ? 'Authorized Signatory For Gyanam Abacus'
@@ -90,10 +91,14 @@ function outputStatementOfMarksPdf(array $d): void
     $pdf->SetLineWidth(0.4);
     $pdf->Rect($pad, $pad, $tw, $bottom - $top);
 
+    // One body font everywhere (MCCE sample uses equal size)
+    $FONT = 10.0;
+    $LINE = 4.0;
+
     $cell = static function (
         float $cx, float $cy, float $cw, float $ch, string $text, bool $fill,
         string $align = 'C', float $size = 10, string $style = '', bool $wrap = false
-    ) use ($pdf) {
+    ) use ($pdf, $LINE) {
         if ($fill) {
             $pdf->SetFillColor(210, 210, 210);
         }
@@ -102,10 +107,11 @@ function outputStatementOfMarksPdf(array $d): void
         $pdf->Rect($cx, $cy, $cw, $ch, $fill ? 'DF' : 'D');
         $pdf->SetTextColor(0, 0, 0);
         $pdf->SetFont('Times', $style, $size);
-        $lineH = max(3.4, min(4.2, $ch / 2.2));
+        $lineH = $LINE;
         $text = str_replace(["\r\n", "\r"], "\n", trim($text));
-        $innerW = max(1.0, $cw - 2.0);
-        $needsWrap = $wrap || (strpos($text, "\n") !== false) || ($pdf->GetStringWidth($text) > $innerW);
+        $padX = 1.5;
+        $innerW = max(1.0, $cw - 2 * $padX);
+        $needsWrap = $wrap || (strpos($text, "\n") !== false) || ($pdf->GetStringWidth($text) > $innerW + 0.2);
         if ($needsWrap) {
             $lines = 0;
             foreach (explode("\n", $text) as $para) {
@@ -114,30 +120,30 @@ function outputStatementOfMarksPdf(array $d): void
                 $lines += max(1, (int)ceil($w / $innerW));
             }
             $blockH = $lines * $lineH;
-            $ty = $cy + max(0.4, ($ch - $blockH) / 2);
-            $pdf->SetXY($cx + 1.0, $ty);
+            $ty = $cy + max(0.8, ($ch - $blockH) / 2);
+            $pdf->SetXY($cx + $padX, $ty);
             $pdf->MultiCell($innerW, $lineH, $text, 0, $align === 'L' ? 'L' : 'C');
             return;
         }
-        $pdf->SetXY($cx + 1.0, $cy + ($ch - $lineH) / 2);
+        $pdf->SetXY($cx + $padX, $cy + ($ch - $lineH) / 2);
         $pdf->Cell($innerW, $lineH, $text, 0, 0, $align);
     };
 
-    $FONT = 10.0;
-    $barH = 11.0;
-    $legHdrH = 12.0;
-    $legValH = 14.0;
+    $barH = 9.0;
+    $legHdrH = 9.0;
+    $legValH = 11.0;
     $legendTotal = $legHdrH + $legValH;
 
-    $headerGap = 2.0;
+    // Compact header (leave more room for even grid rows)
+    $headerGap = 1.5;
     if ($brand === 'abacus') {
-        $headerImgW = 72.0;
-        $headerImgH = 24.0;
+        $headerImgW = 68.0;
+        $headerImgH = 22.0;
         $headerImgX = $x + ($tw - $headerImgW) / 2;
         $headerImgPath = $abacusLogoPath;
     } else {
-        $headerImgW = $tw * 0.65;
-        $headerImgH = $headerImgW * (520.0 / 1280.0);
+        $headerImgW = $tw * 0.62;
+        $headerImgH = min(28.0, $headerImgW * (520.0 / 1280.0));
         $headerImgX = $x + ($tw - $headerImgW) / 2;
         $headerImgPath = $headerBannerPath;
     }
@@ -145,47 +151,50 @@ function outputStatementOfMarksPdf(array $d): void
 
     $gridStart = $top + $headerBodyH + $barH;
     $gridEnd = $bottom - $legendTotal;
-    $stretchH = max(100.0, $gridEnd - $gridStart);
+    $stretchH = max(120.0, $gridEnd - $gridStart);
 
-    $wMetaHdr = 0.08;
-    $wMetaVal = 0.09;
-    $wRow = 0.10;
-    $wContent = 0.16;
-    $wMarksHd = 0.08;
-    $wMarksBd = 0.28;
+    /*
+     * MCCE-like distribution: compact meta + info rows, larger equal marks rows.
+     * Typing: 6 particulars; IT: 2 (max / obtained).
+     */
+    $metaHdrH = 8.5;
+    $metaValH = 9.5;
+    $infoH = 11.0;          // student / ATC — same height
+    $courseH = $isTyping ? 14.0 : 11.0; // 2-line course title
+    $contentH = 13.5;
+    $marksHdrH = 8.5;
+    $fixedTop = $metaHdrH + $metaValH + $infoH + $infoH + $courseH + $contentH + $marksHdrH;
+    $marksBodyH = max(48.0, $stretchH - $fixedTop);
 
-    $metaHdrH = $stretchH * $wMetaHdr;
-    $metaValH = $stretchH * $wMetaVal;
-    $rowH = $stretchH * $wRow;
-    $contentH = $stretchH * $wContent;
-    $marksHdrH = $stretchH * $wMarksHd;
-    $marksBodyH = $stretchH * $wMarksBd;
-    $planned = $metaHdrH + $metaValH + ($rowH * 3) + $contentH + $marksHdrH + $marksBodyH;
-    $marksBodyH += ($stretchH - $planned);
+    // If leftover exists (taller page), grow marks body only — keeps upper rows MCCE-tight
+    $used = $fixedTop + $marksBodyH;
+    if ($used < $stretchH) {
+        $marksBodyH += ($stretchH - $used);
+    }
 
     $colW = $tw / 4;
     $unit = $tw / 28;
     $gw = 4 * $unit;
-    $labelW = $colW;
+    $labelW = 7 * $unit; // ~1/4 width, matches MCCE label column
     $valW = $tw - $labelW;
     $pW = $labelW;
 
     if (is_file($headerImgPath)) {
         try {
-            $pdf->Image($headerImgPath, $headerImgX, $top + 0.5, $headerImgW, $headerImgH);
+            $pdf->Image($headerImgPath, $headerImgX, $top + 0.4, $headerImgW, $headerImgH);
         } catch (Exception $e) {
         }
     }
 
     $barY = $top + $headerBodyH;
-    $pdf->SetFillColor(255, 255, 255);
+    $pdf->SetFillColor(210, 210, 210);
     $pdf->SetDrawColor(0, 0, 0);
     $pdf->SetLineWidth(0.25);
     $pdf->Rect($x, $barY, $tw, $barH, 'DF');
     $pdf->SetTextColor(0, 0, 0);
     $pdf->SetFont('Times', 'B', $FONT);
-    $pdf->SetXY($x, $barY + ($barH - 4.2) / 2);
-    $pdf->Cell($tw, 4.2, 'Statement of Marks', 0, 0, 'C');
+    $pdf->SetXY($x, $barY + ($barH - $LINE) / 2);
+    $pdf->Cell($tw, $LINE, 'Statement of Marks', 0, 0, 'C');
 
     $infoY = $barY + $barH;
     $headers = ['Month & Year of Exam', 'Course Duration', 'Center Code', 'Student ID'];
@@ -196,20 +205,25 @@ function outputStatementOfMarksPdf(array $d): void
     }
 
     $rowsY = $infoY + $metaHdrH + $metaValH;
+    // MCCE: labels left-ish / values left in content cells; we keep labels centered in label col, values left for long text
     $infoRows = [
-        ['Name of Student', $fullName],
-        ["Name of ATC\n(Authorized Training Center)", $atcName],
-        ['Name of the Course', $courseDisplay],
+        ['Name of Student', $fullName, $infoH, 'B'],
+        ['Name of ATC', $atcName, $infoH, 'B'],
+        ['Name of the Course', $courseDisplay, $courseH, 'B'],
     ];
-    foreach ($infoRows as $i => $pair) {
-        $ry = $rowsY + $i * $rowH;
-        $cell($x, $ry, $labelW, $rowH, $pair[0], false, 'C', $FONT, 'B', true);
-        $cell($x + $labelW, $ry, $valW, $rowH, $pair[1], false, 'C', $FONT, 'B', true);
+    $ry = $rowsY;
+    foreach ($infoRows as $pair) {
+        [$lab, $val, $h, $sty] = $pair;
+        $cell($x, $ry, $labelW, $h, $lab, false, 'C', $FONT, 'B', true);
+        $valAlign = (strpos($val, "\n") !== false || strlen($val) > 55) ? 'L' : 'C';
+        $cell($x + $labelW, $ry, $valW, $h, $val, false, $valAlign, $FONT, $sty, true);
+        $ry += $h;
     }
 
-    $contentY = $rowsY + 3 * $rowH;
+    $contentY = $ry;
     $cell($x, $contentY, $labelW, $contentH, "Course\nContents", false, 'C', $FONT, 'B', true);
-    $cell($x + $labelW, $contentY, $valW, $contentH, $contents, false, 'C', $FONT, 'B', true);
+    // MCCE course contents are regular weight
+    $cell($x + $labelW, $contentY, $valW, $contentH, $contents, false, 'L', $FONT, '', true);
 
     $marksY = $contentY + $contentH;
     $mW = 5 * $unit;
@@ -218,10 +232,10 @@ function outputStatementOfMarksPdf(array $d): void
     $rightW = 8 * $unit;
     $leftW = $pW + $mW + $pctW + $gW;
 
-    $cell($x, $marksY, $pW, $marksHdrH, 'Particulars', false, 'C', $FONT, 'B');
-    $cell($x + $pW, $marksY, $mW, $marksHdrH, 'Marks', false, 'C', $FONT, 'B');
-    $cell($x + $pW + $mW, $marksY, $pctW, $marksHdrH, 'Percentage', false, 'C', $FONT, 'B');
-    $cell($x + $pW + $mW + $pctW, $marksY, $gW, $marksHdrH, 'Grade', false, 'C', $FONT, 'B');
+    $cell($x, $marksY, $pW, $marksHdrH, 'Particulars', true, 'C', $FONT, 'B');
+    $cell($x + $pW, $marksY, $mW, $marksHdrH, 'Marks', true, 'C', $FONT, 'B');
+    $cell($x + $pW + $mW, $marksY, $pctW, $marksHdrH, 'Percentage', true, 'C', $FONT, 'B');
+    $cell($x + $pW + $mW + $pctW, $marksY, $gW, $marksHdrH, 'Grade', true, 'C', $FONT, 'B');
 
     if ($isTyping) {
         $parts = typingMarksheetParticulars($wpm, $kph);
@@ -229,13 +243,13 @@ function outputStatementOfMarksPdf(array $d): void
         $obtained = allocateScoreAcrossMaxes($score, $maxes);
         $n = count($parts);
         $rh = $marksBodyH / max(1, $n);
-        $partSize = 8.0;
         for ($i = 0; $i < $n; $i++) {
-            $ry = $marksY + $marksHdrH + $i * $rh;
+            $py = $marksY + $marksHdrH + $i * $rh;
             $obt = (int)($obtained[$i] ?? 0);
             $max = (int)$parts[$i]['max'];
-            $cell($x, $ry, $pW, $rh, (string)$parts[$i]['label'], false, 'L', $partSize, 'B', true);
-            $cell($x + $pW, $ry, $mW, $rh, sprintf('%02d/%02d', $obt, $max), false, 'C', $FONT, 'B');
+            // Same font size as rest of sheet
+            $cell($x, $py, $pW, $rh, (string)$parts[$i]['label'], false, 'L', $FONT, '', true);
+            $cell($x + $pW, $py, $mW, $rh, sprintf('%02d/%02d', $obt, $max), false, 'C', $FONT, 'B');
         }
     } else {
         $rh = $marksBodyH / 2;
@@ -247,15 +261,15 @@ function outputStatementOfMarksPdf(array $d): void
 
     $pdf->Rect($x + $pW + $mW, $marksY + $marksHdrH, $pctW, $marksBodyH, 'D');
     $pdf->Rect($x + $pW + $mW + $pctW, $marksY + $marksHdrH, $gW, $marksBodyH, 'D');
-    $cell($x + $pW + $mW, $marksY + $marksHdrH, $pctW, $marksBodyH, (string)$score, false, 'C', 14, 'B');
-    $cell($x + $pW + $mW + $pctW, $marksY + $marksHdrH, $gW, $marksBodyH, $grade, false, 'C', 14, 'B');
+    $cell($x + $pW + $mW, $marksY + $marksHdrH, $pctW, $marksBodyH, (string)$score, false, 'C', $FONT, 'B');
+    $cell($x + $pW + $mW + $pctW, $marksY + $marksHdrH, $gW, $marksBodyH, $grade, false, 'C', $FONT, 'B');
 
     $sx = $x + $leftW;
     $sy = $marksY;
     $sh = $marksHdrH + $marksBodyH;
     $pdf->Rect($sx, $sy, $rightW, $sh, 'D');
 
-    $sigH = 10.5;
+    $sigH = 10.0;
     $sigW1 = $sigH * (223.0 / 118.0);
     $sigW2 = $sigH * (280.0 / 118.0);
     $sigGap = 2.0;
@@ -268,7 +282,7 @@ function outputStatementOfMarksPdf(array $d): void
         $sigW2 *= $scale;
         $sigTotalW = $sigW1 + $sigGap + $sigW2;
     }
-    $sigY = $sy + 3.5;
+    $sigY = $sy + 4.0;
     $sigX = $sx + ($rightW - $sigTotalW) / 2;
     if (is_file($signPljPath)) {
         try {
@@ -286,17 +300,17 @@ function outputStatementOfMarksPdf(array $d): void
     $pdf->SetTextColor(0, 0, 0);
     $pdf->SetFont('Times', 'B', $FONT);
     $pdf->SetXY($sx + 1, $textY);
-    $pdf->Cell($rightW - 2, 4.5, $signatory, 0, 0, 'C');
-    $pdf->SetFont('Times', '', $FONT);
-    $pdf->SetXY($sx + 1, $textY + 4.8);
-    $pdf->Cell($rightW - 2, 4.5, 'Gyanam India Educational Services', 0, 0, 'C');
+    $pdf->Cell($rightW - 2, 4.2, $signatory, 0, 0, 'C');
+    $pdf->SetFont('Times', '', 8.5);
+    $pdf->SetXY($sx + 1, $textY + 4.5);
+    $pdf->Cell($rightW - 2, 4.0, 'Gyanam India Educational Services', 0, 0, 'C');
 
-    $textBottom = $textY + 4.8 + 4.5;
+    $textBottom = $textY + 4.5 + 4.0;
     $boxBottom = $sy + $sh;
-    $sealPadTop = 0.8;
-    $sealPadBottom = 1.2;
-    $sealAvailH = max(12.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
-    $sealSize = min(29.0, $rightW - 4.0, $sealAvailH);
+    $sealPadTop = 1.0;
+    $sealPadBottom = 1.5;
+    $sealAvailH = max(14.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
+    $sealSize = min(32.0, $rightW - 5.0, $sealAvailH);
     $sealX = $sx + ($rightW - $sealSize) / 2;
     $sealY = $textBottom + $sealPadTop + max(0.0, ($sealAvailH - $sealSize) / 2);
     if (is_file($sealPath)) {
