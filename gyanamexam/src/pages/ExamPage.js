@@ -335,10 +335,22 @@ class ExamPage {
         .exam-mark-btn:hover { background: #fef3c7 !important; border-color: #f59e0b !important; }
         .exam-mark-btn { transition: all 0.2s ease; }
         .exam-layout { display:flex !important; flex-direction:row !important; }
+        .exam-main, .exam-sidebar, #question-palette-container {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .exam-main::-webkit-scrollbar,
+        .exam-sidebar::-webkit-scrollbar,
+        #question-palette-container::-webkit-scrollbar { width: 0; height: 0; display: none; }
+        .options-container { grid-template-columns: 1fr 1fr !important; }
         @media (max-width: 900px) {
           .exam-layout { flex-direction: column !important; height: auto !important; }
-          .exam-sidebar { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 300px; overflow-y: auto; flex-shrink: 1 !important; }
+          .exam-sidebar { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 260px; overflow-y: auto; flex-shrink: 1 !important; }
           .exam-main { height: auto !important; min-height: auto !important; overflow-y: visible !important; }
+          .options-container { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 640px) {
+          .options-container { grid-template-columns: 1fr !important; }
         }
       </style>
 
@@ -389,7 +401,7 @@ class ExamPage {
             <div style="max-width:800px;margin:0 auto;animation:exam-fadeIn 0.4s ease-out">
 
               <!-- Question Card -->
-              <div style="background:white;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);overflow:hidden">
+              <div style="background:white;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04)">
 
                 <!-- Question Number Bar -->
                 <div style="padding:0.875rem 1.5rem;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
@@ -403,7 +415,7 @@ class ExamPage {
                 </div>
 
                 <!-- Question Content -->
-                <div style="padding:1.75rem 1.5rem;min-height:320px">
+                <div style="padding:1.35rem 1.5rem">
                   <div id="question-view-container"></div>
                 </div>
 

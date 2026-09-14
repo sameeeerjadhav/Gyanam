@@ -8,6 +8,7 @@ use App\Models\QuestionBankAssignment;
 use App\Models\Question;
 use App\Support\PortalAtcCentres;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class QuestionBankController extends Controller
 {
@@ -215,12 +216,14 @@ class QuestionBankController extends Controller
             'order'          => $bank->questions()->count(),
         ]);
 
+        $this->bustExamQuestionCaches($bank);
+
         return response()->json($q, 201);
     }
 
     public function updateQuestion(Request $request, $bankId, $questionId)
     {
-        $this->findVisible($request, $bankId);
+        $bank = $this->findVisible($request, $bankId);
         $q    = Question::where('question_bank_id', $bankId)->findOrFail($questionId);
         $data = $request->validate([
             'text'              => 'sometimes|string',
@@ -232,13 +235,15 @@ class QuestionBankController extends Controller
             'correct_answer'    => 'sometimes|string',
         ]);
         $q->update($data);
+        $this->bustExamQuestionCaches($bank);
         return response()->json($q);
     }
 
     public function destroyQuestion(Request $request, $bankId, $questionId)
     {
-        $this->findVisible($request, $bankId);
+        $bank = $this->findVisible($request, $bankId);
         Question::where('question_bank_id', $bankId)->findOrFail($questionId)->delete();
+        $this->bustExamQuestionCaches($bank);
         return response()->json(['message' => 'Deleted']);
     }
 
@@ -297,6 +302,8 @@ class QuestionBankController extends Controller
             ]);
             $added++;
         }
+
+        $this->bustExamQuestionCaches($bank);
 
         return response()->json([
             'added'   => $added,
@@ -413,6 +420,14 @@ class QuestionBankController extends Controller
     {
         $user = $request->user();
         return QuestionBank::visibleTo($user->centre_id, $user->username)->findOrFail($id);
+    }
+
+    /** Drop cached exam question payloads so bilingual fields show immediately. */
+    private function bustExamQuestionCaches(QuestionBank $bank): void
+    {
+        foreach ($bank->examConfigs()->pluck('id') as $examId) {
+            Cache::forget("exam_bank_qs:{$examId}");
+        }
     }
 
     private function authorizeAdmin(Request $request): void
