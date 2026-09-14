@@ -100,8 +100,8 @@ $examDate = (string)($examPass['exam_date'] ?? date('Y-m-d'));
 
 // ── Build dynamic values ──────────────────────────────────────────────────────
 
-// 1. Student name — full caps as shown on template
-$fullName = strtoupper(trim(
+// 1. Student name — Title Case (Hemant Subhash Salunkhe) regardless of input casing
+$fullName = formatPersonNameTitleCase(trim(
     $student['first_name'] . ' ' .
     ($student['middle_name'] ? $student['middle_name'] . ' ' : '') .
     $student['last_name']
@@ -138,7 +138,7 @@ if ($grade === 'Fail') {
 
 $gradeLine = courseCertificateGradeLine($grade);
 
-// 6. Certificate number — IT: GIIT2026-1; Abacus: legacy course-reg-###
+// 6. Certificate number — IT: GIIT20261; Abacus: legacy course-reg-###
 $dateOfIssue = date('d/m/Y', strtotime($examDate ?: date('Y-m-d')));
 $issueYear = (int)date('Y', strtotime($examDate ?: date('Y-m-d')));
 
