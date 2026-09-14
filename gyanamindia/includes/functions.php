@@ -2909,7 +2909,8 @@ function atcCanUseManualCourseCertificate(?int $atcId, ?string $atcCode = null):
 }
 
 /**
- * Allocate / peek IT (GIIT) certificate numbers: GIIT2026-1, GIIT2026-2, …
+ * Allocate / peek IT (GIIT) certificate numbers: GIIT20261, GIIT20262, …
+ * (year + sequence, no hyphen)
  * When $allocate is false (preview), returns the next number without consuming it.
  */
 function nextGiitCertificateNumber(PDO $pdo, ?int $year = null, bool $allocate = true): string
@@ -2935,25 +2936,25 @@ function nextGiitCertificateNumber(PDO $pdo, ?int $year = null, bool $allocate =
             $next = (int)$st->fetchColumn() + 1;
             $pdo->prepare('UPDATE giit_cert_series SET last_no = ? WHERE series_year = ?')->execute([$next, $year]);
             $pdo->commit();
-            return 'GIIT' . $year . '-' . $next;
+            return 'GIIT' . $year . $next;
         }
 
         $pdo->prepare('INSERT IGNORE INTO giit_cert_series (series_year, last_no) VALUES (?, 0)')->execute([$year]);
         $st = $pdo->prepare('SELECT last_no FROM giit_cert_series WHERE series_year = ?');
         $st->execute([$year]);
         $next = (int)$st->fetchColumn() + 1;
-        return 'GIIT' . $year . '-' . $next;
+        return 'GIIT' . $year . $next;
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        return 'GIIT' . $year . '-1';
+        return 'GIIT' . $year . '1';
     }
 }
 
 /**
  * Build certificate number for a course brand.
- * IT → GIIT{year}-{n}; Abacus/other → courseAbbrev-regId-### (legacy).
+ * IT → GIIT{year}{n}; Abacus/other → courseAbbrev-regId-### (legacy).
  */
 function buildCourseCertificateNumber(
     PDO $pdo,
@@ -3169,10 +3170,36 @@ function findIssuedCertificateByCertNo(PDO $pdo, string $certNo): ?array
         return null;
     }
     ensureIssuedCertificatesTable($pdo);
-    $st = $pdo->prepare('SELECT * FROM issued_certificates WHERE cert_no = ? ORDER BY id DESC LIMIT 1');
-    $st->execute([$certNo]);
+
+    $candidates = [$certNo];
+    // Accept both GIIT2026-3 and GIIT20263
+    if (preg_match('/^(GIIT)(20\d{2})-(\d+)$/i', $certNo, $m)) {
+        $candidates[] = strtoupper($m[1]) . $m[2] . $m[3];
+    } elseif (preg_match('/^(GIIT)(20\d{2})(\d+)$/i', $certNo, $m)) {
+        $candidates[] = strtoupper($m[1]) . $m[2] . '-' . $m[3];
+    }
+    $candidates = array_values(array_unique($candidates));
+    $ph = implode(',', array_fill(0, count($candidates), '?'));
+    $st = $pdo->prepare("SELECT * FROM issued_certificates WHERE cert_no IN ($ph) ORDER BY id DESC LIMIT 1");
+    $st->execute($candidates);
     $row = $st->fetch(PDO::FETCH_ASSOC);
     return $row ?: null;
+}
+
+/**
+ * Person name for certificates: First Letter Of Each Word Capital, rest small.
+ * Collapses whitespace; empty → ''.
+ */
+function formatPersonNameTitleCase(string $name): string
+{
+    $name = trim(preg_replace('/\s+/u', ' ', $name) ?? '');
+    if ($name === '') {
+        return '';
+    }
+    if (function_exists('mb_convert_case')) {
+        return mb_convert_case(mb_strtolower($name, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
+    }
+    return ucwords(strtolower($name));
 }
 
 /**
@@ -3307,7 +3334,7 @@ function courseCertificateOverlayLayout(): array
         'cert_y' => 226.0,
         'date_y' => 234.0,
         'photo_x' => 162.0,
-        'photo_y' => 102.0,
+        'photo_y' => 110.0,
         'photo_w' => 28.0,
         'photo_h' => 34.0,
         'qr_x' => 168.0,

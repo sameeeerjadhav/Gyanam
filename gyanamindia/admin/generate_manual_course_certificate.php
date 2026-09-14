@@ -60,7 +60,7 @@ if ($admissionId > 0) {
     $atcCity = trim((string)($atc['city'] ?: $atc['district']));
     $conductedAt = trim((string)($atc['name'] ?: 'N/A')) . ($atcCity !== '' ? ', ' . $atcCity : '');
 
-    $fullName = strtoupper(trim(
+    $fullName = formatPersonNameTitleCase(trim(
         ($student['first_name'] ?? '') . ' ' .
         (!empty($student['middle_name']) ? $student['middle_name'] . ' ' : '') .
         ($student['last_name'] ?? '')

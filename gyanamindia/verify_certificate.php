@@ -2,7 +2,7 @@
 /**
  * Public certificate verification page (no login).
  * URL: /verify_certificate.php?t={token}
- * Also supports ?cert_no=GIIT2026-1
+ * Also supports ?cert_no=GIIT20263
  */
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/includes/functions.php';
@@ -375,7 +375,7 @@ $orgName = $brandKey === 'abacus'
         <form method="get" action="">
             <label for="cert_no">Look up by certificate number</label>
             <div class="search-row">
-                <input type="text" id="cert_no" name="cert_no" placeholder="e.g. GIIT2026-1"
+                <input type="text" id="cert_no" name="cert_no" placeholder="e.g. GIIT20263"
                        value="<?= htmlspecialchars($certNoQ) ?>" autocomplete="off" inputmode="text">
                 <button type="submit">Verify</button>
             </div>
