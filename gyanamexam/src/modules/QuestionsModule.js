@@ -555,85 +555,69 @@ async function showImportQuestionsModal(ApiClient) {
 
   getOverlay().style.display = 'flex';
   document.getElementById('modal-box').innerHTML = `
-    <div class="modal-card" style="max-width:660px;width:95vw;padding:0">
-      <div class="modal-header" style="background:linear-gradient(135deg,#f59e0b,#d97706);padding:1.25rem 1.5rem">
+    <div class="modal-card" style="max-width:560px;width:95vw;padding:0">
+      <div class="modal-header" style="background:linear-gradient(135deg,#f59e0b,#d97706);padding:1.15rem 1.35rem">
         <div style="display:flex;align-items:center;gap:0.75rem">
           <div style="width:36px;height:36px;background:rgba(255,255,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center">
             <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="width:18px;height:18px"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12L11.25 21m0 0l-3.75-3.75M11.25 21V9.75"/></svg>
           </div>
           <div>
             <h3 style="color:#fff;margin:0;font-size:1.05rem;font-weight:700">Bulk Import Questions</h3>
-            <p style="color:rgba(255,255,255,0.75);margin:0;font-size:0.78rem">CSV · Excel · JSON</p>
+            <p style="color:rgba(255,255,255,0.75);margin:0;font-size:0.78rem">Download template → fill → import</p>
           </div>
         </div>
         <button onclick="closeModal()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:0.35rem 0.7rem;cursor:pointer;font-size:1.1rem;line-height:1">×</button>
       </div>
-      <div style="padding:1.25rem 1.5rem">
+      <div style="padding:1.2rem 1.35rem">
 
-        <!-- Target Bank -->
-        <div class="form-group" style="margin-bottom:1rem">
+        <div class="form-group" style="margin-bottom:0.9rem">
           <label class="form-label">Target Question Bank *</label>
           <select id="import-bank-id" class="form-select">${bankOpts}</select>
         </div>
 
-        <!-- Method Tabs -->
-        <div style="display:flex;gap:0;background:var(--gray-100);border-radius:8px;padding:3px;margin-bottom:1rem" id="import-tabs">
-          <button onclick="switchImportTab('csv')" id="tab-csv" style="flex:1;padding:0.45rem 0.75rem;border:none;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;background:#fff;color:#1d4ed8;box-shadow:0 1px 3px rgba(0,0,0,0.08)">📋 Paste CSV</button>
-          <button onclick="switchImportTab('excel')" id="tab-excel" style="flex:1;padding:0.45rem 0.75rem;border:none;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;background:transparent;color:var(--text-muted)">📊 Excel File</button>
-          <button onclick="switchImportTab('json')" id="tab-json" style="flex:1;padding:0.45rem 0.75rem;border:none;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;background:transparent;color:var(--text-muted)">{ } JSON File</button>
+        <div class="form-group" style="margin-bottom:0.9rem">
+          <label class="form-label">Paper type</label>
+          <div style="display:flex;gap:0;background:var(--gray-100);border-radius:8px;padding:3px">
+            <button type="button" id="fmt-en" onclick="setImportFormat('en')" style="flex:1;padding:0.5rem 0.75rem;border:none;border-radius:6px;font-size:0.84rem;font-weight:600;cursor:pointer;background:#fff;color:#1d4ed8;box-shadow:0 1px 3px rgba(0,0,0,0.08)">English</button>
+            <button type="button" id="fmt-bilingual" onclick="setImportFormat('bilingual')" style="flex:1;padding:0.5rem 0.75rem;border:none;border-radius:6px;font-size:0.84rem;font-weight:600;cursor:pointer;background:transparent;color:var(--text-muted)">English + Marathi</button>
+          </div>
+          <p id="import-format-hint" style="margin:0.45rem 0 0;font-size:0.78rem;color:var(--text-muted)">English questions and options only.</p>
         </div>
 
-        <!-- CSV Tab -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:1rem">
+          <button type="button" onclick="downloadImportTemplate('csv')" style="padding:0.7rem 0.75rem;border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#1d4ed8;text-align:center">⬇ Download CSV</button>
+          <button type="button" onclick="downloadImportTemplate('excel')" style="padding:0.7rem 0.75rem;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#047857;text-align:center">⬇ Download Excel</button>
+        </div>
+
+        <div style="display:flex;gap:0;background:var(--gray-100);border-radius:8px;padding:3px;margin-bottom:0.85rem" id="import-tabs">
+          <button onclick="switchImportTab('csv')" id="tab-csv" style="flex:1;padding:0.45rem 0.75rem;border:none;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;background:#fff;color:#1d4ed8;box-shadow:0 1px 3px rgba(0,0,0,0.08)">Paste CSV</button>
+          <button onclick="switchImportTab('excel')" id="tab-excel" style="flex:1;padding:0.45rem 0.75rem;border:none;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;background:transparent;color:var(--text-muted)">Upload Excel</button>
+          <button onclick="switchImportTab('json')" id="tab-json" style="flex:1;padding:0.45rem 0.75rem;border:none;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;background:transparent;color:var(--text-muted)">JSON</button>
+        </div>
+
         <div id="import-panel-csv">
-          <div class="form-group">
-            <label class="form-label" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.35rem">
-              <span>CSV Content</span>
-              <span>
-                <button onclick="downloadCSVTemplate('en')" style="font-size:0.75rem;color:#2563eb;background:none;border:none;cursor:pointer;font-weight:600">⬇ English Template</button>
-                <button onclick="downloadCSVTemplate('bilingual')" style="font-size:0.75rem;color:#047857;background:none;border:none;cursor:pointer;font-weight:600;margin-left:0.35rem">⬇ EN+MR Template</button>
-              </span>
-            </label>
-            <textarea id="csv-content" class="form-textarea" style="min-height:160px;font-family:monospace;font-size:0.82rem" placeholder="Question EN,Question MR,Option A EN,Option A MR,...Correct&#10;Which key exports?,एक्सपोर्ट...,Ctrl + E,कंट्रोल + E,...,c"></textarea>
-          </div>
-          <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.55">
-            <p style="margin:0 0 0.35rem"><strong>English only (6 cols):</strong> <code style="background:var(--gray-100);padding:0.1rem 0.3rem;border-radius:3px">Question, Option A, Option B, Option C, Option D, Correct</code></p>
-            <p style="margin:0"><strong>English + Marathi (11 cols):</strong> <code style="background:var(--gray-100);padding:0.1rem 0.3rem;border-radius:3px">Question EN, Question MR, Option A EN, Option A MR, Option B EN, Option B MR, Option C EN, Option C MR, Option D EN, Option D MR, Correct</code> — Correct = a/b/c/d (or English answer text)</p>
-          </div>
+          <textarea id="csv-content" class="form-textarea" style="min-height:150px;font-family:monospace;font-size:0.82rem" placeholder="Paste filled CSV here (keep the header row)…"></textarea>
         </div>
 
-        <!-- Excel Tab -->
         <div id="import-panel-excel" style="display:none">
-          <div id="excel-drop-zone" style="border:2px dashed var(--gray-300);border-radius:10px;padding:2rem;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--gray-50)" onclick="document.getElementById('excel-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#2563eb';this.style.background='#eff6ff'" ondragleave="this.style.borderColor='var(--gray-300)';this.style.background='var(--gray-50)'" ondrop="handleExcelDrop(event)">
-            <div style="font-size:2.5rem;margin-bottom:0.5rem">📊</div>
-            <p style="font-weight:600;margin-bottom:0.25rem">Drop your Excel file here</p>
-            <p style="font-size:0.82rem;color:var(--text-muted)">.xlsx / .xls — clean template or TallyPrime-style QueE/QueM sheet</p>
+          <div id="excel-drop-zone" style="border:2px dashed var(--gray-300);border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--gray-50)" onclick="document.getElementById('excel-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#2563eb';this.style.background='#eff6ff'" ondragleave="this.style.borderColor='var(--gray-300)';this.style.background='var(--gray-50)'" ondrop="handleExcelDrop(event)">
+            <p style="font-weight:600;margin:0 0 0.25rem">Drop Excel here or click to browse</p>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin:0">.xlsx / .xls · also accepts TallyPrime QueE/QueM sheets</p>
             <input id="excel-file-input" type="file" accept=".xlsx,.xls" style="display:none" onchange="handleExcelFile(this.files[0])">
           </div>
           <div id="excel-preview" style="display:none;margin-top:0.75rem"></div>
-          <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.55">
-            Supports: English 6-col · bilingual 11-col · TallyPrime layout (<code>QueE / QueM / OpE1–4 / OpM1–4 / OpAns</code>).
-            <button onclick="downloadExcelTemplate('en')" style="margin-left:0.35rem;font-size:0.75rem;color:#2563eb;background:none;border:none;cursor:pointer;font-weight:600">⬇ EN Excel</button>
-            <button onclick="downloadExcelTemplate('bilingual')" style="margin-left:0.25rem;font-size:0.75rem;color:#047857;background:none;border:none;cursor:pointer;font-weight:600">⬇ EN+MR Excel</button>
-          </p>
         </div>
 
-        <!-- JSON Tab -->
         <div id="import-panel-json" style="display:none">
-          <div id="json-drop-zone" style="border:2px dashed var(--gray-300);border-radius:10px;padding:2rem;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--gray-50)" onclick="document.getElementById('json-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#2563eb';this.style.background='#eff6ff'" ondragleave="this.style.borderColor='var(--gray-300)';this.style.background='var(--gray-50)'" ondrop="handleJSONDrop(event)">
-            <div style="font-size:2.5rem;margin-bottom:0.5rem">{ }</div>
-            <p style="font-weight:600;margin-bottom:0.25rem">Drop your JSON file here</p>
-            <p style="font-size:0.82rem;color:var(--text-muted)">.json — or click to browse</p>
+          <div id="json-drop-zone" style="border:2px dashed var(--gray-300);border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--gray-50)" onclick="document.getElementById('json-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#2563eb';this.style.background='#eff6ff'" ondragleave="this.style.borderColor='var(--gray-300)';this.style.background='var(--gray-50)'" ondrop="handleJSONDrop(event)">
+            <p style="font-weight:600;margin:0 0 0.25rem">Drop JSON here or click to browse</p>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin:0">Array of { question, a, b, c, d, correct }</p>
             <input id="json-file-input" type="file" accept=".json" style="display:none" onchange="handleJSONFile(this.files[0])">
           </div>
           <div id="json-preview" style="display:none;margin-top:0.75rem"></div>
-          <div style="margin-top:0.75rem;padding:0.75rem;background:var(--gray-50);border-radius:8px;border:1px solid var(--gray-200)">
-            <p style="font-size:0.78rem;font-weight:600;margin-bottom:0.35rem;color:var(--text-secondary)">Expected JSON format:</p>
-            <code style="font-size:0.75rem;color:var(--text-muted);white-space:pre-wrap;display:block">[ { "question": "...", "a": "...", "b": "...", "c": "...", "d": "...", "correct": "b" } ]</code>
-          </div>
         </div>
 
-        <!-- Actions -->
-        <div style="display:flex;gap:0.75rem;justify-content:flex-end;align-items:center;padding-top:0.75rem;border-top:1px solid var(--gray-100);margin-top:0.75rem">
+        <div style="display:flex;gap:0.75rem;justify-content:flex-end;align-items:center;padding-top:0.85rem;border-top:1px solid var(--gray-100);margin-top:0.85rem">
           <span id="import-row-count" style="font-size:0.8rem;color:var(--text-muted);flex:1"></span>
           <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Cancel</button>
           <button class="modal-btn modal-btn-confirm" id="do-import-btn" onclick="doImportQuestions()">Import Questions</button>
@@ -642,7 +626,26 @@ async function showImportQuestionsModal(ApiClient) {
     </div>`;
 
   // ── Parsed rows cache ──────────────────────────────────────────────────────
-  let _parsedCSV = null; // only used by Excel/JSON tabs to feed the CSV endpoint
+  let _parsedCSV = null;
+  let _importFormat = 'en';
+
+  window.setImportFormat = (fmt) => {
+    _importFormat = fmt === 'bilingual' ? 'bilingual' : 'en';
+    const enBtn = document.getElementById('fmt-en');
+    const biBtn = document.getElementById('fmt-bilingual');
+    const active = { background: '#fff', color: '#1d4ed8', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' };
+    const idle = { background: 'transparent', color: 'var(--text-muted)', boxShadow: 'none' };
+    Object.assign(enBtn.style, _importFormat === 'en' ? active : idle);
+    Object.assign(biBtn.style, _importFormat === 'bilingual' ? active : idle);
+    document.getElementById('import-format-hint').textContent = _importFormat === 'bilingual'
+      ? 'English on top, Marathi below — for each question and option.'
+      : 'English questions and options only.';
+  };
+
+  window.downloadImportTemplate = (kind) => {
+    if (kind === 'excel') window.downloadExcelTemplate(_importFormat);
+    else window.downloadCSVTemplate(_importFormat);
+  };
 
   // ── Tab switcher ───────────────────────────────────────────────────────────
   window.switchImportTab = (tab) => {
