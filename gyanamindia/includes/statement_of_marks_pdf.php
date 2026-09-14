@@ -129,25 +129,26 @@ function outputStatementOfMarksPdf(array $d): void
         $pdf->Cell($innerW, $lineH, $text, 0, 0, $align);
     };
 
-    $barH = 8.5;
+    $barH = 9.0;
     $legHdrH = 8.5;
     $legValH = 10.5;
     $legendTotal = $legHdrH + $legValH;
 
-    // Header sized so the grid below can mirror MCCE row balance
-    $headerGap = 1.2;
+    // GIIT header — full width, natural aspect, breathing room from top border
+    $headerTopPad = 3.0;
+    $headerGap = 2.5;
     if ($brand === 'abacus') {
-        $headerImgW = 66.0;
-        $headerImgH = 20.0;
+        $headerImgW = 78.0;
+        $headerImgH = 26.0;
         $headerImgX = $x + ($tw - $headerImgW) / 2;
         $headerImgPath = $abacusLogoPath;
     } else {
-        $headerImgW = $tw * 0.58;
-        $headerImgH = min(26.0, $headerImgW * (520.0 / 1280.0));
+        $headerImgW = $tw * 0.82;
+        $headerImgH = $headerImgW * (520.0 / 1280.0); // keep banner aspect, do not shrink height
         $headerImgX = $x + ($tw - $headerImgW) / 2;
         $headerImgPath = $headerBannerPath;
     }
-    $headerBodyH = $headerImgH + $headerGap;
+    $headerBodyH = $headerTopPad + $headerImgH + $headerGap;
 
     $gridStart = $top + $headerBodyH + $barH;
     $gridEnd = $bottom - $legendTotal;
@@ -199,16 +200,16 @@ function outputStatementOfMarksPdf(array $d): void
 
     if (is_file($headerImgPath)) {
         try {
-            $pdf->Image($headerImgPath, $headerImgX, $top + 0.4, $headerImgW, $headerImgH);
+            $pdf->Image($headerImgPath, $headerImgX, $top + $headerTopPad, $headerImgW, $headerImgH);
         } catch (Exception $e) {
         }
     }
 
     $barY = $top + $headerBodyH;
-    $pdf->SetFillColor(210, 210, 210);
+    // Title row — border only, no grey background
     $pdf->SetDrawColor(0, 0, 0);
     $pdf->SetLineWidth(0.25);
-    $pdf->Rect($x, $barY, $tw, $barH, 'DF');
+    $pdf->Rect($x, $barY, $tw, $barH, 'D');
     $pdf->SetTextColor(0, 0, 0);
     $pdf->SetFont('Times', 'B', $FONT);
     $pdf->SetXY($x, $barY + ($barH - $LINE) / 2);
@@ -223,7 +224,7 @@ function outputStatementOfMarksPdf(array $d): void
     }
 
     $rowsY = $infoY + $metaHdrH + $metaValH;
-    // MCCE: labels left-ish / values left in content cells; we keep labels centered in label col, values left for long text
+    // All values centered in their cells (incl. long multi-line course title)
     $infoRows = [
         ['Name of Student', $fullName, $infoH, 'B'],
         ['Name of ATC', $atcName, $infoH, 'B'],
@@ -233,15 +234,13 @@ function outputStatementOfMarksPdf(array $d): void
     foreach ($infoRows as $pair) {
         [$lab, $val, $h, $sty] = $pair;
         $cell($x, $ry, $labelW, $h, $lab, false, 'C', $FONT, 'B', true);
-        $valAlign = (strpos($val, "\n") !== false || strlen($val) > 55) ? 'L' : 'C';
-        $cell($x + $labelW, $ry, $valW, $h, $val, false, $valAlign, $FONT, $sty, true);
+        $cell($x + $labelW, $ry, $valW, $h, $val, false, 'C', $FONT, $sty, true);
         $ry += $h;
     }
 
     $contentY = $ry;
     $cell($x, $contentY, $labelW, $contentH, "Course\nContents", false, 'C', $FONT, 'B', true);
-    // MCCE course contents are regular weight
-    $cell($x + $labelW, $contentY, $valW, $contentH, $contents, false, 'L', $FONT, '', true);
+    $cell($x + $labelW, $contentY, $valW, $contentH, $contents, false, 'C', $FONT, '', true);
 
     $marksY = $contentY + $contentH;
     $mW = 5 * $unit;
