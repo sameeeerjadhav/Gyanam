@@ -255,7 +255,7 @@ function examSubmissionIsDemo(array $sub): bool
 /**
  * Normalize a passing, non-demo submission for certificate use.
  *
- * @return array{identifier:string,score:int,exam_date:string,exam_title:string,submitted_at:?string}|null
+ * @return array{identifier:string,score:int,exam_date:string,exam_title:string,submitted_at:?string,correct_answers:int,total_questions:int,exam_40:int}|null
  */
 function examSubmissionPassRecord(array $sub): ?array
 {
@@ -270,12 +270,32 @@ function examSubmissionPassRecord(array $sub): ?array
         return null;
     }
     $score = (int)($sub['score'] ?? 0);
+    $correct = (int)($sub['correct_answers'] ?? $sub['correct'] ?? 0);
+    $total = (int)($sub['total_questions'] ?? $sub['total'] ?? 0);
+    if ($total <= 0 && isset($sub['exam']['total_questions'])) {
+        $total = (int)$sub['exam']['total_questions'];
+    }
+    // If API omitted correct/total but score is a %, approximate out of 40 from percentage
+    if ($total <= 0 && $score >= 0) {
+        $correct = $score;
+        $total = 100;
+    }
+    if (function_exists('scaleExamMarksTo40')) {
+        $exam40 = scaleExamMarksTo40($correct, $total);
+    } else {
+        $exam40 = ($total === 40)
+            ? max(0, min(40, $correct))
+            : ($total > 0 ? max(0, min(40, (int)round(($correct / $total) * 40))) : 0);
+    }
     return [
-        'identifier'   => $id,
-        'score'        => $score,
-        'exam_date'    => date('Y-m-d', strtotime((string)($sub['submitted_at'] ?? 'now'))),
-        'exam_title'   => (string)($sub['exam_title'] ?? ($sub['exam']['title'] ?? '')),
-        'submitted_at' => $sub['submitted_at'] ?? null,
+        'identifier'       => $id,
+        'score'            => $score,
+        'exam_date'        => date('Y-m-d', strtotime((string)($sub['submitted_at'] ?? 'now'))),
+        'exam_title'       => (string)($sub['exam_title'] ?? ($sub['exam']['title'] ?? '')),
+        'submitted_at'     => $sub['submitted_at'] ?? null,
+        'correct_answers'  => $correct,
+        'total_questions'  => $total,
+        'exam_40'          => $exam40,
     ];
 }
 

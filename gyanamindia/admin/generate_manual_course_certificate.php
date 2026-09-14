@@ -93,6 +93,24 @@ if ($fullName === '' || $courseName === '') {
     die('<b>Error:</b> Student name and course are required. Select a student from the list.');
 }
 
+// IT manual: prefer Exam/40 + ATC/60 when provided
+$exam40Manual = isset($src['exam_40']) ? (int)$src['exam_40'] : null;
+$atc60Manual = isset($src['atc_marks']) ? (int)$src['atc_marks'] : null;
+if ($exam40Manual !== null && $atc60Manual !== null
+    && isGiitItCourse($courseType, $courseName)) {
+    $exam40Manual = max(0, min(40, $exam40Manual));
+    $atc60Manual = max(0, min(60, $atc60Manual));
+    $score = $exam40Manual + $atc60Manual;
+    upsertAdmissionAtcMarks(
+        $pdo,
+        $admissionId,
+        $atc60Manual,
+        $studentAtcId ?: null,
+        (int)($_SESSION['user_id'] ?? 0) ?: null,
+        'Admin'
+    );
+}
+
 if ($score < 40 || $score > 100) {
     http_response_code(400);
     die('<b>Error:</b> Score must be between 40 and 100 (passing grade required).');

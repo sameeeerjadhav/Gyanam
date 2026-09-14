@@ -7,7 +7,8 @@
  *   student_id:string, full_name:string, atc_name:string, course_name:string,
  *   course_contents:string, duration:string, month_year:string, center_code:string,
  *   score:int, grade:string, brand:string, is_typing?:bool, wpm?:int, kph?:int,
- *   preview?:bool, filename?:string, return_string?:bool
+ *   preview?:bool, filename?:string, return_string?:bool,
+ *   is_it_split?:bool, exam_40?:int, atc_60?:int
  * } $d
  * @return string|null PDF bytes when return_string is true; otherwise outputs and exits.
  */
@@ -32,6 +33,9 @@ function outputStatementOfMarksPdf(array $d): ?string
     $grade = (string)($d['grade'] ?? '');
     $brand = (($d['brand'] ?? 'it') === 'abacus') ? 'abacus' : 'it';
     $isTyping = !empty($d['is_typing']);
+    $isItSplit = !empty($d['is_it_split']) && !$isTyping;
+    $exam40 = max(0, min(40, (int)($d['exam_40'] ?? 0)));
+    $atc60 = max(0, min(60, (int)($d['atc_60'] ?? 0)));
     $wpm = max(1, (int)($d['wpm'] ?? 30));
     $kph = max(1, (int)($d['kph'] ?? 9000));
     $preview = !empty($d['preview']);
@@ -177,6 +181,16 @@ function outputStatementOfMarksPdf(array $d): ?string
         $contentH = 1.45 * $u;
         $marksHdrH = 1.0 * $u;
         $marksBodyH = 7.2 * $u; // 6 × 1.2
+    } elseif ($isItSplit) {
+        // 3 mark rows: ATC/60, Exam/40, Total/100
+        $u = $stretchH / 12.6;
+        $metaHdrH = 1.0 * $u;
+        $metaValH = 1.1 * $u;
+        $infoH = 1.25 * $u;
+        $courseH = 1.25 * $u;
+        $contentH = 1.5 * $u;
+        $marksHdrH = 1.0 * $u;
+        $marksBodyH = 4.5 * $u; // 3 × 1.5
     } else {
         $u = $stretchH / 11.4;
         $metaHdrH = 1.0 * $u;
@@ -281,6 +295,19 @@ function outputStatementOfMarksPdf(array $d): ?string
             // Same font size as rest of sheet
             $cell($x, $py, $pW, $rh, (string)$parts[$i]['label'], false, 'C', $FONT, '', true);
             $cell($x + $pW, $py, $mW, $rh, sprintf('%02d/%02d', $obt, $max), false, 'C', $FONT, 'B');
+        }
+    } elseif ($isItSplit) {
+        $itRows = [
+            ['ATC / Internal Assessment', $atc60, 60],
+            ['Main Exam', $exam40, 40],
+            ['Total', $score, 100],
+        ];
+        $rh = $marksBodyH / 3;
+        for ($i = 0; $i < 3; $i++) {
+            $py = $marksY + $marksHdrH + $i * $rh;
+            $style = ($i === 2) ? 'B' : '';
+            $cell($x, $py, $pW, $rh, $itRows[$i][0], false, 'C', $FONT, $style, true);
+            $cell($x + $pW, $py, $mW, $rh, sprintf('%02d/%02d', $itRows[$i][1], $itRows[$i][2]), false, 'C', $FONT, 'B');
         }
     } else {
         $rh = $marksBodyH / 2;

@@ -142,6 +142,16 @@ if ($isTyping && ($contents === '—' || $contents === '')) {
     $contents = typingMarksheetDefaultContents($speeds['wpm']);
 }
 
+$isItSplit = isGiitItCourse($courseType, $courseName);
+$exam40 = 0;
+$atc60 = 0;
+if ($isItSplit) {
+    $exam40 = max(0, min(40, (int)round($score * 0.4)));
+    $atc60 = max(0, min(60, $score - $exam40));
+    $score = $exam40 + $atc60;
+    $grade = courseExamGradeFromScore($score);
+}
+
 $durationLine = 'The course duration is ' . $duration;
 $gradeLine = courseCertificateGradeLine($grade);
 $courseAbv = strtoupper(preg_replace('/[^A-Z0-9]/i', '', substr($courseName, 0, 6)));
@@ -208,6 +218,9 @@ try {
         'grade'           => $grade,
         'brand'           => $certBrand,
         'is_typing'       => $isTyping,
+        'is_it_split'     => $isItSplit && !$isTyping,
+        'exam_40'         => $exam40,
+        'atc_60'          => $atc60,
         'wpm'             => $speeds['wpm'],
         'kph'             => $speeds['kph'],
         'preview'         => true,

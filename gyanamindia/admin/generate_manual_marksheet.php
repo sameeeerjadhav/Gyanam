@@ -22,6 +22,12 @@ if ($admissionId <= 0) {
     die('<b>Error:</b> Select a student first.');
 }
 
+$exam40Pre = isset($src['exam_40']) ? (int)$src['exam_40'] : null;
+$atc60Pre = isset($src['atc_marks']) ? (int)$src['atc_marks'] : null;
+if ($exam40Pre !== null && $atc60Pre !== null) {
+    $score = max(0, min(40, $exam40Pre)) + max(0, min(60, $atc60Pre));
+}
+
 if ($score < 40 || $score > 100) {
     http_response_code(400);
     die('<b>Error:</b> Score must be between 40 and 100.');
@@ -115,6 +121,39 @@ if ($isTyping && ($contents === '—' || $contents === '')) {
     $contents = typingMarksheetDefaultContents($speeds['wpm']);
 }
 
+$isItSplit = false;
+$exam40 = 0;
+$atc60 = 0;
+if (isGiitItCourse($student['course_type'] ?? null, $courseName)) {
+    $exam40In = isset($src['exam_40']) ? (int)$src['exam_40'] : null;
+    $atc60In = isset($src['atc_marks']) ? (int)$src['atc_marks'] : null;
+    if ($atc60In === null) {
+        $saved = getAdmissionAtcMarks($pdo, $admissionId);
+        if ($saved !== null) {
+            $atc60In = (int)$saved['atc_marks'];
+        }
+    }
+    if ($exam40In !== null && $atc60In !== null) {
+        $exam40 = max(0, min(40, $exam40In));
+        $atc60 = max(0, min(60, $atc60In));
+        $score = $exam40 + $atc60;
+        $grade = courseExamGradeFromScore($score);
+        $isItSplit = true;
+        upsertAdmissionAtcMarks(
+            $pdo,
+            $admissionId,
+            $atc60,
+            (int)($student['atc_id'] ?? 0) ?: null,
+            (int)($_SESSION['user_id'] ?? 0) ?: null,
+            'Admin'
+        );
+        if ($grade === 'Fail') {
+            http_response_code(400);
+            die('<b>Error:</b> Combined IT marks are below passing grade.');
+        }
+    }
+}
+
 outputStatementOfMarksPdf([
     'student_id'      => $studentId,
     'full_name'       => $fullName,
@@ -128,6 +167,9 @@ outputStatementOfMarksPdf([
     'grade'           => $grade,
     'brand'           => $brand,
     'is_typing'       => $isTyping,
+    'is_it_split'     => $isItSplit,
+    'exam_40'         => $exam40,
+    'atc_60'          => $atc60,
     'wpm'             => $speeds['wpm'],
     'kph'             => $speeds['kph'],
     'preview'         => $preview,

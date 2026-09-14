@@ -21,6 +21,53 @@ $certPageSelf     = $certPageSelf     ?? 'print_certificates.php';
 
 $pdo      = getDBConnection();
 $userName = sanitize(getUserName());
+$userId   = (int)($_SESSION['user_id'] ?? 0);
+
+ensureAdmissionAtcMarksSchema($pdo);
+
+$flashOk = '';
+$flashErr = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_atc_marks'])) {
+    $admissionId = (int)($_POST['admission_id'] ?? 0);
+    $marks = (int)($_POST['atc_marks'] ?? -1);
+    $returnQs = trim((string)($_POST['return_qs'] ?? ''));
+    if ($admissionId <= 0) {
+        $flashErr = 'Invalid student.';
+    } elseif ($marks < 0 || $marks > 60) {
+        $flashErr = 'ATC marks must be between 0 and 60.';
+    } else {
+        $chk = $pdo->prepare("
+            SELECT a.id, a.atc_id, a.course, c.course_type
+            FROM admissions a
+            LEFT JOIN courses c ON c.course_name = a.course AND c.status = 'Active'
+            WHERE a.id = ?
+            LIMIT 1
+        ");
+        $chk->execute([$admissionId]);
+        $row = $chk->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            $flashErr = 'Student not found.';
+        } elseif (!isGiitItCourse($row['course_type'] ?? null, $row['course'] ?? null)) {
+            $flashErr = 'ATC /60 marks apply only to IT courses.';
+        } elseif (upsertAdmissionAtcMarks($pdo, $admissionId, $marks, (int)($row['atc_id'] ?? 0) ?: null, $userId, 'Admin')) {
+            $flashOk = 'ATC marks saved.';
+        } else {
+            $flashErr = 'Could not save ATC marks.';
+        }
+    }
+    // Keep flash via session briefly
+    if ($flashOk !== '' || $flashErr !== '') {
+        $_SESSION['print_cert_flash'] = ['ok' => $flashOk, 'err' => $flashErr];
+        $redir = $certPageSelf . ($returnQs !== '' ? ('?' . ltrim($returnQs, '?')) : '');
+        header('Location: ' . $redir);
+        exit;
+    }
+}
+if (!empty($_SESSION['print_cert_flash'])) {
+    $flashOk = (string)($_SESSION['print_cert_flash']['ok'] ?? '');
+    $flashErr = (string)($_SESSION['print_cert_flash']['err'] ?? '');
+    unset($_SESSION['print_cert_flash']);
+}
 
 // ── Load filter options ───────────────────────────────────────────────────────
 $dlcList = $pdo->query("SELECT id, name FROM dlc_offices WHERE status='Active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
@@ -67,12 +114,14 @@ if ($filterSearch !== '') {
 try {
     $sql = "SELECT a.id, a.roll_no, a.registration_id,
                    CONCAT(a.first_name,' ',COALESCE(NULLIF(TRIM(a.middle_name),''),''),' ',a.last_name) AS student_name,
-                   a.course, a.admission_date, a.photo,
+                   a.course, a.admission_date, a.photo, a.atc_id,
+                   c.course_type,
                    atc.name AS atc_name, atc.atc_code,
                    dlc.name AS dlc_name
             FROM admissions a
             LEFT JOIN atc_centers atc ON atc.id = a.atc_id
             LEFT JOIN dlc_offices dlc ON dlc.id = atc.dlc_id
+            LEFT JOIN courses c ON c.course_name = a.course AND c.status = 'Active'
             WHERE " . implode(' AND ', $where) . "
             ORDER BY a.admission_date DESC, student_name ASC";
     $stmt = $pdo->prepare($sql);
@@ -82,7 +131,9 @@ try {
     $students = [];
 }
 
-// Tag each student with pass status + score/date
+$marksMap = getAdmissionAtcMarksMap($pdo, array_column($students, 'id'));
+
+// Tag each student with pass status + score/date + IT composition
 foreach ($students as &$s) {
     $regId = $s['registration_id'] ?: ('GYANAM' . $s['id']);
     $passData = $passedIdentifiers[$regId] ?? null;
@@ -90,6 +141,23 @@ foreach ($students as &$s) {
     $s['exam_score']   = $passData['score']   ?? 0;
     $s['exam_date']    = $passData['exam_date'] ?? date('Y-m-d');
     $s['exam_title']   = $passData['exam_title'] ?? '';
+    $s['exam_40']      = isset($passData['exam_40']) ? (int)$passData['exam_40'] : null;
+    $s['is_it']        = isGiitItCourse($s['course_type'] ?? null, $s['course'] ?? null);
+    $admId = (int)$s['id'];
+    $s['atc_marks'] = array_key_exists($admId, $marksMap) ? $marksMap[$admId] : null;
+    if ($s['is_it']) {
+        $composed = composeItCertificateScores($passData, $s['atc_marks']);
+        $s['exam_40'] = $composed['exam_40'];
+        $s['total_marks'] = $composed['total'];
+        $s['grade'] = $composed['grade'];
+        $s['it_complete'] = $composed['complete'];
+        $s['print_ready'] = !empty($s['exam_passed']) && $composed['complete'] && $composed['grade'] !== 'Fail';
+    } else {
+        $s['total_marks'] = $s['exam_passed'] ? (int)$s['exam_score'] : null;
+        $s['grade'] = $s['exam_passed'] ? courseExamGradeFromScore((int)$s['exam_score']) : '';
+        $s['it_complete'] = false;
+        $s['print_ready'] = !empty($s['exam_passed']);
+    }
 }
 unset($s);
 
@@ -116,13 +184,13 @@ foreach ($students as &$s) {
 unset($s);
 
 if ($filterMode === 'print_pending') {
-    // Prefer exam-passed & not issued; if exam portal offline, keep students not yet issued
+    // Prefer exam-passed & not issued; IT also needs ATC marks
     $students = array_values(array_filter($students, function ($s) use ($integrationReady) {
         if (!empty($s['cert_issued'])) {
             return false;
         }
         if ($integrationReady) {
-            return !empty($s['exam_passed']);
+            return !empty($s['print_ready']);
         }
         return true;
     }));
@@ -130,6 +198,14 @@ if ($filterMode === 'print_pending') {
 
 $totalStudents = count($students);
 $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
+$printReadyCount = count(array_filter($students, fn($s) => !empty($s['print_ready'])));
+$returnQs = http_build_query(array_filter([
+    'dlc_id' => $filterDlc ?: null,
+    'atc_id' => $filterAtc ?: null,
+    'course' => $filterCourse !== '' ? $filterCourse : null,
+    'search' => $filterSearch !== '' ? $filterSearch : null,
+    'filter' => $filterMode !== '' ? $filterMode : null,
+]));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -211,6 +287,12 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
 .btn-marks:hover { background:#dbeafe;transform:translateY(-1px);box-shadow:0 2px 8px rgba(37,99,235,.2) }
 .btn-cert-disabled { display:inline-flex;align-items:center;gap:.3rem;padding:.42rem .9rem;border-radius:8px;border:1.5px solid #e5e7eb;background:#f9fafb;color:#9ca3af;font-size:.78rem;font-weight:800;cursor:not-allowed;white-space:nowrap }
 .cert-actions { display:flex;flex-direction:column;align-items:center;gap:.35rem }
+.im-inline { display:flex;align-items:center;gap:.35rem;flex-wrap:wrap }
+.im-inline input { width:64px;height:32px;border:1.5px solid #e2e8f0;border-radius:7px;padding:0 .4rem;font-weight:700;text-align:center;font-size:.8rem }
+.im-inline button { height:32px;padding:0 .65rem;border:none;border-radius:7px;background:#059669;color:#fff;font-weight:800;font-size:.72rem;cursor:pointer }
+.flash-ok { background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:10px;padding:.7rem 1rem;margin-bottom:1rem;font-weight:700 }
+.flash-err { background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:10px;padding:.7rem 1rem;margin-bottom:1rem;font-weight:700 }
+.marks-cell { font-size:.8rem;font-weight:700;white-space:nowrap }
 
 /* Empty */
 .empty-state { text-align:center;padding:4rem 2rem }
@@ -265,8 +347,17 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
                 <div class="cstat-icon amber">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 </div>
-                <div><div class="cstat-val"><?= $totalStudents - $passedCount ?></div><div class="cstat-lbl">Pending / Not Taken</div></div>
+                <div><div class="cstat-val"><?= $printReadyCount ?></div><div class="cstat-lbl">Print Ready</div></div>
             </div>
+        </div>
+
+        <?php if ($flashOk !== ''): ?><div class="flash-ok"><?= htmlspecialchars($flashOk) ?></div><?php endif; ?>
+        <?php if ($flashErr !== ''): ?><div class="flash-err"><?= htmlspecialchars($flashErr) ?></div><?php endif; ?>
+
+        <div class="info-bar" style="margin-bottom:1rem">
+            <span class="info-notice" style="background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a">
+                IT courses: Exam /40 + ATC /60 = Total /100. Enter or edit ATC marks below before printing.
+            </span>
         </div>
 
         <!-- Filters -->
@@ -324,7 +415,7 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
 
         <!-- Info bar -->
         <div class="info-bar">
-            <span class="info-bar-left"><?= $totalStudents ?> student<?= $totalStudents !== 1 ? 's' : '' ?> listed — <?= $passedCount ?> eligible for certificate</span>
+            <span class="info-bar-left"><?= $totalStudents ?> student<?= $totalStudents !== 1 ? 's' : '' ?> listed — <?= $printReadyCount ?> ready to print</span>
             <?php if (!$integrationReady): ?>
             <span class="info-notice">⚠️ Exam portal not connected — pass status unavailable. Certificates can still be printed manually.</span>
             <?php endif; ?>
@@ -348,8 +439,11 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
                         <th>Student</th>
                         <th>Course</th>
                         <th>ATC Center</th>
-                        <th>Admission Date</th>
-                        <th>Exam Status</th>
+                        <th>Exam %</th>
+                        <th>Exam /40</th>
+                        <th>ATC /60</th>
+                        <th>Total</th>
+                        <th>Status</th>
                         <th style="text-align:center">Documents</th>
                     </tr>
                 </thead>
@@ -359,12 +453,10 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
                     $parts    = array_filter(explode(' ', $name));
                     $initials = strtoupper(implode('', array_map(fn($w) => $w[0], array_slice($parts, 0, 2))));
                     $regId    = $s['registration_id'] ?: ('GYANAM' . $s['id']);
-                    $admDate  = $s['admission_date'] ? date('d M Y', strtotime($s['admission_date'])) : '—';
                 ?>
                 <tr>
                     <td style="color:#9ca3af;font-size:.75rem"><?= $idx + 1 ?></td>
 
-                    <!-- Student -->
                     <td>
                         <div class="stu-cell">
                             <?php if ($s['photo']): ?>
@@ -380,33 +472,79 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
                         </div>
                     </td>
 
-                    <!-- Course -->
-                    <td><span class="course-tag"><?= htmlspecialchars($s['course'] ?: '—') ?></span></td>
+                    <td>
+                        <span class="course-tag"><?= htmlspecialchars($s['course'] ?: '—') ?></span>
+                        <?php if (!empty($s['is_it'])): ?>
+                            <div class="atc-tag">IT · 40+60</div>
+                        <?php elseif (!empty($s['course_type'])): ?>
+                            <div class="atc-tag"><?= htmlspecialchars((string)$s['course_type']) ?></div>
+                        <?php endif; ?>
+                    </td>
 
-                    <!-- ATC -->
                     <td>
                         <div class="stu-name" style="font-size:.84rem"><?= htmlspecialchars($s['atc_name'] ?? '—') ?></div>
                         <?php if ($s['dlc_name']): ?><div class="atc-tag"><?= htmlspecialchars($s['dlc_name']) ?></div><?php endif; ?>
                     </td>
 
-                    <!-- Admission Date -->
-                    <td style="font-size:.82rem;color:#6b7280"><?= $admDate ?></td>
+                    <td class="marks-cell">
+                        <?php if (!$integrationReady): ?>—
+                        <?php elseif ($s['exam_passed']): ?><?= (int)$s['exam_score'] ?>%
+                        <?php else: ?>—
+                        <?php endif; ?>
+                    </td>
 
-                    <!-- Exam Status -->
+                    <td class="marks-cell">
+                        <?php if (!empty($s['is_it']) && $s['exam_passed']): ?>
+                            <?= (int)$s['exam_40'] ?>/40
+                        <?php elseif (!empty($s['is_it'])): ?>
+                            —
+                        <?php else: ?>
+                            <span class="atc-tag">N/A</span>
+                        <?php endif; ?>
+                    </td>
+
+                    <td>
+                        <?php if (!empty($s['is_it'])): ?>
+                        <form method="post" class="im-inline">
+                            <input type="hidden" name="save_atc_marks" value="1">
+                            <input type="hidden" name="admission_id" value="<?= (int)$s['id'] ?>">
+                            <input type="hidden" name="return_qs" value="<?= htmlspecialchars($returnQs) ?>">
+                            <input type="number" name="atc_marks" min="0" max="60" required
+                                   value="<?= $s['atc_marks'] !== null ? (int)$s['atc_marks'] : '' ?>"
+                                   placeholder="0–60">
+                            <button type="submit">Save</button>
+                        </form>
+                        <?php else: ?>
+                            <span class="atc-tag">N/A</span>
+                        <?php endif; ?>
+                    </td>
+
+                    <td class="marks-cell">
+                        <?php if ($s['total_marks'] !== null): ?>
+                            <?= (int)$s['total_marks'] ?>
+                            <?php if ($s['grade'] !== ''): ?> <span class="atc-tag">(<?= htmlspecialchars($s['grade']) ?>)</span><?php endif; ?>
+                        <?php else: ?>
+                            —
+                        <?php endif; ?>
+                    </td>
+
                     <td>
                         <?php if (!$integrationReady): ?>
                         <span class="status-badge badge-none"><span class="status-dot"></span>Not Connected</span>
+                        <?php elseif (!empty($s['print_ready'])): ?>
+                        <span class="status-badge badge-pass"><span class="status-dot"></span>Ready</span>
+                        <?php elseif ($s['exam_passed'] && !empty($s['is_it']) && $s['atc_marks'] === null): ?>
+                        <span class="status-badge badge-pending"><span class="status-dot"></span>Need ATC /60</span>
                         <?php elseif ($s['exam_passed']): ?>
-                        <span class="status-badge badge-pass"><span class="status-dot"></span>✅ Passed</span>
+                        <span class="status-badge badge-pass"><span class="status-dot"></span>Passed</span>
                         <?php else: ?>
                         <span class="status-badge badge-pending"><span class="status-dot"></span>Pending / Fail</span>
                         <?php endif; ?>
                     </td>
 
-                    <!-- Certificate button -->
                     <td style="text-align:center">
                         <div class="cert-actions">
-                        <?php if ($s['exam_passed']): ?>
+                        <?php if (!empty($s['print_ready'])): ?>
                         <a href="generate_marksheet.php?reg_id=<?= urlencode($regId) ?>&preview=1"
                            target="_blank" class="btn-marks">Print Marksheet</a>
                         <a href="generate_course_certificate.php?reg_id=<?= urlencode($regId) ?>&preview=1"
@@ -415,7 +553,12 @@ $passedCount   = count(array_filter($students, fn($s) => $s['exam_passed']));
                             Print Certificate
                         </a>
                         <?php else: ?>
-                        <span class="btn-cert-disabled" title="<?= !$integrationReady ? 'Exam portal not connected' : 'Student has not passed the main exam yet' ?>">
+                        <span class="btn-cert-disabled" title="<?php
+                            if (!$integrationReady) echo 'Exam portal not connected';
+                            elseif (!empty($s['is_it']) && $s['exam_passed'] && $s['atc_marks'] === null) echo 'Enter ATC marks out of 60 first';
+                            elseif (!$s['exam_passed']) echo 'Student has not passed the main exam yet';
+                            else echo 'Not eligible';
+                        ?>">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                             Not Eligible
                         </span>

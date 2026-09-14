@@ -56,6 +56,7 @@ if ($filterAtcId > 0) {
                 a.admission_date,
                 a.atc_id,
                 COALESCE(NULLIF(TRIM(c.duration), ''), '3 months') AS course_duration,
+                c.course_type AS course_type,
                 atc.name AS atc_name,
                 atc.city AS atc_city,
                 atc.district AS atc_district
@@ -100,6 +101,7 @@ foreach ($students as $s) {
         'photo' => $photoUrl,
         'admission_date' => !empty($s['admission_date']) ? date('d M Y', strtotime($s['admission_date'])) : '',
         'conducted_at' => $conducted,
+        'is_it' => isGiitItCourse($s['course_type'] ?? null, $s['course'] ?? null),
     ];
 }
 
@@ -301,10 +303,21 @@ if ($selectedAtc) {
                             </div>
 
                             <div class="marks-box" style="margin-top:1.1rem">
+                                <div id="itMarksWrap" style="display:none">
+                                    <div class="form-field" style="margin-bottom:.75rem">
+                                        <label>Main Exam marks /40 <span class="req">*</span></label>
+                                        <input type="number" name="exam_40" id="exam40Input" min="0" max="40" placeholder="0–40" disabled>
+                                    </div>
+                                    <div class="form-field" style="margin-bottom:.75rem">
+                                        <label>ATC internal marks /60 <span class="req">*</span></label>
+                                        <input type="number" name="atc_marks" id="atc60Input" min="0" max="60" placeholder="0–60" disabled>
+                                    </div>
+                                    <div class="form-hint" style="margin-bottom:.75rem">IT total = Exam/40 + ATC/60 (auto-filled below).</div>
+                                </div>
                                 <div class="form-field">
-                                    <label>Exam marks / score (40–100) <span class="req">*</span></label>
+                                    <label>Total marks / score (40–100) <span class="req">*</span></label>
                                     <input type="number" name="score" id="scoreInput" min="40" max="100" required placeholder="Enter marks" disabled>
-                                    <div class="form-hint">Only this field is entered by Admin. Grade is calculated from the score.</div>
+                                    <div class="form-hint" id="scoreHint">Only this field is entered by Admin. Grade is calculated from the score.</div>
                                 </div>
                             </div>
 
@@ -341,6 +354,10 @@ const select = document.getElementById('studentSelect');
 const panel = document.getElementById('detailsPanel');
 const admissionId = document.getElementById('admissionId');
 const scoreInput = document.getElementById('scoreInput');
+const exam40Input = document.getElementById('exam40Input');
+const atc60Input = document.getElementById('atc60Input');
+const itMarksWrap = document.getElementById('itMarksWrap');
+const scoreHint = document.getElementById('scoreHint');
 const actionBtns = [
     document.getElementById('btnPreviewCert'),
     document.getElementById('btnDownloadCert'),
@@ -350,11 +367,40 @@ const actionBtns = [
 const photoPreview = document.getElementById('photoPreview');
 const photoPlaceholder = document.getElementById('photoPlaceholder');
 
-function setEnabled(on) {
+function syncItTotal() {
+    if (!exam40Input || !atc60Input || !scoreInput) return;
+    const e = parseInt(exam40Input.value, 10);
+    const a = parseInt(atc60Input.value, 10);
+    if (!Number.isNaN(e) && !Number.isNaN(a)) {
+        scoreInput.value = String(Math.max(0, Math.min(100, e + a)));
+    }
+}
+
+function setEnabled(on, isIt) {
     if (!scoreInput) return;
-    scoreInput.disabled = !on;
+    if (itMarksWrap) itMarksWrap.style.display = isIt ? 'block' : 'none';
+    if (exam40Input) {
+        exam40Input.disabled = !on || !isIt;
+        exam40Input.required = !!(on && isIt);
+        if (!isIt) exam40Input.value = '';
+    }
+    if (atc60Input) {
+        atc60Input.disabled = !on || !isIt;
+        atc60Input.required = !!(on && isIt);
+        if (!isIt) atc60Input.value = '';
+    }
+    scoreInput.disabled = !on || !!isIt;
+    scoreInput.readOnly = !!isIt;
+    if (scoreHint) {
+        scoreHint.textContent = isIt
+            ? 'IT total is Exam/40 + ATC/60 (read-only).'
+            : 'Only this field is entered by Admin. Grade is calculated from the score.';
+    }
     actionBtns.forEach(btn => { if (btn) btn.disabled = !on; });
 }
+
+if (exam40Input) exam40Input.addEventListener('input', syncItTotal);
+if (atc60Input) atc60Input.addEventListener('input', syncItTotal);
 
 if (select) {
     select.addEventListener('change', function () {
@@ -362,7 +408,7 @@ if (select) {
         if (!s) {
             panel.style.display = 'none';
             admissionId.value = '';
-            setEnabled(false);
+            setEnabled(false, false);
             return;
         }
         admissionId.value = String(s.id);
@@ -382,8 +428,9 @@ if (select) {
             photoPlaceholder.style.display = 'flex';
         }
         panel.style.display = 'block';
-        setEnabled(true);
-        scoreInput.focus();
+        setEnabled(true, !!s.is_it);
+        if (s.is_it && exam40Input) exam40Input.focus();
+        else scoreInput.focus();
     });
 }
 </script>

@@ -14,7 +14,7 @@ require_once __DIR__ . '/../includes/statement_of_marks_pdf.php';
 if (file_exists(__DIR__ . '/../includes/exam_integration.php')) {
     require_once __DIR__ . '/../includes/exam_integration.php';
 }
-requireLogin(['Admin', 'DLC', 'ATC CENTER']);
+requireLogin(['Admin', 'DLC']);
 
 $pdo = getDBConnection();
 $sessionRole  = (string)(getUserRole() ?? '');
@@ -115,19 +115,17 @@ if (!$student) {
     die($regId === '' ? '<b>Error:</b> Missing <code>reg_id</code> parameter.' : '<b>Error:</b> Student not found.');
 }
 
-if ($sessionRole === 'ATC CENTER' && intval($student['atc_id']) !== $sessionAtcId) {
-    http_response_code(403);
-    die('Access denied.');
-}
-
 $lookupId = trim((string)($student['registration_id'] ?? '')) ?: trim((string)($student['roll_no'] ?? $regId));
 $exam = null;
 if ($isSample) {
     $exam = [
-        'identifier' => $lookupId ?: ('GIIT' . date('Y') . '1'),
-        'score'      => $forceBrand === 'typing' ? 83 : 82,
-        'exam_date'  => date('Y-m-d'),
-        'result'     => 'pass',
+        'identifier'      => $lookupId ?: ('GIIT' . date('Y') . '1'),
+        'score'           => $forceBrand === 'typing' ? 83 : 82,
+        'exam_date'       => date('Y-m-d'),
+        'result'          => 'pass',
+        'correct_answers' => $forceBrand === 'typing' ? 83 : 32,
+        'total_questions' => $forceBrand === 'typing' ? 100 : 40,
+        'exam_40'         => $forceBrand === 'typing' ? 33 : 32,
     ];
 } else {
     if (!function_exists('examIntegrationReady') || !examIntegrationReady()) {
@@ -147,14 +145,23 @@ if ($isSample) {
             if ($id === '') {
                 continue;
             }
-            $rec = [
-                'identifier'   => $id,
-                'score'        => (int)($sub['score'] ?? 0),
-                'exam_date'    => date('Y-m-d', strtotime((string)($sub['submitted_at'] ?? 'now'))),
-                'exam_title'   => (string)($sub['exam_title'] ?? ($sub['exam']['title'] ?? '')),
-                'submitted_at' => $sub['submitted_at'] ?? null,
-                'result'       => strtolower((string)($sub['result'] ?? '')),
-            ];
+            $rec = examSubmissionPassRecord($sub);
+            if (!$rec) {
+                // allow latest non-pass for marksheet preview of failed? Plan requires pass for IT. Keep best any:
+                $correct = (int)($sub['correct_answers'] ?? $sub['correct'] ?? 0);
+                $total = (int)($sub['total_questions'] ?? $sub['total'] ?? 0);
+                $rec = [
+                    'identifier'      => $id,
+                    'score'           => (int)($sub['score'] ?? 0),
+                    'exam_date'       => date('Y-m-d', strtotime((string)($sub['submitted_at'] ?? 'now'))),
+                    'exam_title'      => (string)($sub['exam_title'] ?? ($sub['exam']['title'] ?? '')),
+                    'submitted_at'    => $sub['submitted_at'] ?? null,
+                    'result'          => strtolower((string)($sub['result'] ?? '')),
+                    'correct_answers' => $correct,
+                    'total_questions' => $total,
+                    'exam_40'         => scaleExamMarksTo40($correct, $total > 0 ? $total : 100),
+                ];
+            }
             if ($best === null || strtotime((string)$rec['submitted_at']) > strtotime((string)($best['submitted_at'] ?? '0'))) {
                 $best = $rec;
             }
@@ -198,6 +205,34 @@ if (empty($student['course_type']) && $courseName !== '' && $courseName !== 'N/A
         }
     } catch (Exception $e) {
     }
+}
+
+$isItSplit = false;
+$exam40 = (int)($exam['exam_40'] ?? 0);
+$atc60 = 0;
+if (!$isSample && isGiitItCourse($student['course_type'] ?? null, $courseName)) {
+    $admissionId = (int)($student['id'] ?? 0);
+    $atcMarksRow = getAdmissionAtcMarks($pdo, $admissionId);
+    if ($atcMarksRow === null) {
+        http_response_code(403);
+        die('<b>Marksheet not available:</b> ATC internal marks (out of 60) are required for IT courses.');
+    }
+    $composed = composeItCertificateScores($exam, (int)$atcMarksRow['atc_marks']);
+    if (!$composed['complete']) {
+        http_response_code(403);
+        die('<b>Marksheet not available:</b> Incomplete IT marks (Exam/40 + ATC/60).');
+    }
+    $score = (int)$composed['total'];
+    $grade = $composed['grade'];
+    $exam40 = (int)$composed['exam_40'];
+    $atc60 = (int)$composed['atc_60'];
+    $isItSplit = true;
+} elseif ($isSample && $forceBrand === 'it') {
+    $isItSplit = true;
+    $exam40 = 32;
+    $atc60 = 50;
+    $score = 82;
+    $grade = courseExamGradeFromScore($score);
 }
 
 $atcCity = trim($student['atc_city'] ?? $student['atc_district'] ?? '');
@@ -253,6 +288,9 @@ outputStatementOfMarksPdf([
     'grade'           => $grade,
     'brand'           => $brand,
     'is_typing'       => $isTyping,
+    'is_it_split'     => $isItSplit && !$isTyping,
+    'exam_40'         => $exam40,
+    'atc_60'          => $atc60,
     'wpm'             => $speeds['wpm'],
     'kph'             => $speeds['kph'],
     'preview'         => isset($_GET['preview']),
