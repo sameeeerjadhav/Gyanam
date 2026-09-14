@@ -111,22 +111,30 @@ function outputStatementOfMarksPdf(array $d): void
         $text = str_replace(["\r\n", "\r"], "\n", trim($text));
         $padX = 1.5;
         $innerW = max(1.0, $cw - 2 * $padX);
-        $needsWrap = $wrap || (strpos($text, "\n") !== false) || ($pdf->GetStringWidth($text) > $innerW + 0.2);
+        $pdfAlign = $align === 'L' ? 'L' : ($align === 'R' ? 'R' : 'C');
+
+        // Estimate wrapped line count for vertical centering
+        $lines = 0;
+        foreach (explode("\n", $text === '' ? ' ' : $text) as $para) {
+            $para = ($para === '') ? ' ' : $para;
+            $w = $pdf->GetStringWidth($para);
+            $lines += max(1, (int)ceil($w / max(0.1, $innerW)));
+        }
+        $needsWrap = $wrap || (strpos($text, "\n") !== false) || $lines > 1;
+
         if ($needsWrap) {
-            $lines = 0;
-            foreach (explode("\n", $text) as $para) {
-                $para = ($para === '') ? ' ' : $para;
-                $w = $pdf->GetStringWidth($para);
-                $lines += max(1, (int)ceil($w / $innerW));
-            }
             $blockH = $lines * $lineH;
-            $ty = $cy + max(0.8, ($ch - $blockH) / 2);
+            $ty = $cy + max(0.5, ($ch - $blockH) / 2);
+            // Clamp so text stays inside the cell
+            if ($ty + $blockH > $cy + $ch - 0.3) {
+                $ty = max($cy + 0.4, $cy + $ch - $blockH - 0.3);
+            }
             $pdf->SetXY($cx + $padX, $ty);
-            $pdf->MultiCell($innerW, $lineH, $text, 0, $align === 'L' ? 'L' : 'C');
+            $pdf->MultiCell($innerW, $lineH, $text, 0, $pdfAlign);
             return;
         }
         $pdf->SetXY($cx + $padX, $cy + ($ch - $lineH) / 2);
-        $pdf->Cell($innerW, $lineH, $text, 0, 0, $align);
+        $pdf->Cell($innerW, $lineH, $text, 0, 0, $pdfAlign);
     };
 
     $barH = 9.0;
@@ -265,7 +273,7 @@ function outputStatementOfMarksPdf(array $d): void
             $obt = (int)($obtained[$i] ?? 0);
             $max = (int)$parts[$i]['max'];
             // Same font size as rest of sheet
-            $cell($x, $py, $pW, $rh, (string)$parts[$i]['label'], false, 'L', $FONT, '', true);
+            $cell($x, $py, $pW, $rh, (string)$parts[$i]['label'], false, 'C', $FONT, '', true);
             $cell($x + $pW, $py, $mW, $rh, sprintf('%02d/%02d', $obt, $max), false, 'C', $FONT, 'B');
         }
     } else {
@@ -314,9 +322,14 @@ function outputStatementOfMarksPdf(array $d): void
         }
     }
 
-    // Typing marksheet: push signatory label down (signatures stay top, seal stays bottom)
+    // Typing: signatory lower in the box (still inside). Keep seal visible below it.
+    $labelBlockH = 9.0;
+    $sealPrefer = $isTyping ? 26.0 : 30.0;
+    $boxBottom = $sy + $sh;
     if ($isTyping) {
-        $textY = $sy + max($sigY + $sigH + 6.0, $sh * 0.48);
+        $minTextY = $sigY + $sigH + 5.0;
+        $maxTextY = $boxBottom - $sealPrefer - $labelBlockH - 3.0;
+        $textY = max($minTextY, min($sy + $sh * 0.52, $maxTextY));
     } else {
         $textY = $sigY + $sigH + 2.0;
     }
@@ -328,12 +341,11 @@ function outputStatementOfMarksPdf(array $d): void
     $pdf->SetXY($sx + 1, $textY + 4.5);
     $pdf->Cell($rightW - 2, 4.0, 'Gyanam India Educational Services', 0, 0, 'C');
 
-    $textBottom = $textY + 4.5 + 4.0;
-    $boxBottom = $sy + $sh;
-    $sealPadTop = $isTyping ? 1.5 : 1.0;
+    $textBottom = $textY + $labelBlockH;
+    $sealPadTop = 1.2;
     $sealPadBottom = 1.5;
-    $sealAvailH = max(12.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
-    $sealSize = min($isTyping ? 28.0 : 32.0, $rightW - 5.0, $sealAvailH);
+    $sealAvailH = max(10.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
+    $sealSize = min($sealPrefer, $rightW - 5.0, $sealAvailH);
     $sealX = $sx + ($rightW - $sealSize) / 2;
     $sealY = $textBottom + $sealPadTop + max(0.0, ($sealAvailH - $sealSize) / 2);
     if (is_file($sealPath)) {
