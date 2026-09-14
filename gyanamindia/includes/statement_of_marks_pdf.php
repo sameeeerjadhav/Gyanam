@@ -314,20 +314,23 @@ function outputStatementOfMarksPdf(array $d): void
     $sigX = $sx + ($rightW - $sigTotalW) / 2;
 
     if ($isTyping) {
-        // Pack signatures + signatory text + seal toward the bottom of the right cell
-        $blockH = $sigH + 2.0 + $labelBlockH + 1.2 + $sealPrefer + 1.5;
-        $blockTop = max($sy + 2.0, $boxBottom - $blockH);
-        $sigY = $blockTop;
-        $textY = $sigY + $sigH + 2.0;
-        $textBottom = $textY + $labelBlockH;
-        $sealSize = min($sealPrefer, $rightW - 5.0, max(12.0, $boxBottom - $textBottom - 2.5));
-        $sealX = $sx + ($rightW - $sealSize) / 2;
-        $sealY = $boxBottom - 1.5 - $sealSize;
-        // Keep signatory text above seal with a small gap
-        if ($textBottom + 1.0 > $sealY) {
-            $textY = max($sigY + $sigH + 1.5, $sealY - $labelBlockH - 1.0);
-            $textBottom = $textY + $labelBlockH;
+        // Vertically center signatures + signatory text + seal as one block
+        $gapSigText = 2.0;
+        $gapTextSeal = 1.5;
+        $padY = 2.0;
+        $sealSize = min($sealPrefer, $rightW - 5.0);
+        $blockH = $sigH + $gapSigText + $labelBlockH + $gapTextSeal + $sealSize;
+        $availH = max(12.0, $sh - (2 * $padY));
+        if ($blockH > $availH) {
+            $sealSize = max(12.0, $availH - ($sigH + $gapSigText + $labelBlockH + $gapTextSeal));
+            $blockH = $sigH + $gapSigText + $labelBlockH + $gapTextSeal + $sealSize;
         }
+        $blockTop = $sy + max($padY, ($sh - $blockH) / 2);
+        $sigY = $blockTop;
+        $textY = $sigY + $sigH + $gapSigText;
+        $textBottom = $textY + $labelBlockH;
+        $sealX = $sx + ($rightW - $sealSize) / 2;
+        $sealY = $textBottom + $gapTextSeal;
     } else {
         $sigY = $sy + 4.0;
         $textY = $sigY + $sigH + 2.0;
