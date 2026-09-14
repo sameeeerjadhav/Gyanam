@@ -61,18 +61,9 @@ function baseURL(): string {
 
 /**
  * Generate the next globally unique Registration ID.
- *
- * New Format: GYANAM + [global sequence number]
- * Examples:  GYANAM1, GYANAM2, GYANAM100
- *
- * The sequence is global across all ATCs and center types.
- * Backward-compatible: also reads old GIES and gi* formats for max-sequence detection.
- *
- * @param PDO    $pdo  Active PDO connection
- * @param string $centerType  Ignored — kept for backward compatibility
- * @return string e.g. "GYANAM15"
+ * GYANAM series: GYANAM1, GYANAM2, …
+ * GIIT (IT) series: GIIT20261, GIIT20262, … (year + sequence)
  */
-/**
  * Look up courses.course_type by course name.
  */
 function lookupCourseTypeByName(PDO $pdo, string $courseName): string {
@@ -100,9 +91,48 @@ function studentIdPrefixForCourse(?string $courseType = null, ?string $courseNam
 }
 
 /**
+ * Calendar year used in GIIT student registration IDs (GIIT20261, …).
+ */
+function giitRegistrationYear(?int $year = null): int {
+    $year = $year ?: (int)date('Y');
+    if ($year < 2000 || $year > 2100) {
+        $year = (int)date('Y');
+    }
+    return $year;
+}
+
+/**
+ * Parse GIIT registration id.
+ * Year format: GIIT20261 → ['year'=>2026,'seq'=>1]
+ * Legacy:     GIIT1     → ['year'=>null,'seq'=>1]
+ *
+ * @return array{year:?int,seq:int}|null
+ */
+function parseGiitRegistrationId(string $regId): ?array {
+    $regId = strtoupper(preg_replace('/\s+/', '', trim($regId)) ?? '');
+    if (preg_match('/^GIIT(20\d{2})(\d+)$/', $regId, $m)) {
+        return ['year' => (int)$m[1], 'seq' => (int)$m[2]];
+    }
+    if (preg_match('/^GIIT(\d+)$/', $regId, $m)) {
+        return ['year' => null, 'seq' => (int)$m[1]];
+    }
+    return null;
+}
+
+function isLegacyGiitRegistrationId(string $regId): bool {
+    $p = parseGiitRegistrationId($regId);
+    return $p !== null && $p['year'] === null;
+}
+
+function formatGiitRegistrationId(int $seq, ?int $year = null): string {
+    $seq = max(1, $seq);
+    return 'GIIT' . giitRegistrationYear($year) . $seq;
+}
+
+/**
  * Next global registration / roll ID for a course brand.
  * Abacus/Vedic → GYANAM1, GYANAM2, …
- * IT → GIIT1, GIIT2, …
+ * IT → GIIT20261, GIIT20262, … (year + sequence within that year)
  *
  * Sequences are separate per prefix. GYANAM continues from legacy GIES/gi* IDs.
  */
@@ -118,36 +148,131 @@ function generateRegistrationId(
     $prefix = studentIdPrefixForCourse($courseType, $courseName, $centerType);
 
     if ($prefix === 'GIIT') {
+        $year = giitRegistrationYear();
+        $yearPrefix = 'GIIT' . $year;
+        // Prefer year-format max; if none yet, continue from legacy GIIT# so migrate stays contiguous
         $stmt = $pdo->query(
             "SELECT COALESCE(MAX(
-                CAST(REGEXP_REPLACE(registration_id, '^GIIT', '') AS UNSIGNED)
+                CAST(REGEXP_REPLACE(registration_id, '^GIIT{$year}', '') AS UNSIGNED)
             ), 0)
             FROM admissions
-            WHERE registration_id REGEXP '^GIIT[0-9]+$'"
+            WHERE registration_id REGEXP '^GIIT{$year}[0-9]+$'"
         );
-    } else {
-        // GYANAM series (includes legacy GIES / gi* so numbering stays continuous)
-        $stmt = $pdo->query(
-            "SELECT COALESCE(MAX(
-                CAST(
-                    CASE
-                        WHEN registration_id REGEXP '^GYANAM[0-9]+$' THEN REGEXP_REPLACE(registration_id, '^GYANAM', '')
-                        WHEN registration_id REGEXP '^GIES[0-9]+$'   THEN REGEXP_REPLACE(registration_id, '^GIES', '')
-                        WHEN registration_id REGEXP '^gi[a-z]+[0-9]+$' THEN REGEXP_REPLACE(registration_id, '^gi[a-z]+', '')
-                        ELSE '0'
-                    END
-                AS UNSIGNED)
-            ), 0)
-            FROM admissions
-            WHERE registration_id REGEXP '^(GYANAM|GIES|gi[a-z]+)[0-9]+$'"
-        );
+        $maxSeq = (int)($stmt ? $stmt->fetchColumn() : 0);
+        if ($maxSeq === 0) {
+            $legacy = $pdo->query(
+                "SELECT COALESCE(MAX(
+                    CAST(REGEXP_REPLACE(registration_id, '^GIIT', '') AS UNSIGNED)
+                ), 0)
+                FROM admissions
+                WHERE registration_id REGEXP '^GIIT[0-9]+$'
+                  AND registration_id NOT REGEXP '^GIIT20[0-9]{2}[0-9]+$'"
+            );
+            $maxSeq = (int)($legacy ? $legacy->fetchColumn() : 0);
+        }
+        return $yearPrefix . ($maxSeq + 1);
     }
+
+    // GYANAM series (includes legacy GIES / gi* so numbering stays continuous)
+    $stmt = $pdo->query(
+        "SELECT COALESCE(MAX(
+            CAST(
+                CASE
+                    WHEN registration_id REGEXP '^GYANAM[0-9]+$' THEN REGEXP_REPLACE(registration_id, '^GYANAM', '')
+                    WHEN registration_id REGEXP '^GIES[0-9]+$'   THEN REGEXP_REPLACE(registration_id, '^GIES', '')
+                    WHEN registration_id REGEXP '^gi[a-z]+[0-9]+$' THEN REGEXP_REPLACE(registration_id, '^gi[a-z]+', '')
+                    ELSE '0'
+                END
+            AS UNSIGNED)
+        ), 0)
+        FROM admissions
+        WHERE registration_id REGEXP '^(GYANAM|GIES|gi[a-z]+)[0-9]+$'"
+    );
     $maxSeq = (int)($stmt ? $stmt->fetchColumn() : 0);
     return $prefix . ($maxSeq + 1);
 }
 
 /**
- * Next roll number — same branded series as registration_id (GYANAM# / GIIT#).
+ * Rename legacy GIIT1 / GIIT2 → GIIT20261 / GIIT20262 (and matching roll_no).
+ *
+ * @return array{updated:int,skipped:int,rows:list<array<string,mixed>>,error?:string}
+ */
+function migrateLegacyGiitRegistrationIds(PDO $pdo, ?int $year = null, bool $dryRun = true): array {
+    $year = giitRegistrationYear($year);
+    $out = ['updated' => 0, 'skipped' => 0, 'rows' => []];
+
+    try {
+        $rows = $pdo->query(
+            "SELECT id, registration_id, roll_no, first_name, last_name, course
+             FROM admissions
+             WHERE registration_id REGEXP '^GIIT[0-9]+$'
+               AND registration_id NOT REGEXP '^GIIT20[0-9]{2}[0-9]+$'
+             ORDER BY CAST(REGEXP_REPLACE(registration_id, '^GIIT', '') AS UNSIGNED), id"
+        )->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return ['updated' => 0, 'skipped' => 0, 'rows' => [], 'error' => $e->getMessage()];
+    }
+
+    $takenStmt = $pdo->prepare(
+        "SELECT id FROM admissions WHERE (registration_id = ? OR roll_no = ?) AND id <> ? LIMIT 1"
+    );
+    $upd = $pdo->prepare(
+        "UPDATE admissions SET registration_id = ?, roll_no = CASE
+            WHEN roll_no = ? OR roll_no = '' OR roll_no IS NULL THEN ?
+            ELSE roll_no
+         END
+         WHERE id = ?"
+    );
+
+    foreach ($rows as $row) {
+        $old = trim((string)$row['registration_id']);
+        $parsed = parseGiitRegistrationId($old);
+        if ($parsed === null || $parsed['year'] !== null) {
+            $out['skipped']++;
+            continue;
+        }
+        $new = formatGiitRegistrationId($parsed['seq'], $year);
+        $oldRoll = trim((string)($row['roll_no'] ?? ''));
+        $newRoll = ($oldRoll === '' || $oldRoll === $old) ? $new : $oldRoll;
+
+        $conflict = false;
+        $takenStmt->execute([$new, $new, (int)$row['id']]);
+        if ($takenStmt->fetchColumn()) {
+            $conflict = true;
+        }
+
+        $entry = [
+            'id' => (int)$row['id'],
+            'name' => trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')),
+            'course' => (string)($row['course'] ?? ''),
+            'old' => $old,
+            'new' => $new,
+            'roll_old' => $oldRoll,
+            'roll_new' => $newRoll,
+            'status' => $conflict ? 'conflict' : 'ok',
+        ];
+
+        if ($conflict) {
+            $out['skipped']++;
+            $out['rows'][] = $entry;
+            continue;
+        }
+
+        if (!$dryRun) {
+            $upd->execute([$new, $old, $newRoll, (int)$row['id']]);
+            $out['updated']++;
+            $entry['status'] = 'updated';
+        } else {
+            $entry['status'] = 'pending';
+        }
+        $out['rows'][] = $entry;
+    }
+
+    return $out;
+}
+
+/**
+ * Next roll number — same branded series as registration_id (GYANAM# / GIIT{year}#).
  * $atcId kept for backward-compatible call signatures.
  */
 function generateNextRollNoSimple(
@@ -266,7 +391,7 @@ function resolveAdmissionIdentityForCourse(
 
     return [
         'ok' => true,
-        // Roll No uses the same branded series as Registration ID (GYANAM# / GIIT#)
+        // Roll No uses the same branded series as Registration ID (GYANAM# / GIIT{year}#)
         'roll_no' => $registrationId,
         'registration_id' => $registrationId,
         'is_re_enrollment' => false,

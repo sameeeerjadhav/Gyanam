@@ -78,6 +78,10 @@ if (empty($GLOBALS['_gyanam_sora_injected'])) {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
                 <span>Students</span>
             </a>
+            <a href="migrate_giit_reg_ids.php" class="nav-link <?= $currentPage === 'migrate_giit_reg_ids.php' ? 'active' : '' ?>" data-tooltip="Migrate GIIT IDs">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                <span>Migrate GIIT IDs</span>
+            </a>
             <a href="exam_results.php" class="nav-link <?= $currentPage === 'exam_results.php' ? 'active' : '' ?>" data-tooltip="Exam Results">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                 <span>Exam Results</span>
