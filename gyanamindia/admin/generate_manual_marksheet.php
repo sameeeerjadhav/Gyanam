@@ -2,14 +2,13 @@
 /**
  * Admin-only: Statement of Marks without exam portal.
  * POST/GET: admission_id + score [, preview=1]
+ * Typing courses use the detailed particulars table.
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/statement_of_marks_pdf.php';
 requireLogin(['Admin']);
-
-require_once __DIR__ . '/../assets/fpdi/fpdi_autoload.php';
-use setasign\Fpdi\Fpdi;
 
 $pdo = getDBConnection();
 
@@ -80,7 +79,8 @@ if (empty($student['course_type']) && $courseName !== '' && $courseName !== 'N/A
                 $student['course_duration'] = $crow['duration'] ?? '';
             }
         }
-    } catch (Exception $e) {}
+    } catch (Exception $e) {
+    }
 }
 
 $atcCity = trim((string)($student['atc_city'] ?? $student['atc_district'] ?? ''));
@@ -109,256 +109,26 @@ $brand = courseCertificateBrand(
     $student['center_type'] ?? null,
     $courseName
 );
-$signatory = $brand === 'abacus'
-    ? 'Authorized Signatory For Gyanam Abacus'
-    : 'Authorized Signatory For GIIT';
-
-$headerBannerPath = __DIR__ . '/../assets/templates/giit_marksheet_header_bw.png';
-if (!is_file($headerBannerPath)) {
-    $headerBannerPath = __DIR__ . '/../assets/templates/giit_marksheet_header.png';
-}
-$abacusLogoPath = __DIR__ . '/../assets/templates/abacus_marksheet_logo_bw.png';
-if (!is_file($abacusLogoPath)) {
-    $abacusLogoPath = __DIR__ . '/../assets/templates/abacus_marksheet_logo.png';
-}
-if (!is_file($abacusLogoPath) && function_exists('admissionFormBrandLogoPath')) {
-    $abacusLogoPath = admissionFormBrandLogoPath('abacus');
-}
-$signPljPath = __DIR__ . '/../assets/templates/marksheet_sign_plj.png';
-$signRpsPath = __DIR__ . '/../assets/templates/marksheet_sign_rps.png';
-$sealPath = __DIR__ . '/../assets/templates/marksheet_seal_giit.png';
-if (!is_file($sealPath)) {
-    $sealPath = __DIR__ . '/../assets/templates/marksheet_seal_giit.jpg';
+$isTyping = isTypingCourse($student['course_type'] ?? null, $courseName);
+$speeds = typingMarksheetSpeedDefaults($courseName);
+if ($isTyping && ($contents === '—' || $contents === '')) {
+    $contents = typingMarksheetDefaultContents($speeds['wpm']);
 }
 
-$pdf = new Fpdi();
-$pdf->SetTitle('Statement of Marks — ' . $studentId);
-$pdf->SetAuthor('Gyanam India Educational Services');
-$pdf->SetAutoPageBreak(false);
-$pdf->AddPage('P', 'A4');
-
-$W = 210.0;
-$H = 297.0;
-$pad = 8.0;
-$x = $pad;
-$tw = $W - 2 * $pad;
-$top = $pad;
-$bottom = $H - $pad;
-
-$pdf->SetDrawColor(0, 0, 0);
-$pdf->SetLineWidth(0.4);
-$pdf->Rect($pad, $pad, $tw, $bottom - $top);
-
-$cell = function (
-    float $cx, float $cy, float $cw, float $ch, string $text, bool $fill,
-    string $align = 'C', float $size = 10, string $style = '', bool $wrap = false
-) use ($pdf) {
-    if ($fill) {
-        $pdf->SetFillColor(210, 210, 210);
-    }
-    $pdf->SetDrawColor(0, 0, 0);
-    $pdf->SetLineWidth(0.25);
-    $pdf->Rect($cx, $cy, $cw, $ch, $fill ? 'DF' : 'D');
-    $pdf->SetTextColor(0, 0, 0);
-    $pdf->SetFont('Times', $style, $size);
-    $lineH = 4.2;
-    $text = str_replace(["\r\n", "\r"], "\n", trim($text));
-    $innerW = max(1.0, $cw - 2.0);
-    $needsWrap = $wrap || (strpos($text, "\n") !== false) || ($pdf->GetStringWidth($text) > $innerW);
-    if ($needsWrap) {
-        $lines = 0;
-        foreach (explode("\n", $text) as $para) {
-            $para = ($para === '') ? ' ' : $para;
-            $w = $pdf->GetStringWidth($para);
-            $lines += max(1, (int)ceil($w / $innerW));
-        }
-        $blockH = $lines * $lineH;
-        $ty = $cy + max(0.6, ($ch - $blockH) / 2);
-        $pdf->SetXY($cx + 1.0, $ty);
-        $pdf->MultiCell($innerW, $lineH, $text, 0, 'C');
-        return;
-    }
-    $pdf->SetXY($cx + 1.0, $cy + ($ch - $lineH) / 2);
-    $pdf->Cell($innerW, $lineH, $text, 0, 0, 'C');
-};
-
-$FONT = 10.0;
-$barH = 11.0;
-$legHdrH = 12.0;
-$legValH = 14.0;
-$legendTotal = $legHdrH + $legValH;
-
-$headerGap = 2.0;
-if ($brand === 'abacus') {
-    $headerImgW = 72.0;
-    $headerImgH = 24.0;
-    $headerImgX = $x + ($tw - $headerImgW) / 2;
-    $headerImgPath = $abacusLogoPath;
-} else {
-    $headerImgW = $tw * 0.65;
-    $headerImgH = $headerImgW * (520.0 / 1280.0);
-    $headerImgX = $x + ($tw - $headerImgW) / 2;
-    $headerImgPath = $headerBannerPath;
-}
-$headerBodyH = $headerImgH + $headerGap;
-
-$gridStart = $top + $headerBodyH + $barH;
-$gridEnd = $bottom - $legendTotal;
-$stretchH = max(100.0, $gridEnd - $gridStart);
-
-$wMetaHdr = 0.08;
-$wMetaVal = 0.09;
-$wRow = 0.10;
-$wContent = 0.18;
-$wMarksHd = 0.09;
-$wMarksBd = 0.26;
-
-$metaHdrH = $stretchH * $wMetaHdr;
-$metaValH = $stretchH * $wMetaVal;
-$rowH = $stretchH * $wRow;
-$contentH = $stretchH * $wContent;
-$marksHdrH = $stretchH * $wMarksHd;
-$marksBodyH = $stretchH * $wMarksBd;
-$planned = $metaHdrH + $metaValH + ($rowH * 3) + $contentH + $marksHdrH + $marksBodyH;
-$marksBodyH += ($stretchH - $planned);
-
-$colW = $tw / 4;
-$unit = $tw / 28; // LCM of 4-col meta and 7-col legend
-$gw = 4 * $unit;  // = $tw / 7
-$labelW = $colW;  // = 7 * $unit — aligns with first meta column
-$valW = $tw - $labelW;
-$pW = $labelW;
-
-if (is_file($headerImgPath)) {
-    try {
-        $pdf->Image($headerImgPath, $headerImgX, $top + 0.5, $headerImgW, $headerImgH);
-    } catch (Exception $e) {}
-}
-
-$barY = $top + $headerBodyH;
-$pdf->SetFillColor(255, 255, 255);
-$pdf->SetDrawColor(0, 0, 0);
-$pdf->SetLineWidth(0.25);
-$pdf->Rect($x, $barY, $tw, $barH, 'DF');
-$pdf->SetTextColor(0, 0, 0);
-$pdf->SetFont('Times', 'B', $FONT);
-$pdf->SetXY($x, $barY + ($barH - 4.2) / 2);
-$pdf->Cell($tw, 4.2, 'Statement of Marks', 0, 0, 'C');
-
-$infoY = $barY + $barH;
-$headers = ['Month & Year of Exam', 'Course Duration', 'Center Code', 'Student ID'];
-$values = [$monthYear, $duration, $centerCode, $studentId];
-for ($i = 0; $i < 4; $i++) {
-    $cell($x + $i * $colW, $infoY, $colW, $metaHdrH, $headers[$i], true, 'C', $FONT, 'B', true);
-    $cell($x + $i * $colW, $infoY + $metaHdrH, $colW, $metaValH, $values[$i], false, 'C', $FONT, 'B');
-}
-
-$rowsY = $infoY + $metaHdrH + $metaValH;
-$infoRows = [
-    ['Name of Student', $fullName],
-    ["Name of ATC\n(Authorized Training Center)", $atcName],
-    ['Name of the Course', $courseName],
-];
-foreach ($infoRows as $i => $pair) {
-    $ry = $rowsY + $i * $rowH;
-    $cell($x, $ry, $labelW, $rowH, $pair[0], false, 'C', $FONT, 'B', true);
-    $cell($x + $labelW, $ry, $valW, $rowH, $pair[1], false, 'C', $FONT, 'B');
-}
-
-$contentY = $rowsY + 3 * $rowH;
-$cell($x, $contentY, $labelW, $contentH, "Course\nContents", false, 'C', $FONT, 'B', true);
-$cell($x + $labelW, $contentY, $valW, $contentH, $contents, false, 'C', $FONT, 'B', true);
-
-$marksY = $contentY + $contentH;
-// After Particulars (7 units), snap remaining edges to legend lines at 12/16/20/28
-$mW = 5 * $unit;
-$pctW = 4 * $unit;
-$gW = 4 * $unit;
-$rightW = 8 * $unit;
-$leftW = $pW + $mW + $pctW + $gW;
-$rh = $marksBodyH / 2;
-
-$cell($x, $marksY, $pW, $marksHdrH, 'Particulars', false, 'C', $FONT, 'B');
-$cell($x + $pW, $marksY, $mW, $marksHdrH, 'Marks', false, 'C', $FONT, 'B');
-$cell($x + $pW + $mW, $marksY, $pctW, $marksHdrH, 'Percentage', false, 'C', $FONT, 'B');
-$cell($x + $pW + $mW + $pctW, $marksY, $gW, $marksHdrH, 'Grade', false, 'C', $FONT, 'B');
-
-$cell($x, $marksY + $marksHdrH, $pW, $rh, 'Maximum Marks', false, 'C', $FONT, 'B');
-$cell($x + $pW, $marksY + $marksHdrH, $mW, $rh, '100', false, 'C', $FONT, 'B');
-$cell($x, $marksY + $marksHdrH + $rh, $pW, $rh, 'Marks Obtained', false, 'C', $FONT, 'B');
-$cell($x + $pW, $marksY + $marksHdrH + $rh, $mW, $rh, (string)$score, false, 'C', $FONT, 'B');
-
-$pdf->Rect($x + $pW + $mW, $marksY + $marksHdrH, $pctW, $marksBodyH, 'D');
-$pdf->Rect($x + $pW + $mW + $pctW, $marksY + $marksHdrH, $gW, $marksBodyH, 'D');
-$cell($x + $pW + $mW, $marksY + $marksHdrH, $pctW, $marksBodyH, (string)$score, false, 'C', $FONT, 'B');
-$cell($x + $pW + $mW + $pctW, $marksY + $marksHdrH, $gW, $marksBodyH, $grade, false, 'C', $FONT, 'B');
-
-$sx = $x + $leftW;
-$sy = $marksY;
-$sh = $marksHdrH + $marksBodyH;
-$pdf->Rect($sx, $sy, $rightW, $sh, 'D');
-
-// Signatures above authorized-signatory text; GIIT seal centered below
-$sigH = 10.5;
-$sigW1 = $sigH * (223.0 / 118.0);
-$sigW2 = $sigH * (280.0 / 118.0);
-$sigGap = 2.0;
-$sigTotalW = $sigW1 + $sigGap + $sigW2;
-$maxSigW = max(20.0, $rightW - 4.0);
-if ($sigTotalW > $maxSigW) {
-    $scale = $maxSigW / $sigTotalW;
-    $sigH *= $scale;
-    $sigW1 *= $scale;
-    $sigW2 *= $scale;
-    $sigTotalW = $sigW1 + $sigGap + $sigW2;
-}
-$sigY = $sy + 3.5;
-$sigX = $sx + ($rightW - $sigTotalW) / 2;
-if (is_file($signPljPath)) {
-    try {
-        $pdf->Image($signPljPath, $sigX, $sigY, $sigW1, $sigH);
-    } catch (Exception $e) {}
-}
-if (is_file($signRpsPath)) {
-    try {
-        $pdf->Image($signRpsPath, $sigX + $sigW1 + $sigGap, $sigY, $sigW2, $sigH);
-    } catch (Exception $e) {}
-}
-$textY = $sigY + $sigH + 2.0;
-$pdf->SetTextColor(0, 0, 0);
-$pdf->SetFont('Times', 'B', $FONT);
-$pdf->SetXY($sx + 1, $textY);
-$pdf->Cell($rightW - 2, 4.5, $signatory, 0, 0, 'C');
-$pdf->SetFont('Times', '', $FONT);
-$pdf->SetXY($sx + 1, $textY + 4.8);
-$pdf->Cell($rightW - 2, 4.5, 'Gyanam India Educational Services', 0, 0, 'C');
-
-// Official seal under signatures / signatory text
-$textBottom = $textY + 4.8 + 4.5;
-$boxBottom = $sy + $sh;
-$sealPadTop = 0.8;
-$sealPadBottom = 1.2;
-$sealAvailH = max(12.0, $boxBottom - $textBottom - $sealPadTop - $sealPadBottom);
-$sealSize = min(29.0, $rightW - 4.0, $sealAvailH);
-$sealX = $sx + ($rightW - $sealSize) / 2;
-$sealY = $textBottom + $sealPadTop + max(0.0, ($sealAvailH - $sealSize) / 2);
-if (is_file($sealPath)) {
-    try {
-        $pdf->Image($sealPath, $sealX, $sealY, $sealSize, $sealSize);
-    } catch (Exception $e) {}
-}
-
-$legY = $bottom - $legendTotal;
-$grades = ['A++', 'A+', 'A', 'B', 'C', 'Fail', 'AB'];
-$bands = ['90 & Above', '80 to 89', '66 to 79', '55 to 65', '40 to 54', 'Below 40', 'Absent'];
-for ($i = 0; $i < 7; $i++) {
-    $cell($x + $i * $gw, $legY, $gw, $legHdrH, $grades[$i], true, 'C', $FONT, 'B');
-    $cell($x + $i * $gw, $legY + $legHdrH, $gw, $legValH, $bands[$i], false, 'C', $FONT, '');
-}
-
-if (ob_get_level()) {
-    ob_end_clean();
-}
-$fname = 'Marksheet_' . preg_replace('/[^A-Za-z0-9_\-]/', '_', $studentId) . '.pdf';
-$pdf->Output($preview ? 'I' : 'D', $fname);
-exit;
+outputStatementOfMarksPdf([
+    'student_id'      => $studentId,
+    'full_name'       => $fullName,
+    'atc_name'        => $atcName,
+    'course_name'     => $courseName,
+    'course_contents' => $contents,
+    'duration'        => $duration,
+    'month_year'      => $monthYear,
+    'center_code'     => $centerCode,
+    'score'           => $score,
+    'grade'           => $grade,
+    'brand'           => $brand,
+    'is_typing'       => $isTyping,
+    'wpm'             => $speeds['wpm'],
+    'kph'             => $speeds['kph'],
+    'preview'         => $preview,
+]);
