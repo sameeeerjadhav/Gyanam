@@ -143,8 +143,8 @@ function outputStatementOfMarksPdf(array $d): void
         $headerImgX = $x + ($tw - $headerImgW) / 2;
         $headerImgPath = $abacusLogoPath;
     } else {
-        $headerImgW = $tw * 0.82;
-        $headerImgH = $headerImgW * (520.0 / 1280.0); // keep banner aspect, do not shrink height
+        $headerImgW = $tw * 0.65;
+        $headerImgH = $headerImgW * (520.0 / 1280.0); // keep banner aspect
         $headerImgX = $x + ($tw - $headerImgW) / 2;
         $headerImgPath = $headerBannerPath;
     }
