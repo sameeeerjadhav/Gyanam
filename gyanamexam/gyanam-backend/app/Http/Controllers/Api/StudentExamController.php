@@ -119,42 +119,44 @@ class StudentExamController extends Controller
             ? (int) ($existing->attempt_number ?: ($usedAttempts + 1))
             : ($usedAttempts + 1);
 
+        $bankId = (int) ($exam->question_bank_id ?? 0);
+        if ($bankId <= 0) {
+            abort(422, 'This exam has no question bank configured.');
+        }
+
         $cacheKey = "exam_qs:{$examId}:{$student->id}:{$attemptNumber}";
         $ttl = max(60, ((int) $exam->duration + 120) * 60);
+        $needed = max(1, (int) $exam->total_questions);
 
-        // Prefer questions already bound to this attempt (stable set for grading)
+        // Prefer questions already bound to this attempt — but ONLY if they belong to this exam's bank
+        $questionIds = [];
         if ($existing && !empty($existing->question_ids)) {
-            $questions = Cache::remember($cacheKey, $ttl, function () use ($existing) {
-                $rows = Question::whereIn('id', $existing->question_ids)->get()->keyBy('id');
-                $ordered = [];
-                foreach ($existing->question_ids as $qid) {
-                    if ($rows->has($qid)) {
-                        $ordered[] = $rows[$qid]->toArray();
-                    }
-                }
-                return $ordered;
-            });
-        } else {
-            $questions = Cache::remember($cacheKey, $ttl, function () use ($exam, $examId) {
-                $bankQs = Cache::remember("exam_bank_qs:{$examId}", 300, function () use ($examId) {
-                    $full = ExamConfig::with('questionBank.questions')->findOrFail($examId);
-                    $collection = $full->questionBank?->questions;
-                    if (!$collection) {
-                        return [];
-                    }
-                    return $collection->map(fn ($q) => $q->toArray())->values()->all();
-                });
+            $questionIds = $this->filterQuestionIdsToBank($existing->question_ids, $bankId);
+            // Corrupted / cross-bank session set → discard and rebuild from the linked bank only
+            if (count($questionIds) < min($needed, count($existing->question_ids))) {
+                $questionIds = [];
+                Cache::forget($cacheKey);
+                Cache::forget($legacyCacheKey);
+            }
+        }
+
+        if (empty($questionIds)) {
+            $questions = Cache::remember($cacheKey, $ttl, function () use ($exam, $examId, $bankId, $needed) {
+                $bankQs = $this->loadBankQuestionsCached((int) $examId, $bankId);
                 $qs = $bankQs;
                 if ($exam->randomize_questions) {
                     $qs = $bankQs;
                     shuffle($qs);
                 }
-                return array_slice($qs, 0, (int) $exam->total_questions);
+                return array_slice($qs, 0, $needed);
             });
+            $questionIds = array_values(array_filter(
+                array_map(static fn ($q) => is_array($q) ? ($q['id'] ?? null) : $q, $questions),
+                static fn ($id) => $id !== null && $id !== ''
+            ));
+            // Final guard: never serve IDs outside this bank
+            $questionIds = $this->filterQuestionIdsToBank($questionIds, $bankId);
         }
-
-        $questionIds = array_map(fn ($q) => is_array($q) ? ($q['id'] ?? null) : $q, $questions);
-        $questionIds = array_values(array_filter($questionIds, static fn ($id) => $id !== null && $id !== ''));
 
         $session = $this->liveSessions->startOrResume(
             (int) $student->id,
@@ -165,6 +167,12 @@ class StudentExamController extends Controller
             $questionIds
         );
         $this->liveSessions->setQuestionIds($session, $questionIds);
+        // Overwrite if a prior session stored IDs from outside this exam's bank
+        $storedBankIds = $this->filterQuestionIdsToBank($session->question_ids ?? [], $bankId);
+        if (!empty($questionIds) && $storedBankIds !== array_values($questionIds)) {
+            $session->question_ids = array_values($questionIds);
+            $session->save();
+        }
 
         try {
             if (!in_array(config('broadcasting.default'), ['log', 'null', ''], true)) {
@@ -188,8 +196,11 @@ class StudentExamController extends Controller
         $expired   = $remaining < 0;
         $pastLate  = $this->liveSessions->isPastLateWindow($session);
 
-        // Always hydrate from DB so EN+MR updates are not stuck behind attempt/bank cache
-        $fresh = Question::whereIn('id', $questionIds)->get()->keyBy(fn ($q) => (string) $q->id);
+        // Hydrate from DB — strictly this exam's question bank only
+        $fresh = Question::where('question_bank_id', $bankId)
+            ->whereIn('id', $questionIds)
+            ->get()
+            ->keyBy(fn ($q) => (string) $q->id);
         $safeQuestions = [];
         foreach ($questionIds as $qid) {
             $key = (string) $qid;
@@ -546,7 +557,18 @@ class StudentExamController extends Controller
             ], 422);
         }
 
-        $correctMap = Question::whereIn('id', $questionIds)->pluck('correct_answer', 'id')->all();
+        $bankId = (int) ($exam->question_bank_id ?? 0);
+        $questionIds = $this->filterQuestionIdsToBank($questionIds, $bankId);
+        if (empty($questionIds)) {
+            return response()->json([
+                'message' => 'Cannot grade: no questions from this exam\'s question bank. Contact admin.',
+            ], 422);
+        }
+
+        $correctMap = Question::where('question_bank_id', $bankId)
+            ->whereIn('id', $questionIds)
+            ->pluck('correct_answer', 'id')
+            ->all();
 
         $total      = count($questionIds);
         $correct    = 0;
@@ -764,5 +786,62 @@ class StudentExamController extends Controller
             ];
         }
         return $out;
+    }
+
+    /**
+     * Load questions for one bank only (never pool across banks).
+     * Cache key includes bank id so changing an exam's bank cannot serve stale papers.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function loadBankQuestionsCached(int $examConfigId, int $bankId): array
+    {
+        $cacheKey = "exam_bank_qs:{$examConfigId}:bank:{$bankId}";
+        // Drop legacy key that did not include bank id
+        Cache::forget("exam_bank_qs:{$examConfigId}");
+
+        return Cache::remember($cacheKey, 300, function () use ($bankId) {
+            return Question::where('question_bank_id', $bankId)
+                ->orderBy('order')
+                ->orderBy('id')
+                ->get()
+                ->map(static fn ($q) => $q->toArray())
+                ->values()
+                ->all();
+        });
+    }
+
+    /**
+     * Keep only question IDs that belong to the given bank, preserving order.
+     *
+     * @param  array<int|string|null>  $ids
+     * @return list<int|string>
+     */
+    private function filterQuestionIdsToBank(array $ids, int $bankId): array
+    {
+        if ($bankId <= 0 || empty($ids)) {
+            return [];
+        }
+
+        $ids = array_values(array_filter($ids, static fn ($id) => $id !== null && $id !== ''));
+        if (empty($ids)) {
+            return [];
+        }
+
+        $allowed = Question::where('question_bank_id', $bankId)
+            ->whereIn('id', $ids)
+            ->pluck('id')
+            ->map(static fn ($id) => (string) $id)
+            ->all();
+        $allowedSet = array_fill_keys($allowed, true);
+
+        $ordered = [];
+        foreach ($ids as $id) {
+            $key = (string) $id;
+            if (isset($allowedSet[$key])) {
+                $ordered[] = is_numeric($id) ? (int) $id : $id;
+            }
+        }
+        return $ordered;
     }
 }

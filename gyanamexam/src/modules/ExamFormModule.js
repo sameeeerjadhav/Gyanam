@@ -71,12 +71,20 @@ export async function renderExamForm(ApiClient, { loadPage }) {
   const isProctored = !!exam?.proctored;
   const ps = exam?.proctoring_settings || {};
 
-  const bankOpts = banks.length > 0
-    ? banks.map(b => {
-        const sel = String(exam?.question_bank_id || '') === String(b.id) ? 'selected' : '';
-        return `<option value="${b.id}" ${sel}>${b.title} — ${b.subject} (${b.questions_count} Qs)</option>`;
-      }).join('')
-    : '<option value="">No question banks created yet</option>';
+  const bankOpts = (() => {
+    if (!banks.length) return '<option value="">No question banks created yet</option>';
+    const curBank = String(exam?.question_bank_id || '');
+    const rows = banks.map(b => {
+      const sel = curBank && curBank === String(b.id) ? 'selected' : '';
+      const subj = String(b.subject || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      const title = String(b.title || '').replace(/</g, '&lt;');
+      return `<option value="${b.id}" data-subject="${subj}" ${sel}>${title} — ${subj} (${b.questions_count} Qs)</option>`;
+    }).join('');
+    const placeholder = curBank
+      ? ''
+      : '<option value="" selected disabled>— Select one question bank —</option>';
+    return placeholder + rows;
+  })();
 
   // Active IT courses only for exam subject
   if (Array.isArray(courses) && courses.length) {
@@ -172,6 +180,7 @@ export async function renderExamForm(ApiClient, { loadPage }) {
         <div class="form-group">
           <label class="form-label">Question Bank *</label>
           <select id="ex-bank" class="form-select">${bankOpts}</select>
+          <p style="margin:0.35rem 0 0;font-size:0.75rem;color:var(--text-muted)">Questions are taken only from this bank (never mixed with other banks).</p>
         </div>
 
         <div class="form-group exam-span-2">
@@ -217,7 +226,7 @@ export async function renderExamForm(ApiClient, { loadPage }) {
           </div>
         </div>
       </div>
-      <p class="exam-form-note">Questions are randomly selected from the bank for each student.</p>
+      <p class="exam-form-note">Each student gets a random subset from the <strong>selected question bank only</strong>.</p>
     </div>
   </div>`;
 
@@ -244,6 +253,35 @@ export async function renderExamForm(ApiClient, { loadPage }) {
 
   const exFilter = document.getElementById('ex-subj-filter');
   const exSelect = document.getElementById('ex-subj');
+  const exBank = document.getElementById('ex-bank');
+
+  function filterBanksBySubject() {
+    if (!exBank || !exSelect) return;
+    const subject = (exSelect.value || '').trim().toLowerCase();
+    let visible = 0;
+    Array.from(exBank.options).forEach((opt) => {
+      if (!opt.value) { opt.hidden = false; return; }
+      const bankSubj = String(opt.getAttribute('data-subject') || '').trim().toLowerCase();
+      // Prefer banks matching the selected course; if none match, keep all visible
+      opt.dataset._match = subject && bankSubj === subject ? '1' : '0';
+    });
+    const hasMatch = Array.from(exBank.options).some(o => o.value && o.dataset._match === '1');
+    Array.from(exBank.options).forEach((opt) => {
+      if (!opt.value) { opt.hidden = false; return; }
+      const show = !hasMatch || opt.dataset._match === '1';
+      opt.hidden = !show;
+      if (show) visible++;
+    });
+    // If current selection is hidden, clear it so admin must pick a matching bank
+    const selected = exBank.selectedOptions[0];
+    if (selected && selected.hidden) {
+      exBank.value = '';
+    }
+    if (visible === 0 && hasMatch) {
+      /* keep placeholder */
+    }
+  }
+
   if (exFilter && exSelect && exSelect.tagName === 'SELECT') {
     exFilter.addEventListener('input', () => {
       const q = exFilter.value.trim().toLowerCase();
@@ -254,6 +292,8 @@ export async function renderExamForm(ApiClient, { loadPage }) {
       });
     });
   }
+  exSelect?.addEventListener('change', filterBanksBySubject);
+  filterBanksBySubject();
 
   document.getElementById('exam-form-save')?.addEventListener('click', async () => {
     const title = document.getElementById('ex-title').value.trim();
