@@ -8,6 +8,9 @@
  *   preview=1 = show inline (default downloads)
  *   sample=1  = Admin QA preview with dummy passing marks (skips exam eligibility)
  *   brand=it|abacus|typing = optional template/course-type override for sample previews
+ *   course_name=...        = sample override to test long course titles on the certificate
+ *   course_type=...        = optional type with course_name
+ *   course_duration=...    = optional duration with course_name
  *
  * Score and exam date are loaded from the Exam Portal — never from the URL
  * (except sample mode, which uses fixed dummy marks for layout review).
@@ -189,6 +192,22 @@ if ($isSample && $forceBrand !== '') {
         }
     } else {
         $student['course_type'] = 'IT';
+    }
+}
+
+// Sample QA: override course name (layout stress-test for long titles)
+if ($isSample) {
+    $overrideCourse = trim((string)($_GET['course_name'] ?? ''));
+    if ($overrideCourse !== '') {
+        $student['course'] = $overrideCourse;
+    }
+    $overrideType = trim((string)($_GET['course_type'] ?? ''));
+    if ($overrideType !== '') {
+        $student['course_type'] = $overrideType;
+    }
+    $overrideDur = trim((string)($_GET['course_duration'] ?? ''));
+    if ($overrideDur !== '') {
+        $student['course_duration'] = $overrideDur;
     }
 }
 

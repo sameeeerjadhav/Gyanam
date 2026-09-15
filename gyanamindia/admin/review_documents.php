@@ -336,11 +336,47 @@ if ($selStudent && function_exists('examIntegrationReady') && examIntegrationRea
     $passNote = 'Exam portal not connected — showing sample certificate with dummy marks.';
 }
 
+$courses = [];
+try {
+    $courses = $pdo->query("
+        SELECT id, course_name, course_type, duration, course_content
+        FROM courses
+        WHERE status = 'Active'
+        ORDER BY course_name ASC
+    ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+} catch (Exception $e) {
+    $courses = [];
+}
+
+$selCourseId = (int)($_GET['course_id'] ?? 0);
+$selCourse = null;
+if ($selCourseId > 0) {
+    foreach ($courses as $c) {
+        if ((int)$c['id'] === $selCourseId) {
+            $selCourse = $c;
+            break;
+        }
+    }
+}
+// Default to the selected student's admission course when it matches Active courses
+if ($selCourse === null && $selStudent) {
+    $stuCourse = trim((string)($selStudent['course'] ?? ''));
+    if ($stuCourse !== '') {
+        foreach ($courses as $c) {
+            if (strcasecmp(trim((string)$c['course_name']), $stuCourse) === 0) {
+                $selCourse = $c;
+                $selCourseId = (int)$c['id'];
+                break;
+            }
+        }
+    }
+}
+
 $marksBrand = strtolower(trim((string)($_GET['marks_brand'] ?? 'auto')));
 if ($marksBrand !== 'it' && $marksBrand !== 'abacus' && $marksBrand !== 'typing') {
     $marksBrand = 'auto';
 }
-$marksQs = ['sample' => '1', 'preview' => '1', 'v' => '20'];
+$marksQs = ['sample' => '1', 'preview' => '1', 'v' => '21'];
 if ($tryReg !== '') {
     $marksQs['reg_id'] = $tryReg;
 }
@@ -350,19 +386,37 @@ if ($selAtcId > 0) {
 if ($marksBrand !== 'auto') {
     $marksQs['brand'] = $marksBrand;
 }
+if ($selCourse) {
+    $marksQs['course_name'] = (string)$selCourse['course_name'];
+    if (!empty($selCourse['course_type'])) {
+        $marksQs['course_type'] = (string)$selCourse['course_type'];
+    }
+    if (!empty($selCourse['duration'])) {
+        $marksQs['course_duration'] = (string)$selCourse['duration'];
+    }
+}
 $marksPreviewUrl = 'generate_marksheet.php?' . http_build_query($marksQs);
 
-$typingMarksQs = ['sample' => '1', 'preview' => '1', 'brand' => 'typing', 'v' => '20'];
+$typingMarksQs = ['sample' => '1', 'preview' => '1', 'brand' => 'typing', 'v' => '21'];
 if ($tryReg !== '') {
     $typingMarksQs['reg_id'] = $tryReg;
 }
 if ($selAtcId > 0) {
     $typingMarksQs['atc_id'] = $selAtcId;
 }
+if ($selCourse) {
+    $typingMarksQs['course_name'] = (string)$selCourse['course_name'];
+    if (!empty($selCourse['course_type'])) {
+        $typingMarksQs['course_type'] = (string)$selCourse['course_type'];
+    }
+    if (!empty($selCourse['duration'])) {
+        $typingMarksQs['course_duration'] = (string)$selCourse['duration'];
+    }
+}
 $typingMarksPreviewUrl = 'generate_marksheet.php?' . http_build_query($typingMarksQs);
 
 // Course completion always previewable with dummy marks (sample=1)
-$certQs = ['sample' => '1', 'preview' => '1', 'v' => '2'];
+$certQs = ['sample' => '1', 'preview' => '1', 'v' => '3'];
 if ($tryReg !== '') {
     $certQs['reg_id'] = $tryReg;
 }
@@ -371,6 +425,15 @@ if ($selAtcId > 0) {
 }
 if ($marksBrand === 'abacus' || $marksBrand === 'it' || $marksBrand === 'typing') {
     $certQs['brand'] = $marksBrand;
+}
+if ($selCourse) {
+    $certQs['course_name'] = (string)$selCourse['course_name'];
+    if (!empty($selCourse['course_type'])) {
+        $certQs['course_type'] = (string)$selCourse['course_type'];
+    }
+    if (!empty($selCourse['duration'])) {
+        $certQs['course_duration'] = (string)$selCourse['duration'];
+    }
 }
 $certPreviewUrl = 'generate_course_certificate.php?' . http_build_query($certQs);
 
@@ -512,7 +575,8 @@ $pageTitle = 'Review Documents (TEMP)';
 .rv-banner p { margin:.35rem 0 0; font-size:.84rem; color:#78350f; }
 .rv-filters { display:flex; gap:.75rem; flex-wrap:wrap; align-items:flex-end; background:#fff; border:1.5px solid var(--border-color,#e5e7eb); border-radius:14px; padding:1rem 1.15rem; margin-bottom:1.5rem; }
 .rv-filters label { display:block; font-size:.72rem; font-weight:800; color:#6b7280; margin-bottom:.25rem; text-transform:uppercase; letter-spacing:.04em; }
-.rv-filters select { min-width:220px; height:40px; border:1.5px solid #e5e7eb; border-radius:8px; padding:0 .75rem; font-family:var(--font); font-size:.84rem; }
+.rv-filters select { min-width:200px; max-width:340px; height:40px; border:1.5px solid #e5e7eb; border-radius:8px; padding:0 .75rem; font-family:var(--font); font-size:.84rem; }
+.rv-filters select.rv-course { min-width:280px; max-width:420px; }
 .rv-filters button { height:40px; padding:0 1.1rem; border:none; border-radius:8px; background:#6366f1; color:#fff; font-weight:800; cursor:pointer; font-family:var(--font); }
 .rv-section { margin-bottom:2rem; }
 .rv-section h3 { font-size:1rem; font-weight:800; margin:0 0 .85rem; color:#111; display:flex; align-items:center; gap:.5rem; }
@@ -575,6 +639,22 @@ $pageTitle = 'Review Documents (TEMP)';
                     ?>
                     <option value="<?= (int)$s['id'] ?>" <?= (int)$s['id'] === $selStudentId ? 'selected' : '' ?>>
                         <?= htmlspecialchars($sn) ?> · <?= htmlspecialchars($s['roll_no']) ?><?= $hasPhoto ? ' · photo' : ' · no photo' ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label>Course name (layout test)</label>
+                <select name="course_id" class="rv-course" title="Pick a long course name to check certificate/marksheet fit">
+                    <option value="0">Student’s admission course</option>
+                    <?php foreach ($courses as $c):
+                        $cname = trim((string)($c['course_name'] ?? ''));
+                        if ($cname === '') continue;
+                        $ctype = trim((string)($c['course_type'] ?? ''));
+                        $label = $cname . ($ctype !== '' ? ' · ' . $ctype : '');
+                    ?>
+                    <option value="<?= (int)$c['id'] ?>" <?= (int)$c['id'] === $selCourseId ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($label) ?>
                     </option>
                     <?php endforeach; ?>
                 </select>

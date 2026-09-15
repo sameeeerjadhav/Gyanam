@@ -153,6 +153,31 @@ if ($isSample && $forceBrand === 'typing') {
     }
 }
 
+// Sample QA: override course name (layout stress-test for long titles)
+if ($isSample) {
+    $overrideCourse = trim((string)($_GET['course_name'] ?? ''));
+    if ($overrideCourse !== '') {
+        $student['course'] = $overrideCourse;
+        $courseName = $overrideCourse;
+    }
+    $overrideType = trim((string)($_GET['course_type'] ?? ''));
+    if ($overrideType !== '') {
+        $student['course_type'] = $overrideType;
+    }
+    $overrideDur = trim((string)($_GET['course_duration'] ?? ''));
+    if ($overrideDur !== '') {
+        $student['course_duration'] = $overrideDur;
+    }
+    $overrideContent = trim((string)($_GET['course_content'] ?? ''));
+    if ($overrideContent !== '') {
+        $student['course_content'] = $overrideContent;
+    }
+    // Re-evaluate typing flag after overrides (brand=typing still wins for layout)
+    if ($forceBrand !== 'typing') {
+        $isTypingEarly = isTypingCourse($student['course_type'] ?? null, $courseName);
+    }
+}
+
 $exam = null;
 if ($isSample) {
     $exam = [
