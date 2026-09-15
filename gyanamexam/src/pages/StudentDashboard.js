@@ -18,6 +18,7 @@ export class StudentDashboard {
     this.container = null;
     this.currentSession = null;
     this.availableExams = [];
+    this.practiceExams = [];
   }
 
   async initialize(container) {
@@ -71,7 +72,9 @@ export class StudentDashboard {
 
   async loadAvailableExams() {
     const data = await ApiClient.getStudentExams();
-    this.availableExams = Array.isArray(data) ? data : (data.data || []);
+    const all = Array.isArray(data) ? data : (data.data || []);
+    this.practiceExams = all.filter((e) => !!e.is_global_practice);
+    this.availableExams = all.filter((e) => !e.is_global_practice);
   }
 
   _injectStyles() {
@@ -255,6 +258,43 @@ export class StudentDashboard {
       }
       .sd-pill-official { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
       .sd-pill-practice { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+      .sd-experience {
+        border: 1px solid #bfdbfe;
+        background: linear-gradient(135deg, #eff6ff 0%, #ffffff 55%);
+        border-radius: 16px;
+        padding: 1.25rem 1.35rem;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 1rem;
+        align-items: center;
+        box-shadow: 0 8px 24px rgba(37, 99, 235, 0.08);
+        animation: sd-fade-up .45s ease both;
+      }
+      .sd-experience h2 {
+        margin: 0 0 0.35rem;
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #0f2744;
+      }
+      .sd-experience p {
+        margin: 0;
+        font-size: 0.88rem;
+        color: #475569;
+        line-height: 1.45;
+        max-width: 46rem;
+      }
+      .sd-experience-actions { display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch; min-width: 180px; }
+      .sd-experience .sd-start {
+        background: linear-gradient(135deg, #1d4ed8, #2563eb);
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.28);
+      }
+      .sd-experience-meta {
+        display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem;
+      }
+      @media (max-width: 720px) {
+        .sd-experience { grid-template-columns: 1fr; }
+        .sd-experience-actions { min-width: 0; }
+      }
       .sd-pill-proctor { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
       .sd-exam-title {
         margin: 0 0 .25rem; font-size: 1.05rem; font-weight: 800; color: var(--sd-navy); line-height: 1.3;
@@ -354,6 +394,8 @@ export class StudentDashboard {
             </div>
           </section>
 
+          ${this.renderExperienceSection()}
+
           <section class="sd-section">
             <div class="sd-section-head">
               <div class="sd-section-title">
@@ -362,7 +404,7 @@ export class StudentDashboard {
                 </div>
                 <div>
                   <h2>Available Exams</h2>
-                  <p>${this.availableExams.length} exam${this.availableExams.length !== 1 ? 's' : ''} assigned to you</p>
+                  <p>${this.availableExams.length} official exam${this.availableExams.length !== 1 ? 's' : ''} assigned to you</p>
                 </div>
               </div>
               <button type="button" id="refresh-exams-btn" class="sd-refresh">
@@ -406,6 +448,52 @@ export class StudentDashboard {
     if (h < 12) return 'Good morning';
     if (h < 17) return 'Good afternoon';
     return 'Good evening';
+  }
+
+  renderExperienceSection() {
+    const exam = (this.practiceExams || [])[0];
+    if (!exam) {
+      return `
+        <section class="sd-section" aria-label="Practice experience">
+          <div class="sd-experience" style="background:#f8fafc;border-color:#e2e8f0;box-shadow:none">
+            <div>
+              <h2>Experience the Exam</h2>
+              <p>A practice paper will appear here once your administrator enables the global Practice Exam. Use it to learn the timer, question map, and submit flow before your official exam.</p>
+            </div>
+          </div>
+        </section>`;
+    }
+
+    const canAttempt = exam.attempt_info?.can_attempt !== false;
+    const duration = exam.duration || 0;
+    const totalQs = exam.total_questions || 0;
+    const remaining = exam.attempt_info?.remaining;
+
+    return `
+      <section class="sd-section" aria-label="Practice experience">
+        <div class="sd-experience">
+          <div>
+            <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.45rem">
+              <span class="sd-pill sd-pill-practice">Practice · All courses</span>
+              <span class="sd-pill sd-pill-official" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">Same real exam flow</span>
+            </div>
+            <h2>${this._esc(exam.title || 'Practice Exam')}</h2>
+            <p>Try this practice paper to feel how a demo / main exam works — pre-exam steps, timer, bilingual questions, question map, and submit. It is available to every student and is not tied to your course assignment.</p>
+            <div class="sd-experience-meta">
+              <span class="sd-chip">${duration} min</span>
+              <span class="sd-chip">${totalQs} questions</span>
+              <span class="sd-chip">Pass ${exam.passing_score ?? 40}%</span>
+              ${remaining != null ? `<span class="sd-chip">${remaining} attempt(s) left</span>` : ''}
+            </div>
+          </div>
+          <div class="sd-experience-actions">
+            <button type="button" class="start-exam-btn sd-start" data-exam-id="${exam.id}" ${canAttempt ? '' : 'disabled style="opacity:0.55;cursor:not-allowed"'}>
+              ${canAttempt ? 'Start Practice Exam' : 'No attempts left'}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+            </button>
+          </div>
+        </div>
+      </section>`;
   }
 
   renderAvailableExams() {

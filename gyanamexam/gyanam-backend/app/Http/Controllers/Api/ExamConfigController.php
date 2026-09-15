@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ExamConfig;
 use App\Models\LiveExamSession;
 use App\Models\Question;
+use App\Models\QuestionBank;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -135,5 +136,101 @@ class ExamConfigController extends Controller
         $exam = ExamConfig::findOrFail($id);
         $exam->update(['active' => !$exam->active]);
         return response()->json(['active' => $exam->active]);
+    }
+
+    /**
+     * Get the single global practice exam (visible to all students).
+     */
+    public function getGlobalPractice(Request $request)
+    {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Admin only');
+        }
+
+        $exam = ExamConfig::with(['questionBank' => fn ($q) => $q->withCount('questions')])
+            ->where('is_global_practice', true)
+            ->orderByDesc('updated_at')
+            ->first();
+
+        return response()->json([
+            'exam' => $exam,
+            'configured' => (bool) $exam,
+        ]);
+    }
+
+    /**
+     * Create or update the global practice exam (one bank, all students).
+     */
+    public function saveGlobalPractice(Request $request)
+    {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Admin only');
+        }
+
+        $data = $request->validate([
+            'title'            => 'required|string|max:255',
+            'question_bank_id' => 'required|exists:question_banks,id',
+            'duration'         => 'required|integer|min:1|max:300',
+            'total_questions'  => 'required|integer|min:1|max:200',
+            'passing_score'    => 'required|integer|min:1|max:100',
+            'instructions'     => 'nullable|string|max:5000',
+            'active'           => 'boolean',
+            'randomize_questions' => 'boolean',
+            'proctored'        => 'boolean',
+        ]);
+
+        $bank = QuestionBank::withCount('questions')->findOrFail($data['question_bank_id']);
+        $bankCount = (int) ($bank->questions_count ?? 0);
+        if ($bankCount < 1) {
+            return response()->json(['message' => 'Selected question bank has no questions.'], 422);
+        }
+        if ((int) $data['total_questions'] > $bankCount) {
+            return response()->json([
+                'message' => "Questions to show ({$data['total_questions']}) cannot exceed bank size ({$bankCount}).",
+            ], 422);
+        }
+
+        $exam = ExamConfig::where('is_global_practice', true)->orderByDesc('id')->first();
+        $payload = [
+            'title'               => $data['title'],
+            'subject'             => 'All Courses — Practice Experience',
+            'exam_type'           => 'demo',
+            'duration'            => (int) $data['duration'],
+            'total_questions'     => (int) $data['total_questions'],
+            'passing_score'       => (int) $data['passing_score'],
+            'question_bank_id'    => (int) $data['question_bank_id'],
+            'instructions'        => $data['instructions'] ?? 'This is a practice exam so you can experience how the real exam works. Scores may be recorded for practice only.',
+            'active'              => array_key_exists('active', $data) ? (bool) $data['active'] : true,
+            'randomize_questions' => array_key_exists('randomize_questions', $data) ? (bool) $data['randomize_questions'] : true,
+            'proctored'           => array_key_exists('proctored', $data) ? (bool) $data['proctored'] : false,
+            'proctoring_settings' => null,
+            'is_global_practice'  => true,
+        ];
+
+        if ($exam) {
+            $oldBankId = (int) $exam->question_bank_id;
+            $exam->update($payload);
+            Cache::forget("exam_bank_qs:{$exam->id}");
+            Cache::forget("exam_bank_qs:{$exam->id}:bank:{$oldBankId}");
+            Cache::forget("exam_bank_qs:{$exam->id}:bank:{$exam->question_bank_id}");
+            if ($oldBankId !== (int) $exam->question_bank_id) {
+                LiveExamSession::where('exam_config_id', $exam->id)->update(['question_ids' => null]);
+            }
+        } else {
+            $payload['exam_id'] = 'exam_global_practice';
+            $payload['created_by_user_id'] = $request->user()->id;
+            // Avoid unique collision if a leftover row exists with that exam_id
+            if (ExamConfig::where('exam_id', 'exam_global_practice')->exists()) {
+                $payload['exam_id'] = 'exam_global_practice_' . Str::lower(Str::random(4));
+            }
+            $exam = ExamConfig::create($payload);
+        }
+
+        ExamConfig::clearOtherGlobalPracticeFlags((int) $exam->id);
+
+        return response()->json([
+            'exam' => $exam->fresh()->load(['questionBank' => fn ($q) => $q->withCount('questions')]),
+            'message' => 'Global practice exam saved. It is visible to all students on their dashboard.',
+        ]);
     }
 }

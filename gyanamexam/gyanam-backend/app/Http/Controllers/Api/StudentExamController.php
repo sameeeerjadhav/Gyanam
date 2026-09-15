@@ -26,6 +26,7 @@ class StudentExamController extends Controller
 
     /**
      * Get exams assigned to this student (attempt counts via single grouped query).
+     * Also includes the active global practice exam for all students (any course).
      */
     public function myExams(Request $request)
     {
@@ -39,8 +40,22 @@ class StudentExamController extends Controller
                 'exam_configs.subject', 'exam_configs.exam_type', 'exam_configs.duration',
                 'exam_configs.total_questions', 'exam_configs.passing_score',
                 'exam_configs.instructions', 'exam_configs.proctored',
-                'exam_configs.proctoring_settings',
+                'exam_configs.proctoring_settings', 'exam_configs.is_global_practice',
             ]);
+
+        // Auto-include global practice (all courses / all centres)
+        $global = ExamConfig::activeGlobalPractice()
+            ->get([
+                'id', 'exam_id', 'title', 'subject', 'exam_type', 'duration',
+                'total_questions', 'passing_score', 'instructions', 'proctored',
+                'proctoring_settings', 'is_global_practice',
+            ]);
+
+        foreach ($global as $gExam) {
+            if (!$exams->contains('id', $gExam->id)) {
+                $exams->push($gExam);
+            }
+        }
 
         $examIds = $exams->pluck('id')->all();
         $usedByExam = empty($examIds)
@@ -52,7 +67,10 @@ class StudentExamController extends Controller
                 ->pluck('used', 'exam_config_id');
 
         $payload = $exams->map(function ($exam) use ($usedByExam) {
-            $maxAttempts  = $exam->pivot->max_attempts ?? 1;
+            $isGlobal = (bool) ($exam->is_global_practice ?? false);
+            $maxAttempts  = $isGlobal
+                ? ExamConfig::GLOBAL_PRACTICE_MAX_ATTEMPTS
+                : ($exam->pivot->max_attempts ?? 1);
             $usedAttempts = (int) ($usedByExam[$exam->id] ?? 0);
 
             return array_merge($exam->only([
@@ -61,6 +79,7 @@ class StudentExamController extends Controller
             ]), [
                 'proctored' => (bool) $exam->proctored,
                 'proctoring_settings' => $exam->proctored ? ($exam->proctoring_settings ?? []) : null,
+                'is_global_practice' => $isGlobal,
                 'attempt_info' => [
                     'max_attempts'  => $maxAttempts,
                     'used_attempts' => $usedAttempts,
@@ -70,7 +89,7 @@ class StudentExamController extends Controller
             ]);
         });
 
-        return response()->json($payload);
+        return response()->json($payload->values());
     }
 
     /**
@@ -81,19 +100,39 @@ class StudentExamController extends Controller
         $student = $request->user();
         // Avoid eager-loading the full bank on every start — use shared bank cache below
         $exam = ExamConfig::findOrFail($examId);
+        $isGlobalPractice = (bool) $exam->is_global_practice;
 
         $pivot = $student->exams()
             ->where('exam_config_id', $examId)
             ->withPivot(['max_attempts'])
             ->first()?->pivot;
 
+        // Global practice: available to every student without ATC assignment
+        if (!$pivot && $isGlobalPractice && $exam->active) {
+            $student->exams()->syncWithoutDetaching([
+                (int) $examId => [
+                    'max_attempts'        => ExamConfig::GLOBAL_PRACTICE_MAX_ATTEMPTS,
+                    'assigned_by_user_id' => null,
+                    'assigned_at'         => now(),
+                ],
+            ]);
+            $pivot = $student->exams()
+                ->where('exam_config_id', $examId)
+                ->withPivot(['max_attempts'])
+                ->first()?->pivot;
+        }
+
         if (!$pivot) {
             abort(403, 'You are not assigned to this exam.');
         }
 
+        $maxAttempts = $isGlobalPractice
+            ? ExamConfig::GLOBAL_PRACTICE_MAX_ATTEMPTS
+            : (int) ($pivot->max_attempts ?? 1);
+
         $usedAttempts = $student->submissions()->where('exam_config_id', $examId)->count();
-        if ($usedAttempts >= $pivot->max_attempts) {
-            abort(403, "No attempts remaining. You have used {$usedAttempts}/{$pivot->max_attempts} attempt(s).");
+        if ($usedAttempts >= $maxAttempts) {
+            abort(403, "No attempts remaining. You have used {$usedAttempts}/{$maxAttempts} attempt(s).");
         }
 
         $legacyCacheKey = "exam_qs:{$examId}:{$student->id}";
@@ -667,7 +706,9 @@ class StudentExamController extends Controller
                     ->lockForUpdate()
                     ->count();
 
-                $maxAttempts = (int) ($pivot->max_attempts ?? 1);
+                $maxAttempts = (bool) $exam->is_global_practice
+                    ? ExamConfig::GLOBAL_PRACTICE_MAX_ATTEMPTS
+                    : (int) ($pivot->max_attempts ?? 1);
                 if ($usedAttempts >= $maxAttempts) {
                     abort(403, "No attempts remaining. You have used {$usedAttempts}/{$maxAttempts} attempt(s).");
                 }
