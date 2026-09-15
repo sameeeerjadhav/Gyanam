@@ -427,6 +427,7 @@ class QuestionBankController extends Controller
     {
         foreach ($bank->examConfigs()->pluck('id') as $examId) {
             Cache::forget("exam_bank_qs:{$examId}");
+            Cache::forget("exam_bank_qs:{$examId}:bank:{$bank->id}");
         }
     }
 

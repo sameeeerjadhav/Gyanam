@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ExamConfig;
 use App\Models\Student;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class ExamConfigController extends Controller
@@ -56,12 +57,15 @@ class ExamConfigController extends Controller
     public function update(Request $request, $id)
     {
         $exam = ExamConfig::findOrFail($id);
-        $exam->update($request->validate([
+        $oldBankId = (int) $exam->question_bank_id;
+
+        $data = $request->validate([
             'title'               => 'sometimes|string',
             'subject'             => 'sometimes|string',
             'duration'            => 'sometimes|integer',
             'total_questions'     => 'sometimes|integer',
             'passing_score'       => 'sometimes|integer',
+            'question_bank_id'    => 'sometimes|exists:question_banks,id',
             'instructions'        => 'nullable|string',
             'active'              => 'sometimes|boolean',
             'randomize_questions' => 'sometimes|boolean',
@@ -75,8 +79,17 @@ class ExamConfigController extends Controller
             'proctoring_settings.fullscreen_enforce' => 'boolean',
             'proctoring_settings.devtools_detect'  => 'boolean',
             'proctoring_settings.text_select_block'=> 'boolean',
-        ]));
-        return response()->json($exam);
+        ]);
+
+        $exam->update($data);
+
+        $newBankId = (int) $exam->question_bank_id;
+        // Drop cached papers when bank or size changes so students never see a pooled set
+        Cache::forget("exam_bank_qs:{$exam->id}");
+        Cache::forget("exam_bank_qs:{$exam->id}:bank:{$oldBankId}");
+        Cache::forget("exam_bank_qs:{$exam->id}:bank:{$newBankId}");
+
+        return response()->json($exam->load('questionBank'));
     }
 
     public function destroy($id)
