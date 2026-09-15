@@ -20,7 +20,7 @@ $pdo = getDBConnection();
 $sessionRole  = (string)(getUserRole() ?? '');
 $sessionAtcId = intval($_SESSION['atc_id'] ?? 0);
 $isSample     = isset($_GET['sample']) && (string)$_GET['sample'] === '1';
-if ($isSample && $sessionRole !== 'Admin') {
+if ($isSample && !in_array($sessionRole, ['Admin', 'DLC'], true)) {
     http_response_code(403);
     die('Sample marksheet is only available to Admin.');
 }
