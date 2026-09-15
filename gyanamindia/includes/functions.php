@@ -3937,9 +3937,117 @@ function courseCertificateGradeLine(string $grade): string
 }
 
 /**
+ * Word-wrap text to fit a max width using the current FPDF/FPDI font metrics.
+ *
+ * @param object $pdf FPDF/FPDI instance with GetStringWidth()
+ * @return list<string>
+ */
+function wrapPdfTextLines($pdf, string $text, float $maxWidthMm): array
+{
+    $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+    if ($text === '') {
+        return [''];
+    }
+    $words = preg_split('/\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if ($words === []) {
+        return [''];
+    }
+    $lines = [];
+    $current = '';
+    foreach ($words as $word) {
+        $trial = $current === '' ? $word : ($current . ' ' . $word);
+        if ($pdf->GetStringWidth($trial) <= $maxWidthMm) {
+            $current = $trial;
+            continue;
+        }
+        if ($current !== '') {
+            $lines[] = $current;
+        }
+        // Extremely long single token: hard-split by characters
+        if ($pdf->GetStringWidth($word) > $maxWidthMm) {
+            $chunk = '';
+            $chars = preg_split('//u', $word, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            foreach ($chars as $ch) {
+                $t2 = $chunk . $ch;
+                if ($chunk !== '' && $pdf->GetStringWidth($t2) > $maxWidthMm) {
+                    $lines[] = $chunk;
+                    $chunk = $ch;
+                } else {
+                    $chunk = $t2;
+                }
+            }
+            $current = $chunk;
+        } else {
+            $current = $word;
+        }
+    }
+    if ($current !== '') {
+        $lines[] = $current;
+    }
+    return $lines !== [] ? $lines : [''];
+}
+
+/**
+ * Fit course title into at most $maxLines by wrapping and shrinking font if needed.
+ *
+ * @param object $pdf
+ * @return array{0:list<string>,1:float} [lines, fontSize]
+ */
+function fitCertificateCourseNameLines(
+    $pdf,
+    string $courseName,
+    float $maxWidthMm,
+    float $preferredSize,
+    string $style,
+    int $maxLines = 3
+): array {
+    $maxLines = max(1, min(3, $maxLines));
+    $sizes = array_values(array_unique(array_filter([
+        $preferredSize,
+        $preferredSize - 1.5,
+        $preferredSize - 3.0,
+        12.0,
+        11.0,
+        10.0,
+    ], static fn($s) => $s >= 9.5)));
+
+    $bestLines = [$courseName];
+    $bestSize = $preferredSize;
+    foreach ($sizes as $sz) {
+        $pdf->SetFont('Times', $style, $sz);
+        $wrapped = wrapPdfTextLines($pdf, $courseName, $maxWidthMm);
+        $bestLines = $wrapped;
+        $bestSize = $sz;
+        if (count($wrapped) <= $maxLines) {
+            return [$wrapped, $sz];
+        }
+    }
+
+    // Still too many lines at smallest size — keep first (maxLines-1), merge rest into last
+    $pdf->SetFont('Times', $style, $bestSize);
+    $head = array_slice($bestLines, 0, $maxLines - 1);
+    $tail = trim(implode(' ', array_slice($bestLines, $maxLines - 1)));
+    while ($tail !== '' && $pdf->GetStringWidth($tail) > $maxWidthMm && $bestSize > 9.5) {
+        $bestSize -= 0.5;
+        $pdf->SetFont('Times', $style, $bestSize);
+    }
+    if ($tail !== '' && $pdf->GetStringWidth($tail) > $maxWidthMm) {
+        // Ellipsize last line as last resort
+        while (mb_strlen($tail) > 8 && $pdf->GetStringWidth($tail . '…') > $maxWidthMm) {
+            $tail = mb_substr($tail, 0, -1);
+        }
+        $tail .= '…';
+    }
+    $head[] = $tail;
+    return [$head, $bestSize];
+}
+
+/**
  * Paint the centered certificate body text (labels + dynamic values) onto an FPDI page.
+ * Long course names wrap onto 2–3 lines and push following lines down.
  *
  * @param callable(string,float,float,string,string):void $put Centered text helper
+ * @param object|null $pdf Optional FPDI instance for width-aware wrapping
  */
 function paintCourseCertificateBodyText(
     callable $put,
@@ -3948,17 +4056,53 @@ function paintCourseCertificateBodyText(
     string $conductedAt,
     string $durationLine,
     string $gradeLine,
-    ?array $layout = null
+    ?array $layout = null,
+    $pdf = null,
+    ?float $pageW = null
 ): void {
     $L = $layout ?? courseCertificateOverlayLayout();
     $put('This is to certify That', (float)$L['certify_y'], (float)$L['label_size'], (string)$L['label_style'], (string)$L['label_color']);
     $put($fullName, (float)$L['name_y'], (float)$L['name_size'], (string)$L['name_style'], (string)$L['name_color']);
     $put('Has Successfully completed', (float)$L['completed_y'], (float)$L['label_size'], (string)$L['label_style'], (string)$L['label_color']);
-    $put($courseName, (float)$L['course_y'], (float)$L['course_size'], (string)$L['course_style'], (string)$L['course_color']);
-    $put('Conducted at', (float)$L['conducted_label_y'], (float)$L['label_size'], (string)$L['label_style'], (string)$L['label_color']);
-    $put($conductedAt, (float)$L['atc_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
-    $put($durationLine, (float)$L['duration_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
-    $put($gradeLine, (float)$L['grade_y'], (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
+
+    $courseY = (float)$L['course_y'];
+    $courseSize = (float)$L['course_size'];
+    $courseStyle = (string)$L['course_style'];
+    $courseColor = (string)$L['course_color'];
+    $lineGap = 6.4;
+    $extraShift = 0.0;
+
+    if ($pdf !== null && $pageW !== null && $pageW > 0) {
+        $maxWidth = max(100.0, $pageW - 44.0); // side margins; stay clear of edges
+        [$courseLines, $courseSize] = fitCertificateCourseNameLines(
+            $pdf,
+            $courseName,
+            $maxWidth,
+            (float)$L['course_size'],
+            $courseStyle,
+            3
+        );
+        $y = $courseY;
+        foreach ($courseLines as $i => $line) {
+            $put($line, $y, $courseSize, $courseStyle, $courseColor);
+            if ($i < count($courseLines) - 1) {
+                $y += $lineGap;
+            }
+        }
+        $used = max(0, count($courseLines) - 1);
+        $extraShift = $used * $lineGap;
+        // Keep a little air before "Conducted at" when course grew
+        if ($used > 0) {
+            $extraShift += 1.5;
+        }
+    } else {
+        $put($courseName, $courseY, $courseSize, $courseStyle, $courseColor);
+    }
+
+    $put('Conducted at', (float)$L['conducted_label_y'] + $extraShift, (float)$L['label_size'], (string)$L['label_style'], (string)$L['label_color']);
+    $put($conductedAt, (float)$L['atc_y'] + $extraShift, (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
+    $put($durationLine, (float)$L['duration_y'] + $extraShift, (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
+    $put($gradeLine, (float)$L['grade_y'] + $extraShift, (float)$L['meta_size'], (string)$L['meta_style'], (string)$L['meta_color']);
 }
 
 /**
