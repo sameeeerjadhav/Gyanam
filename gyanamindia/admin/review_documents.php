@@ -329,18 +329,18 @@ if ($selStudent && function_exists('examIntegrationReady') && examIntegrationRea
         if ($pass) {
             $passRegId = $tryReg;
         } else {
-            $passNote = 'Selected student has no passing main exam in Exam Portal — certificate preview unavailable.';
+            $passNote = 'No passing exam on file — showing sample certificate with dummy marks (85 / A+).';
         }
     }
 } elseif ($selStudent) {
-    $passNote = 'Exam portal not connected — certificate preview unavailable.';
+    $passNote = 'Exam portal not connected — showing sample certificate with dummy marks.';
 }
 
 $marksBrand = strtolower(trim((string)($_GET['marks_brand'] ?? 'auto')));
 if ($marksBrand !== 'it' && $marksBrand !== 'abacus' && $marksBrand !== 'typing') {
     $marksBrand = 'auto';
 }
-$marksQs = ['sample' => '1', 'preview' => '1', 'v' => '19'];
+$marksQs = ['sample' => '1', 'preview' => '1', 'v' => '20'];
 if ($tryReg !== '') {
     $marksQs['reg_id'] = $tryReg;
 }
@@ -352,11 +352,27 @@ if ($marksBrand !== 'auto') {
 }
 $marksPreviewUrl = 'generate_marksheet.php?' . http_build_query($marksQs);
 
-$typingMarksQs = ['sample' => '1', 'preview' => '1', 'brand' => 'typing', 'v' => '19'];
+$typingMarksQs = ['sample' => '1', 'preview' => '1', 'brand' => 'typing', 'v' => '20'];
+if ($tryReg !== '') {
+    $typingMarksQs['reg_id'] = $tryReg;
+}
 if ($selAtcId > 0) {
     $typingMarksQs['atc_id'] = $selAtcId;
 }
 $typingMarksPreviewUrl = 'generate_marksheet.php?' . http_build_query($typingMarksQs);
+
+// Course completion always previewable with dummy marks (sample=1)
+$certQs = ['sample' => '1', 'preview' => '1', 'v' => '2'];
+if ($tryReg !== '') {
+    $certQs['reg_id'] = $tryReg;
+}
+if ($selAtcId > 0) {
+    $certQs['atc_id'] = $selAtcId;
+}
+if ($marksBrand === 'abacus' || $marksBrand === 'it' || $marksBrand === 'typing') {
+    $certQs['brand'] = $marksBrand;
+}
+$certPreviewUrl = 'generate_course_certificate.php?' . http_build_query($certQs);
 
 $tplBase = __DIR__ . '/../assets/templates/';
 $templateFiles = [
@@ -386,13 +402,13 @@ $docSections = [
     ],
 ];
 
-// Course completion PDF (brand follows course type)
+// Course completion PDF (brand follows course type / marksheet brand selector)
 $docSections['certificates_pdf']['items'][] = [
     'name'        => 'Course Completion Certificate',
-    'desc'        => 'IT courses use the GIIT template. Abacus / Vedic Maths courses use Gyanam Abacus. Same generator for Admin and ATC.',
+    'desc'        => 'IT & Typing use the GIIT template. Abacus / Vedic Maths use Gyanam Abacus. Review uses dummy marks (85 / A+) so every course type is visible without an exam pass.',
     'live'        => 'atc/completion_certificate.php · admin/course_certificates.php',
-    'preview_url' => $passRegId ? ('generate_course_certificate.php?reg_id=' . urlencode($passRegId) . '&preview=1') : null,
-    'preview_note'=> $passNote ?: 'Preview uses the selected student’s course type.',
+    'preview_url' => $certPreviewUrl,
+    'preview_note'=> $passNote ?: ('Sample preview' . ($passRegId ? ' (student also has a live pass on file)' : '') . '. Switch Marksheet dummy brand for IT / Abacus / Typing.'),
     'code'        => 'admin/generate_course_certificate.php',
 ];
 

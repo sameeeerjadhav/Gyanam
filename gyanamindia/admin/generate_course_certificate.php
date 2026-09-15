@@ -6,8 +6,11 @@
  * URL params:
  *   reg_id    = student registration_id (links to admissions)
  *   preview=1 = show inline (default downloads)
+ *   sample=1  = Admin QA preview with dummy passing marks (skips exam eligibility)
+ *   brand=it|abacus|typing = optional template/course-type override for sample previews
  *
- * Score and exam date are loaded from the Exam Portal — never from the URL.
+ * Score and exam date are loaded from the Exam Portal — never from the URL
+ * (except sample mode, which uses fixed dummy marks for layout review).
  */
 
 require_once __DIR__ . '/../config/db.php';
@@ -26,52 +29,137 @@ $pdo = getDBConnection();
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
 $regId = trim($_GET['reg_id'] ?? '');
+$isSample = isset($_GET['sample']) && (string)$_GET['sample'] === '1';
+$sessionRole  = $_SESSION['role'] ?? '';
+$sessionAtcId = intval($_SESSION['atc_id'] ?? 0);
+$forceBrand = strtolower(trim((string)($_GET['brand'] ?? '')));
+if (!in_array($forceBrand, ['it', 'abacus', 'typing'], true)) {
+    $forceBrand = '';
+}
 
-if (!$regId) {
+if ($isSample && $sessionRole !== 'Admin') {
+    http_response_code(403);
+    die('Sample certificate preview is only available to Admin.');
+}
+
+if (!$regId && !$isSample) {
     http_response_code(400);
     die('<b>Error:</b> Missing <code>reg_id</code> parameter.');
 }
 
 // ── Fetch student (admission) record ─────────────────────────────────────────
-$stmt = $pdo->prepare("
-    SELECT a.*,
-           atc.name       AS atc_name,
-           atc.city       AS atc_city,
-           atc.district   AS atc_district,
-           atc.atc_code,
-           atc.id         AS atc_id,
-           atc.center_type,
-           c.duration     AS course_duration,
-           c.course_type  AS course_type
-    FROM   admissions a
-    LEFT JOIN atc_centers atc ON atc.id = a.atc_id
-    LEFT JOIN courses      c   ON c.course_name = a.course AND c.status = 'Active'
-    WHERE  a.registration_id = ?
-    LIMIT  1
-");
-$stmt->execute([$regId]);
-$student = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if (!$student) {
-    // Fallback: try roll_no
+$student = null;
+if ($regId !== '') {
     $stmt = $pdo->prepare("
         SELECT a.*,
-               atc.name     AS atc_name,
-               atc.city     AS atc_city,
-               atc.district AS atc_district,
+               atc.name       AS atc_name,
+               atc.city       AS atc_city,
+               atc.district   AS atc_district,
                atc.atc_code,
-               atc.id       AS atc_id,
+               atc.id         AS atc_id,
                atc.center_type,
-               c.duration   AS course_duration,
-               c.course_type AS course_type
+               c.duration     AS course_duration,
+               c.course_type  AS course_type
         FROM   admissions a
         LEFT JOIN atc_centers atc ON atc.id = a.atc_id
         LEFT JOIN courses      c   ON c.course_name = a.course AND c.status = 'Active'
-        WHERE  a.roll_no = ?
+        WHERE  a.registration_id = ?
         LIMIT  1
     ");
     $stmt->execute([$regId]);
     $student = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$student) {
+        // Fallback: try roll_no
+        $stmt = $pdo->prepare("
+            SELECT a.*,
+                   atc.name     AS atc_name,
+                   atc.city     AS atc_city,
+                   atc.district AS atc_district,
+                   atc.atc_code,
+                   atc.id       AS atc_id,
+                   atc.center_type,
+                   c.duration   AS course_duration,
+                   c.course_type AS course_type
+            FROM   admissions a
+            LEFT JOIN atc_centers atc ON atc.id = a.atc_id
+            LEFT JOIN courses      c   ON c.course_name = a.course AND c.status = 'Active'
+            WHERE  a.roll_no = ?
+            LIMIT  1
+        ");
+        $stmt->execute([$regId]);
+        $student = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+}
+
+if ($isSample && !$student) {
+    $sampleAtcId = (int)($_GET['atc_id'] ?? 0);
+    $atcRow = null;
+    if ($sampleAtcId > 0) {
+        $as = $pdo->prepare("SELECT id, name, city, district, atc_code, center_type FROM atc_centers WHERE id = ? LIMIT 1");
+        $as->execute([$sampleAtcId]);
+        $atcRow = $as->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+    $brandHint = $forceBrand !== '' ? $forceBrand : 'it';
+    if ($brandHint === 'typing') {
+        $student = [
+            'id'              => 0,
+            'first_name'      => 'Ayush',
+            'middle_name'     => 'Samadhan',
+            'last_name'       => 'Shingote',
+            'course'          => 'Computer Typing & Data Entry Course (Beginner-English)',
+            'course_type'     => 'Typing',
+            'course_duration' => '3 months',
+            'atc_name'        => $atcRow['name'] ?? 'Matrix Computer Institute',
+            'atc_city'        => $atcRow['city'] ?? 'Bhusawal',
+            'atc_district'    => $atcRow['district'] ?? '',
+            'atc_code'        => $atcRow['atc_code'] ?? '911014',
+            'atc_id'          => (int)($atcRow['id'] ?? 0),
+            'center_type'     => $atcRow['center_type'] ?? 'IT',
+            'registration_id' => 'GIIT' . date('Y') . '1',
+            'roll_no'         => 'GIIT' . date('Y') . '1',
+            'photo'           => '',
+        ];
+    } elseif ($brandHint === 'abacus') {
+        $student = [
+            'id'              => 0,
+            'first_name'      => 'Sample',
+            'middle_name'     => '',
+            'last_name'       => 'Student',
+            'course'          => 'Abacus Level 1',
+            'course_type'     => 'Abacus',
+            'course_duration' => '3 Months',
+            'atc_name'        => $atcRow['name'] ?? 'Sample ATC',
+            'atc_city'        => $atcRow['city'] ?? 'Pune',
+            'atc_district'    => $atcRow['district'] ?? '',
+            'atc_code'        => $atcRow['atc_code'] ?? '202600001',
+            'atc_id'          => (int)($atcRow['id'] ?? 0),
+            'center_type'     => $atcRow['center_type'] ?? 'Abacus',
+            'registration_id' => 'GYANAM' . date('Y') . '1',
+            'roll_no'         => 'GYANAM' . date('Y') . '1',
+            'photo'           => '',
+        ];
+    } else {
+        $student = [
+            'id'              => 0,
+            'first_name'      => 'Sample',
+            'middle_name'     => '',
+            'last_name'       => 'Student',
+            'course'          => 'MS-CIT',
+            'course_type'     => 'IT',
+            'course_duration' => '2 Months',
+            'atc_name'        => $atcRow['name'] ?? 'Sample ATC',
+            'atc_city'        => $atcRow['city'] ?? 'Pune',
+            'atc_district'    => $atcRow['district'] ?? '',
+            'atc_code'        => $atcRow['atc_code'] ?? '202600001',
+            'atc_id'          => (int)($atcRow['id'] ?? 0),
+            'center_type'     => $atcRow['center_type'] ?? 'IT',
+            'registration_id' => 'GIIT' . date('Y') . '1',
+            'roll_no'         => 'GIIT' . date('Y') . '1',
+            'photo'           => '',
+        ];
+    }
+    $regId = (string)($student['registration_id'] ?? 'SAMPLE');
 }
 
 if (!$student) {
@@ -80,23 +168,50 @@ if (!$student) {
 }
 
 // ── ATC role: restrict to own students only ───────────────────────────────────
-$sessionRole  = $_SESSION['role'] ?? '';
-$sessionAtcId = intval($_SESSION['atc_id'] ?? 0);
 if ($sessionRole === 'ATC CENTER' && intval($student['atc_id']) !== $sessionAtcId) {
     http_response_code(403);
     die('Access denied.');
 }
 
-// ── Eligibility: exam portal pass + (ATC) share/photo ─────────────────────────
-$eligibility = validateCourseCertificateRequest($pdo, $student, $sessionRole);
-if (!$eligibility['eligible']) {
-    http_response_code(403);
-    die('<b>Certificate not available:</b> ' . htmlspecialchars($eligibility['message']));
+// Sample QA: force course type from brand selector so IT / Abacus / Typing all preview
+if ($isSample && $forceBrand !== '') {
+    if ($forceBrand === 'typing') {
+        $student['course_type'] = 'Typing';
+        if (!isTypingCourse($student['course_type'], (string)($student['course'] ?? ''))) {
+            $student['course'] = 'Computer Typing & Data Entry Course (Beginner-English)';
+        }
+        $student['course_duration'] = $student['course_duration'] ?: '3 months';
+    } elseif ($forceBrand === 'abacus') {
+        $student['course_type'] = 'Abacus';
+        if (stripos((string)($student['course'] ?? ''), 'abacus') === false) {
+            $student['course'] = 'Abacus Level 1';
+        }
+    } else {
+        $student['course_type'] = 'IT';
+    }
 }
 
-$examPass = $eligibility['exam'];
-$score    = (int)($examPass['composed_total'] ?? $examPass['score'] ?? 0);
-$examDate = (string)($examPass['exam_date'] ?? date('Y-m-d'));
+// ── Eligibility: exam portal pass + (ATC) share/photo (skipped for sample) ────
+if ($isSample) {
+    $score    = 85;
+    $examDate = date('Y-m-d');
+    $grade    = courseExamGradeFromScore($score);
+} else {
+    $eligibility = validateCourseCertificateRequest($pdo, $student, $sessionRole);
+    if (!$eligibility['eligible']) {
+        http_response_code(403);
+        die('<b>Certificate not available:</b> ' . htmlspecialchars($eligibility['message']));
+    }
+
+    $examPass = $eligibility['exam'];
+    $score    = (int)($examPass['composed_total'] ?? $examPass['score'] ?? 0);
+    $examDate = (string)($examPass['exam_date'] ?? date('Y-m-d'));
+    $grade    = courseExamGradeFromScore($score);
+    if ($grade === 'Fail') {
+        http_response_code(400);
+        die('<b>Error:</b> Certificate cannot be issued — exam score is below passing grade (40%).');
+    }
+}
 
 // ── Build dynamic values ──────────────────────────────────────────────────────
 
@@ -129,14 +244,6 @@ $duration = trim($student['course_duration'] ?? '');
 if (!$duration) $duration = '3 months';  // safe fallback
 $durationLine = 'The course duration is ' . $duration;
 
-// 5. Grade from score — bands match GIIT template footer (A++ … C)
-// IT: composed_total already preferred above; otherwise portal %
-$grade = courseExamGradeFromScore($score);
-if ($grade === 'Fail') {
-    http_response_code(400);
-    die('<b>Error:</b> Certificate cannot be issued — exam score is below passing grade (40%).');
-}
-
 $gradeLine = courseCertificateGradeLine($grade);
 
 // 6. Certificate number — IT: GIIT20261; Abacus: legacy course-reg-###
@@ -148,16 +255,23 @@ $certBrand = courseCertificateBrand(
     $student['center_type'] ?? null,
     $courseName
 );
+if ($isSample && $forceBrand === 'abacus') {
+    $certBrand = 'abacus';
+} elseif ($isSample && ($forceBrand === 'it' || $forceBrand === 'typing')) {
+    $certBrand = 'it';
+}
 $courseAbv = strtoupper(preg_replace('/[^A-Z0-9]/i', '', substr($courseName, 0, 6)));
 $preview = isset($_GET['preview']);
-$certNo = buildCourseCertificateNumber(
-    $pdo,
-    $certBrand,
-    $regId,
-    $courseName,
-    $issueYear,
-    !$preview
-);
+$certNo = $isSample
+    ? ('SAMPLE-' . strtoupper($certBrand) . '-' . date('Ymd'))
+    : buildCourseCertificateNumber(
+        $pdo,
+        $certBrand,
+        $regId,
+        $courseName,
+        $issueYear,
+        !$preview
+    );
 
 // ── Template (GIIT for IT courses, Gyanam Abacus for Abacus/Vedic) ───────────
 $template = courseCertificateTemplateBackground($certBrand);
@@ -213,27 +327,30 @@ try {
     }
 
     // QR on both preview and download (black modules only — no white card)
-    try {
-        $issued = issueCertificateRecord($pdo, [
-            'cert_no' => $certNo,
-            'student_name' => $fullName,
-            'reg_id' => $regId,
-            'course' => $courseName,
-            'atc_name' => trim((string)($student['atc_name'] ?? '')),
-            'atc_code' => trim((string)($student['atc_code'] ?? '')),
-            'score' => $score,
-            'grade' => $grade,
-            'duration' => $duration,
-            'issue_date' => $examDate ?: date('Y-m-d'),
-            'brand' => $certBrand,
-            'photo_path' => trim((string)($student['photo'] ?? '')),
-            'admission_id' => (int)($student['id'] ?? 0) ?: null,
-            'issued_by_atc_id' => $sessionAtcId ?: (int)($student['atc_id'] ?? 0) ?: null,
-            'source' => 'exam',
-        ]);
-        embedCertificateVerifyQr($pdf, $issued['verify_url'], $L['qr_x'], $L['qr_y'], $L['qr_size']);
-    } catch (\Throwable $qrE) {
-        // Non-fatal: certificate still prints without QR
+    // Sample QA previews skip issuing a real certificate record.
+    if (!$isSample) {
+        try {
+            $issued = issueCertificateRecord($pdo, [
+                'cert_no' => $certNo,
+                'student_name' => $fullName,
+                'reg_id' => $regId,
+                'course' => $courseName,
+                'atc_name' => trim((string)($student['atc_name'] ?? '')),
+                'atc_code' => trim((string)($student['atc_code'] ?? '')),
+                'score' => $score,
+                'grade' => $grade,
+                'duration' => $duration,
+                'issue_date' => $examDate ?: date('Y-m-d'),
+                'brand' => $certBrand,
+                'photo_path' => trim((string)($student['photo'] ?? '')),
+                'admission_id' => (int)($student['id'] ?? 0) ?: null,
+                'issued_by_atc_id' => $sessionAtcId ?: (int)($student['atc_id'] ?? 0) ?: null,
+                'source' => 'exam',
+            ]);
+            embedCertificateVerifyQr($pdf, $issued['verify_url'], $L['qr_x'], $L['qr_y'], $L['qr_size']);
+        } catch (\Throwable $qrE) {
+            // Non-fatal: certificate still prints without QR
+        }
     }
 
     // ── Output ────────────────────────────────────────────────────────────────
