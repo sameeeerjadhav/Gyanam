@@ -9,7 +9,7 @@
 import ApiClient from '../services/APIClient.js';
 import modalService from '../services/ModalService.js';
 import ProctoringService from '../services/ProctoringService.js?v=2';
-import { QuestionView } from '../components/QuestionView.js?v=9';
+import { QuestionView } from '../components/QuestionView.js?v=11';
 import { QuestionPalette } from '../components/QuestionPalette.js';
 import { Timer } from '../components/Timer.js';
 import { sleep, stampedeDelayMs, withBackoff } from '../utils/stampede.js';

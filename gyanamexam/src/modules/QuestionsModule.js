@@ -309,6 +309,7 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
               <tr>
                 <th style="width:50px">#</th>
                 <th>Question</th>
+                <th style="width:70px">Lang</th>
                 <th>Options</th>
                 <th style="width:100px">Answer</th>
                 <th style="width:130px">Actions</th>
@@ -320,10 +321,11 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
                 <td style="font-weight:600;color:var(--text-muted)">${i + 1}</td>
                 <td style="max-width:300px;line-height:1.5">
                   <div>${q.text}</div>
-                  ${q.text_mr ? `<div style="margin-top:0.25rem;color:var(--text-muted);font-size:0.88rem">${q.text_mr}</div>` : ''}
+                  ${q.text_mr ? `<div style="margin-top:0.25rem;color:#047857;font-size:0.88rem;font-family:'Noto Sans Devanagari',sans-serif">${q.text_mr}</div>` : '<div style="margin-top:0.2rem;font-size:0.75rem;color:#94a3b8">No Marathi</div>'}
                 </td>
+                <td>${(q.text_mr || (q.options || []).some(o => o.text_mr)) ? '<span class="badge badge-green">EN+MR</span>' : '<span class="badge" style="background:#f1f5f9;color:#64748b">EN</span>'}</td>
                 <td style="font-size:0.8rem;color:var(--text-muted);max-width:240px">
-                  ${q.options.map(o => '<span style="display:inline-block;background:var(--gray-50);border:1px solid var(--gray-200);padding:0.15rem 0.4rem;border-radius:4px;margin:0.1rem">' + o.id.toUpperCase() + ': ' + o.text + (o.text_mr ? ' / ' + o.text_mr : '') + '</span>').join(' ')}
+                  ${(q.options || []).map(o => '<span style="display:inline-block;background:var(--gray-50);border:1px solid var(--gray-200);padding:0.15rem 0.4rem;border-radius:4px;margin:0.1rem">' + String(o.id).toUpperCase() + ': ' + o.text + (o.text_mr ? '<br><span style="color:#047857">' + o.text_mr + '</span>' : '') + '</span>').join(' ')}
                 </td>
                 <td><span class="badge badge-green">${q.options.find(o => o.id === q.correct_answer)?.text || q.correct_answer}</span></td>
                 <td>
