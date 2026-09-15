@@ -10,10 +10,35 @@ require_once __DIR__ . '/includes/functions.php';
 $pdo = getDBConnection();
 $token = trim((string)($_GET['t'] ?? ''));
 $certNoQ = trim((string)($_GET['cert_no'] ?? ''));
+$isSampleVerify = isset($_GET['sample']) && (string)$_GET['sample'] === '1';
 
 $record = null;
 $lookupMode = '';
-if ($token !== '') {
+$verified = false;
+$isSampleDisplay = false;
+
+if ($isSampleVerify) {
+    // Demo / Sample Certificate QR — no DB row; layout-only verification preview
+    $isSampleDisplay = true;
+    $verified = true;
+    $lookupMode = 'sample';
+    $record = [
+        'id' => 0,
+        'cert_no' => trim((string)($_GET['cert_no'] ?? 'SAMPLE')),
+        'student_name' => trim((string)($_GET['name'] ?? 'Sample Student')),
+        'reg_id' => trim((string)($_GET['reg_id'] ?? '')),
+        'course' => trim((string)($_GET['course'] ?? '')),
+        'atc_name' => trim((string)($_GET['atc'] ?? '')),
+        'atc_code' => trim((string)($_GET['atc_code'] ?? '')),
+        'score' => (int)($_GET['score'] ?? 0),
+        'grade' => trim((string)($_GET['grade'] ?? '')),
+        'duration' => trim((string)($_GET['duration'] ?? '')),
+        'issue_date' => trim((string)($_GET['date'] ?? date('Y-m-d'))),
+        'brand' => trim((string)($_GET['brand'] ?? 'it')) ?: 'it',
+        'photo_path' => '',
+        'admission_id' => null,
+    ];
+} elseif ($token !== '') {
     $record = findIssuedCertificateByToken($pdo, $token);
     $lookupMode = 'token';
 } elseif ($certNoQ !== '') {
@@ -21,12 +46,16 @@ if ($token !== '') {
     $lookupMode = 'cert_no';
 }
 
-$verified = is_array($record) && !empty($record['id']);
-$pageTitle = $verified ? 'Verified Certificate' : 'Certificate Verification';
+if (!$isSampleDisplay) {
+    $verified = is_array($record) && !empty($record['id']);
+}
+$pageTitle = $isSampleDisplay
+    ? 'Sample Certificate Preview'
+    : ($verified ? 'Verified Certificate' : 'Certificate Verification');
 
 $brandKey = ($verified && (($record['brand'] ?? '') === 'abacus')) ? 'abacus' : 'it';
 $logoUrl = admissionFormBrandLogoUrl($brandKey, 'root');
-$photoUrl = $verified ? issuedCertificatePhotoUrl($record, $pdo) : '';
+$photoUrl = ($verified && !$isSampleDisplay) ? issuedCertificatePhotoUrl($record, $pdo) : '';
 $orgName = $brandKey === 'abacus'
     ? 'Gyanam Abacus'
     : 'Gyanam Institute of Information Technology (GIIT)';
@@ -316,16 +345,21 @@ $orgName = $brandKey === 'abacus'
         <div class="sub">Official Certificate Verification</div>
     </header>
 
-    <?php if ($token === '' && $certNoQ === ''): ?>
+    <?php if ($token === '' && $certNoQ === '' && !$isSampleDisplay): ?>
         <div class="banner bad">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             <span>No certificate reference provided</span>
         </div>
         <div class="card"><p class="empty">Scan the QR code on the certificate, or enter the certificate number below.</p></div>
     <?php elseif ($verified): ?>
-        <div class="banner ok">
+        <div class="banner <?= $isSampleDisplay ? 'bad' : 'ok' ?>">
+            <?php if ($isSampleDisplay): ?>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span>SAMPLE only — not an issued certificate</span>
+            <?php else: ?>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             <span>Verified authentic certificate</span>
+            <?php endif; ?>
         </div>
         <article class="card">
             <div class="card-top">

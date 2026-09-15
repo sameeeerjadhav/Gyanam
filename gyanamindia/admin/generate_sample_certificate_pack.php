@@ -197,11 +197,32 @@ try {
         }
     }
 
-    // Sample watermark-style note above footer (subtle)
+    // Sample QR (does not write issued_certificates) — opens public verify page in SAMPLE mode
+    $sampleVerifyUrl = rtrim(certificatePublicBaseUrl(), '/') . '/verify_certificate.php?' . http_build_query([
+        'sample'   => '1',
+        'cert_no'  => $certNo,
+        'name'     => $fullName,
+        'reg_id'   => $regId,
+        'course'   => $courseName,
+        'atc'      => $conductedAt,
+        'atc_code' => trim((string)($atc['atc_code'] ?? '')),
+        'score'    => $score,
+        'grade'    => $grade,
+        'duration' => $duration,
+        'date'     => $examDate,
+        'brand'    => $certBrand,
+    ]);
+    try {
+        embedCertificateVerifyQr($pdfCert, $sampleVerifyUrl, (float)$L['qr_x'], (float)$L['qr_y'], (float)$L['qr_size']);
+    } catch (Throwable $qrE) {
+        // Non-fatal for sample pack
+    }
+
+    // Sample watermark-style note above footer (subtle) — keep clear of QR on the right
     $pdfCert->SetTextColor(120, 120, 120);
     $pdfCert->SetFont('Times', 'I', 9);
     $pdfCert->SetXY(0, 218.0);
-    $pdfCert->Cell($W, 0, 'SAMPLE — For demonstration only', 0, 0, 'C');
+    $pdfCert->Cell(150, 0, 'SAMPLE — For demonstration only', 0, 0, 'C');
 
     $certBytes = $pdfCert->Output('S');
 
