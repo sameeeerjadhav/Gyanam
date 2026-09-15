@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ExamConfig;
+use App\Models\LiveExamSession;
+use App\Models\Question;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -45,6 +47,16 @@ class ExamConfigController extends Controller
         $data['exam_id']             = 'exam_' . Str::random(8);
         $data['created_by_user_id']  = $request->user()->id;
 
+        $bankCount = Question::where('question_bank_id', $data['question_bank_id'])->count();
+        if ($bankCount < 1) {
+            return response()->json(['message' => 'Selected question bank has no questions.'], 422);
+        }
+        if ((int) $data['total_questions'] > $bankCount) {
+            return response()->json([
+                'message' => "Questions to show ({$data['total_questions']}) cannot exceed bank size ({$bankCount}).",
+            ], 422);
+        }
+
         $exam = ExamConfig::create($data);
         return response()->json($exam->load('questionBank'), 201);
     }
@@ -81,15 +93,35 @@ class ExamConfigController extends Controller
             'proctoring_settings.text_select_block'=> 'boolean',
         ]);
 
+        $newBankId = (int) ($data['question_bank_id'] ?? $exam->question_bank_id);
+        $newTotal  = (int) ($data['total_questions'] ?? $exam->total_questions);
+        $bankChanged = $oldBankId !== $newBankId;
+
+        if ($bankChanged || array_key_exists('total_questions', $data) || array_key_exists('question_bank_id', $data)) {
+            $bankCount = Question::where('question_bank_id', $newBankId)->count();
+            if ($bankCount < 1) {
+                return response()->json(['message' => 'Selected question bank has no questions.'], 422);
+            }
+            if ($newTotal > $bankCount) {
+                return response()->json([
+                    'message' => "Questions to show ({$newTotal}) cannot exceed bank size ({$bankCount}).",
+                ], 422);
+            }
+        }
+
         $exam->update($data);
 
-        $newBankId = (int) $exam->question_bank_id;
         // Drop cached papers when bank or size changes so students never see a pooled set
         Cache::forget("exam_bank_qs:{$exam->id}");
         Cache::forget("exam_bank_qs:{$exam->id}:bank:{$oldBankId}");
         Cache::forget("exam_bank_qs:{$exam->id}:bank:{$newBankId}");
 
-        return response()->json($exam->load('questionBank'));
+        // If bank changed, clear locked papers on live sessions so next load rebuilds from new bank only
+        if ($bankChanged) {
+            LiveExamSession::where('exam_config_id', $exam->id)->update(['question_ids' => null]);
+        }
+
+        return response()->json($exam->fresh()->load('questionBank'));
     }
 
     public function destroy($id)

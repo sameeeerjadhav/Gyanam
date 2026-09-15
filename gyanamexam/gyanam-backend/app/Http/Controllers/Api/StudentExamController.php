@@ -124,38 +124,28 @@ class StudentExamController extends Controller
             abort(422, 'This exam has no question bank configured.');
         }
 
+        // New attempts require an active exam; in-progress sessions may still finish
+        if (!$exam->active && !$existing) {
+            abort(403, 'This exam is not currently active.');
+        }
+
         $cacheKey = "exam_qs:{$examId}:{$student->id}:{$attemptNumber}";
         $ttl = max(60, ((int) $exam->duration + 120) * 60);
         $needed = max(1, (int) $exam->total_questions);
 
-        // Prefer questions already bound to this attempt — but ONLY if they belong to this exam's bank
-        $questionIds = [];
-        if ($existing && !empty($existing->question_ids)) {
-            $questionIds = $this->filterQuestionIdsToBank($existing->question_ids, $bankId);
-            // Corrupted / cross-bank session set → discard and rebuild from the linked bank only
-            if (count($questionIds) < min($needed, count($existing->question_ids))) {
-                $questionIds = [];
-                Cache::forget($cacheKey);
-                Cache::forget($legacyCacheKey);
-            }
-        }
+        $questionIds = $this->resolveAttemptQuestionIds(
+            $existing,
+            $exam,
+            (int) $examId,
+            $bankId,
+            $needed,
+            $cacheKey,
+            $legacyCacheKey,
+            $ttl
+        );
 
         if (empty($questionIds)) {
-            $questions = Cache::remember($cacheKey, $ttl, function () use ($exam, $examId, $bankId, $needed) {
-                $bankQs = $this->loadBankQuestionsCached((int) $examId, $bankId);
-                $qs = $bankQs;
-                if ($exam->randomize_questions) {
-                    $qs = $bankQs;
-                    shuffle($qs);
-                }
-                return array_slice($qs, 0, $needed);
-            });
-            $questionIds = array_values(array_filter(
-                array_map(static fn ($q) => is_array($q) ? ($q['id'] ?? null) : $q, $questions),
-                static fn ($id) => $id !== null && $id !== ''
-            ));
-            // Final guard: never serve IDs outside this bank
-            $questionIds = $this->filterQuestionIdsToBank($questionIds, $bankId);
+            abort(422, 'No questions available in this exam\'s question bank. Contact admin.');
         }
 
         $session = $this->liveSessions->startOrResume(
@@ -166,13 +156,8 @@ class StudentExamController extends Controller
             $attemptNumber,
             $questionIds
         );
-        $this->liveSessions->setQuestionIds($session, $questionIds);
-        // Overwrite if a prior session stored IDs from outside this exam's bank
-        $storedBankIds = $this->filterQuestionIdsToBank($session->question_ids ?? [], $bankId);
-        if (!empty($questionIds) && $storedBankIds !== array_values($questionIds)) {
-            $session->question_ids = array_values($questionIds);
-            $session->save();
-        }
+        // Always persist the bank-validated set (fixes corrupt / cross-bank sessions)
+        $this->liveSessions->forceSetQuestionIds($session, $questionIds);
 
         try {
             if (!in_array(config('broadcasting.default'), ['log', 'null', ''], true)) {
@@ -192,14 +177,29 @@ class StudentExamController extends Controller
             $draft = null;
         }
 
+        // Drop draft answers that are not part of this attempt's bank-scoped paper
+        if ($draft && is_array($draft->answers)) {
+            $allowed = array_fill_keys(array_map('strval', $questionIds), true);
+            $cleanAnswers = [];
+            foreach ($draft->answers as $qid => $ans) {
+                if (isset($allowed[(string) $qid])) {
+                    $cleanAnswers[$qid] = $ans;
+                }
+            }
+            if ($cleanAnswers !== $draft->answers) {
+                $draft->answers = $cleanAnswers;
+                $draft->save();
+            }
+        }
+
         $remaining = $this->liveSessions->remainingSeconds($session);
         $expired   = $remaining < 0;
         $pastLate  = $this->liveSessions->isPastLateWindow($session);
 
-        // Hydrate from DB — strictly this exam's question bank only
+        // Hydrate from DB — strictly this exam's question bank only (never leak correct_answer)
         $fresh = Question::where('question_bank_id', $bankId)
             ->whereIn('id', $questionIds)
-            ->get()
+            ->get(['id', 'text', 'text_mr', 'options'])
             ->keyBy(fn ($q) => (string) $q->id);
         $safeQuestions = [];
         foreach ($questionIds as $qid) {
@@ -214,6 +214,10 @@ class StudentExamController extends Controller
                 'text_mr' => $row->text_mr,
                 'options' => $this->normalizeOptionsForStudent($row->options),
             ];
+        }
+
+        if (empty($safeQuestions)) {
+            abort(422, 'Could not load questions for this exam. Contact admin.');
         }
 
         return response()->json([
@@ -285,7 +289,33 @@ class StudentExamController extends Controller
             return response()->json(['message' => 'Too many answers in draft.'], 422);
         }
 
+        // Only keep answers for questions on this attempt's bank-scoped paper
+        $exam = ExamConfig::find($examId);
+        $bankId = (int) ($exam?->question_bank_id ?? 0);
+        $allowedIds = $this->filterQuestionIdsToBank($session?->question_ids ?? [], $bankId);
+        if (!empty($allowedIds)) {
+            $allowed = array_fill_keys(array_map('strval', $allowedIds), true);
+            $answers = array_filter(
+                $answers,
+                static fn ($v, $k) => isset($allowed[(string) $k]),
+                ARRAY_FILTER_USE_BOTH
+            );
+        } else {
+            // No locked paper yet — reject draft writes that could poison the attempt
+            $answers = [];
+        }
+
         $marks = $data['marked_for_review'] ?? [];
+        if (!empty($allowedIds) && is_array($marks)) {
+            $allowed = array_fill_keys(array_map('strval', $allowedIds), true);
+            $marks = array_values(array_filter(
+                $marks,
+                static fn ($id) => isset($allowed[(string) $id])
+            ));
+        } else {
+            $marks = [];
+        }
+
         $existing = ExamAnswerDraft::where('student_id', $student->id)
             ->where('exam_config_id', $examId)
             ->first();
@@ -565,19 +595,38 @@ class StudentExamController extends Controller
             ], 422);
         }
 
+        // Persist cleaned set so grading matches what student was shown
+        if ($session) {
+            $prev = array_map('strval', array_values($session->question_ids ?? []));
+            $next = array_map('strval', array_values($questionIds));
+            if ($prev !== $next) {
+                $session->question_ids = array_values($questionIds);
+                $session->save();
+            }
+        }
+
         $correctMap = Question::where('question_bank_id', $bankId)
             ->whereIn('id', $questionIds)
             ->pluck('correct_answer', 'id')
+            ->mapWithKeys(static fn ($ans, $id) => [(string) $id => (string) $ans])
             ->all();
+
+        // Normalize client answers to string keys (JSON often sends string ids)
+        $answersById = [];
+        foreach ($formattedAnswers as $qid => $ans) {
+            $answersById[(string) $qid] = $ans;
+        }
 
         $total      = count($questionIds);
         $correct    = 0;
         $answerRows = [];
 
         foreach ($questionIds as $qId) {
-            $selected  = $formattedAnswers[$qId] ?? null;
-            $isCorrect = isset($correctMap[$qId]) && $selected !== null
-                && (string) $correctMap[$qId] === (string) $selected;
+            $key = (string) $qId;
+            $selected = array_key_exists($key, $answersById) ? $answersById[$key] : null;
+            $isCorrect = $selected !== null
+                && array_key_exists($key, $correctMap)
+                && $correctMap[$key] === (string) $selected;
             if ($isCorrect) {
                 $correct++;
             }
@@ -757,6 +806,83 @@ class StudentExamController extends Controller
     }
 
     /**
+     * Resolve the locked question set for this attempt from ONE bank only.
+     * Prefer live-session IDs, then attempt cache, else pick a fresh subset.
+     *
+     * @return list<int>
+     */
+    private function resolveAttemptQuestionIds(
+        $existing,
+        ExamConfig $exam,
+        int $examConfigId,
+        int $bankId,
+        int $needed,
+        string $cacheKey,
+        string $legacyCacheKey,
+        int $ttl
+    ): array {
+        // 1) Live session set (stable for grading) — bank-filtered
+        if ($existing && !empty($existing->question_ids)) {
+            $ids = $this->filterQuestionIdsToBank($existing->question_ids, $bankId);
+            $originalCount = count($existing->question_ids);
+            // Any ID from outside this bank → discard and rebuild
+            if (count($ids) === $originalCount && count($ids) > 0) {
+                return $ids;
+            }
+            Cache::forget($cacheKey);
+            Cache::forget($legacyCacheKey);
+        }
+
+        // 2) Attempt cache — bank-filtered; drop if tainted
+        $cached = Cache::get($cacheKey) ?: Cache::get($legacyCacheKey);
+        if (is_array($cached) && !empty($cached)) {
+            $ids = $this->filterQuestionIdsToBank(
+                array_map(static fn ($q) => is_array($q) ? ($q['id'] ?? null) : $q, $cached),
+                $bankId
+            );
+            $rawCount = count($cached);
+            if (count($ids) === $rawCount && count($ids) > 0) {
+                return $ids;
+            }
+            Cache::forget($cacheKey);
+            Cache::forget($legacyCacheKey);
+        }
+
+        // 3) Fresh pick from the linked bank only
+        $picked = $this->pickQuestionsFromBank($exam, $examConfigId, $bankId, $needed);
+        if (empty($picked)) {
+            return [];
+        }
+        Cache::put($cacheKey, $picked, $ttl);
+
+        return $this->filterQuestionIdsToBank(
+            array_map(static fn ($q) => $q['id'] ?? null, $picked),
+            $bankId
+        );
+    }
+
+    /**
+     * Random (or ordered) subset from exactly one question bank.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function pickQuestionsFromBank(ExamConfig $exam, int $examConfigId, int $bankId, int $needed): array
+    {
+        $bankQs = $this->loadBankQuestionsCached($examConfigId, $bankId);
+        if (empty($bankQs)) {
+            return [];
+        }
+
+        // Copy before shuffle so the shared bank cache is never mutated
+        $qs = array_values($bankQs);
+        if ($exam->randomize_questions) {
+            shuffle($qs);
+        }
+
+        return array_slice($qs, 0, max(1, $needed));
+    }
+
+    /**
      * Ensure each option exposes id/text/text_mr for the student exam UI.
      *
      * @param  mixed  $options
@@ -805,7 +931,17 @@ class StudentExamController extends Controller
                 ->orderBy('order')
                 ->orderBy('id')
                 ->get()
-                ->map(static fn ($q) => $q->toArray())
+                ->map(static function ($q) {
+                    // Never cache correct answers in shared bank payloads used for paper picks
+                    return [
+                        'id'      => $q->id,
+                        'text'    => $q->text,
+                        'text_mr' => $q->text_mr,
+                        'options' => $q->options,
+                        'order'   => $q->order,
+                        'question_bank_id' => $q->question_bank_id,
+                    ];
+                })
                 ->values()
                 ->all();
         });
@@ -815,7 +951,7 @@ class StudentExamController extends Controller
      * Keep only question IDs that belong to the given bank, preserving order.
      *
      * @param  array<int|string|null>  $ids
-     * @return list<int|string>
+     * @return list<int>
      */
     private function filterQuestionIdsToBank(array $ids, int $bankId): array
     {
@@ -839,7 +975,7 @@ class StudentExamController extends Controller
         foreach ($ids as $id) {
             $key = (string) $id;
             if (isset($allowedSet[$key])) {
-                $ordered[] = is_numeric($id) ? (int) $id : $id;
+                $ordered[] = (int) $id;
             }
         }
         return $ordered;

@@ -69,6 +69,22 @@ class LiveSessionService
         }
     }
 
+    /**
+     * Overwrite the locked paper set (used after bank validation / corruption repair).
+     */
+    public function forceSetQuestionIds(LiveExamSession $session, array $questionIds): void
+    {
+        $next = array_values($questionIds);
+        $prev = array_values($session->question_ids ?? []);
+        // Compare as strings to avoid int/string false positives
+        $same = array_map('strval', $prev) === array_map('strval', $next);
+        if ($same) {
+            return;
+        }
+        $session->question_ids = $next;
+        $session->save();
+    }
+
     public function touch(int $studentId, int $examConfigId, int $minIntervalSeconds = 45): ?LiveExamSession
     {
         $session = LiveExamSession::where('student_id', $studentId)
