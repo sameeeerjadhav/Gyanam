@@ -143,6 +143,14 @@ if (empty($student['course_type']) && $courseName !== '' && $courseName !== 'N/A
 $isTypingEarly = isTypingCourse($student['course_type'] ?? null, $courseName);
 if ($isSample && $forceBrand === 'typing') {
     $isTypingEarly = true;
+    // Keep selected student name/photo/ATC, but force typing course layout for QA
+    if (!isTypingCourse($student['course_type'] ?? null, $courseName)) {
+        $student['course'] = 'Computer Typing & Data Entry Course (Beginner-English)';
+        $student['course_type'] = 'Typing';
+        $student['course_content'] = typingMarksheetDefaultContents(30);
+        $student['course_duration'] = $student['course_duration'] ?: '3 months';
+        $courseName = $student['course'];
+    }
 }
 
 $exam = null;
