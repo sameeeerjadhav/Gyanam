@@ -40,6 +40,8 @@ Route::prefix('v1')->group(function () {
         // Exam Configs
         Route::apiResource('exam-configs', ExamConfigController::class);
         Route::patch('exam-configs/{id}/toggle-active', [ExamConfigController::class, 'toggleActive']);
+        Route::get('exam-configs-global-practice', [ExamConfigController::class, 'getGlobalPractice']);
+        Route::put('exam-configs-global-practice', [ExamConfigController::class, 'saveGlobalPractice']);
 
         // Admin/Staff Routes
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
