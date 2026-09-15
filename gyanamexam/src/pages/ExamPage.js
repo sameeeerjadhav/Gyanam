@@ -10,7 +10,7 @@ import ApiClient from '../services/APIClient.js';
 import modalService from '../services/ModalService.js';
 import ProctoringService from '../services/ProctoringService.js?v=2';
 import { QuestionView } from '../components/QuestionView.js?v=11';
-import { QuestionPalette } from '../components/QuestionPalette.js';
+import { QuestionPalette } from '../components/QuestionPalette.js?v=2';
 import { Timer } from '../components/Timer.js';
 import { sleep, stampedeDelayMs, withBackoff } from '../utils/stampede.js';
 
@@ -342,15 +342,32 @@ class ExamPage {
         .exam-main::-webkit-scrollbar,
         .exam-sidebar::-webkit-scrollbar,
         #question-palette-container::-webkit-scrollbar { width: 0; height: 0; display: none; }
+        #question-palette-container {
+          overflow-x: hidden !important;
+          max-width: 100%;
+        }
+        #question-palette-container .question-palette-grid {
+          width: 100%;
+          max-width: 100%;
+          overflow: hidden;
+        }
+        .exam-header-logo {
+          width: 42px;
+          height: 42px;
+          object-fit: contain;
+          flex-shrink: 0;
+          display: block;
+        }
         .options-container { grid-template-columns: 1fr 1fr !important; }
         @media (max-width: 900px) {
           .exam-layout { flex-direction: column !important; height: auto !important; }
-          .exam-sidebar { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 260px; overflow-y: auto; flex-shrink: 1 !important; }
+          .exam-sidebar { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 280px; overflow-y: auto; flex-shrink: 1 !important; }
           .exam-main { height: auto !important; min-height: auto !important; overflow-y: visible !important; }
           .options-container { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 640px) {
           .options-container { grid-template-columns: 1fr !important; }
+          .exam-header-logo { width: 36px; height: 36px; }
         }
       </style>
 
@@ -358,21 +375,27 @@ class ExamPage {
 
         <!-- ═══ Top Header Bar ═══ -->
         <header style="background:white;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:20;box-shadow:0 1px 4px rgba(0,0,0,0.05)">
-          <div style="max-width:1400px;margin:0 auto;padding:0.75rem 1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+          <div style="max-width:1400px;margin:0 auto;padding:0.65rem 1.25rem;display:flex;align-items:center;gap:0.85rem;flex-wrap:wrap">
 
-            <!-- Exam Info -->
-            <div style="flex:1;min-width:180px">
-              <h2 id="exam-title" style="font-size:1rem;font-weight:700;color:#0f172a;margin:0;line-height:1.3">Loading...</h2>
-              <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.2rem">
-                <span id="exam-type" style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em"></span>
-                <span style="width:3px;height:3px;border-radius:50%;background:#cbd5e1"></span>
-                <span style="font-size:0.72rem;color:#64748b;font-weight:500"><span id="total-questions">—</span> Questions</span>
-                <span id="autosave-status" style="font-size:0.7rem;font-weight:600;color:#94a3b8;margin-left:0.25rem"></span>
+            <!-- GIIT brand -->
+            <div style="display:flex;align-items:center;gap:0.65rem;flex-shrink:0">
+              <img class="exam-header-logo" src="assets/giit_brand_logo.png" alt="GIIT"
+                   onerror="this.onerror=null;this.src='assets/giit_logo.png'">
+              <div style="min-width:0">
+                <h2 id="exam-title" style="font-size:1rem;font-weight:700;color:#0f172a;margin:0;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">Loading...</h2>
+                <div style="display:flex;align-items:center;gap:0.55rem;margin-top:0.15rem;flex-wrap:wrap">
+                  <span style="font-size:0.68rem;font-weight:700;color:#1d4ed8;letter-spacing:0.02em">GIIT</span>
+                  <span style="width:3px;height:3px;border-radius:50%;background:#cbd5e1"></span>
+                  <span id="exam-type" style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em"></span>
+                  <span style="width:3px;height:3px;border-radius:50%;background:#cbd5e1"></span>
+                  <span style="font-size:0.72rem;color:#64748b;font-weight:500"><span id="total-questions">—</span> Questions</span>
+                  <span id="autosave-status" style="font-size:0.7rem;font-weight:600;color:#94a3b8;margin-left:0.15rem"></span>
+                </div>
               </div>
             </div>
 
             <!-- Progress Bar (desktop) -->
-            <div style="flex:0 0 200px;display:flex;align-items:center;gap:0.5rem">
+            <div style="flex:1;min-width:120px;max-width:220px;display:flex;align-items:center;gap:0.5rem;margin-left:auto">
               <div style="flex:1;height:6px;background:#e2e8f0;border-radius:999px;overflow:hidden">
                 <div id="progress-bar" style="height:100%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);border-radius:999px;transition:width 0.4s ease;width:0%;animation:progress-grow 0.6s ease-out"></div>
               </div>
@@ -446,10 +469,10 @@ class ExamPage {
           </div>
 
           <!-- ═══ Sidebar ═══ -->
-          <div class="exam-sidebar" style="width:280px;flex-shrink:0;background:white;border-left:1px solid #e2e8f0;display:flex;flex-direction:column;padding:1.25rem;overflow-y:auto">
-            <h2 style="font-size:0.75rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem">Question Map</h2>
+          <div class="exam-sidebar" style="width:260px;flex-shrink:0;background:white;border-left:1px solid #e2e8f0;display:flex;flex-direction:column;padding:1rem;overflow-x:hidden;overflow-y:auto;box-sizing:border-box">
+            <h2 style="font-size:0.75rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.85rem">Question Map</h2>
 
-            <div id="question-palette-container" style="flex:1;overflow-y:auto;margin-bottom:1.25rem"></div>
+            <div id="question-palette-container" style="flex:1;overflow-x:hidden;overflow-y:auto;margin-bottom:1rem;min-width:0;width:100%"></div>
 
             <!-- Legend -->
             <div style="background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;padding:0.75rem;margin-bottom:1rem">
