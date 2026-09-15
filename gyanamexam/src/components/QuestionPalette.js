@@ -73,12 +73,16 @@ export class QuestionPalette {
     this.container = container;
     this.container.innerHTML = '';
 
-    // Create grid container - using explicit CSS to avoid any Tailwind conflicts
+    // Create grid — 5 columns that always fit the sidebar (no horizontal scroll)
     const grid = document.createElement('div');
+    grid.className = 'question-palette-grid';
     grid.style.display = 'grid';
-    grid.style.gridTemplateColumns = 'repeat(5, 1fr)';
-    grid.style.gap = '0.625rem';
+    grid.style.gridTemplateColumns = 'repeat(5, minmax(0, 1fr))';
+    grid.style.gap = '0.4rem';
     grid.style.width = '100%';
+    grid.style.maxWidth = '100%';
+    grid.style.boxSizing = 'border-box';
+    grid.style.overflow = 'hidden';
     grid.setAttribute('role', 'navigation');
     grid.setAttribute('aria-label', 'Question navigation palette');
 
@@ -158,11 +162,30 @@ export class QuestionPalette {
     button.setAttribute('aria-label', `Question ${questionIndex + 1}`);
     button.textContent = questionIndex + 1;
 
-    // Base styles
-    button.className = 'question-palette-button w-12 h-12 rounded border-2 font-medium transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500';
-    button.style.backgroundColor = '#f1f5f9';
-    button.style.borderColor = '#e2e8f0';
-    button.style.color = '#475569';
+    // Fluid square buttons — fill grid cell (fixed w-12 caused horizontal overflow)
+    button.className = 'question-palette-button';
+    button.style.cssText = [
+      'width:100%',
+      'aspect-ratio:1',
+      'min-width:0',
+      'min-height:0',
+      'padding:0',
+      'margin:0',
+      'box-sizing:border-box',
+      'border-radius:8px',
+      'border:2px solid #e2e8f0',
+      'font-size:0.72rem',
+      'font-weight:600',
+      'font-family:inherit',
+      'line-height:1',
+      'cursor:pointer',
+      'display:flex',
+      'align-items:center',
+      'justify-content:center',
+      'transition:transform 0.15s ease, box-shadow 0.15s ease',
+      'background-color:#f1f5f9',
+      'color:#475569',
+    ].join(';');
 
     // Apply status-specific styles
     const status = this.questionStatuses.get(questionIndex) || 'unattempted';
