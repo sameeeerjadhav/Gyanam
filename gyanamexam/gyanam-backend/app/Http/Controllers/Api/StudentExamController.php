@@ -153,7 +153,8 @@ class StudentExamController extends Controller
             });
         }
 
-        $questionIds = array_map(fn ($q) => $q['id'], $questions);
+        $questionIds = array_map(fn ($q) => is_array($q) ? ($q['id'] ?? null) : $q, $questions);
+        $questionIds = array_values(array_filter($questionIds, static fn ($id) => $id !== null && $id !== ''));
 
         $session = $this->liveSessions->startOrResume(
             (int) $student->id,
@@ -187,12 +188,22 @@ class StudentExamController extends Controller
         $expired   = $remaining < 0;
         $pastLate  = $this->liveSessions->isPastLateWindow($session);
 
-        $safeQuestions = array_map(fn ($q) => [
-            'id'      => $q['id'],
-            'text'    => $q['text'],
-            'text_mr' => $q['text_mr'] ?? null,
-            'options' => $q['options'],
-        ], $questions);
+        // Always hydrate from DB so EN+MR updates are not stuck behind attempt/bank cache
+        $fresh = Question::whereIn('id', $questionIds)->get()->keyBy(fn ($q) => (string) $q->id);
+        $safeQuestions = [];
+        foreach ($questionIds as $qid) {
+            $key = (string) $qid;
+            if (!$fresh->has($key)) {
+                continue;
+            }
+            $row = $fresh[$key];
+            $safeQuestions[] = [
+                'id'      => $row->id,
+                'text'    => $row->text,
+                'text_mr' => $row->text_mr,
+                'options' => $this->normalizeOptionsForStudent($row->options),
+            ];
+        }
 
         return response()->json([
             'exam' => [
@@ -522,7 +533,11 @@ class StudentExamController extends Controller
         $questionIds = $session->question_ids ?: [];
         if (empty($questionIds)) {
             $cachedQuestions = Cache::get($cacheKey) ?: Cache::get($legacyCacheKey, []);
-            $questionIds = array_map(fn ($q) => $q['id'], $cachedQuestions);
+            $questionIds = array_map(
+                static fn ($q) => is_array($q) ? ($q['id'] ?? null) : $q,
+                $cachedQuestions
+            );
+            $questionIds = array_values(array_filter($questionIds, static fn ($id) => $id !== null && $id !== ''));
         }
 
         if (empty($questionIds)) {
@@ -717,5 +732,37 @@ class StudentExamController extends Controller
             ]);
 
         return response()->json($subs);
+    }
+
+    /**
+     * Ensure each option exposes id/text/text_mr for the student exam UI.
+     *
+     * @param  mixed  $options
+     * @return list<array{id:mixed,text:string,text_mr:?string}>
+     */
+    private function normalizeOptionsForStudent(mixed $options): array
+    {
+        if (is_string($options)) {
+            $decoded = json_decode($options, true);
+            $options = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($options)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($options as $opt) {
+            if (!is_array($opt)) {
+                continue;
+            }
+            $mr = $opt['text_mr'] ?? $opt['textMr'] ?? $opt['mr'] ?? null;
+            $mr = is_string($mr) ? trim($mr) : '';
+            $out[] = [
+                'id'      => $opt['id'] ?? null,
+                'text'    => (string) ($opt['text'] ?? ''),
+                'text_mr' => $mr !== '' ? $mr : null,
+            ];
+        }
+        return $out;
     }
 }

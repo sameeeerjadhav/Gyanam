@@ -42,7 +42,11 @@ class ProcessSubmission implements ShouldQueue
             $attempt = (int) ($session?->attempt_number ?: 1);
             $cached = Cache::get("exam_qs:{$this->examConfigId}:{$this->studentId}:{$attempt}")
                 ?: Cache::get("exam_qs:{$this->examConfigId}:{$this->studentId}", []);
-            $questionIds = array_map(fn ($q) => $q['id'], $cached);
+            $questionIds = array_map(
+                static fn ($q) => is_array($q) ? ($q['id'] ?? null) : $q,
+                $cached
+            );
+            $questionIds = array_values(array_filter($questionIds, static fn ($id) => $id !== null && $id !== ''));
         }
         if (empty($questionIds)) {
             $questionIds = array_keys($this->answers);

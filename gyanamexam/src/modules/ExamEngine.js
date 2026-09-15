@@ -122,6 +122,7 @@ export class ExamEngine {
       originalIndex: questionBank.indexOf(q),
       type: q.type,
       text: q.text,
+      text_mr: q.text_mr ?? q.textMr ?? null,
       options: q.options,
       answer: null,
       markedForReview: false,
