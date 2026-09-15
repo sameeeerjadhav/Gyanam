@@ -30,14 +30,15 @@ $pdo = getDBConnection();
 // ── Inputs ────────────────────────────────────────────────────────────────────
 $regId = trim($_GET['reg_id'] ?? '');
 $isSample = isset($_GET['sample']) && (string)$_GET['sample'] === '1';
-$sessionRole  = $_SESSION['role'] ?? '';
+$sessionRole  = (string)(getUserRole() ?? '');
 $sessionAtcId = intval($_SESSION['atc_id'] ?? 0);
 $forceBrand = strtolower(trim((string)($_GET['brand'] ?? '')));
 if (!in_array($forceBrand, ['it', 'abacus', 'typing'], true)) {
     $forceBrand = '';
 }
 
-if ($isSample && $sessionRole !== 'Admin') {
+// Sample QA is for HO Admin/DLC (same as Review Documents). Use getUserRole() — session key is user_role, not role.
+if ($isSample && !in_array($sessionRole, ['Admin', 'DLC'], true)) {
     http_response_code(403);
     die('Sample certificate preview is only available to Admin.');
 }
