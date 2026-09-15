@@ -218,12 +218,6 @@ try {
         // Non-fatal for sample pack
     }
 
-    // Sample watermark-style note above footer (subtle) — keep clear of QR on the right
-    $pdfCert->SetTextColor(120, 120, 120);
-    $pdfCert->SetFont('Times', 'I', 9);
-    $pdfCert->SetXY(0, 218.0);
-    $pdfCert->Cell(150, 0, 'SAMPLE — For demonstration only', 0, 0, 'C');
-
     $certBytes = $pdfCert->Output('S');
 
     $marksBytes = outputStatementOfMarksPdf([
