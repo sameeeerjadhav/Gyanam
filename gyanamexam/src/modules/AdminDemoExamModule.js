@@ -123,7 +123,29 @@ export async function renderAdminDemoExam(ApiClient, { currentUser, loadPage }) 
       </div>
       <div class="form-group" style="margin:0;grid-column:1 / -1">
         <label class="form-label">Instructions (shown before start)</label>
-        <textarea id="gp-inst" class="form-textarea" rows="3">${esc(current?.instructions || 'This practice exam helps you experience how the real exam works — timer, question map, navigation, and submit. Your practice score may be saved for your reference.')}</textarea>
+        <textarea id="gp-inst" class="form-textarea" rows="8">${esc(current?.instructions || `Welcome to MCCE Demo exam portal.
+
+1) All questions are MCQ type.
+
+2) Total questions : 20, all questions are mandatory.
+
+3) Each question is of 1 marks. There is no penalty for incorrect answers.
+
+4) Exam time : 30 min.
+
+5) Your certification grade & percentage depend on this given examination.
+
+6) Once exam is finished, there is no option to make changes in answers. So be careful while answering to questions.
+
+7) Do not try to do any other activity on the computer other than attempting exam. ANY OTHER ACTIVITY DURING THE EXAM WILL TERMINATE THE EXAM AND THERE IS NO WAY TO GAIN ACCESS TO EXAM OTHER THAN RE-APPEAR.
+
+8) If you fail in exam OR terminated exam due to mishandling, you can reappear by paying (re-examination fees).
+
+9) Do not use mobile phones or any other electronic device during EXAM.
+
+10) Request provisional certificate to the centre head before leaving exam centre.
+
+ALL THE BEST !!!`)}</textarea>
       </div>
     </div>
 
