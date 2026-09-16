@@ -4012,7 +4012,32 @@ function wrapPdfTextLines($pdf, string $text, float $maxWidthMm): array
 }
 
 /**
+ * Prefer certificate layout for typing-style titles:
+ * Line 1 — course title before "Speed"
+ * Line 2 — starts with "Speed … WPM/KPH"
+ *
+ * @return list<string>|null Forced lines, or null if no Speed clause
+ */
+function splitCertificateCourseNameAtSpeed(string $courseName): ?array
+{
+    $normalized = trim(preg_replace('/\s+/u', ' ', str_replace(["\r\n", "\r", "\n"], ' ', $courseName)) ?? $courseName);
+    if ($normalized === '') {
+        return null;
+    }
+    // Break immediately before the word Speed (keeps "Typing" on line 1)
+    if (preg_match('/^(.*?)\s+(Speed\b.*)$/iu', $normalized, $m)) {
+        $before = trim($m[1]);
+        $after = trim($m[2]);
+        if ($before !== '' && $after !== '') {
+            return [$before, $after];
+        }
+    }
+    return null;
+}
+
+/**
  * Fit course title into at most $maxLines by wrapping and shrinking font if needed.
+ * Typing courses force a break so line 2 starts with "Speed".
  *
  * @param object $pdf
  * @return array{0:list<string>,1:float} [lines, fontSize]
@@ -4035,15 +4060,28 @@ function fitCertificateCourseNameLines(
         10.0,
     ], static fn($s) => $s >= 9.5)));
 
+    $forced = splitCertificateCourseNameAtSpeed($courseName);
     $bestLines = [$courseName];
     $bestSize = $preferredSize;
+
     foreach ($sizes as $sz) {
         $pdf->SetFont('Times', $style, $sz);
-        $wrapped = wrapPdfTextLines($pdf, $courseName, $maxWidthMm);
-        $bestLines = $wrapped;
+
+        if ($forced !== null) {
+            $lines = [];
+            foreach ($forced as $part) {
+                foreach (wrapPdfTextLines($pdf, $part, $maxWidthMm) as $ln) {
+                    $lines[] = $ln;
+                }
+            }
+        } else {
+            $lines = wrapPdfTextLines($pdf, $courseName, $maxWidthMm);
+        }
+
+        $bestLines = $lines;
         $bestSize = $sz;
-        if (count($wrapped) <= $maxLines) {
-            return [$wrapped, $sz];
+        if (count($lines) <= $maxLines) {
+            return [$lines, $sz];
         }
     }
 
