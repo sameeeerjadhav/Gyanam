@@ -245,12 +245,8 @@ function setupRoutes(appContainer) {
             <div class="result-header-pattern" aria-hidden="true"></div>
             <div class="result-header-inner">
               <div class="result-brand">
-                <img src="assets/giit_brand_logo.png" alt="GIIT"
-                     onerror="this.onerror=null;this.src='assets/giit_logo.png';this.onerror=function(){this.src='assets/logo.png'}">
-                <div>
-                  <div class="result-brand-name">Gyanam Exam Portal</div>
-                  <div class="result-brand-sub">Exam results</div>
-                </div>
+                <div class="result-brand-name">Gyanam Exam Portal</div>
+                <div class="result-brand-sub">Exam results</div>
               </div>
             </div>
           </header>

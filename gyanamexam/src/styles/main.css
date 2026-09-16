@@ -2497,22 +2497,12 @@ tbody tr:hover {
   padding: 0.55rem 1rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
 }
 
 .result-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
+  text-align: center;
   min-width: 0;
-}
-
-.result-brand img {
-  width: 46px;
-  height: 46px;
-  object-fit: contain;
-  flex-shrink: 0;
-  filter: drop-shadow(0 2px 6px rgba(15, 39, 68, 0.12));
 }
 
 .result-brand-name {
