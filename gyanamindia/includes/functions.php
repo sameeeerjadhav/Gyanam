@@ -204,16 +204,34 @@ function migrateLegacyGiitRegistrationIds(PDO $pdo, ?int $year = null, bool $dry
     $out = ['updated' => 0, 'skipped' => 0, 'rows' => []];
 
     try {
+        // Broad fetch — filter legacy (no year) in PHP so older MySQL/MariaDB still works
         $rows = $pdo->query(
             "SELECT id, registration_id, roll_no, first_name, last_name, course
              FROM admissions
-             WHERE registration_id REGEXP '^GIIT[0-9]+$'
-               AND registration_id NOT REGEXP '^GIIT20[0-9]{2}[0-9]+$'
-             ORDER BY CAST(REGEXP_REPLACE(registration_id, '^GIIT', '') AS UNSIGNED), id"
+             WHERE registration_id LIKE 'GIIT%'
+             ORDER BY id ASC"
         )->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
         return ['updated' => 0, 'skipped' => 0, 'rows' => [], 'error' => $e->getMessage()];
     }
+
+    $legacy = [];
+    foreach ($rows as $row) {
+        $old = trim((string)($row['registration_id'] ?? ''));
+        if (isLegacyGiitRegistrationId($old)) {
+            $legacy[] = $row;
+        }
+    }
+    usort($legacy, static function ($a, $b) {
+        $pa = parseGiitRegistrationId(trim((string)$a['registration_id']));
+        $pb = parseGiitRegistrationId(trim((string)$b['registration_id']));
+        $sa = $pa['seq'] ?? 0;
+        $sb = $pb['seq'] ?? 0;
+        if ($sa === $sb) {
+            return ((int)$a['id']) <=> ((int)$b['id']);
+        }
+        return $sa <=> $sb;
+    });
 
     $takenStmt = $pdo->prepare(
         "SELECT id FROM admissions WHERE (registration_id = ? OR roll_no = ?) AND id <> ? LIMIT 1"
@@ -226,7 +244,7 @@ function migrateLegacyGiitRegistrationIds(PDO $pdo, ?int $year = null, bool $dry
          WHERE id = ?"
     );
 
-    foreach ($rows as $row) {
+    foreach ($legacy as $row) {
         $old = trim((string)$row['registration_id']);
         $parsed = parseGiitRegistrationId($old);
         if ($parsed === null || $parsed['year'] !== null) {
@@ -261,9 +279,15 @@ function migrateLegacyGiitRegistrationIds(PDO $pdo, ?int $year = null, bool $dry
         }
 
         if (!$dryRun) {
-            $upd->execute([$new, $old, $newRoll, (int)$row['id']]);
-            $out['updated']++;
-            $entry['status'] = 'updated';
+            try {
+                $upd->execute([$new, $old, $newRoll, (int)$row['id']]);
+                $out['updated']++;
+                $entry['status'] = 'updated';
+            } catch (Throwable $e) {
+                $entry['status'] = 'conflict';
+                $entry['error'] = $e->getMessage();
+                $out['skipped']++;
+            }
         } else {
             $entry['status'] = 'pending';
         }
