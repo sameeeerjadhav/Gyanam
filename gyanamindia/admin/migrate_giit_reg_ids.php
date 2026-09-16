@@ -1,7 +1,7 @@
 <?php
 /**
- * One-time: rename legacy GIIT1 / GIIT2 → GIIT20261 / GIIT20262
- * (and matching roll_no when it equals the old registration id).
+ * One-time tool: rename legacy GIIT1 / GIIT2 → GIIT20261 / GIIT20262
+ * Runs automatically when this page is opened. Delete this file after use.
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -11,28 +11,22 @@ requireLogin(['Admin']);
 
 $pdo = getDBConnection();
 $userName = sanitize(getUserName());
-$year = giitRegistrationYear(isset($_REQUEST['year']) ? (int)$_REQUEST['year'] : null);
-$message = '';
-$messageType = 'info';
-$result = null;
+$year = giitRegistrationYear(isset($_GET['year']) ? (int)$_GET['year'] : null);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? 'preview';
-    $dryRun = ($action !== 'apply');
-    $result = migrateLegacyGiitRegistrationIds($pdo, $year, $dryRun);
-    if (!empty($result['error'])) {
-        $message = 'Migration failed: ' . $result['error'];
-        $messageType = 'error';
-    } elseif ($dryRun) {
-        $message = 'Preview only — nothing written yet. Review the table, then click Apply migration.';
-        $messageType = 'info';
-    } else {
-        $message = 'Updated ' . (int)$result['updated'] . ' admission(s)'
-            . ($result['skipped'] ? ('; · skipped ' . (int)$result['skipped']) : '') . '.';
-        $messageType = 'success';
-    }
+// Apply migration immediately on page open
+$result = migrateLegacyGiitRegistrationIds($pdo, $year, false);
+
+if (!empty($result['error'])) {
+    $message = 'Migration failed: ' . $result['error'];
+    $messageType = 'error';
+} elseif (empty($result['rows'])) {
+    $message = 'No legacy GIIT# IDs found — already in year format (or none to convert).';
+    $messageType = 'success';
 } else {
-    $result = migrateLegacyGiitRegistrationIds($pdo, $year, true);
+    $message = 'Done. Updated ' . (int)$result['updated'] . ' admission(s)'
+        . ($result['skipped'] ? ('; · skipped ' . (int)$result['skipped'] . ' (conflict)') : '')
+        . '. You can delete this page from the server when finished.';
+    $messageType = ((int)$result['updated'] > 0 || (int)$result['skipped'] === 0) ? 'success' : 'info';
 }
 ?>
 <!DOCTYPE html>
@@ -61,18 +55,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 .mig-alert.info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
 .mig-alert.success { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
 .mig-alert.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-.mig-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; margin-bottom: 1rem; }
-.mig-actions label { font-size: .72rem; font-weight: 700; color: #64748b; display: block; margin-bottom: .25rem; }
-.mig-actions input {
-    height: 36px; width: 96px; border: 1.5px solid #e5e7eb; border-radius: 8px;
-    padding: 0 .6rem; font-weight: 700; font-family: inherit;
-}
+.mig-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1rem; }
 .mig-btn {
     height: 36px; padding: 0 1rem; border-radius: 8px; border: none;
     font-size: .8rem; font-weight: 700; cursor: pointer; text-decoration: none;
     display: inline-flex; align-items: center; font-family: inherit;
 }
-.mig-btn.danger { background: #dc2626; color: #fff; }
 .mig-btn.ghost { background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; }
 .mig-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
 .mig-table th, .mig-table td { padding: .55rem .65rem; border-bottom: 1px solid #f1f5f9; text-align: left; vertical-align: top; }
@@ -84,7 +72,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     display: inline-block; font-size: .65rem; font-weight: 800; padding: .15rem .45rem;
     border-radius: 99px; background: #f1f5f9; color: #475569; text-transform: uppercase;
 }
-.mig-badge.pending { background: #ecfdf5; color: #047857; }
 .mig-badge.updated { background: #dbeafe; color: #1d4ed8; }
 .mig-badge.conflict { background: #fef3c7; color: #b45309; }
 .mig-note { margin-top: 1rem; font-size: .78rem; color: #64748b; line-height: 1.45; }
@@ -102,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </button>
             <div style="margin-left:1rem">
                 <h1 style="font-size:1.1rem;font-weight:800;margin:0;line-height:1.2">Migrate GIIT Reg IDs</h1>
-                <p style="font-size:.75rem;color:#94a3b8;margin:.15rem 0 0">GIIT1 → GIIT<?= (int)$year ?>1</p>
+                <p style="font-size:.75rem;color:#94a3b8;margin:.15rem 0 0">GIIT1 → GIIT<?= (int)$year ?>1 (runs on open)</p>
             </div>
         </div>
         <div class="header-right">
@@ -113,35 +100,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <div class="page-content">
         <div class="mig-card">
-            <h1>Rename legacy GIIT registration IDs</h1>
+            <h1>Legacy GIIT IDs → year format</h1>
             <p class="lead">
                 Converts <span class="mig-mono">GIIT1</span>, <span class="mig-mono">GIIT2</span>…
                 to <span class="mig-mono">GIIT<?= (int)$year ?>1</span>,
                 <span class="mig-mono">GIIT<?= (int)$year ?>2</span>….
-                Roll numbers that match the old registration ID are updated too.
-                New IT admissions already use this year format.
+                Matching roll numbers are updated too. This ran automatically when you opened the page.
             </p>
 
-            <?php if ($message !== ''): ?>
-                <div class="mig-alert <?= htmlspecialchars($messageType) ?>"><?= htmlspecialchars($message) ?></div>
-            <?php endif; ?>
+            <div class="mig-alert <?= htmlspecialchars($messageType) ?>"><?= htmlspecialchars($message) ?></div>
 
-            <form method="post" class="mig-actions">
-                <div>
-                    <label for="year">Year prefix</label>
-                    <input type="number" id="year" name="year" value="<?= (int)$year ?>" min="2020" max="2099">
-                </div>
-                <button type="submit" name="action" value="preview" class="mig-btn ghost">Refresh preview</button>
-                <button type="submit" name="action" value="apply" class="mig-btn danger"
-                        onclick="return confirm('Apply GIIT ID rename permanently on the live database?');">
-                    Apply migration
-                </button>
+            <div class="mig-actions">
+                <a class="mig-btn ghost" href="migrate_giit_reg_ids.php">Run again</a>
                 <a class="mig-btn ghost" href="students.php?search=GIIT">Open students (GIIT)</a>
-            </form>
+            </div>
 
             <?php if ($result && empty($result['rows'])): ?>
-                <p class="empty-ok">No legacy GIIT# IDs found — nothing to migrate.</p>
-            <?php elseif ($result): ?>
+                <p class="empty-ok">Nothing left to migrate.</p>
+            <?php elseif ($result && !empty($result['rows'])): ?>
                 <table class="mig-table">
                     <thead>
                         <tr>
@@ -158,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <td><?= (int)$r['id'] ?></td>
                             <td>
                                 <?= htmlspecialchars($r['name'] ?: '—') ?>
-                                <?php if ($r['course'] !== ''): ?>
+                                <?php if (($r['course'] ?? '') !== ''): ?>
                                     <div style="color:#94a3b8;font-size:.72rem"><?= htmlspecialchars($r['course']) ?></div>
                                 <?php endif; ?>
                             </td>
@@ -181,9 +157,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
             <p class="mig-note">
-                If a student already exists on the exam portal under the old ID
-                (e.g. <span class="mig-mono">GIIT1</span>), update that identifier to the new value
-                so login and results stay linked.
+                After confirming Students shows <span class="mig-mono">GIIT<?= (int)$year ?>#</span> IDs,
+                delete <span class="mig-mono">admin/migrate_giit_reg_ids.php</span> and remove the sidebar link.
+                If exam-portal logins still use old IDs (e.g. GIIT1), update those identifiers to match.
             </p>
         </div>
     </div>
