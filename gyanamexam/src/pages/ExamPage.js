@@ -439,8 +439,8 @@ class ExamPage {
           .exam-layout { flex-direction: column !important; height: auto !important; overflow:auto; }
           .exam-sidebar { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 320px; overflow-y: auto; flex-shrink: 1 !important; }
           .exam-main { height: auto !important; min-height: auto !important; overflow-y: visible !important; }
-          .exam-header-logo { width: 32px; height: 32px; }
-          .exam-header-inner { flex-wrap: wrap; }
+          .exam-header-logo { width: 42px; height: 42px; }
+          .exam-header-inner { flex-wrap: nowrap; padding: 0.15rem 0.65rem; }
         }
       </style>
 
@@ -449,30 +449,30 @@ class ExamPage {
         <header class="exam-header">
           <div class="exam-header-pattern" aria-hidden="true"></div>
           <div class="exam-header-inner">
-            <div style="display:flex;align-items:center;gap:0.55rem;flex-shrink:0;min-width:0">
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-shrink:0;min-width:0">
               <img class="exam-header-logo" src="assets/giit_brand_logo.png" alt="GIIT"
                    onerror="this.onerror=null;this.src='assets/giit_logo.png';this.onerror=function(){this.src='assets/logo.png'}">
-              <div class="exam-brand-meta" style="min-width:0">
-                <strong id="exam-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px">Loading...</strong>
-                <span>GIIT · <span id="exam-type"></span> · <span id="total-questions">—</span> Questions</span>
+              <div class="exam-brand-meta">
+                <strong id="exam-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px">Loading...</strong>
+                <span>GIIT · <span id="exam-type"></span> · <span id="total-questions">—</span> Qs</span>
               </div>
             </div>
 
-            <div style="flex:1;min-width:100px;max-width:200px;display:flex;align-items:center;gap:0.5rem;margin-left:auto">
-              <div style="flex:1;height:6px;background:#e2e8f0;border-radius:999px;overflow:hidden">
+            <div style="flex:1;min-width:80px;max-width:160px;display:flex;align-items:center;gap:0.4rem;margin-left:auto">
+              <div style="flex:1;height:4px;background:#e2e8f0;border-radius:999px;overflow:hidden">
                 <div id="progress-bar" style="height:100%;background:linear-gradient(90deg,#c41e3a,#9f1830);border-radius:999px;transition:width 0.4s ease;width:0%;animation:progress-grow 0.6s ease-out"></div>
               </div>
-              <span id="progress-label" style="font-size:0.72rem;font-weight:700;color:#64748b;white-space:nowrap">0%</span>
+              <span id="progress-label" style="font-size:0.65rem;font-weight:700;color:#64748b;white-space:nowrap">0%</span>
             </div>
 
-            <div id="exam-header-status" style="display:flex;align-items:center;gap:0.65rem">
-              <span id="autosave-status" style="font-size:0.7rem;font-weight:600;color:#94a3b8"></span>
-              <div style="display:flex;align-items:center;gap:0.55rem">
-                <div style="text-align:right">
-                  <div style="font-size:0.82rem;font-weight:700;color:#0f2744">${userName}</div>
-                  <div style="font-size:0.68rem;color:#94a3b8;font-weight:600">${userId}</div>
+            <div id="exam-header-status" style="display:flex;align-items:center;gap:0.45rem">
+              <span id="autosave-status" style="font-size:0.65rem;font-weight:600;color:#94a3b8"></span>
+              <div style="display:flex;align-items:center;gap:0.4rem">
+                <div style="text-align:right;line-height:1.15">
+                  <div style="font-size:0.75rem;font-weight:700;color:#0f2744">${userName}</div>
+                  <div style="font-size:0.62rem;color:#94a3b8;font-weight:600">${userId}</div>
                 </div>
-                <div style="width:36px;height:36px;background:linear-gradient(135deg,#0f2744,#1e4d7b);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;color:white;flex-shrink:0">${initial}</div>
+                <div style="width:28px;height:28px;background:linear-gradient(135deg,#0f2744,#1e4d7b);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;color:white;flex-shrink:0">${initial}</div>
               </div>
             </div>
           </div>
