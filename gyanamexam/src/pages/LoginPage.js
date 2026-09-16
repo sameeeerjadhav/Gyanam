@@ -15,6 +15,9 @@ class LoginPage {
   }
 
   render(container) {
+    // Always rebuild styles so a cached old stylesheet cannot stick after deploy
+    document.getElementById('gep-login-styles')?.remove();
+    document.getElementById('gep-login-styles-v2')?.remove();
     container.innerHTML = this._getLoginHTML();
     this._injectStyles();
     this._attachEventListeners();
@@ -22,9 +25,10 @@ class LoginPage {
   }
 
   _injectStyles() {
-    if (document.getElementById('gep-login-styles')) return;
+    document.getElementById('gep-login-styles')?.remove();
+    document.getElementById('gep-login-styles-v2')?.remove();
     const style = document.createElement('style');
-    style.id = 'gep-login-styles';
+    style.id = 'gep-login-styles-v2';
     style.textContent = `
       @import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700;800&display=swap');
 
@@ -742,6 +746,7 @@ class LoginPage {
       this._clockTimer = null;
     }
     document.getElementById('gep-login-styles')?.remove();
+    document.getElementById('gep-login-styles-v2')?.remove();
   }
 }
 
