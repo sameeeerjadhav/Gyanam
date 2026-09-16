@@ -365,31 +365,35 @@ class ExamPage {
 
         .exam-header {
           position: relative; background:#fff; border-bottom:1px solid #e2e8f0;
-          overflow:hidden; isolation:isolate; flex-shrink:0;
+          overflow:hidden; isolation:isolate; flex-shrink:0; line-height:1.15;
         }
         .exam-header-pattern {
-          position:absolute; inset:0; z-index:0; pointer-events:none; opacity:0.4;
+          position:absolute; inset:0; z-index:0; pointer-events:none; opacity:0.35;
           background-color:#f8fafc;
           background-image:
-            radial-gradient(circle at 10% 40%, rgba(196,30,58,0.05), transparent 42%),
-            radial-gradient(circle at 90% 20%, rgba(15,39,68,0.06), transparent 40%),
-            url("data:image/svg+xml,%3Csvg width='120' height='104' viewBox='0 0 120 104' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%2394a3b8' stroke-width='0.9' opacity='0.35'%3E%3Cpath d='M30 2l28 16v32L30 66 2 50V18z'/%3E%3Cpath d='M90 2l28 16v32L90 66 62 50V18z'/%3E%3Cpath d='M60 36l28 16v32L60 100 32 84V52z'/%3E%3C/g%3E%3C/svg%3E");
-          background-size: auto, auto, 100px 86px;
+            radial-gradient(circle at 8% 50%, rgba(196,30,58,0.05), transparent 40%),
+            radial-gradient(circle at 92% 40%, rgba(15,39,68,0.06), transparent 38%),
+            url("data:image/svg+xml,%3Csvg width='90' height='78' viewBox='0 0 120 104' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%2394a3b8' stroke-width='0.9' opacity='0.3'%3E%3Cpath d='M30 2l28 16v32L30 66 2 50V18z'/%3E%3Cpath d='M90 2l28 16v32L90 66 62 50V18z'/%3E%3Cpath d='M60 36l28 16v32L60 100 32 84V52z'/%3E%3C/g%3E%3C/svg%3E");
+          background-size: auto, auto, 90px 78px;
         }
         .exam-header-inner {
           position:relative; z-index:1; max-width:1400px; margin:0 auto;
-          padding:0.4rem 1rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:nowrap;
+          padding:0.15rem 0.85rem; min-height:0;
+          display:flex; align-items:center; gap:0.55rem; flex-wrap:nowrap;
         }
         .exam-header-logo {
-          width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; display: block;
-          filter: drop-shadow(0 1px 3px rgba(15,39,68,.1));
+          width: 52px; height: 52px; object-fit: contain; flex-shrink: 0; display: block;
+          filter: drop-shadow(0 1px 3px rgba(15,39,68,.12));
+        }
+        .exam-brand-meta {
+          display:flex; flex-direction:column; justify-content:center; gap:0.02rem; min-width:0;
         }
         .exam-brand-meta strong {
-          display:block; font-size:0.84rem; font-weight:800; color:var(--ex-navy); line-height:1.15;
+          display:block; font-size:0.78rem; font-weight:800; color:var(--ex-navy); line-height:1.15;
         }
         .exam-brand-meta span {
-          display:block; margin-top:0.05rem; font-size:0.64rem; font-weight:600;
-          color:#64748b; text-transform:uppercase; letter-spacing:0.04em;
+          display:block; font-size:0.6rem; font-weight:600;
+          color:#64748b; text-transform:uppercase; letter-spacing:0.04em; line-height:1.1;
         }
 
         .exam-timer-box {
@@ -439,8 +443,8 @@ class ExamPage {
           .exam-layout { flex-direction: column !important; height: auto !important; overflow:auto; }
           .exam-sidebar { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 320px; overflow-y: auto; flex-shrink: 1 !important; }
           .exam-main { height: auto !important; min-height: auto !important; overflow-y: visible !important; }
-          .exam-header-logo { width: 42px; height: 42px; }
-          .exam-header-inner { flex-wrap: nowrap; padding: 0.15rem 0.65rem; }
+          .exam-header-logo { width: 44px; height: 44px; }
+          .exam-header-inner { flex-wrap: nowrap; padding: 0.1rem 0.65rem; }
         }
       </style>
 

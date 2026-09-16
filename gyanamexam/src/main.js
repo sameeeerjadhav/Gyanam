@@ -12,7 +12,7 @@ import router from './services/Router.js';
 import { getAuthModule } from './services/AuthenticationModule.js';
 import LoginPage from './pages/LoginPage.js?v=6';
 import { StudentDashboard } from './pages/StudentDashboard.js?v=14';
-import ExamPage from './pages/ExamPage.js?v=15';
+import ExamPage from './pages/ExamPage.js?v=16';
 import PreExamGate from './pages/PreExamGate.js?v=3';
 import ApiClient from './services/APIClient.js?v=6';
 
