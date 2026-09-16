@@ -32,17 +32,38 @@ if (!$video) {
     exit;
 }
 
-// Determine embed
+$atcName = '';
+if ($atcId) {
+    $a = $pdo->prepare("SELECT name FROM atc_centers WHERE id = ?");
+    $a->execute([$atcId]);
+    $atcName = (string)($a->fetchColumn() ?: '');
+}
+$watermarkText = trim(($atcName !== '' ? $atcName . ' · ' : '') . $userName);
+
+// Secure embed — never expose direct upload paths
 $embedHtml = '';
+$isUpload = false;
 if ($video['video_type'] === 'youtube' && $video['video_url']) {
     preg_match('/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/', $video['video_url'], $m);
     if (!empty($m[1])) {
-        $embedHtml = '<iframe src="https://www.youtube.com/embed/' . $m[1] . '?rel=0&modestbranding=1" frameborder="0" allowfullscreen style="width:100%;height:100%;border-radius:14px"></iframe>';
+        // modestbranding; no related videos; fs still needed for fullscreen watch
+        $embedHtml = '<iframe id="tvPlayerFrame" src="https://www.youtube-nocookie.com/embed/' . htmlspecialchars($m[1])
+            . '?rel=0&modestbranding=1&controls=1&disablekb=1&iv_load_policy=3&playsinline=1"'
+            . ' title="Training video" frameborder="0" allow="accelerometer; autoplay; encrypted-media; picture-in-picture"'
+            . ' allowfullscreen referrerpolicy="strict-origin-when-cross-origin"'
+            . ' style="width:100%;height:100%;border:0;border-radius:14px"></iframe>';
     }
 } elseif ($video['video_type'] === 'upload' && $video['video_path']) {
-    $embedHtml = '<video controls style="width:100%;height:100%;border-radius:14px;background:#000"><source src="../' . htmlspecialchars($video['video_path']) . '" type="video/mp4">Your browser does not support video.</video>';
+    $isUpload = true;
+    $streamSrc = 'stream.php?a=' . (int)$video['assignment_id'];
+    $embedHtml = '<video id="tvPlayer" controls playsinline controlslist="nodownload noplaybackrate noremoteplayback"'
+        . ' disablepictureinpicture preload="metadata"'
+        . ' style="width:100%;height:100%;border-radius:14px;background:#000;object-fit:contain">'
+        . '<source src="' . htmlspecialchars($streamSrc) . '" type="video/mp4">'
+        . 'Your browser does not support video.</video>';
 } elseif ($video['video_url']) {
-    $embedHtml = '<iframe src="' . htmlspecialchars($video['video_url']) . '" frameborder="0" allowfullscreen style="width:100%;height:100%;border-radius:14px"></iframe>';
+    $embedHtml = '<iframe id="tvPlayerFrame" src="' . htmlspecialchars($video['video_url']) . '"'
+        . ' frameborder="0" allowfullscreen style="width:100%;height:100%;border-radius:14px"></iframe>';
 }
 
 $daysLeft = (int)((strtotime($video['access_end']) - time()) / 86400);
@@ -53,6 +74,7 @@ $daysClass = $daysLeft <= 3 ? 'urgent' : ($daysLeft <= 7 ? 'warn' : 'ok');
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
 <title><?= htmlspecialchars($video['title']) ?> — Training | Gyanam India</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -84,6 +106,7 @@ $daysClass = $daysLeft <= 3 ? 'urgent' : ($daysLeft <= 7 ? 'warn' : 'ok');
 .back-link svg { width: 14px; height: 14px; }
 
 .player-wrap {
+    position: relative;
     width: 100%;
     aspect-ratio: 16/9;
     max-height: 72vh;
@@ -92,7 +115,80 @@ $daysClass = $daysLeft <= 3 ? 'urgent' : ($daysLeft <= 7 ? 'warn' : 'ok');
     overflow: hidden;
     margin-bottom: 1.5rem;
     box-shadow: 0 8px 32px rgba(0,0,0,.15);
+    user-select: none;
+    -webkit-user-select: none;
 }
+.player-wrap video,
+.player-wrap iframe {
+    position: relative;
+    z-index: 1;
+}
+
+/* Visible + tiled watermarks — leak deterrent (cannot stop OS capture) */
+.wm-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    overflow: hidden;
+}
+.wm-tile {
+    position: absolute;
+    inset: -40%;
+    width: 180%;
+    height: 180%;
+    background-image: repeating-linear-gradient(
+        -28deg,
+        transparent 0,
+        transparent 68px,
+        rgba(255,255,255,.045) 68px,
+        rgba(255,255,255,.045) 69px
+    );
+    transform: rotate(-12deg);
+}
+.wm-text {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(-18deg);
+    font-size: clamp(.85rem, 2.2vw, 1.15rem);
+    font-weight: 800;
+    letter-spacing: .04em;
+    color: rgba(255,255,255,.22);
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0,0,0,.35);
+    font-family: 'Sora', system-ui, sans-serif;
+}
+.wm-corner {
+    position: absolute;
+    right: .75rem;
+    bottom: .65rem;
+    z-index: 3;
+    pointer-events: none;
+    font-size: .65rem;
+    font-weight: 700;
+    color: rgba(255,255,255,.55);
+    background: rgba(0,0,0,.35);
+    padding: .2rem .45rem;
+    border-radius: 6px;
+    font-family: 'Sora', system-ui, sans-serif;
+}
+
+.secure-note {
+    display: flex;
+    align-items: flex-start;
+    gap: .55rem;
+    margin: -.5rem 0 1.25rem;
+    padding: .65rem .85rem;
+    border-radius: 10px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    font-size: .75rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+.secure-note svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; }
 
 .video-info {
     background: #fff;
@@ -145,6 +241,11 @@ $daysClass = $daysLeft <= 3 ? 'urgent' : ($daysLeft <= 7 ? 'warn' : 'ok');
     .video-info { padding: 1.25rem; }
     .vi-title { font-size: 1.1rem; }
 }
+
+/* Hide download affordance on some WebKit builds */
+video::-webkit-media-controls-enclosure { overflow: hidden; }
+video::-internal-media-controls-download-button { display: none !important; }
+video::-webkit-media-controls-download-button { display: none !important; }
 </style>
 </head>
 <body>
@@ -164,7 +265,22 @@ $daysClass = $daysLeft <= 3 ? 'urgent' : ($daysLeft <= 7 ? 'warn' : 'ok');
         Back to Videos
     </a>
 
-    <div class="player-wrap"><?= $embedHtml ?></div>
+    <div class="secure-note">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div>
+            Protected training content — downloading and sharing is not allowed.
+            This session is watermarked for your centre. Screen recording cannot be fully blocked by any website; misuse can be traced.
+        </div>
+    </div>
+
+    <div class="player-wrap" id="playerWrap" oncontextmenu="return false;">
+        <?= $embedHtml ?>
+        <div class="wm-layer" aria-hidden="true">
+            <div class="wm-tile"></div>
+            <div class="wm-text"><?= htmlspecialchars($watermarkText !== '' ? $watermarkText : 'Gyanam Training') ?></div>
+        </div>
+        <div class="wm-corner"><?= htmlspecialchars($watermarkText !== '' ? $watermarkText : 'Gyanam') ?></div>
+    </div>
 
     <div class="video-info">
         <div class="vi-title"><?= htmlspecialchars($video['title']) ?></div>
@@ -191,5 +307,47 @@ $daysClass = $daysLeft <= 3 ? 'urgent' : ($daysLeft <= 7 ? 'warn' : 'ok');
 </main>
 </div>
 <script src="../assets/js/dashboard.js"></script>
+<script>
+(function () {
+    const wrap = document.getElementById('playerWrap');
+    const video = document.getElementById('tvPlayer');
+
+    // Block right-click / drag save on player
+    document.addEventListener('contextmenu', function (e) {
+        if (wrap && wrap.contains(e.target)) e.preventDefault();
+    });
+    document.addEventListener('dragstart', function (e) {
+        if (wrap && wrap.contains(e.target)) e.preventDefault();
+    });
+
+    // Block common save / print / view-source shortcuts while on this page
+    document.addEventListener('keydown', function (e) {
+        const k = (e.key || '').toLowerCase();
+        if ((e.ctrlKey || e.metaKey) && ['s', 'u', 'p'].includes(k)) {
+            e.preventDefault();
+        }
+        if (e.key === 'F12' || ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(k))) {
+            e.preventDefault();
+        }
+    });
+
+    if (video) {
+        video.setAttribute('controlsList', 'nodownload noplaybackrate noremoteplayback');
+        video.disablePictureInPicture = true;
+
+        // Pause when tab is hidden (mild deterrent during some capture flows)
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden && !video.paused) {
+                try { video.pause(); } catch (_) {}
+            }
+        });
+
+        // Discourage PiP
+        video.addEventListener('enterpictureinpicture', function () {
+            try { document.exitPictureInPicture(); } catch (_) {}
+        });
+    }
+})();
+</script>
 </body>
 </html>

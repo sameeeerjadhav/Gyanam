@@ -1,5 +1,9 @@
-# Allow video downloads/streaming; block script execution
+# Block direct public access — videos stream only via training/stream.php
 Options -Indexes
-<FilesMatch "\.(php|phtml|php3|php4|php5|phar|cgi|pl|py)$">
-    Require all denied
-</FilesMatch>
+Require all denied
+
+# Apache 2.2 fallback
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>
