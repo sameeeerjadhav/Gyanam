@@ -9,7 +9,7 @@
 import ApiClient from '../services/APIClient.js';
 import modalService from '../services/ModalService.js';
 import ProctoringService from '../services/ProctoringService.js?v=2';
-import { QuestionView } from '../components/QuestionView.js?v=12';
+import { QuestionView } from '../components/QuestionView.js?v=13';
 import { QuestionPalette } from '../components/QuestionPalette.js?v=2';
 import { Timer } from '../components/Timer.js?v=2';
 import { sleep, stampedeDelayMs, withBackoff } from '../utils/stampede.js';
@@ -368,28 +368,28 @@ class ExamPage {
           overflow:hidden; isolation:isolate; flex-shrink:0;
         }
         .exam-header-pattern {
-          position:absolute; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+          position:absolute; inset:0; z-index:0; pointer-events:none; opacity:0.4;
           background-color:#f8fafc;
           background-image:
-            radial-gradient(circle at 10% 40%, rgba(196,30,58,0.06), transparent 42%),
-            radial-gradient(circle at 90% 20%, rgba(15,39,68,0.07), transparent 40%),
-            url("data:image/svg+xml,%3Csvg width='120' height='104' viewBox='0 0 120 104' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%2394a3b8' stroke-width='0.9' opacity='0.4'%3E%3Cpath d='M30 2l28 16v32L30 66 2 50V18z'/%3E%3Cpath d='M90 2l28 16v32L90 66 62 50V18z'/%3E%3Cpath d='M60 36l28 16v32L60 100 32 84V52z'/%3E%3Ccircle cx='30' cy='2' r='2.2' fill='%2394a3b8'/%3E%3Ccircle cx='58' cy='18' r='2.2' fill='%2394a3b8'/%3E%3Ccircle cx='90' cy='2' r='2.2' fill='%2394a3b8'/%3E%3C/g%3E%3C/svg%3E");
-          background-size: auto, auto, 120px 104px;
+            radial-gradient(circle at 10% 40%, rgba(196,30,58,0.05), transparent 42%),
+            radial-gradient(circle at 90% 20%, rgba(15,39,68,0.06), transparent 40%),
+            url("data:image/svg+xml,%3Csvg width='120' height='104' viewBox='0 0 120 104' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%2394a3b8' stroke-width='0.9' opacity='0.35'%3E%3Cpath d='M30 2l28 16v32L30 66 2 50V18z'/%3E%3Cpath d='M90 2l28 16v32L90 66 62 50V18z'/%3E%3Cpath d='M60 36l28 16v32L60 100 32 84V52z'/%3E%3C/g%3E%3C/svg%3E");
+          background-size: auto, auto, 100px 86px;
         }
         .exam-header-inner {
           position:relative; z-index:1; max-width:1400px; margin:0 auto;
-          padding:0.7rem 1.25rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+          padding:0.4rem 1rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:nowrap;
         }
         .exam-header-logo {
-          width: 56px; height: 56px; object-fit: contain; flex-shrink: 0; display: block;
-          filter: drop-shadow(0 2px 6px rgba(15,39,68,.12));
+          width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; display: block;
+          filter: drop-shadow(0 1px 3px rgba(15,39,68,.1));
         }
         .exam-brand-meta strong {
-          display:block; font-size:0.95rem; font-weight:800; color:var(--ex-navy); line-height:1.2;
+          display:block; font-size:0.84rem; font-weight:800; color:var(--ex-navy); line-height:1.15;
         }
         .exam-brand-meta span {
-          display:block; margin-top:0.12rem; font-size:0.7rem; font-weight:600;
-          color:#64748b; text-transform:uppercase; letter-spacing:0.05em;
+          display:block; margin-top:0.05rem; font-size:0.64rem; font-weight:600;
+          color:#64748b; text-transform:uppercase; letter-spacing:0.04em;
         }
 
         .exam-timer-box {
@@ -417,29 +417,30 @@ class ExamPage {
           box-shadow:0 1px 3px rgba(15,39,68,.04); overflow:hidden;
         }
         .exam-qbar {
-          padding:0.75rem 1.25rem; background:#f8fafc; border-bottom:1px solid #e8edf3;
+          padding:0.5rem 1rem; background:#f8fafc; border-bottom:1px solid #e8edf3;
           display:flex; align-items:center; justify-content:space-between; gap:0.75rem;
         }
         .exam-footer-bar {
           background:#1a1f2a; color:#e2e8f0; flex-shrink:0;
         }
         .exam-footer-top {
-          max-width:1400px; margin:0 auto; padding:0.55rem 1.25rem;
+          max-width:1400px; margin:0 auto; padding:0.35rem 1rem;
           display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;
-          font-size:0.75rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
+          font-size:0.7rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
         }
         .exam-footer-top .accent { color:#f87171; }
         .exam-footer-bot {
           border-top:1px solid rgba(255,255,255,0.1);
-          padding:0.4rem 1.25rem 0.5rem; text-align:center;
-          font-size:0.68rem; color:rgba(226,232,240,0.5); font-weight:500;
+          padding:0.25rem 1rem 0.35rem; text-align:center;
+          font-size:0.62rem; color:rgba(226,232,240,0.5); font-weight:500;
         }
 
         @media (max-width: 900px) {
           .exam-layout { flex-direction: column !important; height: auto !important; overflow:auto; }
           .exam-sidebar { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 320px; overflow-y: auto; flex-shrink: 1 !important; }
           .exam-main { height: auto !important; min-height: auto !important; overflow-y: visible !important; }
-          .exam-header-logo { width: 46px; height: 46px; }
+          .exam-header-logo { width: 32px; height: 32px; }
+          .exam-header-inner { flex-wrap: wrap; }
         }
       </style>
 
@@ -448,11 +449,11 @@ class ExamPage {
         <header class="exam-header">
           <div class="exam-header-pattern" aria-hidden="true"></div>
           <div class="exam-header-inner">
-            <div style="display:flex;align-items:center;gap:0.75rem;flex-shrink:0;min-width:0">
+            <div style="display:flex;align-items:center;gap:0.55rem;flex-shrink:0;min-width:0">
               <img class="exam-header-logo" src="assets/giit_brand_logo.png" alt="GIIT"
                    onerror="this.onerror=null;this.src='assets/giit_logo.png';this.onerror=function(){this.src='assets/logo.png'}">
               <div class="exam-brand-meta" style="min-width:0">
-                <strong id="exam-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px">Loading...</strong>
+                <strong id="exam-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px">Loading...</strong>
                 <span>GIIT · <span id="exam-type"></span> · <span id="total-questions">—</span> Questions</span>
               </div>
             </div>
@@ -478,45 +479,45 @@ class ExamPage {
         </header>
 
         <div class="exam-layout">
-          <div class="exam-main" style="flex:1;overflow-y:auto;padding:1.25rem 1.5rem;min-height:0">
-            <div style="max-width:820px;margin:0 auto;animation:exam-fadeIn 0.35s ease-out">
+          <div class="exam-main" style="flex:1;overflow-y:auto;padding:0.85rem 1.1rem;min-height:0">
+            <div style="max-width:920px;margin:0 auto;animation:exam-fadeIn 0.35s ease-out">
               <div class="exam-qcard">
                 <div class="exam-qbar">
-                  <div style="display:flex;align-items:center;gap:0.65rem">
-                    <div id="question-number-badge" style="width:30px;height:30px;background:#0f2744;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:800;color:white">1</div>
-                    <span style="font-size:0.84rem;font-weight:700;color:#334155">
+                  <div style="display:flex;align-items:center;gap:0.55rem">
+                    <div id="question-number-badge" style="width:26px;height:26px;background:#0f2744;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;color:white">1</div>
+                    <span style="font-size:0.8rem;font-weight:700;color:#334155">
                       Question <span id="current-question-number">1</span> of <span id="total-questions-inline">—</span>
                       <span style="color:#94a3b8;font-weight:600"> · 1 Mark</span>
                     </span>
                   </div>
-                  <span style="background:#ecfdf5;color:#047857;padding:0.22rem 0.65rem;border-radius:999px;font-size:0.68rem;font-weight:800;border:1px solid #a7f3d0;text-transform:uppercase;letter-spacing:0.03em">MCQ</span>
+                  <span style="background:#ecfdf5;color:#047857;padding:0.18rem 0.55rem;border-radius:999px;font-size:0.64rem;font-weight:800;border:1px solid #a7f3d0;text-transform:uppercase;letter-spacing:0.03em">MCQ</span>
                 </div>
 
-                <div style="padding:1.25rem 1.35rem 1.1rem">
+                <div style="padding:0.9rem 1rem 0.75rem">
                   <div id="question-view-container"></div>
                 </div>
 
-                <div style="padding:0.9rem 1.25rem 1.1rem;background:#fafbfc;border-top:1px solid #e8edf3;display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap">
-                  <button id="prev-button" class="exam-nav-btn" type="button" style="display:inline-flex;align-items:center;gap:0.35rem;background:#fff;border:1px solid #d1d5db;color:#334155;padding:0.55rem 1.1rem;border-radius:8px;font-weight:700;font-size:0.84rem;cursor:pointer;font-family:inherit">
-                    <svg style="width:15px;height:15px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                <div style="padding:0.65rem 1rem 0.75rem;background:#fafbfc;border-top:1px solid #e8edf3;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap">
+                  <button id="prev-button" class="exam-nav-btn" type="button" style="display:inline-flex;align-items:center;gap:0.3rem;background:#fff;border:1px solid #d1d5db;color:#334155;padding:0.45rem 0.9rem;border-radius:8px;font-weight:700;font-size:0.8rem;cursor:pointer;font-family:inherit">
+                    <svg style="width:14px;height:14px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                     Prev
                   </button>
-                  <div style="display:flex;gap:0.45rem;flex-wrap:wrap">
-                    <button id="clear-answer-button" class="exam-reset-btn" type="button" style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.55rem 0.9rem;border-radius:8px;font-weight:700;font-size:0.82rem;cursor:pointer;font-family:inherit">
+                  <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
+                    <button id="clear-answer-button" class="exam-reset-btn" type="button" style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.45rem 0.75rem;border-radius:8px;font-weight:700;font-size:0.78rem;cursor:pointer;font-family:inherit">
                       Reset
                     </button>
-                    <button id="mark-review-button" class="exam-mark-btn" type="button" style="display:inline-flex;align-items:center;gap:0.35rem;background:#fffbeb;border:1px solid #fde68a;color:#b45309;padding:0.55rem 0.9rem;border-radius:8px;font-weight:700;font-size:0.82rem;cursor:pointer;font-family:inherit">
+                    <button id="mark-review-button" class="exam-mark-btn" type="button" style="display:inline-flex;align-items:center;gap:0.3rem;background:#fffbeb;border:1px solid #fde68a;color:#b45309;padding:0.45rem 0.75rem;border-radius:8px;font-weight:700;font-size:0.78rem;cursor:pointer;font-family:inherit">
                       Review
                     </button>
-                    <button id="next-button" class="exam-nav-btn exam-save-btn" type="button" style="display:inline-flex;align-items:center;gap:0.4rem;color:white;padding:0.55rem 1.25rem;border-radius:8px;font-weight:800;font-size:0.84rem;border:none;cursor:pointer;font-family:inherit">
+                    <button id="next-button" class="exam-nav-btn exam-save-btn" type="button" style="display:inline-flex;align-items:center;gap:0.35rem;color:white;padding:0.45rem 1rem;border-radius:8px;font-weight:800;font-size:0.8rem;border:none;cursor:pointer;font-family:inherit">
                       Save &amp; Next
-                      <svg style="width:15px;height:15px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                      <svg style="width:14px;height:14px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
                     </button>
                   </div>
                 </div>
               </div>
 
-              <div style="text-align:center;margin-top:0.85rem;font-size:0.72rem;color:#94a3b8;font-weight:600">
+              <div style="text-align:center;margin-top:0.55rem;font-size:0.68rem;color:#94a3b8;font-weight:600">
                 Press A–D or 1–4 to select · ← → to navigate
               </div>
             </div>

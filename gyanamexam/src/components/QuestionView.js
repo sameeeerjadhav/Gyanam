@@ -73,45 +73,48 @@ export class QuestionView {
   }
 
   _ensureStyles() {
-    if (document.getElementById('qv-polish-styles')) return;
+    document.getElementById('qv-polish-styles')?.remove();
+    document.getElementById('qv-polish-styles-v2')?.remove();
     const st = document.createElement('style');
-    st.id = 'qv-polish-styles';
+    st.id = 'qv-polish-styles-v2';
     st.textContent = `
       .qv-root { font-family: 'Source Sans 3', 'Segoe UI', sans-serif; }
       .qv-stem {
-        margin: 0 0 1.25rem;
-        padding: 0 0 1.1rem;
+        margin: 0 0 0.75rem;
+        padding: 0 0 0.7rem;
         border-bottom: 1px solid #e8edf3;
       }
       .qv-en {
-        font-size: 1.08rem;
+        font-size: 1rem;
         font-weight: 650;
         letter-spacing: -0.01em;
-        line-height: 1.55;
+        line-height: 1.45;
         color: #0f2744;
         font-family: 'Source Sans 3', 'Segoe UI', sans-serif;
       }
       .qv-mr {
-        margin-top: 0.55rem;
-        font-size: 1.02rem;
+        margin-top: 0.35rem;
+        font-size: 0.94rem;
         font-weight: 550;
-        line-height: 1.55;
+        line-height: 1.4;
         color: #334155;
         font-family: 'Noto Sans Devanagari', 'Source Sans 3', sans-serif;
       }
       .options-container {
-        display: flex !important;
-        flex-direction: column;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
         gap: 0.55rem;
+        align-items: stretch;
       }
-      .option-item { min-width: 0; }
+      .option-item { min-width: 0; height: 100%; }
       .qv-opt {
         display: flex;
         align-items: flex-start;
-        gap: 0.85rem;
+        gap: 0.65rem;
         width: 100%;
-        padding: 0.85rem 1rem;
-        border-radius: 10px;
+        height: 100%;
+        padding: 0.7rem 0.8rem;
+        border-radius: 9px;
         cursor: pointer;
         border: 1px solid #e2e8f0;
         background: #fff;
@@ -134,8 +137,8 @@ export class QuestionView {
         width: 0; height: 0;
       }
       .qv-letter {
-        width: 30px;
-        height: 30px;
+        width: 26px;
+        height: 26px;
         border-radius: 50%;
         border: 1.5px solid #cbd5e1;
         background: #f8fafc;
@@ -143,7 +146,7 @@ export class QuestionView {
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 0.78rem;
+        font-size: 0.72rem;
         font-weight: 800;
         flex-shrink: 0;
         margin-top: 0.05rem;
@@ -159,14 +162,17 @@ export class QuestionView {
         min-width: 0;
         display: flex;
         flex-direction: column;
-        gap: 0.3rem;
+        gap: 0.2rem;
         color: #1e293b;
         font-weight: 550;
-        font-size: 0.95rem;
-        line-height: 1.45;
+        font-size: 0.9rem;
+        line-height: 1.35;
       }
-      .qv-opt-text .qv-en { font-size: 0.95rem; font-weight: 550; color: #1e293b; }
-      .qv-opt-text .qv-mr { margin-top: 0; font-size: 0.9rem; color: #475569; }
+      .qv-opt-text .qv-en { font-size: 0.9rem; font-weight: 550; color: #1e293b; }
+      .qv-opt-text .qv-mr { margin-top: 0; font-size: 0.84rem; color: #475569; }
+      @media (max-width: 640px) {
+        .options-container { grid-template-columns: 1fr !important; }
+      }
     `;
     document.head.appendChild(st);
   }
