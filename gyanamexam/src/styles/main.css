@@ -2940,51 +2940,82 @@ tbody tr:hover {
 /* ── Pre-exam gate ──────────────────────────────────────────── */
 .peg-page {
   min-height: 100vh;
-  padding: 1.25rem 1rem 2rem;
+  padding: 0 0 2rem;
   background:
-    radial-gradient(ellipse 70% 45% at 50% -10%, rgba(29, 78, 216, 0.12), transparent),
-    linear-gradient(180deg, #0f172a 0%, #1e293b 35%, #f1f5f9 35%);
+    radial-gradient(ellipse 70% 45% at 50% -10%, rgba(29, 78, 216, 0.14), transparent),
+    linear-gradient(180deg, #0f2744 0%, #16355c 32%, #f1f5f9 32%);
   font-family: var(--font);
 }
 
 .peg-shell {
   max-width: 760px;
   margin: 0 auto;
+  padding: 0 1rem;
 }
 
 .peg-top {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.25rem;
+  margin: 0 -1rem 1.15rem;
+  padding: 0.85rem 1.15rem;
+  overflow: hidden;
+  isolation: isolate;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 39, 68, 0.55);
+}
+
+.peg-top-pattern {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(circle at 12% 40%, rgba(196, 30, 58, 0.12), transparent 42%),
+    radial-gradient(circle at 88% 20%, rgba(255, 255, 255, 0.08), transparent 40%),
+    url("data:image/svg+xml,%3Csvg width='120' height='104' viewBox='0 0 120 104' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23cbd5e1' stroke-width='0.9' opacity='0.55'%3E%3Cpath d='M30 2l28 16v32L30 66 2 50V18z'/%3E%3Cpath d='M90 2l28 16v32L90 66 62 50V18z'/%3E%3Cpath d='M60 36l28 16v32L60 100 32 84V52z'/%3E%3Ccircle cx='30' cy='2' r='2.2' fill='%23cbd5e1'/%3E%3Ccircle cx='58' cy='18' r='2.2' fill='%23cbd5e1'/%3E%3Ccircle cx='90' cy='2' r='2.2' fill='%23cbd5e1'/%3E%3Ccircle cx='30' cy='66' r='2.2' fill='%23cbd5e1'/%3E%3Ccircle cx='60' cy='36' r='2.2' fill='%23cbd5e1'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: auto, auto, 120px 104px;
 }
 
 .peg-brand {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.75rem;
   color: #fff;
+  min-width: 0;
 }
 
 .peg-brand img {
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
 }
 
 .peg-brand-name {
-  font-weight: 750;
+  font-weight: 800;
   font-size: 0.95rem;
+  letter-spacing: -0.01em;
 }
 
 .peg-brand-sub {
   font-size: 0.7rem;
   color: #94a3b8;
-  font-weight: 500;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.1rem;
 }
 
 .peg-cancel {
+  position: relative;
+  z-index: 1;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
   color: #e2e8f0;
@@ -2993,6 +3024,7 @@ tbody tr:hover {
   font-weight: 650;
   font-size: 0.8rem;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .peg-cancel:hover {

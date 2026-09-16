@@ -139,8 +139,10 @@ export class PreExamGate {
       <div class="peg-page">
         <div class="peg-shell">
           <header class="peg-top">
+            <div class="peg-top-pattern" aria-hidden="true"></div>
             <div class="peg-brand">
-              <img src="assets/logo.png" alt="" onerror="this.style.display='none'">
+              <img src="assets/giit_brand_logo.png" alt="GIIT"
+                   onerror="this.onerror=null;this.src='assets/giit_logo.png';this.onerror=function(){this.style.display='none'}">
               <div>
                 <div class="peg-brand-name">Gyanam Exam Portal</div>
                 <div class="peg-brand-sub">Secure examination gateway</div>
