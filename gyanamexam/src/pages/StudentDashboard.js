@@ -19,6 +19,7 @@ export class StudentDashboard {
     this.currentSession = null;
     this.availableExams = [];
     this.practiceExams = [];
+    this.profile = null;
     this.activeTab = 'dashboard';
     this._resultsLoaded = false;
     this._clockTimer = null;
@@ -55,11 +56,23 @@ export class StudentDashboard {
     try {
       const me = await ApiClient.getStudentMe();
       if (me && typeof me === 'object') {
-        this.authModule.updateSessionUser(me);
+        this.profile = me;
+        this.authModule.updateSessionUser({
+          id: me.id,
+          identifier: me.identifier,
+          name: me.name,
+          centre_name: me.centre_name,
+          exam_slot: me.exam_slot,
+          time_window: me.time_window,
+          photo_url: me.photo_url,
+          course: me.course,
+          role: me.role || 'student',
+        });
         this.currentSession = this.authModule.getCurrentSession();
       }
     } catch (_) {
       /* keep cached session user */
+      this.profile = this.profile || this.authModule.getCurrentSession()?.user || null;
     }
   }
 
@@ -294,19 +307,39 @@ export class StudentDashboard {
         overflow: hidden; box-shadow: 0 1px 3px rgba(15,39,68,.04);
       }
       .sd-profile-banner {
-        background: linear-gradient(135deg, var(--sd-navy) 0%, var(--sd-navy-2) 100%);
-        height: 88px;
+        background:
+          radial-gradient(circle at 12% 40%, rgba(196, 30, 58, 0.22), transparent 42%),
+          radial-gradient(circle at 88% 20%, rgba(255,255,255,0.1), transparent 40%),
+          linear-gradient(135deg, var(--sd-navy) 0%, var(--sd-navy-2) 55%, #1e4d7b 100%);
+        height: 110px;
+        position: relative;
+      }
+      .sd-profile-banner::after {
+        content: '';
+        position: absolute; inset: 0; opacity: 0.35; pointer-events: none;
+        background-image: url("data:image/svg+xml,%3Csvg width='120' height='104' viewBox='0 0 120 104' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='0.9' opacity='0.35'%3E%3Cpath d='M30 2l28 16v32L30 66 2 50V18z'/%3E%3Cpath d='M90 2l28 16v32L90 66 62 50V18z'/%3E%3Cpath d='M60 36l28 16v32L60 100 32 84V52z'/%3E%3C/g%3E%3C/svg%3E");
+        background-size: 120px 104px;
       }
       .sd-profile-body {
         padding: 0 1.5rem 1.5rem;
         display: grid; grid-template-columns: auto 1fr; gap: 1.25rem;
-        margin-top: -40px; position: relative;
+        margin-top: -48px; position: relative;
       }
       .sd-profile-body .sd-photo {
+        width: 112px; height: 136px;
         border-color: #fff; background: #e2e8f0;
+        box-shadow: 0 10px 24px rgba(15,39,68,.2);
       }
-      .sd-profile-body .sd-name { color: var(--sd-navy); margin-top: 48px; }
+      .sd-profile-body .sd-name { color: var(--sd-navy); margin-top: 56px; font-size: 1.5rem; }
       .sd-profile-body .sd-role-line { color: var(--sd-muted); }
+      .sd-profile-badges {
+        display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .65rem;
+      }
+      .sd-profile-id {
+        margin-top: .45rem; font-size: .86rem; font-weight: 700; color: var(--sd-navy);
+        font-variant-numeric: tabular-nums; letter-spacing: .02em;
+      }
+      .sd-profile-id span { color: var(--sd-muted); font-weight: 600; margin-right: .35rem; }
       .sd-profile-grid {
         display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: .75rem; margin-top: 1.25rem; grid-column: 1 / -1;
@@ -320,6 +353,58 @@ export class StudentDashboard {
       }
       .sd-profile-field strong {
         display: block; font-size: .92rem; font-weight: 700; color: var(--sd-navy); word-break: break-word;
+      }
+      .sd-profile-layout {
+        display: grid; grid-template-columns: 1.35fr 0.85fr; gap: 1rem; align-items: start;
+      }
+      .sd-profile-side { display: flex; flex-direction: column; gap: 1rem; }
+      .sd-profile-block {
+        background: #fff; border: 1px solid var(--sd-line); border-radius: 14px;
+        padding: 1.15rem 1.2rem; box-shadow: 0 1px 3px rgba(15,39,68,.04);
+      }
+      .sd-profile-block h3 {
+        margin: 0 0 .85rem; font-size: .92rem; font-weight: 800; color: var(--sd-navy);
+        display: flex; align-items: center; gap: .45rem;
+      }
+      .sd-profile-block h3 svg { width: 16px; height: 16px; color: var(--sd-red); flex-shrink: 0; }
+      .sd-mini-stats {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: .55rem;
+      }
+      .sd-mini-stat {
+        background: #f8fafc; border: 1px solid var(--sd-line); border-radius: 10px;
+        padding: .7rem .75rem; text-align: center;
+      }
+      .sd-mini-stat em {
+        display: block; font-style: normal; font-size: .62rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: .05em; color: var(--sd-muted); margin-bottom: .2rem;
+      }
+      .sd-mini-stat strong {
+        display: block; font-size: 1.15rem; font-weight: 800; color: var(--sd-navy);
+      }
+      .sd-assigned-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .55rem; }
+      .sd-assigned-list li {
+        display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem;
+        padding: .7rem .75rem; background: #f8fafc; border: 1px solid var(--sd-line); border-radius: 10px;
+      }
+      .sd-assigned-list strong { display: block; font-size: .86rem; font-weight: 800; color: var(--sd-navy); }
+      .sd-assigned-list span { display: block; margin-top: .15rem; font-size: .75rem; color: var(--sd-muted); font-weight: 500; }
+      .sd-latest {
+        display: grid; gap: .45rem;
+      }
+      .sd-latest-row {
+        display: flex; justify-content: space-between; gap: .75rem;
+        font-size: .84rem; padding: .35rem 0; border-bottom: 1px solid #f1f5f9;
+      }
+      .sd-latest-row:last-child { border-bottom: none; }
+      .sd-latest-row em { font-style: normal; color: var(--sd-muted); font-weight: 600; }
+      .sd-latest-row strong { color: var(--sd-navy); font-weight: 700; text-align: right; }
+      .sd-result-pass { color: #047857 !important; }
+      .sd-result-fail { color: #b91c1c !important; }
+      .sd-profile-note {
+        margin-top: .85rem; font-size: .78rem; color: var(--sd-muted); font-weight: 500; line-height: 1.45;
+      }
+      @media (max-width: 900px) {
+        .sd-profile-layout { grid-template-columns: 1fr; }
       }
 
       .sd-section { margin-top: 1.5rem; }
@@ -477,6 +562,8 @@ export class StudentDashboard {
         .sd-profile { grid-template-columns: 1fr; text-align: center; justify-items: center; }
         .sd-profile-body { grid-template-columns: 1fr; justify-items: center; text-align: center; }
         .sd-profile-body .sd-name { margin-top: .75rem; }
+        .sd-profile-badges { justify-content: center; }
+        .sd-profile-id { text-align: center; }
         .sd-facts { width: 100%; }
         .sd-stats { grid-template-columns: 1fr; }
         .sd-brand-meta strong { font-size: .95rem; }
@@ -496,19 +583,11 @@ export class StudentDashboard {
     this._injectStyles();
 
     const user = this.currentSession?.user || {};
-    const initial = (user.name || user.identifier || 'S').charAt(0).toUpperCase();
     const greeting = this._getGreeting();
-    const photoUrl = user.photo_url || user.photoUrl || '';
-    const course = user.course || '';
     const centre = user.centre_name || user.centerName || '—';
-    const slot = user.exam_slot || user.examSlot || '—';
-    const windowLabel = user.time_window || user.timeWindow || '—';
+    const slot = this._formatSlot(user.exam_slot || user.examSlot);
     const name = user.name || user.identifier || 'Student';
     const practiceReady = (this.practiceExams || []).length > 0;
-
-    const photoHtml = photoUrl
-      ? `<img src="${this._esc(photoUrl)}" alt="${this._esc(name)}" onerror="this.style.display='none';var f=this.nextElementSibling;if(f)f.style.display='flex'"><div class="sd-photo-fallback" style="display:none">${initial}</div>`
-      : `<div class="sd-photo-fallback">${initial}</div>`;
 
     const tabs = [
       { id: 'dashboard', label: 'Dashboard', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>' },
@@ -594,23 +673,7 @@ export class StudentDashboard {
           </section>
 
           <section class="sd-panel${this.activeTab === 'profile' ? ' is-active' : ''}" data-panel="profile" role="tabpanel">
-            <div class="sd-profile-card">
-              <div class="sd-profile-banner"></div>
-              <div class="sd-profile-body">
-                <div class="sd-photo">${photoHtml}</div>
-                <div style="min-width:0;width:100%">
-                  <h1 class="sd-name">${this._esc(name)}</h1>
-                  <p class="sd-role-line">Candidate · GIIT Student Exam Portal</p>
-                </div>
-                <div class="sd-profile-grid">
-                  <div class="sd-profile-field"><em>Registration ID</em><strong>${this._esc(user.identifier || '—')}</strong></div>
-                  <div class="sd-profile-field"><em>Centre</em><strong>${this._esc(centre)}</strong></div>
-                  <div class="sd-profile-field"><em>Exam Slot</em><strong>${this._esc(slot)}</strong></div>
-                  <div class="sd-profile-field"><em>Time Window</em><strong>${this._esc(windowLabel)}</strong></div>
-                  ${course ? `<div class="sd-profile-field"><em>Course</em><strong>${this._esc(course)}</strong></div>` : ''}
-                </div>
-              </div>
-            </div>
+            ${this.renderProfilePanel()}
           </section>
 
           <section class="sd-panel${this.activeTab === 'exams' ? ' is-active' : ''}" data-panel="exams" role="tabpanel">
@@ -715,6 +778,166 @@ export class StudentDashboard {
     if (certificatesContainer) {
       await this.certificationModule.initialize(certificatesContainer, studentId).catch((e) => console.warn('Certification module error:', e));
     }
+  }
+
+  _formatSlot(slot) {
+    const map = { SLOT1: 'Slot 1', SLOT2: 'Slot 2', SLOT3: 'Slot 3' };
+    const key = String(slot || '').toUpperCase();
+    return map[key] || slot || '—';
+  }
+
+  _formatWindow(win) {
+    const map = { MORNING: 'Morning', AFTERNOON: 'Afternoon', EVENING: 'Evening' };
+    const key = String(win || '').toUpperCase();
+    return map[key] || win || '—';
+  }
+
+  _formatDate(iso) {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleDateString('en-IN', {
+        day: '2-digit', month: 'short', year: 'numeric',
+      });
+    } catch (_) {
+      return '—';
+    }
+  }
+
+  _formatDateTime(iso) {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      return `${d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} · ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+    } catch (_) {
+      return '—';
+    }
+  }
+
+  _formatDuration(seconds) {
+    if (seconds == null || seconds === '') return '—';
+    const n = Number(seconds);
+    if (!Number.isFinite(n) || n < 0) return '—';
+    const m = Math.floor(n / 60);
+    const s = Math.floor(n % 60);
+    if (m <= 0) return `${s}s`;
+    return `${m}m ${String(s).padStart(2, '0')}s`;
+  }
+
+  renderProfilePanel() {
+    const user = this.profile || this.currentSession?.user || {};
+    const name = user.name || user.identifier || 'Student';
+    const initial = name.charAt(0).toUpperCase();
+    const photoUrl = user.photo_url || user.photoUrl || '';
+    const course = user.course || '';
+    const centre = user.centre_name || user.centerName || '—';
+    const slot = this._formatSlot(user.exam_slot || user.examSlot);
+    const windowLabel = this._formatWindow(user.time_window || user.timeWindow);
+    const identifier = user.identifier || '—';
+    const registered = this._formatDate(user.registered_at || user.created_at);
+    const updated = this._formatDate(user.profile_updated_at || user.updated_at);
+    const assigned = Array.isArray(user.assigned_exams) ? user.assigned_exams : [];
+    const assignedCount = user.assigned_exams_count ?? assigned.length;
+    const attempts = user.attempts_count ?? 0;
+    const passed = user.passed_count ?? 0;
+    const failed = user.failed_count ?? 0;
+    const best = user.best_score != null ? `${user.best_score}%` : '—';
+    const latest = user.latest_attempt || null;
+
+    const photoHtml = photoUrl
+      ? `<img src="${this._esc(photoUrl)}" alt="${this._esc(name)}" onerror="this.style.display='none';var f=this.nextElementSibling;if(f)f.style.display='flex'"><div class="sd-photo-fallback" style="display:none">${initial}</div>`
+      : `<div class="sd-photo-fallback">${initial}</div>`;
+
+    const assignedHtml = assigned.length
+      ? `<ul class="sd-assigned-list">${assigned.map((e) => `
+          <li>
+            <div>
+              <strong>${this._esc(e.title || 'Exam')}</strong>
+              <span>${this._esc(e.subject || 'General')} · ${e.duration || 0} min · ${e.total_questions || 0} Qs</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.25rem;flex-shrink:0">
+              <span class="sd-pill ${(e.exam_type || '') === 'demo' ? 'sd-pill-practice' : 'sd-pill-official'}">${(e.exam_type || '') === 'demo' ? 'Practice' : 'Official'}</span>
+              ${e.proctored ? '<span class="sd-pill sd-pill-proctor">Proctored</span>' : ''}
+            </div>
+          </li>`).join('')}</ul>`
+      : `<div class="sd-empty" style="padding:1.5rem 1rem"><h3 style="font-size:0.95rem">No exams assigned</h3><p>Your centre has not assigned an official paper yet.</p></div>`;
+
+    const latestHtml = latest
+      ? `<div class="sd-latest">
+          <div class="sd-latest-row"><em>Exam</em><strong>${this._esc(latest.exam_title || '—')}</strong></div>
+          <div class="sd-latest-row"><em>Score</em><strong>${latest.score != null ? `${latest.score}%` : '—'}</strong></div>
+          <div class="sd-latest-row"><em>Result</em><strong class="${latest.result === 'pass' ? 'sd-result-pass' : latest.result === 'fail' ? 'sd-result-fail' : ''}">${this._esc((latest.result || '—').toString().toUpperCase())}</strong></div>
+          <div class="sd-latest-row"><em>Correct</em><strong>${latest.correct_answers ?? '—'} / ${latest.total_questions ?? '—'}</strong></div>
+          <div class="sd-latest-row"><em>Duration</em><strong>${this._formatDuration(latest.duration_taken)}</strong></div>
+          <div class="sd-latest-row"><em>Submitted</em><strong>${this._formatDateTime(latest.submitted_at)}</strong></div>
+        </div>`
+      : `<p class="sd-profile-note" style="margin:0">No attempts yet. Complete an exam to see your latest result here.</p>`;
+
+    return `
+      <div class="sd-profile-layout">
+        <div>
+          <div class="sd-profile-card">
+            <div class="sd-profile-banner" aria-hidden="true"></div>
+            <div class="sd-profile-body">
+              <div class="sd-photo">${photoHtml}</div>
+              <div style="min-width:0;width:100%">
+                <h1 class="sd-name">${this._esc(name)}</h1>
+                <p class="sd-role-line">Registered candidate · GIIT Student Exam Portal</p>
+                <p class="sd-profile-id"><span>Reg. ID</span>${this._esc(identifier)}</p>
+                <div class="sd-profile-badges">
+                  <span class="sd-pill sd-pill-official">Active student</span>
+                  ${course ? `<span class="sd-pill" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe">${this._esc(course)}</span>` : ''}
+                  <span class="sd-pill" style="background:#f8fafc;color:#334155;border:1px solid #e2e8f0">${this._esc(windowLabel)}</span>
+                </div>
+              </div>
+              <div class="sd-profile-grid">
+                <div class="sd-profile-field"><em>Registration ID</em><strong>${this._esc(identifier)}</strong></div>
+                <div class="sd-profile-field"><em>Full name</em><strong>${this._esc(name)}</strong></div>
+                <div class="sd-profile-field"><em>Course</em><strong>${this._esc(course || 'Not set')}</strong></div>
+                <div class="sd-profile-field"><em>Exam centre</em><strong>${this._esc(centre)}</strong></div>
+                <div class="sd-profile-field"><em>Exam slot</em><strong>${this._esc(slot)}</strong></div>
+                <div class="sd-profile-field"><em>Time window</em><strong>${this._esc(windowLabel)}</strong></div>
+                <div class="sd-profile-field"><em>Portal role</em><strong>Student</strong></div>
+                <div class="sd-profile-field"><em>Account registered</em><strong>${this._esc(registered)}</strong></div>
+                <div class="sd-profile-field"><em>Profile last updated</em><strong>${this._esc(updated)}</strong></div>
+                <div class="sd-profile-field"><em>Assigned exams</em><strong>${assignedCount}</strong></div>
+                <div class="sd-profile-field"><em>Total attempts</em><strong>${attempts}</strong></div>
+                <div class="sd-profile-field"><em>Best score</em><strong>${this._esc(best)}</strong></div>
+              </div>
+              <p class="sd-profile-note" style="grid-column:1/-1">
+                Profile details are issued by your ATC / centre. Contact your centre if any information needs correction.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="sd-profile-side">
+          <div class="sd-profile-block">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+              Exam summary
+            </h3>
+            <div class="sd-mini-stats">
+              <div class="sd-mini-stat"><em>Assigned</em><strong>${assignedCount}</strong></div>
+              <div class="sd-mini-stat"><em>Attempts</em><strong>${attempts}</strong></div>
+              <div class="sd-mini-stat"><em>Passed</em><strong class="sd-result-pass">${passed}</strong></div>
+              <div class="sd-mini-stat"><em>Failed</em><strong class="sd-result-fail">${failed}</strong></div>
+            </div>
+          </div>
+          <div class="sd-profile-block">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z"/></svg>
+              Assigned exams
+            </h3>
+            ${assignedHtml}
+          </div>
+          <div class="sd-profile-block">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Latest attempt
+            </h3>
+            ${latestHtml}
+          </div>
+        </div>
+      </div>`;
   }
 
   _esc(value) {
