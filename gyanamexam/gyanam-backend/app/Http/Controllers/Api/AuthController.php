@@ -100,11 +100,66 @@ class AuthController extends Controller
     }
 
     /**
-     * Current authenticated student profile (fresh from DB).
+     * Current authenticated student profile (fresh from DB) with exam summary.
      */
     public function studentMe(Request $request)
     {
-        return response()->json($this->studentProfilePayload($request->user()));
+        $student = $request->user();
+        $payload = $this->studentProfilePayload($student);
+
+        $payload['registered_at'] = $student->created_at ? $student->created_at->toIso8601String() : null;
+        $payload['profile_updated_at'] = $student->updated_at ? $student->updated_at->toIso8601String() : null;
+
+        $assigned = $student->exams()
+            ->where('active', true)
+            ->orderBy('title')
+            ->get([
+                'exam_configs.id',
+                'exam_configs.title',
+                'exam_configs.subject',
+                'exam_configs.exam_type',
+                'exam_configs.duration',
+                'exam_configs.total_questions',
+                'exam_configs.passing_score',
+                'exam_configs.proctored',
+            ]);
+
+        $payload['assigned_exams'] = $assigned->map(fn ($e) => [
+            'id'              => $e->id,
+            'title'           => $e->title,
+            'subject'         => $e->subject,
+            'exam_type'       => $e->exam_type,
+            'duration'        => $e->duration,
+            'total_questions' => $e->total_questions,
+            'passing_score'   => $e->passing_score,
+            'proctored'       => (bool) $e->proctored,
+        ])->values()->all();
+        $payload['assigned_exams_count'] = $assigned->count();
+
+        $subs = $student->submissions()
+            ->orderByDesc('submitted_at')
+            ->get([
+                'id', 'exam_title', 'score', 'result', 'correct_answers',
+                'total_questions', 'duration_taken', 'submitted_at',
+            ]);
+
+        $payload['attempts_count'] = $subs->count();
+        $payload['passed_count']   = $subs->where('result', 'pass')->count();
+        $payload['failed_count']   = $subs->where('result', 'fail')->count();
+        $payload['best_score']     = $subs->max('score');
+        $payload['latest_attempt'] = $subs->first() ? [
+            'exam_title'       => $subs->first()->exam_title,
+            'score'            => $subs->first()->score,
+            'result'           => $subs->first()->result,
+            'correct_answers'  => $subs->first()->correct_answers,
+            'total_questions'  => $subs->first()->total_questions,
+            'duration_taken'   => $subs->first()->duration_taken,
+            'submitted_at'     => $subs->first()->submitted_at
+                ? $subs->first()->submitted_at->toIso8601String()
+                : null,
+        ] : null;
+
+        return response()->json($payload);
     }
 
     /**
