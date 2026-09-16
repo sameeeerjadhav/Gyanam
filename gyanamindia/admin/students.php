@@ -30,12 +30,6 @@ $filterAtc    = isset($_GET['atc_id'])   && $_GET['atc_id']   !== '' ? (int)$_GE
 $filterCourse = isset($_GET['course'])   ? trim((string)$_GET['course']) : '';
 $filterSearch = isset($_GET['search'])   ? trim($_GET['search'])    : '';
 
-// Form was submitted (even with "All" empties) — show the list
-$formSubmitted = array_key_exists('dlc_id', $_GET)
-    || array_key_exists('atc_id', $_GET)
-    || array_key_exists('course', $_GET)
-    || array_key_exists('search', $_GET);
-
 // If ATC is selected under a DLC, keep only ATCs that belong to that DLC
 if ($filterAtc !== null && $filterDlc !== null) {
     $atcBelongs = false;
@@ -51,9 +45,9 @@ if ($filterAtc !== null && $filterDlc !== null) {
 }
 
 $hasSpecificFilter = $filterDlc !== null || $filterAtc !== null || $filterCourse !== '' || $filterSearch !== '';
-$filtered = $formSubmitted; // "All DLC / All ATC / All Course" still loads every student
+$filtered = true; // Always show students (all by default; filters narrow the list)
 
-// ── Fetch students (after Filter is clicked, including All/All) ─────────────
+// ── Fetch students (all by default; filters narrow) ─────────────────────────
 $students   = [];
 $totalCount = 0;
 $listError  = '';
@@ -703,7 +697,7 @@ if ($filtered) {
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                                 Apply
                             </button>
-                            <?php if ($filtered): ?>
+                            <?php if ($hasSpecificFilter): ?>
                             <a href="students.php" class="btn-clear">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                                 Clear
@@ -740,27 +734,17 @@ if ($filtered) {
             </div>
 
             <!-- ── Student Table ── -->
-            <?php if (!$filtered): ?>
-            <!-- Empty state — not yet filtered -->
-            <div class="table-wrap">
-                <div class="empty-state">
-                    <div class="empty-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
-                    </div>
-                    <div class="empty-title">Select a filter to view students</div>
-                    <div class="empty-sub">Leave filters on <strong>All</strong> and click <strong>Filter Students</strong> to see everyone,<br>or narrow by DLC, ATC, Course, or search.</div>
-                </div>
-            </div>
-
-            <?php elseif (empty($students)): ?>
-            <!-- Filtered but no results -->
+            <?php if (empty($students)): ?>
+            <!-- No results -->
             <div class="table-wrap">
                 <div class="empty-state">
                     <div class="empty-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                     </div>
                     <div class="empty-title">No students found</div>
-                    <div class="empty-sub">No active students match the selected filters. Try adjusting your criteria.</div>
+                    <div class="empty-sub"><?= $hasSpecificFilter
+                        ? 'No active students match the selected filters. Try adjusting your criteria.'
+                        : 'No active students are available yet.' ?></div>
                 </div>
             </div>
 
