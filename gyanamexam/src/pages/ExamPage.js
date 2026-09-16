@@ -9,9 +9,9 @@
 import ApiClient from '../services/APIClient.js';
 import modalService from '../services/ModalService.js';
 import ProctoringService from '../services/ProctoringService.js?v=2';
-import { QuestionView } from '../components/QuestionView.js?v=11';
+import { QuestionView } from '../components/QuestionView.js?v=12';
 import { QuestionPalette } from '../components/QuestionPalette.js?v=2';
-import { Timer } from '../components/Timer.js';
+import { Timer } from '../components/Timer.js?v=2';
 import { sleep, stampedeDelayMs, withBackoff } from '../utils/stampede.js';
 
 class ExamPage {
@@ -28,6 +28,7 @@ class ExamPage {
     this.questionPalette = new QuestionPalette();
     this.isSubmitting = false;
     this._timerInterval = null;
+    this._clockTimer = null;
     this.proctoring = new ProctoringService();
     this._proctorPublisher = null;
   }
@@ -64,6 +65,7 @@ class ExamPage {
     this._renderQuestionPalette();
     this._updateProgress();
     this._startTimerDisplay();
+    this._startExamClock();
     this._startHeartbeat();
     this._startAutosaveLoop();
 
@@ -321,200 +323,263 @@ class ExamPage {
     const userName = user?.name || 'Student';
     const userId = user?.identifier || '';
     const initial = (userName).charAt(0).toUpperCase();
+    const year = new Date().getFullYear();
 
     return `
       <style>
-        @keyframes exam-fadeIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700;800&display=swap');
+        @keyframes exam-fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         @keyframes timer-pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.03); } }
         @keyframes progress-grow { from { width:0; } }
-        .exam-nav-btn { transition: all 0.2s ease; }
-        .exam-nav-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .exam-shell {
+          --ex-navy: #0f2744;
+          --ex-red: #c41e3a;
+          --ex-green: #16a34a;
+          --ex-green-dark: #15803d;
+          background:#f3f5f8; height:100vh; display:flex; flex-direction:column;
+          color:#0f172a; font-family:'Source Sans 3','Segoe UI',sans-serif; overflow:hidden;
+        }
+        .exam-nav-btn { transition: all 0.15s ease; }
+        .exam-nav-btn:hover:not(:disabled) { border-color:#94a3b8; color:var(--ex-navy); }
         .exam-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .exam-submit-btn:hover { background: #b91c1c !important; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(220,38,38,0.3); }
-        .exam-submit-btn { transition: all 0.25s ease; }
+        .exam-save-btn {
+          background: linear-gradient(135deg, #22c55e, #16a34a); color:#fff; border:none;
+          box-shadow: 0 4px 12px rgba(22,163,74,.22);
+        }
+        .exam-save-btn:hover:not(:disabled) { filter:brightness(1.05); transform:translateY(-1px); }
+        .exam-reset-btn { background:#fff; border:1px solid #fecaca; color:var(--ex-red); }
+        .exam-reset-btn:hover { background:#fef2f2; }
+        .exam-submit-btn { transition: all 0.2s ease; background:var(--ex-red) !important; }
+        .exam-submit-btn:hover { background:#9f1830 !important; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(196,30,58,0.28); }
         .exam-mark-btn:hover { background: #fef3c7 !important; border-color: #f59e0b !important; }
         .exam-mark-btn { transition: all 0.2s ease; }
-        .exam-layout { display:flex !important; flex-direction:row !important; }
+        .exam-layout { display:flex !important; flex-direction:row !important; flex:1; min-height:0; overflow:hidden; }
         .exam-main, .exam-sidebar, #question-palette-container {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
+          scrollbar-width: none; -ms-overflow-style: none;
         }
         .exam-main::-webkit-scrollbar,
         .exam-sidebar::-webkit-scrollbar,
         #question-palette-container::-webkit-scrollbar { width: 0; height: 0; display: none; }
-        #question-palette-container {
-          overflow-x: hidden !important;
-          max-width: 100%;
+        #question-palette-container { overflow-x: hidden !important; max-width: 100%; }
+        #question-palette-container .question-palette-grid { width: 100%; max-width: 100%; overflow: hidden; }
+
+        .exam-header {
+          position: relative; background:#fff; border-bottom:1px solid #e2e8f0;
+          overflow:hidden; isolation:isolate; flex-shrink:0;
         }
-        #question-palette-container .question-palette-grid {
-          width: 100%;
-          max-width: 100%;
-          overflow: hidden;
+        .exam-header-pattern {
+          position:absolute; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+          background-color:#f8fafc;
+          background-image:
+            radial-gradient(circle at 10% 40%, rgba(196,30,58,0.06), transparent 42%),
+            radial-gradient(circle at 90% 20%, rgba(15,39,68,0.07), transparent 40%),
+            url("data:image/svg+xml,%3Csvg width='120' height='104' viewBox='0 0 120 104' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%2394a3b8' stroke-width='0.9' opacity='0.4'%3E%3Cpath d='M30 2l28 16v32L30 66 2 50V18z'/%3E%3Cpath d='M90 2l28 16v32L90 66 62 50V18z'/%3E%3Cpath d='M60 36l28 16v32L60 100 32 84V52z'/%3E%3Ccircle cx='30' cy='2' r='2.2' fill='%2394a3b8'/%3E%3Ccircle cx='58' cy='18' r='2.2' fill='%2394a3b8'/%3E%3Ccircle cx='90' cy='2' r='2.2' fill='%2394a3b8'/%3E%3C/g%3E%3C/svg%3E");
+          background-size: auto, auto, 120px 104px;
+        }
+        .exam-header-inner {
+          position:relative; z-index:1; max-width:1400px; margin:0 auto;
+          padding:0.7rem 1.25rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
         }
         .exam-header-logo {
-          width: 42px;
-          height: 42px;
-          object-fit: contain;
-          flex-shrink: 0;
-          display: block;
+          width: 56px; height: 56px; object-fit: contain; flex-shrink: 0; display: block;
+          filter: drop-shadow(0 2px 6px rgba(15,39,68,.12));
         }
-        .options-container { grid-template-columns: 1fr 1fr !important; }
+        .exam-brand-meta strong {
+          display:block; font-size:0.95rem; font-weight:800; color:var(--ex-navy); line-height:1.2;
+        }
+        .exam-brand-meta span {
+          display:block; margin-top:0.12rem; font-size:0.7rem; font-weight:600;
+          color:#64748b; text-transform:uppercase; letter-spacing:0.05em;
+        }
+
+        .exam-timer-box {
+          display:flex; gap:0.45rem; justify-content:center; margin-bottom:0.85rem;
+        }
+        .exam-timer-cell {
+          flex:1; background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+          padding:0.55rem 0.35rem; text-align:center; min-width:0;
+        }
+        .exam-timer-cell strong {
+          display:block; font-size:1.35rem; font-weight:800; color:#64748b;
+          font-variant-numeric: tabular-nums; letter-spacing:0.02em; line-height:1.1;
+        }
+        .exam-timer-cell em {
+          display:block; margin-top:0.2rem; font-style:normal; font-size:0.62rem;
+          font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:#94a3b8;
+        }
+        .exam-timer-box.is-warn .exam-timer-cell { border-color:#fde68a; background:#fffbeb; }
+        .exam-timer-box.is-warn .exam-timer-cell strong { color:#d97706; }
+        .exam-timer-box.is-danger .exam-timer-cell { border-color:#fecaca; background:#fef2f2; }
+        .exam-timer-box.is-danger .exam-timer-cell strong { color:#dc2626; animation:timer-pulse 0.8s infinite; }
+
+        .exam-qcard {
+          background:#fff; border:1px solid #e2e8f0; border-radius:14px;
+          box-shadow:0 1px 3px rgba(15,39,68,.04); overflow:hidden;
+        }
+        .exam-qbar {
+          padding:0.75rem 1.25rem; background:#f8fafc; border-bottom:1px solid #e8edf3;
+          display:flex; align-items:center; justify-content:space-between; gap:0.75rem;
+        }
+        .exam-footer-bar {
+          background:#1a1f2a; color:#e2e8f0; flex-shrink:0;
+        }
+        .exam-footer-top {
+          max-width:1400px; margin:0 auto; padding:0.55rem 1.25rem;
+          display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+          font-size:0.75rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
+        }
+        .exam-footer-top .accent { color:#f87171; }
+        .exam-footer-bot {
+          border-top:1px solid rgba(255,255,255,0.1);
+          padding:0.4rem 1.25rem 0.5rem; text-align:center;
+          font-size:0.68rem; color:rgba(226,232,240,0.5); font-weight:500;
+        }
+
         @media (max-width: 900px) {
-          .exam-layout { flex-direction: column !important; height: auto !important; }
-          .exam-sidebar { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 280px; overflow-y: auto; flex-shrink: 1 !important; }
+          .exam-layout { flex-direction: column !important; height: auto !important; overflow:auto; }
+          .exam-sidebar { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 320px; overflow-y: auto; flex-shrink: 1 !important; }
           .exam-main { height: auto !important; min-height: auto !important; overflow-y: visible !important; }
-          .options-container { grid-template-columns: 1fr !important; }
-        }
-        @media (max-width: 640px) {
-          .options-container { grid-template-columns: 1fr !important; }
-          .exam-header-logo { width: 36px; height: 36px; }
+          .exam-header-logo { width: 46px; height: 46px; }
         }
       </style>
 
-      <div style="background:#f1f5f9;height:100vh;display:flex;flex-direction:column;color:#0f172a;font-family:'Inter',sans-serif;overflow:hidden">
+      <div class="exam-shell">
 
-        <!-- ═══ Top Header Bar ═══ -->
-        <header style="background:white;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:20;box-shadow:0 1px 4px rgba(0,0,0,0.05)">
-          <div style="max-width:1400px;margin:0 auto;padding:0.65rem 1.25rem;display:flex;align-items:center;gap:0.85rem;flex-wrap:wrap">
-
-            <!-- GIIT brand -->
-            <div style="display:flex;align-items:center;gap:0.65rem;flex-shrink:0">
+        <header class="exam-header">
+          <div class="exam-header-pattern" aria-hidden="true"></div>
+          <div class="exam-header-inner">
+            <div style="display:flex;align-items:center;gap:0.75rem;flex-shrink:0;min-width:0">
               <img class="exam-header-logo" src="assets/giit_brand_logo.png" alt="GIIT"
-                   onerror="this.onerror=null;this.src='assets/giit_logo.png'">
-              <div style="min-width:0">
-                <h2 id="exam-title" style="font-size:1rem;font-weight:700;color:#0f172a;margin:0;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">Loading...</h2>
-                <div style="display:flex;align-items:center;gap:0.55rem;margin-top:0.15rem;flex-wrap:wrap">
-                  <span style="font-size:0.68rem;font-weight:700;color:#1d4ed8;letter-spacing:0.02em">GIIT</span>
-                  <span style="width:3px;height:3px;border-radius:50%;background:#cbd5e1"></span>
-                  <span id="exam-type" style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em"></span>
-                  <span style="width:3px;height:3px;border-radius:50%;background:#cbd5e1"></span>
-                  <span style="font-size:0.72rem;color:#64748b;font-weight:500"><span id="total-questions">—</span> Questions</span>
-                  <span id="autosave-status" style="font-size:0.7rem;font-weight:600;color:#94a3b8;margin-left:0.15rem"></span>
-                </div>
+                   onerror="this.onerror=null;this.src='assets/giit_logo.png';this.onerror=function(){this.src='assets/logo.png'}">
+              <div class="exam-brand-meta" style="min-width:0">
+                <strong id="exam-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px">Loading...</strong>
+                <span>GIIT · <span id="exam-type"></span> · <span id="total-questions">—</span> Questions</span>
               </div>
             </div>
 
-            <!-- Progress Bar (desktop) -->
-            <div style="flex:1;min-width:120px;max-width:220px;display:flex;align-items:center;gap:0.5rem;margin-left:auto">
+            <div style="flex:1;min-width:100px;max-width:200px;display:flex;align-items:center;gap:0.5rem;margin-left:auto">
               <div style="flex:1;height:6px;background:#e2e8f0;border-radius:999px;overflow:hidden">
-                <div id="progress-bar" style="height:100%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);border-radius:999px;transition:width 0.4s ease;width:0%;animation:progress-grow 0.6s ease-out"></div>
+                <div id="progress-bar" style="height:100%;background:linear-gradient(90deg,#c41e3a,#9f1830);border-radius:999px;transition:width 0.4s ease;width:0%;animation:progress-grow 0.6s ease-out"></div>
               </div>
-              <span id="progress-label" style="font-size:0.72rem;font-weight:600;color:#64748b;white-space:nowrap">0%</span>
+              <span id="progress-label" style="font-size:0.72rem;font-weight:700;color:#64748b;white-space:nowrap">0%</span>
             </div>
 
-            <!-- Student Info -->
-            <div style="display:flex;align-items:center;gap:0.75rem">
-              <div style="text-align:right">
-                <div style="font-size:0.82rem;font-weight:600;color:#1e293b">${userName}</div>
-                <div style="font-size:0.7rem;color:#94a3b8;font-weight:500">${userId}</div>
+            <div id="exam-header-status" style="display:flex;align-items:center;gap:0.65rem">
+              <span id="autosave-status" style="font-size:0.7rem;font-weight:600;color:#94a3b8"></span>
+              <div style="display:flex;align-items:center;gap:0.55rem">
+                <div style="text-align:right">
+                  <div style="font-size:0.82rem;font-weight:700;color:#0f2744">${userName}</div>
+                  <div style="font-size:0.68rem;color:#94a3b8;font-weight:600">${userId}</div>
+                </div>
+                <div style="width:36px;height:36px;background:linear-gradient(135deg,#0f2744,#1e4d7b);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;color:white;flex-shrink:0">${initial}</div>
               </div>
-              <div style="width:36px;height:36px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;color:white;flex-shrink:0">${initial}</div>
             </div>
-
-            <!-- Timer -->
-            <div id="timer-display" style="font-family:'Inter',monospace;font-size:1.35rem;font-weight:800;background:#f0fdf4;color:#16a34a;border:2px solid #bbf7d0;padding:0.4rem 1.1rem;border-radius:12px;min-width:110px;text-align:center;letter-spacing:0.02em">00:00</div>
           </div>
         </header>
 
-        <!-- ═══ Main Layout ═══ -->
-        <div class="exam-layout" style="flex:1;display:flex;overflow:hidden;min-height:0">
-
-          <!-- Question Panel -->
-          <div class="exam-main" style="flex:1;overflow-y:auto;padding:1.5rem 2rem;min-height:0">
-            <div style="max-width:800px;margin:0 auto;animation:exam-fadeIn 0.4s ease-out">
-
-              <!-- Question Card -->
-              <div style="background:white;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04)">
-
-                <!-- Question Number Bar -->
-                <div style="padding:0.875rem 1.5rem;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
-                  <div style="display:flex;align-items:center;gap:0.75rem">
-                    <div id="question-number-badge" style="width:32px;height:32px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:700;color:white">1</div>
-                    <span style="font-size:0.82rem;font-weight:600;color:#475569">
+        <div class="exam-layout">
+          <div class="exam-main" style="flex:1;overflow-y:auto;padding:1.25rem 1.5rem;min-height:0">
+            <div style="max-width:820px;margin:0 auto;animation:exam-fadeIn 0.35s ease-out">
+              <div class="exam-qcard">
+                <div class="exam-qbar">
+                  <div style="display:flex;align-items:center;gap:0.65rem">
+                    <div id="question-number-badge" style="width:30px;height:30px;background:#0f2744;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:800;color:white">1</div>
+                    <span style="font-size:0.84rem;font-weight:700;color:#334155">
                       Question <span id="current-question-number">1</span> of <span id="total-questions-inline">—</span>
+                      <span style="color:#94a3b8;font-weight:600"> · 1 Mark</span>
                     </span>
                   </div>
-                  <span style="background:#f0fdf4;color:#15803d;padding:0.2rem 0.6rem;border-radius:6px;font-size:0.7rem;font-weight:700;border:1px solid #bbf7d0">+1.0 Mark</span>
+                  <span style="background:#ecfdf5;color:#047857;padding:0.22rem 0.65rem;border-radius:999px;font-size:0.68rem;font-weight:800;border:1px solid #a7f3d0;text-transform:uppercase;letter-spacing:0.03em">MCQ</span>
                 </div>
 
-                <!-- Question Content -->
-                <div style="padding:1.35rem 1.5rem">
+                <div style="padding:1.25rem 1.35rem 1.1rem">
                   <div id="question-view-container"></div>
                 </div>
 
-                <!-- Navigation Footer -->
-                <div style="padding:1rem 1.5rem;background:#fafbfc;border-top:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap">
-                  <button id="prev-button" class="exam-nav-btn" style="display:flex;align-items:center;gap:0.4rem;background:white;border:1px solid #e2e8f0;color:#475569;padding:0.6rem 1.25rem;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer">
-                    <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                    Previous
+                <div style="padding:0.9rem 1.25rem 1.1rem;background:#fafbfc;border-top:1px solid #e8edf3;display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap">
+                  <button id="prev-button" class="exam-nav-btn" type="button" style="display:inline-flex;align-items:center;gap:0.35rem;background:#fff;border:1px solid #d1d5db;color:#334155;padding:0.55rem 1.1rem;border-radius:8px;font-weight:700;font-size:0.84rem;cursor:pointer;font-family:inherit">
+                    <svg style="width:15px;height:15px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    Prev
                   </button>
-                  <div style="display:flex;gap:0.5rem">
-                    <button id="mark-review-button" class="exam-mark-btn" style="display:flex;align-items:center;gap:0.4rem;background:#fffbeb;border:1px solid #fde68a;color:#b45309;padding:0.6rem 1rem;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer">
-                      <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                  <div style="display:flex;gap:0.45rem;flex-wrap:wrap">
+                    <button id="clear-answer-button" class="exam-reset-btn" type="button" style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.55rem 0.9rem;border-radius:8px;font-weight:700;font-size:0.82rem;cursor:pointer;font-family:inherit">
+                      Reset
+                    </button>
+                    <button id="mark-review-button" class="exam-mark-btn" type="button" style="display:inline-flex;align-items:center;gap:0.35rem;background:#fffbeb;border:1px solid #fde68a;color:#b45309;padding:0.55rem 0.9rem;border-radius:8px;font-weight:700;font-size:0.82rem;cursor:pointer;font-family:inherit">
                       Review
                     </button>
-                    <button id="next-button" class="exam-nav-btn" style="display:flex;align-items:center;gap:0.4rem;background:linear-gradient(135deg,#1d4ed8,#3b82f6);color:white;padding:0.6rem 1.5rem;border-radius:10px;font-weight:700;font-size:0.85rem;border:none;cursor:pointer;box-shadow:0 2px 8px rgba(29,78,216,0.2)">
-                      Next
-                      <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    <button id="next-button" class="exam-nav-btn exam-save-btn" type="button" style="display:inline-flex;align-items:center;gap:0.4rem;color:white;padding:0.55rem 1.25rem;border-radius:8px;font-weight:800;font-size:0.84rem;border:none;cursor:pointer;font-family:inherit">
+                      Save &amp; Next
+                      <svg style="width:15px;height:15px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
                     </button>
                   </div>
                 </div>
               </div>
 
-              <!-- Keyboard hint -->
-              <div style="text-align:center;margin-top:1rem;font-size:0.75rem;color:#94a3b8">
-                <span style="background:#f1f5f9;padding:0.2rem 0.5rem;border-radius:4px;font-weight:500">💡 Press A-D or 1-4 to select • ← → to navigate</span>
+              <div style="text-align:center;margin-top:0.85rem;font-size:0.72rem;color:#94a3b8;font-weight:600">
+                Press A–D or 1–4 to select · ← → to navigate
               </div>
             </div>
           </div>
 
-          <!-- ═══ Sidebar ═══ -->
-          <div class="exam-sidebar" style="width:260px;flex-shrink:0;background:white;border-left:1px solid #e2e8f0;display:flex;flex-direction:column;padding:1rem;overflow-x:hidden;overflow-y:auto;box-sizing:border-box">
-            <h2 style="font-size:0.75rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.85rem">Question Map</h2>
+          <div class="exam-sidebar" style="width:270px;flex-shrink:0;background:#fff;border-left:1px solid #e2e8f0;display:flex;flex-direction:column;padding:1rem;overflow-x:hidden;overflow-y:auto;box-sizing:border-box">
+            <div id="timer-display" class="exam-timer-box" aria-label="Time remaining">
+              <div class="exam-timer-cell"><strong id="timer-h">00</strong><em>Hours</em></div>
+              <div class="exam-timer-cell"><strong id="timer-m">00</strong><em>Minutes</em></div>
+              <div class="exam-timer-cell"><strong id="timer-s">00</strong><em>Seconds</em></div>
+            </div>
 
-            <div id="question-palette-container" style="flex:1;overflow-x:hidden;overflow-y:auto;margin-bottom:1rem;min-width:0;width:100%"></div>
+            <h2 style="font-size:0.72rem;font-weight:800;color:#fff;background:#0f2744;margin:0 0 0.65rem;padding:0.45rem 0.65rem;border-radius:6px;letter-spacing:0.04em;text-transform:uppercase">Question Map</h2>
 
-            <!-- Legend -->
-            <div style="background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;padding:0.75rem;margin-bottom:1rem">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
-                <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.7rem;color:#475569;font-weight:500">
-                  <div style="width:12px;height:12px;background:#16a34a;border-radius:3px"></div> Answered
+            <div id="question-palette-container" style="flex:1;overflow-x:hidden;overflow-y:auto;margin-bottom:0.85rem;min-width:0;width:100%"></div>
+
+            <div style="background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;padding:0.7rem;margin-bottom:0.85rem">
+              <div style="font-size:0.68rem;font-weight:800;color:#0f2744;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.45rem">Legend</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem">
+                <div style="display:flex;align-items:center;gap:0.35rem;font-size:0.68rem;color:#475569;font-weight:600">
+                  <div style="width:11px;height:11px;background:#16a34a;border-radius:2px"></div> Answered
                 </div>
-                <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.7rem;color:#475569;font-weight:500">
-                  <div style="width:12px;height:12px;background:#d97706;border-radius:3px"></div> Marked
+                <div style="display:flex;align-items:center;gap:0.35rem;font-size:0.68rem;color:#475569;font-weight:600">
+                  <div style="width:11px;height:11px;background:#d97706;border-radius:2px"></div> Marked
                 </div>
-                <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.7rem;color:#475569;font-weight:500">
-                  <div style="width:12px;height:12px;background:#f1f5f9;border:2px solid #cbd5e1;border-radius:3px"></div> Pending
+                <div style="display:flex;align-items:center;gap:0.35rem;font-size:0.68rem;color:#475569;font-weight:600">
+                  <div style="width:11px;height:11px;background:#fff;border:1.5px solid #cbd5e1;border-radius:2px"></div> Pending
                 </div>
-                <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.7rem;color:#475569;font-weight:500">
-                  <div style="width:12px;height:12px;background:#eff6ff;border:2px solid #3b82f6;border-radius:3px"></div> Current
+                <div style="display:flex;align-items:center;gap:0.35rem;font-size:0.68rem;color:#475569;font-weight:600">
+                  <div style="width:11px;height:11px;background:#eff6ff;border:1.5px solid #3b82f6;border-radius:2px"></div> Current
                 </div>
               </div>
             </div>
 
-            <!-- Stats -->
-            <div id="answer-stats" style="display:flex;gap:0.5rem;margin-bottom:1rem">
-              <div style="flex:1;text-align:center;background:#f0fdf4;border-radius:8px;padding:0.5rem">
-                <div id="stat-answered" style="font-size:1.1rem;font-weight:800;color:#16a34a">0</div>
-                <div style="font-size:0.65rem;color:#64748b;font-weight:600">Done</div>
+            <div id="answer-stats" style="display:flex;gap:0.4rem;margin-bottom:0.85rem">
+              <div style="flex:1;text-align:center;background:#f0fdf4;border-radius:8px;padding:0.45rem">
+                <div id="stat-answered" style="font-size:1.05rem;font-weight:800;color:#16a34a">0</div>
+                <div style="font-size:0.62rem;color:#64748b;font-weight:700">Done</div>
               </div>
-              <div style="flex:1;text-align:center;background:#fffbeb;border-radius:8px;padding:0.5rem">
-                <div id="stat-marked" style="font-size:1.1rem;font-weight:800;color:#d97706">0</div>
-                <div style="font-size:0.65rem;color:#64748b;font-weight:600">Review</div>
+              <div style="flex:1;text-align:center;background:#fffbeb;border-radius:8px;padding:0.45rem">
+                <div id="stat-marked" style="font-size:1.05rem;font-weight:800;color:#d97706">0</div>
+                <div style="font-size:0.62rem;color:#64748b;font-weight:700">Review</div>
               </div>
-              <div style="flex:1;text-align:center;background:#f8fafc;border-radius:8px;padding:0.5rem">
-                <div id="stat-pending" style="font-size:1.1rem;font-weight:800;color:#94a3b8">0</div>
-                <div style="font-size:0.65rem;color:#64748b;font-weight:600">Left</div>
+              <div style="flex:1;text-align:center;background:#f8fafc;border-radius:8px;padding:0.45rem">
+                <div id="stat-pending" style="font-size:1.05rem;font-weight:800;color:#94a3b8">0</div>
+                <div style="font-size:0.62rem;color:#64748b;font-weight:700">Left</div>
               </div>
             </div>
 
-            <!-- Submit Button -->
-            <button id="submit-exam-button" class="exam-submit-btn" style="width:100%;padding:0.8rem;background:#dc2626;color:white;border:none;border-radius:10px;font-weight:700;font-size:0.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:0.5rem;box-shadow:0 4px 12px rgba(220,38,38,0.15)">
-              <svg style="width:18px;height:18px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              Submit Exam
+            <button id="submit-exam-button" class="exam-submit-btn" type="button" style="width:100%;padding:0.78rem;color:white;border:none;border-radius:9px;font-weight:800;font-size:0.88rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:0.45rem;box-shadow:0 4px 12px rgba(196,30,58,0.2);font-family:inherit">
+              <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+              Finish Exam
             </button>
           </div>
         </div>
+
+        <footer class="exam-footer-bar">
+          <div class="exam-footer-top">
+            <div>Copyright © ${year} <span class="accent">GIIT</span></div>
+            <div>Time <span class="accent" id="exam-live-clock">—</span></div>
+          </div>
+          <div class="exam-footer-bot">A unit of IT Training — Gyanam India Educational Services (ISO 9001 : 2015)</div>
+        </footer>
       </div>
     `;
   }
@@ -643,12 +708,8 @@ class ExamPage {
   }
 
   _renderProctoringIndicator() {
-    const header = document.querySelector('header');
-    if (!header) return;
-
-    // Add a proctoring badge next to the timer
-    const timerEl = document.getElementById('timer-display');
-    if (!timerEl) return;
+    const host = document.getElementById('exam-header-status');
+    if (!host || document.getElementById('proctoring-badge')) return;
 
     const badge = document.createElement('div');
     badge.id = 'proctoring-badge';
@@ -656,17 +717,17 @@ class ExamPage {
       display:flex;align-items:center;gap:0.4rem;
       background:#fef2f2;border:1.5px solid #fecaca;
       padding:0.35rem 0.75rem;border-radius:8px;
-      font-size:0.75rem;font-weight:700;color:#dc2626;
+      font-size:0.72rem;font-weight:800;color:#dc2626;
     `;
     badge.innerHTML = `
       <span style="width:8px;height:8px;background:#dc2626;border-radius:50%;animation:timer-pulse 1.5s infinite"></span>
       LOCAL PROCTORING
-      <span id="tab-switch-counter" style="background:#dc2626;color:white;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.7rem;margin-left:0.25rem">
+      <span id="tab-switch-counter" style="background:#dc2626;color:white;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.68rem;margin-left:0.25rem">
         0/${this.proctoring.settings.tab_switch_limit || 3}
       </span>
     `;
     badge.title = 'Browser-side checks only — not remote invigilation';
-    timerEl.parentNode.insertBefore(badge, timerEl);
+    host.prepend(badge);
   }
 
   _renderCameraPreview() {
@@ -720,7 +781,19 @@ class ExamPage {
     document.getElementById('prev-button')?.addEventListener('click', () => this._navigate(-1));
     document.getElementById('next-button')?.addEventListener('click', () => this._navigate(1));
     document.getElementById('mark-review-button')?.addEventListener('click', () => this._toggleMarkForReview());
+    document.getElementById('clear-answer-button')?.addEventListener('click', () => this._clearCurrentAnswer());
     document.getElementById('submit-exam-button')?.addEventListener('click', () => this._submitExam(false));
+  }
+
+  _clearCurrentAnswer() {
+    const q = this.questions[this.currentIndex];
+    if (!q) return;
+    delete this.answers[q.id];
+    this._renderCurrentQuestion();
+    this._renderQuestionPalette();
+    this._updateProgress();
+    this._updateStats();
+    this._scheduleAutosave();
   }
 
   _navigate(delta) {
@@ -826,32 +899,47 @@ class ExamPage {
   }
 
   _startTimerDisplay() {
-    const timerDisplay = document.getElementById('timer-display');
-    if (!timerDisplay) return;
+    const box = document.getElementById('timer-display');
+    const hEl = document.getElementById('timer-h');
+    const mEl = document.getElementById('timer-m');
+    const sEl = document.getElementById('timer-s');
+    if (!box || !hEl || !mEl || !sEl) return;
 
-    this._timerInterval = setInterval(() => {
-      const formattedTime = this.timer.getFormattedTime();
+    const paint = () => {
+      const parts = this.timer.getTimeParts();
+      hEl.textContent = parts.hours;
+      mEl.textContent = parts.minutes;
+      sEl.textContent = parts.seconds;
       const warningLevel = this.timer.getWarningLevel();
+      box.classList.toggle('is-warn', warningLevel === 'yellow');
+      box.classList.toggle('is-danger', warningLevel === 'red');
+    };
 
-      timerDisplay.textContent = formattedTime;
+    paint();
+    this._timerInterval = setInterval(paint, 1000);
+  }
 
-      if (warningLevel === 'red') {
-        timerDisplay.style.background = '#fef2f2';
-        timerDisplay.style.color = '#dc2626';
-        timerDisplay.style.borderColor = '#fecaca';
-        timerDisplay.style.animation = 'timer-pulse 0.8s infinite';
-      } else if (warningLevel === 'yellow') {
-        timerDisplay.style.background = '#fffbeb';
-        timerDisplay.style.color = '#d97706';
-        timerDisplay.style.borderColor = '#fde68a';
-        timerDisplay.style.animation = 'none';
-      } else {
-        timerDisplay.style.background = '#f0fdf4';
-        timerDisplay.style.color = '#16a34a';
-        timerDisplay.style.borderColor = '#bbf7d0';
-        timerDisplay.style.animation = 'none';
-      }
-    }, 1000);
+  _startExamClock() {
+    if (this._clockTimer) {
+      clearInterval(this._clockTimer);
+      this._clockTimer = null;
+    }
+    const el = document.getElementById('exam-live-clock');
+    if (!el) return;
+    const tick = () => {
+      const now = new Date();
+      const d = String(now.getDate()).padStart(2, '0');
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const y = now.getFullYear();
+      let h = now.getHours();
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      const min = String(now.getMinutes()).padStart(2, '0');
+      const sec = String(now.getSeconds()).padStart(2, '0');
+      el.textContent = `${d}-${m}-${y} ${String(h).padStart(2, '0')}:${min}:${sec} ${ampm}`;
+    };
+    tick();
+    this._clockTimer = setInterval(tick, 1000);
   }
 
   _startHeartbeat() {
@@ -1014,6 +1102,7 @@ class ExamPage {
     this._proctorPublisher = null;
     this.timer.stop();
     if (this._timerInterval) clearInterval(this._timerInterval);
+    if (this._clockTimer) clearInterval(this._clockTimer);
     if (this._heartbeatInterval) clearInterval(this._heartbeatInterval);
     if (this._heartbeatTimeout) clearTimeout(this._heartbeatTimeout);
     if (this._autosaveTimer) clearTimeout(this._autosaveTimer);

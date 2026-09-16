@@ -98,6 +98,19 @@ export class Timer {
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
 
+  /** Hours / minutes / seconds parts for boxed timer UI */
+  getTimeParts() {
+    const total = Math.max(0, Math.floor(this.remainingSeconds));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    return {
+      hours: String(hours).padStart(2, '0'),
+      minutes: String(minutes).padStart(2, '0'),
+      seconds: String(seconds).padStart(2, '0'),
+    };
+  }
+
   /**
    * Get warning level based on remaining time
    * @returns {string} 'green' | 'yellow' | 'red'
