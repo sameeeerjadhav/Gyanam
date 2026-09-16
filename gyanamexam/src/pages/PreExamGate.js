@@ -126,7 +126,7 @@ export class PreExamGate {
     const steps = [
       { key: 'identity', label: 'Identity' },
       { key: 'rules', label: 'Rules' },
-      { key: 'terms', label: 'Terms' },
+      { key: 'terms', label: 'Instructions' },
       { key: 'ready', label: 'Start' },
     ];
     return steps;
@@ -304,7 +304,7 @@ export class PreExamGate {
     }
 
     if (key === 'terms' && !this.termsAccepted) {
-      this._setError('You must accept the terms and conditions to proceed.');
+      this._setError('You must accept the exam instructions to proceed.');
       return;
     }
 
@@ -440,28 +440,45 @@ export class PreExamGate {
   }
 
   _termsHTML() {
-    const custom = (this.exam.instructions || '').trim();
+    const totalQs = this.exam.total_questions || 20;
+    const duration = this.exam.duration || 30;
+    const body = [
+      'Welcome to MCCE Demo exam portal.',
+      '',
+      '1) All questions are MCQ type.',
+      '',
+      `2) Total questions : ${totalQs}, all questions are mandatory.`,
+      '',
+      '3) Each question is of 1 marks. There is no penalty for incorrect answers.',
+      '',
+      `4) Exam time : ${duration} min.`,
+      '',
+      '5) Your certification grade & percentage depend on this given examination.',
+      '',
+      '6) Once exam is finished, there is no option to make changes in answers. So be careful while answering to questions.',
+      '',
+      '7) Do not try to do any other activity on the computer other than attempting exam. ANY OTHER ACTIVITY DURING THE EXAM WILL TERMINATE THE EXAM AND THERE IS NO WAY TO GAIN ACCESS TO EXAM OTHER THAN RE-APPEAR.',
+      '',
+      '8) If you fail in exam OR terminated exam due to mishandling, you can reappear by paying (re-examination fees).',
+      '',
+      '9) Do not use mobile phones or any other electronic device during EXAM.',
+      '',
+      '10) Request provisional certificate to the centre head before leaving exam centre.',
+      '',
+      'ALL THE BEST !!!',
+    ].join('\n');
+
     return `
-      <h2 class="peg-h2">Terms &amp; conditions</h2>
-      <p class="peg-lead">By starting this exam you agree to the following.</p>
+      <h2 class="peg-h2">Instructions</h2>
+      <p class="peg-lead">Read all instructions carefully before you start the examination.</p>
       <div class="peg-terms">
-        <ol>
-          <li>I am the registered candidate named on the previous screen and will not allow anyone else to take this exam on my behalf.</li>
-          <li>I will not use unauthorized materials, devices, or assistance during the examination.</li>
-          <li>I understand that proctoring signals (tab switches, fullscreen exit, etc.) may be logged and reviewed.</li>
-          <li>I accept that exceeding allowed warnings may cause automatic submission of my answers.</li>
-          <li>I will not copy, photograph, or distribute exam content in any form.</li>
-          <li>Technical issues should be reported to my centre immediately; incomplete attempts may still be recorded.</li>
-        </ol>
-        ${custom ? `
-          <div class="peg-instructions">
-            <div class="peg-instructions-label">Exam-specific instructions</div>
-            <div class="peg-instructions-body">${esc(custom).replace(/\n/g, '<br>')}</div>
-          </div>` : ''}
+        <div class="peg-instructions" style="margin:0;border:none;padding:0;background:transparent">
+          <div class="peg-instructions-body" style="white-space:pre-wrap;line-height:1.55">${esc(body)}</div>
+        </div>
       </div>
       <label class="peg-check">
         <input type="checkbox" id="peg-accept-terms" ${this.termsAccepted ? 'checked' : ''}>
-        <span>I have read and agree to the terms, conditions, and exam instructions above.</span>
+        <span>I have read and agree to the exam instructions above.</span>
       </label>`;
   }
 
