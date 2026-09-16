@@ -182,10 +182,20 @@ function setupRoutes(appContainer) {
         ? new Date(sub.submitted_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
         : '';
 
+      const escapeHtml = (s) => String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
       const escapeAttr = (s) => String(s || '')
         .replace(/\\/g, '\\\\')
         .replace(/'/g, "\\'")
         .substring(0, 80);
+
+      const year = new Date().getFullYear();
+      const user = authModule.getCurrentSession()?.user || {};
+      const studentName = sub.student_name || user.name || user.identifier || '';
 
       const answerReviewHTML = answers.length > 0 ? `
         <div class="result-review">
@@ -193,20 +203,31 @@ function setupRoutes(appContainer) {
             <div class="result-review-title">Answer review</div>
             <div class="result-review-count">${correctCount} correct · ${wrongCount} incorrect</div>
           </div>
+          <div class="result-review-list">
           ${answers.map((a, i) => {
             const opts = typeof a.options === 'string' ? JSON.parse(a.options) : (a.options || []);
             const correctOpt = opts.find(o => String(o.id) === String(a.correct_answer));
             const selectedOpt = opts.find(o => String(o.id) === String(a.selected_answer));
             const ok = !!a.is_correct;
+            const selLetter = selectedOpt ? String(selectedOpt.id || '').toUpperCase() : '';
+            const corLetter = correctOpt ? String(correctOpt.id || '').toUpperCase() : String(a.correct_answer || '').toUpperCase();
             return `
               <div class="result-answer ${ok ? 'correct' : 'wrong'}">
                 <div class="result-answer-top">
-                  <div class="result-answer-q">${i + 1}. ${a.question_text || '—'}</div>
+                  <span class="result-answer-num">${i + 1}</span>
+                  <div class="result-answer-q">${escapeHtml(a.question_text || '—')}</div>
                   <span class="result-answer-badge">${ok ? 'Correct' : 'Incorrect'}</span>
                 </div>
-                <div class="result-answer-meta">
-                  Your answer: <strong class="${ok ? 'ok' : 'bad'}">${selectedOpt ? selectedOpt.text : (a.selected_answer || 'Not answered')}</strong>
-                  ${!ok ? `<br>Correct answer: <strong class="ok">${correctOpt ? correctOpt.text : a.correct_answer}</strong>` : ''}
+                <div class="result-answer-rows">
+                  <div class="result-answer-row">
+                    <em>Your answer</em>
+                    <strong class="${ok ? 'ok' : 'bad'}">${selLetter ? `<span class="result-letter">${selLetter}</span>` : ''}${escapeHtml(selectedOpt ? selectedOpt.text : (a.selected_answer || 'Not answered'))}</strong>
+                  </div>
+                  ${!ok ? `
+                  <div class="result-answer-row">
+                    <em>Correct answer</em>
+                    <strong class="ok">${corLetter ? `<span class="result-letter">${corLetter}</span>` : ''}${escapeHtml(correctOpt ? correctOpt.text : a.correct_answer)}</strong>
+                  </div>` : ''}
                 </div>
                 ${!ok ? `
                   <button type="button" class="result-challenge-btn"
@@ -215,45 +236,62 @@ function setupRoutes(appContainer) {
                   </button>` : ''}
               </div>`;
           }).join('')}
+          </div>
         </div>` : '';
 
       appContainer.innerHTML = `
-        <div class="result-page">
-          <div class="result-page-inner">
-            <div class="result-brand">
-              <div class="result-brand-mark">
-                <img src="assets/logo.png" alt="" onerror="this.style.display='none'">
-                <span>Gyanam Exam Portal</span>
+        <div class="result-shell">
+          <header class="result-header">
+            <div class="result-header-pattern" aria-hidden="true"></div>
+            <div class="result-header-inner">
+              <div class="result-brand">
+                <img src="assets/giit_brand_logo.png" alt="GIIT"
+                     onerror="this.onerror=null;this.src='assets/giit_logo.png';this.onerror=function(){this.src='assets/logo.png'}">
+                <div>
+                  <div class="result-brand-name">Gyanam Exam Portal</div>
+                  <div class="result-brand-sub">Exam results</div>
+                </div>
               </div>
-              <div class="result-brand-sub">Results</div>
             </div>
+          </header>
+
+          <main class="result-main">
+            <div class="result-page-inner">
 
             ${notice?.type === 'auto_submit' ? `
-              <div class="result-notice" style="margin-bottom:0.85rem">
+              <div class="result-notice">
                 <div class="result-notice-icon">!</div>
                 <div>
                   <div class="result-notice-title">Exam auto-submitted</div>
-                  <div class="result-notice-text">${notice.message || 'This exam was auto-submitted due to a proctoring rule.'}</div>
+                  <div class="result-notice-text">${escapeHtml(notice.message || 'This exam was auto-submitted due to a proctoring rule.')}</div>
                 </div>
               </div>` : ''}
 
             <div class="result-card">
               <div class="result-card-accent ${outcome}"></div>
               <div class="result-card-body">
-                <div class="result-status-pill ${outcome}">${isPassed ? 'Passed' : 'Did not pass'}</div>
-                <h1 class="result-title ${outcome}">${isPassed ? 'Congratulations!' : 'Keep practicing'}</h1>
-                <p class="result-subtitle">${sub.exam_title || 'Exam'} — final results</p>
-
-                <div class="result-score-wrap">
-                  <svg class="result-score-ring" viewBox="0 0 160 160" aria-hidden="true">
-                    <circle class="track" cx="80" cy="80" r="70"></circle>
-                    <circle class="progress ${outcome}" cx="80" cy="80" r="70"
-                      stroke-dasharray="${circumference.toFixed(2)}"
-                      stroke-dashoffset="${dashOffset.toFixed(2)}"></circle>
-                  </svg>
-                  <div class="result-score-center">
-                    <div class="result-score-value ${outcome}">${sub.score}%</div>
-                    <div class="result-score-label">Score</div>
+                <div class="result-hero">
+                  <div class="result-hero-text">
+                    <div class="result-status-pill ${outcome}">${isPassed ? 'Passed' : 'Did not pass'}</div>
+                    <h1 class="result-title ${outcome}">${isPassed ? 'Congratulations!' : 'Keep practicing'}</h1>
+                    <p class="result-subtitle">${escapeHtml(sub.exam_title || 'Exam')} — final results</p>
+                    ${submittedLabel || studentName ? `
+                      <div class="result-meta">
+                        ${studentName ? `<span>${escapeHtml(studentName)}</span>` : ''}
+                        ${submittedLabel ? `<span>${escapeHtml(submittedLabel)}</span>` : ''}
+                      </div>` : ''}
+                  </div>
+                  <div class="result-score-wrap">
+                    <svg class="result-score-ring" viewBox="0 0 160 160" aria-hidden="true">
+                      <circle class="track" cx="80" cy="80" r="70"></circle>
+                      <circle class="progress ${outcome}" cx="80" cy="80" r="70"
+                        stroke-dasharray="${circumference.toFixed(2)}"
+                        stroke-dashoffset="${dashOffset.toFixed(2)}"></circle>
+                    </svg>
+                    <div class="result-score-center">
+                      <div class="result-score-value ${outcome}">${sub.score}%</div>
+                      <div class="result-score-label">Score</div>
+                    </div>
                   </div>
                 </div>
 
@@ -276,12 +314,6 @@ function setupRoutes(appContainer) {
                   </div>
                 </div>
 
-                ${submittedLabel || sub.student_name ? `
-                  <div class="result-meta">
-                    ${sub.student_name ? `<span>${sub.student_name}</span>` : ''}
-                    ${submittedLabel ? `<span>${submittedLabel}</span>` : ''}
-                  </div>` : ''}
-
                 ${answerReviewHTML}
 
                 <div class="result-actions">
@@ -291,13 +323,22 @@ function setupRoutes(appContainer) {
                 </div>
               </div>
             </div>
-          </div>
+            </div>
+          </main>
+
+          <footer class="result-footer">
+            <div class="result-footer-top">
+              <div>Copyright © ${year} <span class="accent">GIIT</span></div>
+              <div>Time <span class="accent" id="result-live-clock">—</span></div>
+            </div>
+            <div class="result-footer-bot">A unit of IT Training — Gyanam India Educational Services (ISO 9001 : 2015)</div>
+          </footer>
         </div>
 
         <div id="challenge-overlay" class="result-challenge-modal">
           <div class="result-challenge-dialog">
             <h3>Challenge this question</h3>
-            <p id="challenge-q-text" style="font-size:0.8rem;color:#64748b;margin:0 0 1rem"></p>
+            <p id="challenge-q-text" class="result-challenge-q"></p>
             <label for="challenge-reason">Reason *</label>
             <select id="challenge-reason">
               <option value="Wrong answer key">Wrong answer key listed</option>
@@ -315,6 +356,24 @@ function setupRoutes(appContainer) {
           </div>
         </div>
       `;
+
+      const clockEl = document.getElementById('result-live-clock');
+      if (clockEl) {
+        const tick = () => {
+          const now = new Date();
+          const d = String(now.getDate()).padStart(2, '0');
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const y = now.getFullYear();
+          let h = now.getHours();
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          h = h % 12 || 12;
+          const min = String(now.getMinutes()).padStart(2, '0');
+          const sec = String(now.getSeconds()).padStart(2, '0');
+          clockEl.textContent = `${d}-${m}-${y} ${String(h).padStart(2, '0')}:${min}:${sec} ${ampm}`;
+        };
+        tick();
+        window._resultClockTimer = setInterval(tick, 1000);
+      }
 
       document.getElementById('result-back-btn')?.addEventListener('click', () => {
         if (typeof router?.navigate === 'function') router.navigate('/student');
