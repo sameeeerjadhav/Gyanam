@@ -1,7 +1,6 @@
 /**
- * QuestionView Component
- * Displays a single question with answer options
- * Supports English + Marathi stacked in the same card
+ * QuestionView — polished bilingual question + MCQ options
+ * Clean list options (not chunky multi-color cards)
  */
 export class QuestionView {
   constructor() {
@@ -73,6 +72,105 @@ export class QuestionView {
     return [];
   }
 
+  _ensureStyles() {
+    if (document.getElementById('qv-polish-styles')) return;
+    const st = document.createElement('style');
+    st.id = 'qv-polish-styles';
+    st.textContent = `
+      .qv-root { font-family: 'Source Sans 3', 'Segoe UI', sans-serif; }
+      .qv-stem {
+        margin: 0 0 1.25rem;
+        padding: 0 0 1.1rem;
+        border-bottom: 1px solid #e8edf3;
+      }
+      .qv-en {
+        font-size: 1.08rem;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        line-height: 1.55;
+        color: #0f2744;
+        font-family: 'Source Sans 3', 'Segoe UI', sans-serif;
+      }
+      .qv-mr {
+        margin-top: 0.55rem;
+        font-size: 1.02rem;
+        font-weight: 550;
+        line-height: 1.55;
+        color: #334155;
+        font-family: 'Noto Sans Devanagari', 'Source Sans 3', sans-serif;
+      }
+      .options-container {
+        display: flex !important;
+        flex-direction: column;
+        gap: 0.55rem;
+      }
+      .option-item { min-width: 0; }
+      .qv-opt {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.85rem;
+        width: 100%;
+        padding: 0.85rem 1rem;
+        border-radius: 10px;
+        cursor: pointer;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        box-sizing: border-box;
+        transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+      }
+      .qv-opt:hover {
+        border-color: #cbd5e1;
+        background: #fafbfc;
+      }
+      .qv-opt.is-selected {
+        border-color: #16a34a;
+        background: #f0fdf4;
+        box-shadow: inset 3px 0 0 #16a34a;
+      }
+      .qv-opt input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+        width: 0; height: 0;
+      }
+      .qv-letter {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 1.5px solid #cbd5e1;
+        background: #f8fafc;
+        color: #0f2744;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.78rem;
+        font-weight: 800;
+        flex-shrink: 0;
+        margin-top: 0.05rem;
+        transition: all .15s ease;
+      }
+      .qv-opt.is-selected .qv-letter {
+        border-color: #16a34a;
+        background: #16a34a;
+        color: #fff;
+      }
+      .qv-opt-text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        color: #1e293b;
+        font-weight: 550;
+        font-size: 0.95rem;
+        line-height: 1.45;
+      }
+      .qv-opt-text .qv-en { font-size: 0.95rem; font-weight: 550; color: #1e293b; }
+      .qv-opt-text .qv-mr { margin-top: 0; font-size: 0.9rem; color: #475569; }
+    `;
+    document.head.appendChild(st);
+  }
+
   render(container, question, questionNumber, savedAnswer = null, onAnswerChange = null) {
     if (!(container instanceof HTMLElement)) {
       throw new Error('Container must be an HTMLElement');
@@ -85,6 +183,7 @@ export class QuestionView {
     this.currentQuestion = question;
     this.currentAnswer = savedAnswer;
     this.onAnswerChange = onAnswerChange;
+    this._ensureStyles();
 
     this.container.style.opacity = '0';
     this.container.style.transition = `opacity ${this.transitionDuration}ms ease-in-out`;
@@ -101,27 +200,22 @@ export class QuestionView {
     this.container.innerHTML = '';
 
     const questionDiv = document.createElement('div');
-    questionDiv.className = 'question-view';
+    questionDiv.className = 'question-view qv-root';
     questionDiv.setAttribute('role', 'region');
     questionDiv.setAttribute('aria-label', `Question ${questionNumber}`);
 
     const pair = this._bilingualPair(question);
     const questionText = document.createElement('div');
-    questionText.className = 'qv-question-text';
-    questionText.style.cssText = 'margin-bottom:1.35rem;line-height:1.65;color:#0f172a';
+    questionText.className = 'qv-stem';
 
-    // English on top
     const enLine = document.createElement('div');
     enLine.className = 'qv-en';
-    enLine.style.cssText = 'font-size:1.12rem;font-weight:600;letter-spacing:-0.01em;font-family:Inter,\"Noto Sans\",sans-serif';
     enLine.innerHTML = this._sanitizeText(pair.en || question.text);
     questionText.appendChild(enLine);
 
-    // Marathi directly below (same card)
     if (pair.mr) {
       const mrLine = document.createElement('div');
       mrLine.className = 'qv-mr';
-      mrLine.style.cssText = 'font-size:1.08rem;font-weight:500;color:#1e293b;margin-top:0.55rem;padding-top:0.55rem;border-top:1px dashed #cbd5e1;font-family:\"Noto Sans Devanagari\",\"Noto Sans\",sans-serif';
       mrLine.innerHTML = this._sanitizeText(pair.mr);
       questionText.appendChild(mrLine);
     }
@@ -135,48 +229,27 @@ export class QuestionView {
   _renderOptions(question, savedAnswer) {
     const optionsDiv = document.createElement('div');
     optionsDiv.className = 'options-container';
-    optionsDiv.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;align-items:stretch';
     optionsDiv.setAttribute('role', 'radiogroup');
     optionsDiv.setAttribute('aria-label', 'Answer options');
 
     const isMultipleChoice = question.type === 'multiple-choice-multiple';
     const inputType = isMultipleChoice ? 'checkbox' : 'radio';
     const savedAnswers = Array.isArray(savedAnswer) ? savedAnswer : (savedAnswer ? [savedAnswer] : []);
-    const badgeColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b'];
     const options = this._normalizeOptions(question.options);
 
     options.forEach((option, index) => {
       const optionDiv = document.createElement('div');
       optionDiv.className = 'option-item';
-      optionDiv.style.cssText = 'min-width:0';
 
       const isSelected = savedAnswers.includes(option.id);
       const label = document.createElement('label');
+      label.className = `qv-opt${isSelected ? ' is-selected' : ''}`;
       label.setAttribute('data-option-index', index);
-      label.style.cssText = `
-        display:flex; align-items:flex-start; gap:0.7rem;
-        padding:0.85rem 0.9rem; border-radius:12px; cursor:pointer;
-        border:2px solid ${isSelected ? '#1d4ed8' : '#e2e8f0'};
-        background:${isSelected ? '#eff6ff' : '#ffffff'};
-        transition:all 0.2s ease; width:100%; height:100%; box-sizing:border-box;
-      `;
-      label.addEventListener('mouseenter', () => {
-        if (!label.querySelector('input').checked) {
-          label.style.borderColor = '#93c5fd';
-          label.style.background = '#f8fafc';
-        }
-      });
-      label.addEventListener('mouseleave', () => {
-        const checked = label.querySelector('input').checked;
-        label.style.borderColor = checked ? '#1d4ed8' : '#e2e8f0';
-        label.style.background = checked ? '#eff6ff' : '#ffffff';
-      });
 
       const input = document.createElement('input');
       input.type = inputType;
       input.name = isMultipleChoice ? `question-${question.id}-option` : `question-${question.id}`;
       input.value = option.id;
-      input.style.cssText = 'width:18px;height:18px;accent-color:#1d4ed8;cursor:pointer;flex-shrink:0;margin-top:0.2rem';
       input.setAttribute('aria-label', `Option ${String.fromCharCode(65 + index)}`);
       if (isSelected) input.checked = true;
 
@@ -186,30 +259,21 @@ export class QuestionView {
       });
 
       const badge = document.createElement('div');
-      badge.style.cssText = `
-        width:28px; height:28px; border-radius:7px;
-        background:${isSelected ? '#1d4ed8' : badgeColors[index] + '15'};
-        color:${isSelected ? '#ffffff' : badgeColors[index]};
-        display:flex; align-items:center; justify-content:center;
-        font-size:0.78rem; font-weight:700; flex-shrink:0; margin-top:0.05rem;
-        transition:all 0.2s ease;
-      `;
+      badge.className = 'qv-letter';
       badge.textContent = String.fromCharCode(65 + index);
 
       const optPair = this._bilingualPair(option);
       const text = document.createElement('span');
-      text.style.cssText = 'color:#1e293b;font-weight:500;font-size:0.92rem;line-height:1.4;flex:1;min-width:0;display:flex;flex-direction:column;gap:0.35rem';
+      text.className = 'qv-opt-text';
 
       const enOpt = document.createElement('span');
       enOpt.className = 'qv-en';
-      enOpt.style.cssText = 'font-family:Inter,\"Noto Sans\",sans-serif';
       enOpt.innerHTML = this._sanitizeText(optPair.en || option.text);
       text.appendChild(enOpt);
 
       if (optPair.mr) {
         const mrOpt = document.createElement('span');
         mrOpt.className = 'qv-mr';
-        mrOpt.style.cssText = 'color:#334155;font-weight:500;font-size:0.9rem;line-height:1.4;font-family:\"Noto Sans Devanagari\",\"Noto Sans\",sans-serif';
         mrOpt.innerHTML = this._sanitizeText(optPair.mr);
         text.appendChild(mrOpt);
       }
@@ -226,17 +290,8 @@ export class QuestionView {
 
   _handleSingleChoiceChange(optionsDiv, selectedLabel, optionId) {
     this.currentAnswer = optionId;
-    const badgeColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b'];
-    optionsDiv.querySelectorAll('label').forEach((l, i) => {
-      l.style.background = '#ffffff';
-      l.style.borderColor = '#e2e8f0';
-      const b = l.querySelector('div');
-      if (b) { b.style.background = badgeColors[i] + '15'; b.style.color = badgeColors[i]; }
-    });
-    selectedLabel.style.background = '#eff6ff';
-    selectedLabel.style.borderColor = '#1d4ed8';
-    const selBadge = selectedLabel.querySelector('div');
-    if (selBadge) { selBadge.style.background = '#1d4ed8'; selBadge.style.color = '#ffffff'; }
+    optionsDiv.querySelectorAll('.qv-opt').forEach((l) => l.classList.remove('is-selected'));
+    selectedLabel.classList.add('is-selected');
     if (this.onAnswerChange) this.onAnswerChange(optionId);
   }
 
@@ -244,19 +299,9 @@ export class QuestionView {
     const checkedInputs = optionsDiv.querySelectorAll('input[type="checkbox"]:checked');
     const selectedIds = Array.from(checkedInputs).map((input) => input.value);
     this.currentAnswer = selectedIds.length > 0 ? selectedIds : null;
-    const badgeColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b'];
-    optionsDiv.querySelectorAll('label').forEach((label, i) => {
+    optionsDiv.querySelectorAll('.qv-opt').forEach((label) => {
       const input = label.querySelector('input');
-      const badge = label.querySelector('div');
-      if (input.checked) {
-        label.style.background = '#eff6ff';
-        label.style.borderColor = '#1d4ed8';
-        if (badge) { badge.style.background = '#1d4ed8'; badge.style.color = '#ffffff'; }
-      } else {
-        label.style.background = '#ffffff';
-        label.style.borderColor = '#e2e8f0';
-        if (badge) { badge.style.background = badgeColors[i] + '15'; badge.style.color = badgeColors[i]; }
-      }
+      label.classList.toggle('is-selected', !!(input && input.checked));
     });
     if (this.onAnswerChange) this.onAnswerChange(this.currentAnswer);
   }
