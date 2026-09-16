@@ -21,6 +21,7 @@ export class StudentDashboard {
     this.practiceExams = [];
     this.activeTab = 'dashboard';
     this._resultsLoaded = false;
+    this._clockTimer = null;
   }
 
   async initialize(container) {
@@ -98,6 +99,8 @@ export class StudentDashboard {
         --sd-card: #ffffff;
         --sd-text: #0f172a;
         min-height: 100vh;
+        display: flex;
+        flex-direction: column;
         background: var(--sd-bg);
         font-family: 'Source Sans 3', 'Segoe UI', sans-serif;
         color: var(--sd-text);
@@ -119,63 +122,94 @@ export class StudentDashboard {
         to { opacity: 1; transform: translateY(0); }
       }
 
-      .sd-topbar {
+      .sd-chrome { position: sticky; top: 0; z-index: 30; }
+
+      .sd-header {
+        position: relative;
         background: #fff;
         border-bottom: 1px solid var(--sd-line);
-        position: sticky; top: 0; z-index: 30;
-        box-shadow: 0 1px 0 rgba(15,39,68,.04);
+        overflow: hidden;
+        isolation: isolate;
       }
-      .sd-topbar-inner {
-        max-width: 1120px; margin: 0 auto;
-        padding: .65rem 1.25rem 0;
-        display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      .sd-header-pattern {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        opacity: 0.55;
+        background-color: #f8fafc;
+        background-image:
+          radial-gradient(circle at 12% 40%, rgba(196, 30, 58, 0.06), transparent 42%),
+          radial-gradient(circle at 88% 20%, rgba(15, 39, 68, 0.07), transparent 40%),
+          url("data:image/svg+xml,%3Csvg width='120' height='104' viewBox='0 0 120 104' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%2394a3b8' stroke-width='0.9' opacity='0.45'%3E%3Cpath d='M30 2l28 16v32L30 66 2 50V18z'/%3E%3Cpath d='M90 2l28 16v32L90 66 62 50V18z'/%3E%3Cpath d='M60 36l28 16v32L60 100 32 84V52z'/%3E%3Ccircle cx='30' cy='2' r='2.2' fill='%2394a3b8'/%3E%3Ccircle cx='58' cy='18' r='2.2' fill='%2394a3b8'/%3E%3Ccircle cx='90' cy='2' r='2.2' fill='%2394a3b8'/%3E%3Ccircle cx='30' cy='66' r='2.2' fill='%2394a3b8'/%3E%3Ccircle cx='60' cy='36' r='2.2' fill='%2394a3b8'/%3E%3C/g%3E%3C/svg%3E");
+        background-size: auto, auto, 120px 104px;
       }
-      .sd-brand { display: flex; align-items: center; gap: .85rem; min-width: 0; }
-      .sd-brand img {
-        height: 42px; width: auto; max-width: 160px; object-fit: contain; display: block;
+      .sd-header-inner {
+        position: relative;
+        z-index: 1;
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 1.05rem 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+      .sd-brand { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+      .sd-brand-logo {
+        width: 72px;
+        height: 72px;
+        object-fit: contain;
+        flex-shrink: 0;
+        display: block;
+        filter: drop-shadow(0 2px 6px rgba(15, 39, 68, 0.12));
       }
       .sd-brand-meta { min-width: 0; }
       .sd-brand-meta strong {
-        display: block; font-size: .9rem; font-weight: 800; color: var(--sd-navy);
-        letter-spacing: .01em; line-height: 1.2;
+        display: block; font-size: 1.08rem; font-weight: 800; color: var(--sd-navy);
+        letter-spacing: -.01em; line-height: 1.2;
       }
       .sd-brand-meta span {
-        display: block; font-size: .7rem; color: var(--sd-muted); font-weight: 600;
-        text-transform: uppercase; letter-spacing: .06em; margin-top: .1rem;
+        display: block; font-size: .78rem; color: var(--sd-muted); font-weight: 600;
+        text-transform: uppercase; letter-spacing: .04em; margin-top: .15rem;
       }
       .sd-logout {
         display: inline-flex; align-items: center; gap: .4rem;
         background: #fff5f5; border: 1px solid #fecaca; color: var(--sd-red);
-        padding: .42rem .85rem; border-radius: 8px; font-size: .78rem; font-weight: 700;
+        padding: .5rem .95rem; border-radius: 8px; font-size: .8rem; font-weight: 700;
         cursor: pointer; font-family: inherit; transition: background .15s; flex-shrink: 0;
+        position: relative; z-index: 1;
       }
       .sd-logout:hover { background: #fee2e2; }
 
       .sd-nav {
+        background: var(--sd-navy);
+        box-shadow: 0 2px 8px rgba(15, 39, 68, 0.18);
+      }
+      .sd-nav-inner {
         max-width: 1120px; margin: 0 auto;
         padding: 0 1.25rem;
-        display: flex; gap: .15rem; overflow-x: auto;
+        display: flex; gap: .2rem; overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
       }
-      .sd-nav::-webkit-scrollbar { display: none; }
+      .sd-nav-inner::-webkit-scrollbar { display: none; }
       .sd-nav-btn {
         appearance: none; background: transparent; border: none;
         font-family: inherit; cursor: pointer;
-        padding: .85rem 1.05rem .75rem;
-        font-size: .86rem; font-weight: 700; color: var(--sd-muted);
-        border-bottom: 2.5px solid transparent;
-        white-space: nowrap; transition: color .15s, border-color .15s;
+        padding: .75rem 1.1rem;
+        font-size: .82rem; font-weight: 700; color: rgba(255,255,255,.72);
+        white-space: nowrap; transition: background .15s, color .15s;
         display: inline-flex; align-items: center; gap: .45rem;
       }
-      .sd-nav-btn:hover { color: var(--sd-navy); }
+      .sd-nav-btn:hover { color: #fff; background: rgba(255,255,255,.08); }
       .sd-nav-btn.is-active {
-        color: var(--sd-red);
-        border-bottom-color: var(--sd-red);
+        background: var(--sd-red);
+        color: #fff;
       }
-      .sd-nav-btn svg { width: 16px; height: 16px; opacity: .85; }
+      .sd-nav-btn svg { width: 15px; height: 15px; opacity: .9; }
 
-      .sd-main { max-width: 1120px; margin: 0 auto; padding: 1.35rem 1.25rem 2.5rem; }
+      .sd-main { flex: 1; max-width: 1120px; width: 100%; margin: 0 auto; padding: 1.35rem 1.25rem 2.5rem; }
       .sd-panel { display: none; animation: sd-fade-up .35s ease both; }
       .sd-panel.is-active { display: block; }
 
@@ -410,8 +444,33 @@ export class StudentDashboard {
       .sd-quick span { display: block; margin-top: .25rem; font-size: .78rem; color: var(--sd-muted); font-weight: 500; }
 
       .sd-footer {
-        max-width: 1120px; margin: 0 auto; padding: 0 1.25rem 2rem;
-        text-align: center; color: #94a3b8; font-size: .75rem; font-weight: 600;
+        background: #1a1f2a;
+        color: #e2e8f0;
+        margin-top: auto;
+      }
+      .sd-footer-top {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 0.85rem 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .sd-footer-top .accent { color: #f87171; }
+      .sd-footer-bot {
+        border-top: 1px solid rgba(255,255,255,0.1);
+        padding: 0.55rem 1.5rem 0.7rem;
+        text-align: center;
+        font-size: 0.72rem;
+        color: rgba(226, 232, 240, 0.55);
+        font-weight: 500;
+        letter-spacing: 0.02em;
       }
 
       @media (max-width: 720px) {
@@ -420,10 +479,13 @@ export class StudentDashboard {
         .sd-profile-body .sd-name { margin-top: .75rem; }
         .sd-facts { width: 100%; }
         .sd-stats { grid-template-columns: 1fr; }
-        .sd-brand-meta { display: none; }
+        .sd-brand-meta strong { font-size: .95rem; }
+        .sd-brand-logo { width: 56px; height: 56px; }
+        .sd-header-inner { padding: 0.9rem 1rem; }
         .sd-experience { grid-template-columns: 1fr; }
         .sd-experience-actions { min-width: 0; }
-        .sd-nav-btn { padding: .75rem .7rem .65rem; font-size: .8rem; }
+        .sd-nav-btn { padding: .7rem .75rem; font-size: .78rem; }
+        .sd-footer-top { justify-content: center; text-align: center; }
       }
     `;
     document.head.appendChild(st);
@@ -460,26 +522,34 @@ export class StudentDashboard {
         ${t.icon}${t.label}
       </button>`).join('');
 
+    const year = new Date().getFullYear();
+
     this.container.innerHTML = `
       <div class="sd-root">
-        <header class="sd-topbar">
-          <div class="sd-topbar-inner">
-            <div class="sd-brand">
-              <img src="assets/giit_brand_logo.png" alt="GIIT" onerror="this.src='assets/logo.png'">
-              <div class="sd-brand-meta">
-                <strong>Gyanam Institute of Information Technology</strong>
-                <span>Student Exam Portal</span>
+        <div class="sd-chrome">
+          <header class="sd-header">
+            <div class="sd-header-pattern" aria-hidden="true"></div>
+            <div class="sd-header-inner">
+              <div class="sd-brand">
+                <img class="sd-brand-logo" src="assets/giit_brand_logo.png" alt="GIIT"
+                     onerror="this.onerror=null;this.src='assets/giit_logo.png';this.onerror=function(){this.src='assets/logo.png'}">
+                <div class="sd-brand-meta">
+                  <strong>Gyanam Institute of Information Technology</strong>
+                  <span>Student Exam Portal</span>
+                </div>
               </div>
+              <button type="button" id="logout-btn" class="sd-logout">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"/></svg>
+                Logout
+              </button>
             </div>
-            <button type="button" id="logout-btn" class="sd-logout">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"/></svg>
-              Logout
-            </button>
-          </div>
+          </header>
           <nav class="sd-nav" role="tablist" aria-label="Student portal sections">
-            ${navHtml}
+            <div class="sd-nav-inner">
+              ${navHtml}
+            </div>
           </nav>
-        </header>
+        </div>
 
         <main class="sd-main">
           <section class="sd-panel${this.activeTab === 'dashboard' ? ' is-active' : ''}" data-panel="dashboard" role="tabpanel">
@@ -578,11 +648,41 @@ export class StudentDashboard {
         </main>
 
         <footer class="sd-footer">
-          A unit of IT Training — Gyanam India (ISO 9001 : 2015)
+          <div class="sd-footer-top">
+            <div>Copyright © ${year} <span class="accent">GIIT</span></div>
+            <div>Time <span class="accent" id="sd-live-clock">—</span></div>
+          </div>
+          <div class="sd-footer-bot">
+            A unit of IT Training — Gyanam India Educational Services (ISO 9001 : 2015)
+          </div>
         </footer>
       </div>`;
 
     this.attachEventListeners();
+    this._startClock();
+  }
+
+  _startClock() {
+    if (this._clockTimer) {
+      clearInterval(this._clockTimer);
+      this._clockTimer = null;
+    }
+    const el = this.container?.querySelector('#sd-live-clock');
+    if (!el) return;
+    const tick = () => {
+      const now = new Date();
+      const d = String(now.getDate()).padStart(2, '0');
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const y = now.getFullYear();
+      let h = now.getHours();
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      const min = String(now.getMinutes()).padStart(2, '0');
+      const sec = String(now.getSeconds()).padStart(2, '0');
+      el.textContent = `${d}-${m}-${y} ${String(h).padStart(2, '0')}:${min}:${sec} ${ampm}`;
+    };
+    tick();
+    this._clockTimer = setInterval(tick, 1000);
   }
 
   switchTab(tabId) {
@@ -807,6 +907,10 @@ export class StudentDashboard {
   }
 
   destroy() {
+    if (this._clockTimer) {
+      clearInterval(this._clockTimer);
+      this._clockTimer = null;
+    }
     if (this.examHistoryModule) this.examHistoryModule.destroy();
     if (this.certificationModule) this.certificationModule.destroy();
     if (this.container) this.container.innerHTML = '';

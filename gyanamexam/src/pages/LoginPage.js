@@ -93,8 +93,8 @@ class LoginPage {
       }
 
       .gep-brand-logo {
-        width: 56px;
-        height: 56px;
+        width: 72px;
+        height: 72px;
         object-fit: contain;
         flex-shrink: 0;
         display: block;
@@ -511,7 +511,7 @@ class LoginPage {
 
       @media (max-width: 480px) {
         .gep-header-inner { padding: 0.9rem 1rem; }
-        .gep-brand-logo { width: 46px; height: 46px; }
+        .gep-brand-logo { width: 58px; height: 58px; }
         .gep-card { padding: 1.35rem 1.15rem 1.25rem; }
         .gep-footer-top { justify-content: center; text-align: center; }
       }
