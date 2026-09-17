@@ -4013,10 +4013,10 @@ function wrapPdfTextLines($pdf, string $text, float $maxWidthMm): array
 
 /**
  * Prefer certificate layout for typing-style titles:
- * Line 1 — course title before "Speed"
- * Line 2 — starts with "Speed … WPM/KPH"
+ * Line 1 — course title before "Typing Speed"
+ * Line 2 — starts with "Typing Speed … WPM/KPH"
  *
- * @return list<string>|null Forced lines, or null if no Speed clause
+ * @return list<string>|null Forced lines, or null if no Typing Speed clause
  */
 function splitCertificateCourseNameAtSpeed(string $courseName): ?array
 {
@@ -4024,11 +4024,22 @@ function splitCertificateCourseNameAtSpeed(string $courseName): ?array
     if ($normalized === '') {
         return null;
     }
-    // Break immediately before the word Speed (keeps "Typing" on line 1)
+    // Break immediately before "Typing Speed" (2nd line always starts with those words)
+    if (preg_match('/^(.*?)\s+(Typing\s+Speed\b.*)$/iu', $normalized, $m)) {
+        $before = trim($m[1]);
+        $after = trim($m[2]);
+        if ($before !== '' && $after !== '') {
+            return [$before, $after];
+        }
+    }
+    // Fallback: bare "Speed …" → normalize line 2 to start with "Typing Speed"
     if (preg_match('/^(.*?)\s+(Speed\b.*)$/iu', $normalized, $m)) {
         $before = trim($m[1]);
         $after = trim($m[2]);
         if ($before !== '' && $after !== '') {
+            if (!preg_match('/^Typing\s+/iu', $after)) {
+                $after = 'Typing ' . $after;
+            }
             return [$before, $after];
         }
     }
@@ -4037,7 +4048,7 @@ function splitCertificateCourseNameAtSpeed(string $courseName): ?array
 
 /**
  * Fit course title into at most $maxLines by wrapping and shrinking font if needed.
- * Typing courses force a break so line 2 starts with "Speed".
+ * Typing courses force a break so line 2 starts with "Typing Speed".
  *
  * @param object $pdf
  * @return array{0:list<string>,1:float} [lines, fontSize]
