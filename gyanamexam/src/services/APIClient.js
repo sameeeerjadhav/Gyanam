@@ -173,8 +173,6 @@ class ApiClient {
   static updateExam(id, data) { return this.put(`/exam-configs/${id}`, data); }
   static deleteExam(id) { return this.delete(`/exam-configs/${id}`); }
   static toggleExam(id) { return this.patch(`/exam-configs/${id}/toggle-active`); }
-  static getGlobalPracticeExam() { return this.get('/exam-configs-global-practice'); }
-  static saveGlobalPracticeExam(data) { return this.put('/exam-configs-global-practice', data); }
 
   // ─── Students ──────────────────────────────
   static getStudents() { return this.get('/students'); }

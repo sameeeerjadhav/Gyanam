@@ -16,7 +16,15 @@ class ExamConfigController extends Controller
 {
     public function index(Request $request)
     {
-        $exams = ExamConfig::with(['questionBank', 'creator'])->get();
+        // Retire leftover global practice exams (feature removed)
+        ExamConfig::where('is_global_practice', true)
+            ->where('active', true)
+            ->update(['active' => false]);
+
+        $exams = ExamConfig::with(['questionBank', 'creator'])
+            ->where('is_global_practice', false)
+            ->orderByDesc('updated_at')
+            ->get();
         return response()->json($exams);
     }
 
@@ -136,101 +144,5 @@ class ExamConfigController extends Controller
         $exam = ExamConfig::findOrFail($id);
         $exam->update(['active' => !$exam->active]);
         return response()->json(['active' => $exam->active]);
-    }
-
-    /**
-     * Get the single global practice exam (visible to all students).
-     */
-    public function getGlobalPractice(Request $request)
-    {
-        if (!$request->user()->isAdmin()) {
-            abort(403, 'Admin only');
-        }
-
-        $exam = ExamConfig::with(['questionBank' => fn ($q) => $q->withCount('questions')])
-            ->where('is_global_practice', true)
-            ->orderByDesc('updated_at')
-            ->first();
-
-        return response()->json([
-            'exam' => $exam,
-            'configured' => (bool) $exam,
-        ]);
-    }
-
-    /**
-     * Create or update the global practice exam (one bank, all students).
-     */
-    public function saveGlobalPractice(Request $request)
-    {
-        if (!$request->user()->isAdmin()) {
-            abort(403, 'Admin only');
-        }
-
-        $data = $request->validate([
-            'title'            => 'required|string|max:255',
-            'question_bank_id' => 'required|exists:question_banks,id',
-            'duration'         => 'required|integer|min:1|max:300',
-            'total_questions'  => 'required|integer|min:1|max:200',
-            'passing_score'    => 'required|integer|min:1|max:100',
-            'instructions'     => 'nullable|string|max:5000',
-            'active'           => 'boolean',
-            'randomize_questions' => 'boolean',
-            'proctored'        => 'boolean',
-        ]);
-
-        $bank = QuestionBank::withCount('questions')->findOrFail($data['question_bank_id']);
-        $bankCount = (int) ($bank->questions_count ?? 0);
-        if ($bankCount < 1) {
-            return response()->json(['message' => 'Selected question bank has no questions.'], 422);
-        }
-        if ((int) $data['total_questions'] > $bankCount) {
-            return response()->json([
-                'message' => "Questions to show ({$data['total_questions']}) cannot exceed bank size ({$bankCount}).",
-            ], 422);
-        }
-
-        $exam = ExamConfig::where('is_global_practice', true)->orderByDesc('id')->first();
-        $payload = [
-            'title'               => $data['title'],
-            'subject'             => 'All Courses — Practice Experience',
-            'exam_type'           => 'demo',
-            'duration'            => (int) $data['duration'],
-            'total_questions'     => (int) $data['total_questions'],
-            'passing_score'       => (int) $data['passing_score'],
-            'question_bank_id'    => (int) $data['question_bank_id'],
-            'instructions'        => $data['instructions'] ?? "Welcome to MCCE Demo exam portal.\n\n1) All questions are MCQ type.\n\n2) Total questions : 20, all questions are mandatory.\n\n3) Each question is of 1 marks. There is no penalty for incorrect answers.\n\n4) Exam time : 30 min.\n\n5) Your certification grade & percentage depend on this given examination.\n\n6) Once exam is finished, there is no option to make changes in answers. So be careful while answering to questions.\n\n7) Do not try to do any other activity on the computer other than attempting exam. ANY OTHER ACTIVITY DURING THE EXAM WILL TERMINATE THE EXAM AND THERE IS NO WAY TO GAIN ACCESS TO EXAM OTHER THAN RE-APPEAR.\n\n8) If you fail in exam OR terminated exam due to mishandling, you can reappear by paying (re-examination fees).\n\n9) Do not use mobile phones or any other electronic device during EXAM.\n\n10) Request provisional certificate to the centre head before leaving exam centre.\n\nALL THE BEST !!!",
-            'active'              => array_key_exists('active', $data) ? (bool) $data['active'] : true,
-            'randomize_questions' => array_key_exists('randomize_questions', $data) ? (bool) $data['randomize_questions'] : true,
-            'proctored'           => array_key_exists('proctored', $data) ? (bool) $data['proctored'] : false,
-            'proctoring_settings' => null,
-            'is_global_practice'  => true,
-        ];
-
-        if ($exam) {
-            $oldBankId = (int) $exam->question_bank_id;
-            $exam->update($payload);
-            Cache::forget("exam_bank_qs:{$exam->id}");
-            Cache::forget("exam_bank_qs:{$exam->id}:bank:{$oldBankId}");
-            Cache::forget("exam_bank_qs:{$exam->id}:bank:{$exam->question_bank_id}");
-            if ($oldBankId !== (int) $exam->question_bank_id) {
-                LiveExamSession::where('exam_config_id', $exam->id)->update(['question_ids' => null]);
-            }
-        } else {
-            $payload['exam_id'] = 'exam_global_practice';
-            $payload['created_by_user_id'] = $request->user()->id;
-            // Avoid unique collision if a leftover row exists with that exam_id
-            if (ExamConfig::where('exam_id', 'exam_global_practice')->exists()) {
-                $payload['exam_id'] = 'exam_global_practice_' . Str::lower(Str::random(4));
-            }
-            $exam = ExamConfig::create($payload);
-        }
-
-        ExamConfig::clearOtherGlobalPracticeFlags((int) $exam->id);
-
-        return response()->json([
-            'exam' => $exam->fresh()->load(['questionBank' => fn ($q) => $q->withCount('questions')]),
-            'message' => 'Global practice exam saved. It is visible to all students on their dashboard.',
-        ]);
     }
 }

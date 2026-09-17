@@ -155,7 +155,7 @@ export async function renderExamForm(ApiClient, { loadPage }) {
         <div class="form-group">
           <label class="form-label">Type</label>
           <select id="ex-type" class="form-select">
-            <option value="demo" ${exam?.exam_type === 'demo' ? 'selected' : ''}>Demo / Practice</option>
+            <option value="demo" ${exam?.exam_type === 'demo' ? 'selected' : ''}>Demo</option>
             <option value="main" ${!exam || exam?.exam_type === 'main' ? 'selected' : ''}>Main / Official</option>
           </select>
         </div>

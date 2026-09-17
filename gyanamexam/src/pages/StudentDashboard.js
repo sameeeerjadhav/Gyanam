@@ -18,7 +18,6 @@ export class StudentDashboard {
     this.container = null;
     this.currentSession = null;
     this.availableExams = [];
-    this.practiceExams = [];
     this.profile = null;
     this.activeTab = 'dashboard';
     this._resultsLoaded = false;
@@ -89,7 +88,6 @@ export class StudentDashboard {
   async loadAvailableExams() {
     const data = await ApiClient.getStudentExams();
     const all = Array.isArray(data) ? data : (data.data || []);
-    this.practiceExams = all.filter((e) => !!e.is_global_practice);
     this.availableExams = all.filter((e) => !e.is_global_practice);
   }
 
@@ -587,7 +585,7 @@ export class StudentDashboard {
     const centre = user.centre_name || user.centerName || '—';
     const slot = this._formatSlot(user.exam_slot || user.examSlot);
     const name = user.name || user.identifier || 'Student';
-    const practiceReady = (this.practiceExams || []).length > 0;
+    const resultsCount = (this.completedExams || []).length;
 
     const tabs = [
       { id: 'dashboard', label: 'Dashboard', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>' },
@@ -645,9 +643,9 @@ export class StudentDashboard {
                 <span>Official papers</span>
               </div>
               <div class="sd-stat">
-                <em>Practice</em>
-                <strong>${practiceReady ? 'Ready' : 'Soon'}</strong>
-                <span>${practiceReady ? 'Try the demo flow' : 'Awaiting admin setup'}</span>
+                <em>Results</em>
+                <strong>${resultsCount}</strong>
+                <span>Completed attempts</span>
               </div>
               <div class="sd-stat">
                 <em>Centre</em>
@@ -655,7 +653,6 @@ export class StudentDashboard {
                 <span>Slot ${this._esc(slot)}</span>
               </div>
             </div>
-            ${this.renderExperienceSection()}
             <div class="sd-quick-links">
               <button type="button" class="sd-quick" data-goto="exams">
                 <strong>My Exams →</strong>
@@ -677,8 +674,7 @@ export class StudentDashboard {
           </section>
 
           <section class="sd-panel${this.activeTab === 'exams' ? ' is-active' : ''}" data-panel="exams" role="tabpanel">
-            ${this.renderExperienceSection()}
-            <div class="sd-section">
+            <div class="sd-section" style="margin-top:0">
               <div class="sd-section-head">
                 <div class="sd-section-title">
                   <div class="sd-section-icon">
@@ -686,7 +682,7 @@ export class StudentDashboard {
                   </div>
                   <div>
                     <h2>Available Exams</h2>
-                    <p>${this.availableExams.length} official exam${this.availableExams.length !== 1 ? 's' : ''} assigned to you</p>
+                    <p>${this.availableExams.length} exam${this.availableExams.length !== 1 ? 's' : ''} assigned to you</p>
                   </div>
                 </div>
                 <button type="button" id="refresh-exams-btn" class="sd-refresh">
@@ -855,7 +851,7 @@ export class StudentDashboard {
               <span>${this._esc(e.subject || 'General')} · ${e.duration || 0} min · ${e.total_questions || 0} Qs</span>
             </div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.25rem;flex-shrink:0">
-              <span class="sd-pill ${(e.exam_type || '') === 'demo' ? 'sd-pill-practice' : 'sd-pill-official'}">${(e.exam_type || '') === 'demo' ? 'Practice' : 'Official'}</span>
+              <span class="sd-pill ${(e.exam_type || '') === 'demo' ? 'sd-pill-practice' : 'sd-pill-official'}">${(e.exam_type || '') === 'demo' ? 'Demo' : 'Official'}</span>
               ${e.proctored ? '<span class="sd-pill sd-pill-proctor">Proctored</span>' : ''}
             </div>
           </li>`).join('')}</ul>`
@@ -956,52 +952,6 @@ export class StudentDashboard {
     return 'Good evening';
   }
 
-  renderExperienceSection() {
-    const exam = (this.practiceExams || [])[0];
-    if (!exam) {
-      return `
-        <section class="sd-section" style="margin-top:0" aria-label="Practice experience">
-          <div class="sd-experience" style="background:#f8fafc;border-color:#e2e8f0;box-shadow:none">
-            <div>
-              <h2>Experience the Exam</h2>
-              <p>A practice paper will appear here once your administrator enables the global Practice Exam. Use it to learn the timer, question map, and submit flow before your official exam.</p>
-            </div>
-          </div>
-        </section>`;
-    }
-
-    const canAttempt = exam.attempt_info?.can_attempt !== false;
-    const duration = exam.duration || 0;
-    const totalQs = exam.total_questions || 0;
-    const remaining = exam.attempt_info?.remaining;
-
-    return `
-      <section class="sd-section" style="margin-top:0" aria-label="Practice experience">
-        <div class="sd-experience">
-          <div>
-            <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.45rem">
-              <span class="sd-pill sd-pill-practice">Practice · All courses</span>
-              <span class="sd-pill sd-pill-official" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">Same real exam flow</span>
-            </div>
-            <h2>${this._esc(exam.title || 'Practice Exam')}</h2>
-            <p>Try this practice paper to feel how a demo / main exam works — pre-exam steps, timer, bilingual questions, question map, and submit. It is available to every student and is not tied to your course assignment.</p>
-            <div class="sd-experience-meta">
-              <span class="sd-chip">${duration} min</span>
-              <span class="sd-chip">${totalQs} questions</span>
-              <span class="sd-chip">Pass ${exam.passing_score ?? 40}%</span>
-              ${remaining != null ? `<span class="sd-chip">${remaining} attempt(s) left</span>` : ''}
-            </div>
-          </div>
-          <div class="sd-experience-actions">
-            <button type="button" class="start-exam-btn sd-start" data-exam-id="${exam.id}" ${canAttempt ? '' : 'disabled style="opacity:0.55;cursor:not-allowed"'}>
-              ${canAttempt ? 'Start Practice Exam' : 'No attempts left'}
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
-            </button>
-          </div>
-        </div>
-      </section>`;
-  }
-
   renderAvailableExams() {
     if (this.availableExams.length === 0) {
       return `
@@ -1021,7 +971,7 @@ export class StudentDashboard {
     const dbId = exam.id;
     const accent = isDemo ? 'linear-gradient(90deg,#f59e0b,#d97706)' : 'linear-gradient(90deg,#c41e3a,#9f1830)';
     const badge = isDemo
-      ? '<span class="sd-pill sd-pill-practice">Practice</span>'
+      ? '<span class="sd-pill sd-pill-practice">Demo</span>'
       : '<span class="sd-pill sd-pill-official">Official</span>';
     const proctor = exam.proctored
       ? '<span class="sd-pill sd-pill-proctor">Proctored</span>'

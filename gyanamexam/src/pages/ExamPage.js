@@ -777,7 +777,7 @@ class ExamPage {
     const totalInline = document.getElementById('total-questions-inline');
 
     if (titleEl) titleEl.textContent = this.examConfig.title || 'Examination';
-    if (typeEl) typeEl.textContent = this.examConfig.exam_type === 'demo' ? 'Practice' : 'Official';
+    if (typeEl) typeEl.textContent = this.examConfig.exam_type === 'demo' ? 'Demo' : 'Official';
     if (totalEl) totalEl.textContent = this.questions.length;
     if (totalInline) totalInline.textContent = this.questions.length;
   }

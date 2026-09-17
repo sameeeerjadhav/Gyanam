@@ -552,7 +552,7 @@ class LoginPage {
           <aside class="gep-aside">
             <div class="gep-aside-kicker">GIIT Online Examination</div>
             <h1>Sign in to begin your exam session</h1>
-            <p>Use your Registration ID and password issued by your ATC. The same secure flow is used for practice and official papers.</p>
+            <p>Use your Registration ID and password issued by your ATC to access your assigned exams.</p>
             <ul class="gep-points">
               <li>Timed papers with auto-submit</li>
               <li>Question map &amp; bilingual support</li>
