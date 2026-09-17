@@ -205,6 +205,44 @@ class QuestionBankController extends Controller
         ]);
     }
 
+    /**
+     * One-shot: assign every bank that has no centres yet to all IT ATCs
+     * (falls back to every synced ATC if no IT centres are listed).
+     */
+    public function backfillUnassigned(Request $request)
+    {
+        $this->authorizeAdmin($request);
+
+        $centres = PortalAtcCentres::codesMatchingType('IT');
+        if ($centres === []) {
+            $centres = PortalAtcCentres::codes();
+        }
+        if ($centres === []) {
+            return response()->json(['message' => 'No ATC centres synced yet. Sync portal ATCs first.'], 422);
+        }
+
+        $banks = QuestionBank::whereDoesntHave('assignments')->get();
+        $updated = [];
+        foreach ($banks as $bank) {
+            foreach ($centres as $c) {
+                QuestionBankAssignment::firstOrCreate([
+                    'question_bank_id' => $bank->id,
+                    'centre_id'        => $c,
+                ]);
+            }
+            $updated[] = ['id' => $bank->id, 'title' => $bank->title];
+        }
+
+        return response()->json([
+            'message'       => count($updated) === 0
+                ? 'All question banks already have assignments.'
+                : 'Assigned ' . count($updated) . ' bank(s) to ' . count($centres) . ' IT ATC centre(s).',
+            'banks_updated' => count($updated),
+            'centres'       => count($centres),
+            'banks'         => $updated,
+        ]);
+    }
+
     // ─── Questions ───────────────────────────────────────────────────────────
 
     public function storeQuestion(Request $request, $bankId)

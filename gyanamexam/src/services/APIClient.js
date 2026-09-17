@@ -160,6 +160,9 @@ class ApiClient {
       centre_type: opts.centre_type || null,
     });
   }
+  static backfillUnassignedQuestionBanks() {
+    return this.post('/question-banks/backfill-assignments', {});
+  }
 
   // ─── Questions ─────────────────────────────
   static addQuestion(bankId, data) { return this.post(`/question-banks/${bankId}/questions`, data); }
