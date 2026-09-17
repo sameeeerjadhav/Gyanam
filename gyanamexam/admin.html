@@ -276,6 +276,29 @@
     }
 
     // ─── Session restore on load ───────────────────────────────────────
+    const ADMIN_PAGES = new Set([
+      'dashboard', 'live', 'questions', 'exams', 'students', 'results',
+      'atc', 'credentials', 'assign-bank', 'exam-form',
+    ]);
+
+    function resolveStartPage(user) {
+      const isATC = user.role === 'atc' || user.role === 'dlc';
+      const fallback = isATC ? 'atc' : 'dashboard';
+      const fromHash = (location.hash || '').replace(/^#\/?/, '').trim();
+      const fromStore = sessionStorage.getItem('gyanam_admin_page') || '';
+      const candidate = fromHash || fromStore || fallback;
+      if (!ADMIN_PAGES.has(candidate)) return fallback;
+      if (isATC && !['atc', 'results'].includes(candidate)) return fallback;
+      if (!isATC && candidate === 'atc') return fallback;
+      return candidate;
+    }
+
+    function setSidebarActive(page) {
+      document.querySelectorAll('.sidebar-link[data-page]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.page === page);
+      });
+    }
+
     window.addEventListener('load', async () => {
       const userStr = localStorage.getItem('gyanam_admin_user');
       const token = localStorage.getItem('gyanam_admin_token');
@@ -283,8 +306,7 @@
         currentUser = JSON.parse(userStr);
         ApiClient.setToken(token);
         showPortal();
-        const defaultPage = (currentUser.role === 'atc' || currentUser.role === 'dlc') ? 'atc' : 'dashboard';
-        loadPage(defaultPage);
+        loadPage(resolveStartPage(currentUser));
         startLiveRefresh();
         setupReverbWebSocket();
       }
@@ -304,8 +326,11 @@
         document.getElementById('sidebar-urole').textContent = user.role;
         document.getElementById('sidebar-avatar').textContent = username.charAt(0).toUpperCase();
         showPortal();
-        const defaultPage = (user.role === 'atc' || user.role === 'dlc') ? 'atc' : 'dashboard';
-        loadPage(defaultPage);
+        // Fresh login always lands on role home (ignore stale hash)
+        const home = (user.role === 'atc' || user.role === 'dlc') ? 'atc' : 'dashboard';
+        sessionStorage.removeItem('gyanam_admin_page');
+        if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+        loadPage(home);
         startLiveRefresh();
         setupReverbWebSocket();
       } catch (error) {
@@ -356,23 +381,31 @@
         sec.style.display = hasVisible ? '' : 'none';
       });
 
-      // Set active highlight on the correct default link
-      const defaultPage = isATC ? 'atc' : 'dashboard';
+      // Highlight will be set by loadPage() for the restored/current page
       document.querySelectorAll('.sidebar-link[data-page]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.page === defaultPage);
+        btn.classList.remove('active');
       });
     }
 
     document.querySelectorAll('.sidebar-link[data-page]').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-        btn.classList.add('active');
         loadPage(btn.dataset.page);
       });
     });
 
     // ─── Routing ─────────────────────────────────────────────────────────
-    async function loadPage(page) {
+    let _currentAdminPage = null;
+    async function loadPage(page, { skipHash = false } = {}) {
+      if (!currentUser) return;
+      const isATC = currentUser.role === 'atc' || currentUser.role === 'dlc';
+      if (!ADMIN_PAGES.has(page)) {
+        page = isATC ? 'atc' : 'dashboard';
+      } else if (isATC && !['atc', 'results'].includes(page)) {
+        page = 'atc';
+      } else if (!isATC && page === 'atc') {
+        page = 'dashboard';
+      }
+
       if (currentPageTimer) {
         if (typeof currentPageTimer === 'object' && currentPageTimer.stop) currentPageTimer.stop();
         else clearTimeout(currentPageTimer);
@@ -389,6 +422,15 @@
         'exam-form': 'Exam Configuration',
       };
       document.getElementById('page-title').textContent = titles[page] || page;
+      setSidebarActive(page);
+      _currentAdminPage = page;
+      sessionStorage.setItem('gyanam_admin_page', page);
+      if (!skipHash) {
+        const nextHash = '#' + page;
+        if (location.hash !== nextHash) {
+          history.replaceState(null, '', location.pathname + location.search + nextHash);
+        }
+      }
 
       const ctx = { currentUser, loadPage, getScopedLive };
       const pages = {
@@ -410,6 +452,12 @@
     }
 
     window.loadPage = loadPage;
+
+    window.addEventListener('hashchange', () => {
+      if (!currentUser) return;
+      const page = resolveStartPage(currentUser);
+      if (page !== _currentAdminPage) loadPage(page, { skipHash: true });
+    });
 
     // â”€â”€â”€ Live-count refresh â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async function getScopedLive() {
