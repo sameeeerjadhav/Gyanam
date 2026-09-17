@@ -21,6 +21,30 @@ function questionOptions(q) {
   return Array.isArray(q?.options) ? q.options : [];
 }
 
+/** Infer course type for a bank subject using portal course map + name heuristics. */
+function inferBankCourseType(subject, courseTypeByName) {
+  const name = String(subject || '').trim();
+  if (!name) return 'Other';
+  const mapped = courseTypeByName.get(name.toLowerCase());
+  if (mapped) return mapped;
+  const lower = name.toLowerCase();
+  if (/\b(typing|wpm|kph|data\s*entry)\b/.test(lower)) return 'Typing';
+  if (/\babacus\b/.test(lower)) return 'Abacus';
+  if (/\bvedic\b/.test(lower)) return 'Vedic';
+  return 'Other';
+}
+
+function buildCourseTypeMap(courses) {
+  const map = new Map();
+  (courses || []).forEach(c => {
+    const name = String(c.course_name || '').trim();
+    if (!name) return;
+    const type = String(c.course_type || 'IT').trim() || 'IT';
+    map.set(name.toLowerCase(), type);
+  });
+  return map;
+}
+
 // Cache for portal data (fetched once per session)
 let _coursesCache    = null;
 let _coursesSyncedAt = null;
@@ -120,20 +144,57 @@ export async function renderQuestions(ApiClient, { currentUser, loadPage }) {
     getPortalATCData(ApiClient),
   ]);
   const centresList = atcData.centres;
+  const courseTypeByName = buildCourseTypeMap(courses);
+
+  const subjectOptions = [...new Set(
+    allBanks.map(b => String(b.subject || '').trim()).filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b));
+
+  const courseTypeOptions = [...new Set(
+    allBanks.map(b => inferBankCourseType(b.subject, courseTypeByName))
+  )].sort((a, b) => a.localeCompare(b));
 
   let filterText = '';
   let filterCentre = '';
+  let filterCourse = '';
+  let filterCourseType = '';
+  let filterAssign = ''; // '', 'assigned', 'unassigned'
+  let filterQs = ''; // '', 'has', 'empty'
 
   function renderList() {
     const filtered = allBanks.filter(b => {
+      const title = String(b.title || '');
+      const subject = String(b.subject || '');
+      const qCount = Number(b.questions_count) || 0;
+      const assigned = Array.isArray(b.assigned_to) ? b.assigned_to : [];
+      const isAssigned = assigned.length > 0 || !!b.centre_id;
+      const courseType = inferBankCourseType(subject, courseTypeByName);
+
       const matchesText = !filterText ||
-        b.title.toLowerCase().includes(filterText.toLowerCase()) ||
-        b.subject.toLowerCase().includes(filterText.toLowerCase());
+        title.toLowerCase().includes(filterText.toLowerCase()) ||
+        subject.toLowerCase().includes(filterText.toLowerCase()) ||
+        String(b.creator_name || '').toLowerCase().includes(filterText.toLowerCase());
       const matchesCentre = !filterCentre ||
-        (Array.isArray(b.assigned_to) && b.assigned_to.includes(filterCentre)) ||
+        assigned.includes(filterCentre) ||
         (b.centre_id === filterCentre);
-      return matchesText && matchesCentre;
+      const matchesCourse = !filterCourse || subject === filterCourse;
+      const matchesType = !filterCourseType || courseType === filterCourseType;
+      const matchesAssign = !filterAssign
+        || (filterAssign === 'assigned' && isAssigned)
+        || (filterAssign === 'unassigned' && !isAssigned);
+      const matchesQs = !filterQs
+        || (filterQs === 'has' && qCount > 0)
+        || (filterQs === 'empty' && qCount === 0);
+
+      return matchesText && matchesCentre && matchesCourse && matchesType && matchesAssign && matchesQs;
     });
+
+    const countEl = document.getElementById('banks-filter-count');
+    if (countEl) {
+      countEl.textContent = filtered.length === allBanks.length
+        ? `${allBanks.length} bank(s) total`
+        : `Showing ${filtered.length} of ${allBanks.length} bank(s)`;
+    }
 
     const listDiv = document.getElementById('banks-list');
     if (!listDiv) return;
@@ -141,21 +202,26 @@ export async function renderQuestions(ApiClient, { currentUser, loadPage }) {
     listDiv.innerHTML = filtered.length === 0
       ? '<div class="empty-state"><h3>No matching question banks</h3><p>Try adjusting your filters or create a new bank.</p></div>'
       : filtered.map(bank => {
+        const assigned = Array.isArray(bank.assigned_to) ? bank.assigned_to : [];
         const assignedLabel = currentUser.role === 'admin'
-          ? (Array.isArray(bank.assigned_to) && bank.assigned_to.length
-            ? '<span class="badge badge-blue" style="font-size:0.7rem">' + bank.assigned_to.join(', ') + '</span>'
+          ? (assigned.length
+            ? '<span class="badge badge-blue" style="font-size:0.7rem">' + escapeHtml(assigned.join(', ')) + '</span>'
             : '<span class="badge badge-gray" style="font-size:0.7rem">Unassigned</span>')
           : '';
         const isOwned = bank.created_by_user_id === currentUser.id;
         const ownerBadge = isOwned
           ? '<span class="badge badge-green" style="font-size:0.7rem">Mine</span>'
           : '<span class="badge badge-gray" style="font-size:0.7rem">Assigned</span>';
+        const courseType = inferBankCourseType(bank.subject, courseTypeByName);
+        const typeBadge = `<span class="badge" style="font-size:0.65rem;background:#eef2ff;color:#4338ca">${escapeHtml(courseType)}</span>`;
         return `
           <div class="card" style="margin-bottom:1rem">
             <div style="padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
               <div style="flex:1;min-width:200px">
-                <div style="font-weight:700;font-size:0.95rem;display:flex;align-items:center;gap:0.5rem">${bank.title} ${currentUser.role === 'admin' ? '' : ownerBadge}</div>
-                <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem">${bank.questions_count} questions · ${bank.subject} · by ${bank.creator_name || 'Admin'} ${assignedLabel}</div>
+                <div style="font-weight:700;font-size:0.95rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+                  ${escapeHtml(bank.title)} ${typeBadge} ${currentUser.role === 'admin' ? '' : ownerBadge}
+                </div>
+                <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem">${Number(bank.questions_count) || 0} questions · ${escapeHtml(bank.subject || '—')} · by ${escapeHtml(bank.creator_name || 'Admin')} ${assignedLabel}</div>
               </div>
               <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
                 <button class="btn btn-outline btn-sm" onclick="viewBankQuestions('${bank.id}')">
@@ -172,17 +238,24 @@ export async function renderQuestions(ApiClient, { currentUser, loadPage }) {
       }).join('');
   }
 
-  const scopeNote = currentUser.centre_id ? ' · <span style="color:var(--text-muted);font-size:0.78rem">' + currentUser.centre_id + ' only</span>' : '';
+  const scopeNote = currentUser.centre_id ? ' · <span style="color:var(--text-muted);font-size:0.78rem">' + escapeHtml(currentUser.centre_id) + ' only</span>' : '';
   const centreOptions = centresList.length > 0
     ? centresList.map(c => {
         const typeLabel = c.centre_type ? ' · ' + c.centre_type : '';
-        return '<option value="' + c.code + '">' + c.name + ' (' + c.code + ')' + typeLabel + '</option>';
+        return '<option value="' + escapeHtml(c.code) + '">' + escapeHtml(c.name + ' (' + c.code + ')' + typeLabel) + '</option>';
       }).join('')
     : '<option value="" disabled>No centres synced yet</option>';
 
+  const courseOptsHtml = subjectOptions.map(s =>
+    `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`
+  ).join('');
+  const typeOptsHtml = courseTypeOptions.map(t =>
+    `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`
+  ).join('');
+
   el.innerHTML = `
   <div class="page-header">
-    <div><h2>Question Banks${scopeNote}</h2><p>${allBanks.length} bank(s) total</p></div>
+    <div><h2>Question Banks${scopeNote}</h2><p id="banks-filter-count">${allBanks.length} bank(s) total</p></div>
     <div style="display:flex;gap:0.5rem">
       <button id="import-qs-btn" class="btn btn-outline">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12L11.25 21m0 0l-3.75-3.75M11.25 21V9.75"/></svg>
@@ -195,30 +268,85 @@ export async function renderQuestions(ApiClient, { currentUser, loadPage }) {
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:1.5rem; padding:1rem; display:flex; gap:1rem; flex-wrap:wrap; align-items:center; background: var(--gray-50)">
-    <div style="flex:1; min-width:240px; position:relative">
-      <input type="text" id="bank-search" class="form-input" placeholder="Search by title or course..." style="padding-left:2.5rem">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute; left:0.75rem; top:50%; transform:translateY(-50%); width:18px; height:18px; color:var(--gray-400)">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-      </svg>
+  <div class="card" style="margin-bottom:1.5rem; padding:1rem; background: var(--gray-50)">
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center">
+      <div style="flex:1; min-width:220px; position:relative">
+        <input type="text" id="bank-search" class="form-input" placeholder="Search title, course, or creator..." style="padding-left:2.5rem">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute; left:0.75rem; top:50%; transform:translateY(-50%); width:18px; height:18px; color:var(--gray-400)">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+        </svg>
+      </div>
+      <div style="min-width:150px">
+        <select id="bank-type-filter" class="form-select" title="Course type">
+          <option value="">All course types</option>
+          ${typeOptsHtml}
+        </select>
+      </div>
+      <div style="min-width:200px; flex:1">
+        <select id="bank-course-filter" class="form-select" title="Course / subject">
+          <option value="">All courses</option>
+          ${courseOptsHtml}
+        </select>
+      </div>
+      <div style="min-width:140px">
+        <select id="bank-assign-filter" class="form-select" title="Assignment status">
+          <option value="">All assignment</option>
+          <option value="assigned">Assigned</option>
+          <option value="unassigned">Unassigned</option>
+        </select>
+      </div>
+      <div style="min-width:140px">
+        <select id="bank-qs-filter" class="form-select" title="Question count">
+          <option value="">All sizes</option>
+          <option value="has">Has questions</option>
+          <option value="empty">Empty banks</option>
+        </select>
+      </div>
+      ${!currentUser.centre_id ? `
+      <div style="min-width:180px">
+        <select id="bank-centre-filter" class="form-select">
+          <option value="">All Centres</option>
+          ${centreOptions}
+        </select>
+      </div>` : ''}
+      <button type="button" id="bank-filters-clear" class="btn btn-outline btn-sm" style="white-space:nowrap">Clear filters</button>
     </div>
-    ${!currentUser.centre_id ? `
-    <div style="width:220px">
-      <select id="bank-centre-filter" class="form-select">
-        <option value="">All Centres</option>
-        ${centreOptions}
-      </select>
-    </div>` : ''}
   </div>
 
   <div id="banks-list"></div>`;
 
   renderList();
 
-  document.getElementById('bank-search').addEventListener('input', e => { filterText = e.target.value; renderList(); });
+  const bindFilter = (id, setter) => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    node.addEventListener(node.tagName === 'INPUT' ? 'input' : 'change', e => {
+      setter(e.target.value);
+      renderList();
+    });
+  };
+  bindFilter('bank-search', v => { filterText = v; });
+  bindFilter('bank-type-filter', v => { filterCourseType = v; });
+  bindFilter('bank-course-filter', v => { filterCourse = v; });
+  bindFilter('bank-assign-filter', v => { filterAssign = v; });
+  bindFilter('bank-qs-filter', v => { filterQs = v; });
   if (!currentUser.centre_id) {
-    document.getElementById('bank-centre-filter').addEventListener('change', e => { filterCentre = e.target.value; renderList(); });
+    bindFilter('bank-centre-filter', v => { filterCentre = v; });
   }
+  document.getElementById('bank-filters-clear')?.addEventListener('click', () => {
+    filterText = '';
+    filterCentre = '';
+    filterCourse = '';
+    filterCourseType = '';
+    filterAssign = '';
+    filterQs = '';
+    ['bank-search', 'bank-type-filter', 'bank-course-filter', 'bank-assign-filter', 'bank-qs-filter', 'bank-centre-filter']
+      .forEach(id => {
+        const n = document.getElementById(id);
+        if (n) n.value = '';
+      });
+    renderList();
+  });
 
   document.getElementById('add-bank-btn').addEventListener('click', () => showNewBankModal(ApiClient, currentUser, null, courses));
   document.getElementById('import-qs-btn').addEventListener('click', () => showImportQuestionsModal(ApiClient));
