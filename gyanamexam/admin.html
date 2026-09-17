@@ -152,13 +152,6 @@
           </svg>
           Exam Configurations
         </button>
-        <button class="sidebar-link" data-page="demo-exam">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round"
-              d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
-          </svg>
-          Practice Exam
-        </button>
         <div class="sidebar-nav-section">Students</div>
         <button class="sidebar-link" data-page="students">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -230,7 +223,7 @@
 
   <script type="module">
     import { CONFIG } from './src/config.js?v=3';
-    import ApiClient from './src/services/APIClient.js?v=5';
+    import ApiClient from './src/services/APIClient.js?v=6';
     import modalService from './src/services/ModalService.js?v=3';
     import { renderDashboard } from './src/modules/DashboardModule.js?v=3';
     import { renderLive } from './src/modules/LiveMonitorModule.js?v=3';
@@ -241,8 +234,7 @@
     import { renderATC } from './src/modules/ATCModule.js?v=6';
     import { renderCredentials } from './src/modules/CredentialsModule.js?v=1';
     import { renderAssignBank } from './src/modules/AssignBankModule.js?v=1';
-    import { renderExamForm } from './src/modules/ExamFormModule.js?v=5';
-    import { renderAdminDemoExam } from './src/modules/AdminDemoExamModule.js?v=2';
+    import { renderExamForm } from './src/modules/ExamFormModule.js?v=6';
 
     // ── CRITICAL: Set admin scope FIRST so we never share tokens with the student portal ──
     ApiClient.setScope('admin');
@@ -391,7 +383,6 @@
       const titles = {
         dashboard: 'Dashboard', live: 'Live Monitoring',
         questions: 'Question Banks', exams: 'Exam Configurations',
-        'demo-exam': 'Practice Exam',
         students: 'Student Records', results: 'Results & Analytics',
         atc: 'ATC Dashboard', credentials: 'Portal Credentials',
         'assign-bank': 'Assign to ATC Centres',
@@ -405,7 +396,6 @@
         live:      () => renderLive(ApiClient, ctx),
         questions: () => renderQuestions(ApiClient, ctx),
         exams:     () => renderExams(ApiClient, ctx),
-        'demo-exam': () => renderAdminDemoExam(ApiClient, ctx),
         students:  () => renderStudents(ApiClient, ctx),
         results:   () => renderResults(ApiClient, ctx),
         atc:       () => renderATC(ApiClient, ctx),
