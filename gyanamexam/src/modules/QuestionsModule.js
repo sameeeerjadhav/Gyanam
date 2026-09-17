@@ -256,7 +256,11 @@ export async function renderQuestions(ApiClient, { currentUser, loadPage }) {
   el.innerHTML = `
   <div class="page-header">
     <div><h2>Question Banks${scopeNote}</h2><p id="banks-filter-count">${allBanks.length} bank(s) total</p></div>
-    <div style="display:flex;gap:0.5rem">
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+      ${currentUser.role === 'admin' ? `
+      <button id="backfill-assign-btn" class="btn btn-outline" title="Assign every Unassigned bank to all IT ATC centres">
+        Assign all unassigned
+      </button>` : ''}
       <button id="import-qs-btn" class="btn btn-outline">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12L11.25 21m0 0l-3.75-3.75M11.25 21V9.75"/></svg>
         Import CSV
@@ -350,6 +354,20 @@ export async function renderQuestions(ApiClient, { currentUser, loadPage }) {
 
   document.getElementById('add-bank-btn').addEventListener('click', () => showNewBankModal(ApiClient, currentUser, null, courses));
   document.getElementById('import-qs-btn').addEventListener('click', () => showImportQuestionsModal(ApiClient));
+  document.getElementById('backfill-assign-btn')?.addEventListener('click', async () => {
+    const ok = await modalService.confirm(
+      'Assign every Unassigned question bank to all IT ATC centres? Banks that already have centres will be left unchanged.',
+      { title: 'Assign all unassigned', confirmText: 'Assign all', type: 'primary' }
+    );
+    if (!ok) return;
+    try {
+      const res = await ApiClient.backfillUnassignedQuestionBanks();
+      modalService.toast(res.message || 'Done', 'success');
+      renderQuestions(ApiClient, { currentUser });
+    } catch (e) {
+      modalService.toast(e.message || 'Backfill failed', 'error');
+    }
+  });
 
   window.editBank = async (bankId) => {
     try {

@@ -28,6 +28,7 @@ Route::prefix('v1')->group(function () {
 
         // Question Banks (static paths before {id} resource)
         Route::get('question-banks/for-centre', [QuestionBankController::class, 'forCentre']);
+        Route::post('question-banks/backfill-assignments', [QuestionBankController::class, 'backfillUnassigned']);
         Route::get('question-banks/{id}/export', [QuestionBankController::class, 'exportForCentre']);
         Route::apiResource('question-banks', QuestionBankController::class);
         Route::get('question-banks/{id}/questions', [QuestionBankController::class, 'questions']);
