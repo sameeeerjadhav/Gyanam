@@ -8,6 +8,7 @@ use App\Models\ExamAnswerDraft;
 use App\Models\ExamConfig;
 use App\Models\ProctoringEvent;
 use App\Models\Question;
+use App\Models\QuestionBankAssignment;
 use App\Models\Submission;
 use App\Services\LiveSessionService;
 use App\Services\ProctorMediaService;
@@ -25,7 +26,10 @@ class StudentExamController extends Controller
     ) {}
 
     /**
-     * Get exams assigned to this student (attempt counts via single grouped query).
+     * Get exams for this student:
+     * - Assigned exams (ATC scheduled) — attemptable
+     * - Course catalog: Demo exams for their course/centre — attemptable
+     * - Course catalog: Main exams for their course/centre — visible but locked until ATC schedules
      */
     public function myExams(Request $request)
     {
@@ -43,6 +47,8 @@ class StudentExamController extends Controller
                 'exam_configs.proctoring_settings', 'exam_configs.is_global_practice',
             ]);
 
+        $assignedIds = $exams->pluck('id')->map(fn ($id) => (int) $id)->all();
+
         $examIds = $exams->pluck('id')->all();
         $usedByExam = empty($examIds)
             ? collect()
@@ -53,8 +59,9 @@ class StudentExamController extends Controller
                 ->pluck('used', 'exam_config_id');
 
         $payload = $exams->map(function ($exam) use ($usedByExam) {
-            $maxAttempts  = $exam->pivot->max_attempts ?? 1;
+            $maxAttempts  = (int) ($exam->pivot->max_attempts ?? 1);
             $usedAttempts = (int) ($usedByExam[$exam->id] ?? 0);
+            $isDemo = in_array(strtolower((string) $exam->exam_type), ['demo', 'practice'], true);
 
             return array_merge($exam->only([
                 'id', 'exam_id', 'title', 'subject', 'exam_type',
@@ -63,16 +70,134 @@ class StudentExamController extends Controller
                 'proctored' => (bool) $exam->proctored,
                 'proctoring_settings' => $exam->proctored ? ($exam->proctoring_settings ?? []) : null,
                 'is_global_practice' => false,
+                'access_status' => 'assigned',
+                'locked' => false,
+                'lock_reason' => null,
                 'attempt_info' => [
                     'max_attempts'  => $maxAttempts,
                     'used_attempts' => $usedAttempts,
                     'remaining'     => max(0, $maxAttempts - $usedAttempts),
                     'can_attempt'   => $usedAttempts < $maxAttempts,
                 ],
+                'is_demo' => $isDemo,
             ]);
-        });
+        })->keyBy('id');
+
+        // Course catalog (demo + locked main) for this student's course + ATC
+        foreach ($this->courseCatalogExamsForStudent($student) as $exam) {
+            $id = (int) $exam->id;
+            if (in_array($id, $assignedIds, true)) {
+                continue; // already scheduled/assigned — keep attemptable row
+            }
+
+            $isDemo = in_array(strtolower((string) $exam->exam_type), ['demo', 'practice'], true);
+            $usedAttempts = (int) ($student->submissions()->where('exam_config_id', $id)->count());
+            $maxAttempts = $isDemo ? 50 : 1;
+
+            if ($isDemo) {
+                $payload[$id] = array_merge($exam->only([
+                    'id', 'exam_id', 'title', 'subject', 'exam_type',
+                    'duration', 'total_questions', 'passing_score', 'instructions',
+                ]), [
+                    'proctored' => (bool) $exam->proctored,
+                    'proctoring_settings' => $exam->proctored ? ($exam->proctoring_settings ?? []) : null,
+                    'is_global_practice' => false,
+                    'access_status' => 'demo_open',
+                    'locked' => false,
+                    'lock_reason' => null,
+                    'attempt_info' => [
+                        'max_attempts'  => $maxAttempts,
+                        'used_attempts' => $usedAttempts,
+                        'remaining'     => max(0, $maxAttempts - $usedAttempts),
+                        'can_attempt'   => $usedAttempts < $maxAttempts,
+                    ],
+                    'is_demo' => true,
+                ]);
+            } else {
+                // Main (or other): visible but locked until ATC schedules
+                $payload[$id] = array_merge($exam->only([
+                    'id', 'exam_id', 'title', 'subject', 'exam_type',
+                    'duration', 'total_questions', 'passing_score', 'instructions',
+                ]), [
+                    'proctored' => (bool) $exam->proctored,
+                    'proctoring_settings' => $exam->proctored ? ($exam->proctoring_settings ?? []) : null,
+                    'is_global_practice' => false,
+                    'access_status' => 'awaiting_schedule',
+                    'locked' => true,
+                    'lock_reason' => 'Your ATC will unlock this exam when they schedule it.',
+                    'attempt_info' => [
+                        'max_attempts'  => $maxAttempts,
+                        'used_attempts' => $usedAttempts,
+                        'remaining'     => 0,
+                        'can_attempt'   => false,
+                    ],
+                    'is_demo' => false,
+                ]);
+            }
+        }
 
         return response()->json($payload->values());
+    }
+
+    /**
+     * Active exams for the student's registered course whose question bank is assigned to their ATC.
+     *
+     * @return \Illuminate\Support\Collection<int,\App\Models\ExamConfig>
+     */
+    private function courseCatalogExamsForStudent($student)
+    {
+        $course = trim((string) ($student->course ?? ''));
+        $centre = trim((string) ($student->centre_name ?? ''));
+        if ($course === '' || $centre === '') {
+            return collect();
+        }
+
+        $normCourse = mb_strtolower(preg_replace('/\s+/u', ' ', $course) ?? $course);
+
+        return ExamConfig::query()
+            ->where('active', true)
+            ->where('is_global_practice', false)
+            ->whereHas('questionBank.assignments', function ($q) use ($centre) {
+                $q->where('centre_id', $centre);
+            })
+            ->get([
+                'id', 'exam_id', 'title', 'subject', 'exam_type', 'duration',
+                'total_questions', 'passing_score', 'instructions', 'proctored',
+                'proctoring_settings', 'is_global_practice', 'question_bank_id',
+            ])
+            ->filter(function ($exam) use ($normCourse) {
+                $subject = mb_strtolower(preg_replace('/\s+/u', ' ', trim((string) $exam->subject)) ?? '');
+                return $subject !== '' && $subject === $normCourse;
+            })
+            ->values();
+    }
+
+    /** Whether student may start a course demo without prior ATC schedule assignment. */
+    private function studentMayStartCourseDemo($student, ExamConfig $exam): bool
+    {
+        if (!(bool) $exam->active || (bool) $exam->is_global_practice) {
+            return false;
+        }
+        if (!in_array(strtolower((string) $exam->exam_type), ['demo', 'practice'], true)) {
+            return false;
+        }
+        $course = trim((string) ($student->course ?? ''));
+        $centre = trim((string) ($student->centre_name ?? ''));
+        if ($course === '' || $centre === '') {
+            return false;
+        }
+        $normCourse = mb_strtolower(preg_replace('/\s+/u', ' ', $course) ?? $course);
+        $subject = mb_strtolower(preg_replace('/\s+/u', ' ', trim((string) $exam->subject)) ?? '');
+        if ($subject === '' || $subject !== $normCourse) {
+            return false;
+        }
+        $bankId = (int) ($exam->question_bank_id ?? 0);
+        if ($bankId <= 0) {
+            return false;
+        }
+        return QuestionBankAssignment::where('question_bank_id', $bankId)
+            ->where('centre_id', $centre)
+            ->exists();
     }
 
     /**
@@ -93,8 +218,23 @@ class StudentExamController extends Controller
             ->withPivot(['max_attempts'])
             ->first()?->pivot;
 
+        // Course demo: allow start without prior ATC schedule (auto-attach assignment)
+        if (!$pivot && $this->studentMayStartCourseDemo($student, $exam)) {
+            $student->exams()->syncWithoutDetaching([
+                (int) $examId => [
+                    'max_attempts'        => 50,
+                    'assigned_by_user_id' => null,
+                    'assigned_at'         => now(),
+                ],
+            ]);
+            $pivot = $student->exams()
+                ->where('exam_config_id', $examId)
+                ->withPivot(['max_attempts'])
+                ->first()?->pivot;
+        }
+
         if (!$pivot) {
-            abort(403, 'You are not assigned to this exam.');
+            abort(403, 'This exam is locked until your ATC schedules it.');
         }
 
         $maxAttempts = (int) ($pivot->max_attempts ?? 1);
