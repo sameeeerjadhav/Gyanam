@@ -34,6 +34,7 @@ Route::prefix('v1')->group(function () {
         Route::post ('question-banks/{id}/assign',              [QuestionBankController::class, 'assign']);
         Route::post ('question-banks/{bankId}/questions',       [QuestionBankController::class, 'storeQuestion']);
         Route::post ('question-banks/{bankId}/import-questions',[QuestionBankController::class, 'importQuestions']);
+        Route::post ('question-banks/{bankId}/questions/bulk-delete', [QuestionBankController::class, 'bulkDestroyQuestions']);
         Route::put  ('question-banks/{bankId}/questions/{qId}', [QuestionBankController::class, 'updateQuestion']);
         Route::delete('question-banks/{bankId}/questions/{qId}',[QuestionBankController::class, 'destroyQuestion']);
 

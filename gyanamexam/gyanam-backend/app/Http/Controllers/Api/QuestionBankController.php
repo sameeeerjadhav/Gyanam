@@ -247,6 +247,31 @@ class QuestionBankController extends Controller
         return response()->json(['message' => 'Deleted']);
     }
 
+    /**
+     * Bulk-delete questions from a bank.
+     * POST /question-banks/{bankId}/questions/bulk-delete  { ids: [1,2,3] }
+     */
+    public function bulkDestroyQuestions(Request $request, $bankId)
+    {
+        $bank = $this->findVisible($request, $bankId);
+        $data = $request->validate([
+            'ids'   => 'required|array|min:1|max:500',
+            'ids.*' => 'integer',
+        ]);
+
+        $ids = array_values(array_unique(array_map('intval', $data['ids'])));
+        $deleted = Question::where('question_bank_id', $bankId)
+            ->whereIn('id', $ids)
+            ->delete();
+
+        $this->bustExamQuestionCaches($bank);
+
+        return response()->json([
+            'deleted' => (int) $deleted,
+            'message' => "Deleted {$deleted} question(s).",
+        ]);
+    }
+
     public function questions(Request $request, $id)
     {
         $bank = $this->findVisible($request, $id);

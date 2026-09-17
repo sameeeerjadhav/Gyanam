@@ -165,6 +165,9 @@ class ApiClient {
   static addQuestion(bankId, data) { return this.post(`/question-banks/${bankId}/questions`, data); }
   static updateQuestion(bankId, qId, data) { return this.put(`/question-banks/${bankId}/questions/${qId}`, data); }
   static deleteQuestion(bankId, qId) { return this.delete(`/question-banks/${bankId}/questions/${qId}`); }
+  static bulkDeleteQuestions(bankId, ids) {
+    return this.post(`/question-banks/${bankId}/questions/bulk-delete`, { ids });
+  }
   static importQuestions(bankId, csv) { return this.post(`/question-banks/${bankId}/import-questions`, { csv }); }
 
   // ─── Exam Configs ──────────────────────────
