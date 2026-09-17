@@ -17,6 +17,35 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
+/** Compact ATC assignment label — count (+ optional All IT/All), codes in title tooltip. */
+function formatAssignmentBadge(assigned, centresList = []) {
+  const codes = (Array.isArray(assigned) ? assigned : [])
+    .map(c => String(c || '').trim())
+    .filter(Boolean);
+  if (codes.length === 0) {
+    return '<span class="badge badge-gray" style="font-size:0.7rem">Unassigned</span>';
+  }
+
+  const centreCode = c => String(c.centre_id || c.code || '').trim();
+  const isIt = c => {
+    const raw = String(c.centre_type || '').toLowerCase();
+    return /(^|[^a-z])it([^a-z]|$)/.test(raw) || raw.includes('all three');
+  };
+  const allCodes = centresList.map(centreCode).filter(Boolean);
+  const itCodes = centresList.filter(isIt).map(centreCode).filter(Boolean);
+  const covers = (pool) =>
+    pool.length > 0 &&
+    pool.every(c => codes.includes(c)) &&
+    codes.every(c => pool.includes(c));
+
+  let label = codes.length === 1 ? '1 ATC' : `${codes.length} ATCs`;
+  if (covers(allCodes)) label = `All ATCs · ${codes.length}`;
+  else if (covers(itCodes)) label = `All IT ATCs · ${codes.length}`;
+
+  const tip = escapeHtml(codes.join(', '));
+  return `<span class="badge badge-blue" style="font-size:0.7rem;cursor:help" title="${tip}">${escapeHtml(label)}</span>`;
+}
+
 function questionOptions(q) {
   return Array.isArray(q?.options) ? q.options : [];
 }
@@ -204,9 +233,7 @@ export async function renderQuestions(ApiClient, { currentUser, loadPage }) {
       : filtered.map(bank => {
         const assigned = Array.isArray(bank.assigned_to) ? bank.assigned_to : [];
         const assignedLabel = currentUser.role === 'admin'
-          ? (assigned.length
-            ? '<span class="badge badge-blue" style="font-size:0.7rem">' + escapeHtml(assigned.join(', ')) + '</span>'
-            : '<span class="badge badge-gray" style="font-size:0.7rem">Unassigned</span>')
+          ? formatAssignmentBadge(assigned, centresList)
           : '';
         const isOwned = bank.created_by_user_id === currentUser.id;
         const ownerBadge = isOwned
@@ -219,9 +246,9 @@ export async function renderQuestions(ApiClient, { currentUser, loadPage }) {
             <div style="padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
               <div style="flex:1;min-width:200px">
                 <div style="font-weight:700;font-size:0.95rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
-                  ${escapeHtml(bank.title)} ${typeBadge} ${currentUser.role === 'admin' ? '' : ownerBadge}
+                  ${escapeHtml(bank.title)} ${typeBadge} ${assignedLabel} ${currentUser.role === 'admin' ? '' : ownerBadge}
                 </div>
-                <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem">${Number(bank.questions_count) || 0} questions · ${escapeHtml(bank.subject || '—')} · by ${escapeHtml(bank.creator_name || 'Admin')} ${assignedLabel}</div>
+                <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem">${Number(bank.questions_count) || 0} questions · ${escapeHtml(bank.subject || '—')} · by ${escapeHtml(bank.creator_name || 'Admin')}</div>
               </div>
               <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
                 <button class="btn btn-outline btn-sm" onclick="viewBankQuestions('${bank.id}')">
@@ -434,14 +461,14 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
     return;
   }
 
-  const assignedLabel = Array.isArray(bank.assigned_to) && bank.assigned_to.length
-    ? bank.assigned_to.join(', ')
-    : 'Unassigned';
+  const atcData = await getPortalATCData(ApiClient);
+  const assignedHtml = currentUser.role === 'admin'
+    ? formatAssignmentBadge(bank.assigned_to, atcData.centres || [])
+    : '';
 
   const bankTitle = escapeHtml(bank.title || '');
   const bankSubject = escapeHtml(bank.subject || '');
   const creatorName = escapeHtml(bank.creator_name || 'Admin');
-  const assignedEsc = escapeHtml(assignedLabel);
 
   el.innerHTML = `
   <div style="margin-bottom:1.25rem">
@@ -451,8 +478,8 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
     </button>
     <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem">
       <div>
-        <h2 style="font-size:1.25rem;font-weight:800;margin-bottom:0.25rem">${bankTitle}</h2>
-        <p style="font-size:0.85rem;color:var(--text-muted)">${bankSubject} · ${questions.length} questions · by ${creatorName} · Assigned: <span class="badge badge-blue" style="font-size:0.7rem">${assignedEsc}</span></p>
+        <h2 style="font-size:1.25rem;font-weight:800;margin-bottom:0.25rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">${bankTitle} ${assignedHtml}</h2>
+        <p style="font-size:0.85rem;color:var(--text-muted)">${bankSubject} · ${questions.length} questions · by ${creatorName}</p>
       </div>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
         ${currentUser.role === 'admin' ? `<button class="btn btn-outline btn-sm" onclick="openAssignBankPage('${bank.id}')">🔗 Assign Centres</button>` : ''}
