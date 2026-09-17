@@ -106,9 +106,21 @@ class QuestionBankController extends Controller
         ]);
 
         // ATC/DLC: auto-assign to their own centre
-        $centres = $user->isAdmin()
-            ? ($data['assigned_to'] ?? [])
-            : [$user->centre_id];
+        // Admin: use provided centres, otherwise auto-assign to all IT ATCs (fallback: all synced ATCs)
+        if ($user->isAdmin()) {
+            $centres = array_values(array_unique(array_filter(
+                array_map(static fn ($c) => trim((string) $c), $data['assigned_to'] ?? []),
+                static fn ($c) => $c !== ''
+            )));
+            if ($centres === []) {
+                $centres = PortalAtcCentres::codesMatchingType('IT');
+                if ($centres === []) {
+                    $centres = PortalAtcCentres::codes();
+                }
+            }
+        } else {
+            $centres = array_filter([(string) $user->centre_id]);
+        }
 
         foreach ($centres as $c) {
             QuestionBankAssignment::firstOrCreate([

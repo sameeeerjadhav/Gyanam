@@ -88,7 +88,17 @@ export class StudentDashboard {
   async loadAvailableExams() {
     const data = await ApiClient.getStudentExams();
     const all = Array.isArray(data) ? data : (data.data || []);
-    this.availableExams = all.filter((e) => !e.is_global_practice);
+    // Prefer unlocked first, then demos, then locked mains
+    this.availableExams = all
+      .filter((e) => !e.is_global_practice)
+      .sort((a, b) => {
+        const rank = (e) => {
+          if (e.locked) return 2;
+          if ((e.exam_type || '') === 'demo' || e.is_demo) return 0;
+          return 1;
+        };
+        return rank(a) - rank(b);
+      });
   }
 
   _injectStyles() {
@@ -957,42 +967,59 @@ export class StudentDashboard {
       return `
         <div class="sd-empty">
           <h3>No exams available</h3>
-          <p>You do not have any exams assigned right now. Please check with your centre.</p>
+          <p>No demo or main exams match your registered course yet. Ask your centre to confirm your course and schedule.</p>
         </div>`;
     }
     return this.availableExams.map((exam, i) => this.renderExamCard(exam, i)).join('');
   }
 
   renderExamCard(exam, index = 0) {
-    const isDemo = (exam.exam_type || exam.examType) === 'demo';
+    const isDemo = (exam.exam_type || exam.examType) === 'demo' || exam.is_demo;
+    const locked = !!exam.locked || exam.access_status === 'awaiting_schedule';
+    const canAttempt = !locked && exam.attempt_info?.can_attempt !== false;
     const duration = exam.duration || 0;
     const totalQs = exam.total_questions || exam.totalQuestions || 0;
     const passingScore = exam.passing_score || exam.passingScore || 60;
     const dbId = exam.id;
-    const accent = isDemo ? 'linear-gradient(90deg,#f59e0b,#d97706)' : 'linear-gradient(90deg,#c41e3a,#9f1830)';
-    const badge = isDemo
-      ? '<span class="sd-pill sd-pill-practice">Demo</span>'
-      : '<span class="sd-pill sd-pill-official">Official</span>';
+    const accent = locked
+      ? 'linear-gradient(90deg,#94a3b8,#64748b)'
+      : (isDemo ? 'linear-gradient(90deg,#f59e0b,#d97706)' : 'linear-gradient(90deg,#c41e3a,#9f1830)');
+    const badge = locked
+      ? '<span class="sd-pill" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0">Locked</span>'
+      : (isDemo
+        ? '<span class="sd-pill sd-pill-practice">Demo</span>'
+        : '<span class="sd-pill sd-pill-official">Official</span>');
     const proctor = exam.proctored
       ? '<span class="sd-pill sd-pill-proctor">Proctored</span>'
       : '';
+    const lockNote = locked
+      ? `<p class="sd-exam-sub" style="color:#b45309;margin-top:0.35rem">${this._esc(exam.lock_reason || 'Awaiting ATC schedule')}</p>`
+      : '';
+    const startBtn = locked
+      ? `<button type="button" class="sd-start" disabled style="opacity:0.55;cursor:not-allowed;background:#94a3b8;box-shadow:none">
+            Locked until scheduled
+          </button>`
+      : (canAttempt
+        ? `<button type="button" class="start-exam-btn sd-start" data-exam-id="${dbId}">
+            ${isDemo ? 'Start Demo' : 'Start Exam'}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+          </button>`
+        : `<button type="button" class="sd-start" disabled style="opacity:0.55;cursor:not-allowed">No attempts left</button>`);
 
     return `
-      <article class="sd-exam-card" data-exam-id="${dbId}" style="animation-delay:${0.04 * index}s">
+      <article class="sd-exam-card${locked ? ' is-locked' : ''}" ${locked ? '' : `data-exam-id="${dbId}"`} style="animation-delay:${0.04 * index}s${locked ? ';opacity:0.92' : ''}">
         <div class="sd-exam-accent" style="background:${accent}"></div>
         <div class="sd-exam-body">
           <div class="sd-exam-badges">${badge}${proctor}</div>
           <h3 class="sd-exam-title">${this._esc(exam.title)}</h3>
           <p class="sd-exam-sub">${this._esc(exam.subject || 'General')}</p>
+          ${lockNote}
           <div class="sd-meta">
             <span class="sd-chip">${duration} min</span>
             <span class="sd-chip">${totalQs} questions</span>
             <span class="sd-chip">Pass ${passingScore}%</span>
           </div>
-          <button type="button" class="start-exam-btn sd-start" data-exam-id="${dbId}">
-            Start Exam
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
-          </button>
+          ${startBtn}
         </div>
       </article>`;
   }
