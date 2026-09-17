@@ -448,11 +448,24 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
 
   ${questions.length === 0
     ? '<div class="card" style="padding:3rem;text-align:center;color:var(--text-muted)"><h3>No questions yet</h3><p>Click "Add Question" to add your first question to this bank.</p></div>'
-    : `<div class="card">
-        <div class="table-wrap" style="max-height:calc(100vh - 240px);overflow:auto">
+    : `<div id="qb-bulk-bar" class="card" style="display:none;margin-bottom:0.85rem;background:#b91c1c;color:#fff;padding:0.7rem 1.1rem;align-items:center;justify-content:space-between;border:none;border-radius:12px;gap:0.75rem;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:0.65rem;font-weight:700;font-size:0.88rem">
+          <span id="qb-bulk-count" style="background:rgba(255,255,255,0.2);min-width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem">0</span>
+          selected
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+          <button type="button" class="btn btn-sm" id="qb-bulk-clear" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25)">Clear selection</button>
+          <button type="button" class="btn btn-sm" id="qb-bulk-delete" style="background:#fff;color:#b91c1c;border:none;font-weight:800">Delete selected</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap" style="max-height:calc(100vh - 280px);overflow:auto">
           <table>
             <thead>
               <tr>
+                <th style="width:42px">
+                  <input type="checkbox" id="qb-select-all" title="Select all" aria-label="Select all questions">
+                </th>
                 <th style="width:50px">#</th>
                 <th>Question</th>
                 <th style="width:70px">Lang</th>
@@ -475,6 +488,9 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
                 ).join(' ');
                 return `
               <tr>
+                <td>
+                  <input type="checkbox" class="qb-row-check" value="${q.id}" aria-label="Select question ${i + 1}">
+                </td>
                 <td style="font-weight:600;color:var(--text-muted)">${i + 1}</td>
                 <td style="max-width:300px;line-height:1.5">
                   <div>${escapeHtml(q.text)}</div>
@@ -496,14 +512,64 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
             </tbody>
           </table>
         </div>
-        <div style="padding:0.65rem 1rem;border-top:1px solid var(--gray-200);font-size:0.8rem;color:var(--text-muted);font-weight:600">
-          Showing ${questions.length} question${questions.length !== 1 ? 's' : ''}
+        <div style="padding:0.65rem 1rem;border-top:1px solid var(--gray-200);font-size:0.8rem;color:var(--text-muted);font-weight:600;display:flex;justify-content:space-between;gap:0.75rem;flex-wrap:wrap">
+          <span>Showing ${questions.length} question${questions.length !== 1 ? 's' : ''}</span>
+          <span style="font-weight:500">Tip: select rows to delete in bulk</span>
         </div>
       </div>`
   }`;
 
   document.getElementById('back-to-banks').addEventListener('click', () => {
     renderQuestions(ApiClient, { currentUser });
+  });
+
+  const syncBulkBar = () => {
+    const checks = [...document.querySelectorAll('.qb-row-check')];
+    const selected = checks.filter(c => c.checked);
+    const bar = document.getElementById('qb-bulk-bar');
+    const countEl = document.getElementById('qb-bulk-count');
+    const master = document.getElementById('qb-select-all');
+    if (countEl) countEl.textContent = String(selected.length);
+    if (bar) bar.style.display = selected.length ? 'flex' : 'none';
+    if (master && checks.length) {
+      master.checked = selected.length === checks.length;
+      master.indeterminate = selected.length > 0 && selected.length < checks.length;
+    }
+  };
+
+  document.getElementById('qb-select-all')?.addEventListener('change', (e) => {
+    document.querySelectorAll('.qb-row-check').forEach(c => { c.checked = e.target.checked; });
+    syncBulkBar();
+  });
+  document.querySelectorAll('.qb-row-check').forEach(c => {
+    c.addEventListener('change', syncBulkBar);
+  });
+  document.getElementById('qb-bulk-clear')?.addEventListener('click', () => {
+    document.querySelectorAll('.qb-row-check').forEach(c => { c.checked = false; });
+    const master = document.getElementById('qb-select-all');
+    if (master) { master.checked = false; master.indeterminate = false; }
+    syncBulkBar();
+  });
+  document.getElementById('qb-bulk-delete')?.addEventListener('click', async () => {
+    const ids = [...document.querySelectorAll('.qb-row-check:checked')].map(c => parseInt(c.value, 10)).filter(Boolean);
+    if (!ids.length) return;
+    const ok = await modalService.confirm(
+      `Delete ${ids.length} selected question${ids.length !== 1 ? 's' : ''}? This cannot be undone.`,
+      { title: 'Delete Selected', confirmText: 'Delete', type: 'danger' }
+    );
+    if (!ok) return;
+    const btn = document.getElementById('qb-bulk-delete');
+    if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+    try {
+      const res = await ApiClient.bulkDeleteQuestions(bank.id, ids);
+      modalService.toast(res.message || `Deleted ${res.deleted || ids.length} question(s).`, 'success');
+      const banks = await ApiClient.getQuestionBanks();
+      const bk = banks.find(b => b.id == bank.id) || bank;
+      renderBankDetailPage(el, ApiClient, bk, currentUser, courses);
+    } catch (e) {
+      modalService.toast(e.message || 'Bulk delete failed', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Delete selected'; }
+    }
   });
 
   // Override addQuestion for this page context — after save, reload this detail page
