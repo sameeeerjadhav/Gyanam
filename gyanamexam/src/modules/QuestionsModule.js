@@ -8,6 +8,19 @@
 import modalService from '../services/ModalService.js';
 import { setAssignBankId } from './AssignBankModule.js';
 
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function questionOptions(q) {
+  return Array.isArray(q?.options) ? q.options : [];
+}
+
 // Cache for portal data (fetched once per session)
 let _coursesCache    = null;
 let _coursesSyncedAt = null;
@@ -279,6 +292,11 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
     ? bank.assigned_to.join(', ')
     : 'Unassigned';
 
+  const bankTitle = escapeHtml(bank.title || '');
+  const bankSubject = escapeHtml(bank.subject || '');
+  const creatorName = escapeHtml(bank.creator_name || 'Admin');
+  const assignedEsc = escapeHtml(assignedLabel);
+
   el.innerHTML = `
   <div style="margin-bottom:1.25rem">
     <button id="back-to-banks" class="btn btn-outline btn-sm" style="margin-bottom:1rem">
@@ -287,8 +305,8 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
     </button>
     <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem">
       <div>
-        <h2 style="font-size:1.25rem;font-weight:800;margin-bottom:0.25rem">${bank.title}</h2>
-        <p style="font-size:0.85rem;color:var(--text-muted)">${bank.subject} · ${questions.length} questions · by ${bank.creator_name || 'Admin'} · Assigned: <span class="badge badge-blue" style="font-size:0.7rem">${assignedLabel}</span></p>
+        <h2 style="font-size:1.25rem;font-weight:800;margin-bottom:0.25rem">${bankTitle}</h2>
+        <p style="font-size:0.85rem;color:var(--text-muted)">${bankSubject} · ${questions.length} questions · by ${creatorName} · Assigned: <span class="badge badge-blue" style="font-size:0.7rem">${assignedEsc}</span></p>
       </div>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
         ${currentUser.role === 'admin' ? `<button class="btn btn-outline btn-sm" onclick="openAssignBankPage('${bank.id}')">🔗 Assign Centres</button>` : ''}
@@ -303,7 +321,7 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
   ${questions.length === 0
     ? '<div class="card" style="padding:3rem;text-align:center;color:var(--text-muted)"><h3>No questions yet</h3><p>Click "Add Question" to add your first question to this bank.</p></div>'
     : `<div class="card">
-        <div class="table-wrap">
+        <div class="table-wrap" style="max-height:calc(100vh - 240px);overflow:auto">
           <table>
             <thead>
               <tr>
@@ -316,27 +334,42 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
               </tr>
             </thead>
             <tbody>
-              ${questions.map((q, i) => `
+              ${questions.map((q, i) => {
+                const opts = questionOptions(q);
+                const hasMr = !!(q.text_mr || opts.some(o => o.text_mr));
+                const answerOpt = opts.find(o => String(o.id) === String(q.correct_answer));
+                const answerLabel = escapeHtml(answerOpt?.text || q.correct_answer || '—');
+                const optionsHtml = opts.map(o =>
+                  '<span style="display:inline-block;background:var(--gray-50);border:1px solid var(--gray-200);padding:0.15rem 0.4rem;border-radius:4px;margin:0.1rem">'
+                  + escapeHtml(String(o.id || '').toUpperCase()) + ': ' + escapeHtml(o.text)
+                  + (o.text_mr ? '<br><span style="color:#047857">' + escapeHtml(o.text_mr) + '</span>' : '')
+                  + '</span>'
+                ).join(' ');
+                return `
               <tr>
                 <td style="font-weight:600;color:var(--text-muted)">${i + 1}</td>
                 <td style="max-width:300px;line-height:1.5">
-                  <div>${q.text}</div>
-                  ${q.text_mr ? `<div style="margin-top:0.25rem;color:#047857;font-size:0.88rem;font-family:'Noto Sans Devanagari',sans-serif">${q.text_mr}</div>` : '<div style="margin-top:0.2rem;font-size:0.75rem;color:#94a3b8">No Marathi</div>'}
+                  <div>${escapeHtml(q.text)}</div>
+                  ${q.text_mr
+                    ? `<div style="margin-top:0.25rem;color:#047857;font-size:0.88rem;font-family:'Noto Sans Devanagari',sans-serif">${escapeHtml(q.text_mr)}</div>`
+                    : '<div style="margin-top:0.2rem;font-size:0.75rem;color:#94a3b8">No Marathi</div>'}
                 </td>
-                <td>${(q.text_mr || (q.options || []).some(o => o.text_mr)) ? '<span class="badge badge-green">EN+MR</span>' : '<span class="badge" style="background:#f1f5f9;color:#64748b">EN</span>'}</td>
-                <td style="font-size:0.8rem;color:var(--text-muted);max-width:240px">
-                  ${(q.options || []).map(o => '<span style="display:inline-block;background:var(--gray-50);border:1px solid var(--gray-200);padding:0.15rem 0.4rem;border-radius:4px;margin:0.1rem">' + String(o.id).toUpperCase() + ': ' + o.text + (o.text_mr ? '<br><span style="color:#047857">' + o.text_mr + '</span>' : '') + '</span>').join(' ')}
-                </td>
-                <td><span class="badge badge-green">${q.options.find(o => o.id === q.correct_answer)?.text || q.correct_answer}</span></td>
+                <td>${hasMr ? '<span class="badge badge-green">EN+MR</span>' : '<span class="badge" style="background:#f1f5f9;color:#64748b">EN</span>'}</td>
+                <td style="font-size:0.8rem;color:var(--text-muted);max-width:240px">${optionsHtml || '—'}</td>
+                <td><span class="badge badge-green">${answerLabel}</span></td>
                 <td>
                   <div style="display:flex;gap:0.375rem">
                     <button class="btn btn-outline btn-sm" onclick="editQuestion('${bank.id}','${q.id}')">Edit</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteQuestion('${bank.id}','${q.id}')">Remove</button>
                   </div>
                 </td>
-              </tr>`).join('')}
+              </tr>`;
+              }).join('')}
             </tbody>
           </table>
+        </div>
+        <div style="padding:0.65rem 1rem;border-top:1px solid var(--gray-200);font-size:0.8rem;color:var(--text-muted);font-weight:600">
+          Showing ${questions.length} question${questions.length !== 1 ? 's' : ''}
         </div>
       </div>`
   }`;
