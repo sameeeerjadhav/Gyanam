@@ -7,8 +7,7 @@
  *   student_id:string, full_name:string, atc_name:string, course_name:string,
  *   course_contents:string, duration:string, month_year:string, center_code:string,
  *   score:int, grade:string, brand:string, is_typing?:bool, wpm?:int, kph?:int,
- *   preview?:bool, filename?:string, return_string?:bool,
- *   is_it_split?:bool, exam_40?:int, atc_60?:int
+ *   preview?:bool, filename?:string, return_string?:bool
  * } $d
  * @return string|null PDF bytes when return_string is true; otherwise outputs and exits.
  */
@@ -33,9 +32,6 @@ function outputStatementOfMarksPdf(array $d): ?string
     $grade = (string)($d['grade'] ?? '');
     $brand = (($d['brand'] ?? 'it') === 'abacus') ? 'abacus' : 'it';
     $isTyping = !empty($d['is_typing']);
-    $isItSplit = !empty($d['is_it_split']) && !$isTyping;
-    $exam40 = max(0, min(40, (int)($d['exam_40'] ?? 0)));
-    $atc60 = max(0, min(60, (int)($d['atc_60'] ?? 0)));
     $typingObtained = null;
     if (!empty($d['typing_obtained']) && is_array($d['typing_obtained'])) {
         $typingObtained = array_map('intval', array_values($d['typing_obtained']));
@@ -185,37 +181,39 @@ function outputStatementOfMarksPdf(array $d): ?string
         $contentH = 1.45 * $u;
         $marksHdrH = 1.0 * $u;
         $marksBodyH = 7.2 * $u; // 6 × 1.2
-    } elseif ($isItSplit) {
-        // 3 mark rows: ATC/60, Exam/40, Total/100
-        $u = $stretchH / 12.6;
-        $metaHdrH = 1.0 * $u;
-        $metaValH = 1.1 * $u;
-        $infoH = 1.25 * $u;
-        $courseH = 1.25 * $u;
-        $contentH = 1.5 * $u;
-        $marksHdrH = 1.0 * $u;
-        $marksBodyH = 4.5 * $u; // 3 × 1.5
     } else {
-        $u = $stretchH / 11.4;
+        // GIIT / non-typing: taller Course Contents; marks = Maximum Marks + Marks Obtained
+        $u = $stretchH / 11.6;
         $metaHdrH = 1.0 * $u;
         $metaValH = 1.1 * $u;
-        $infoH = 1.25 * $u;
-        $courseH = 1.25 * $u;
-        $contentH = 1.5 * $u;
+        $infoH = 1.15 * $u;
+        $courseH = 1.15 * $u;
+        $contentH = 2.5 * $u;
         $marksHdrH = 1.0 * $u;
-        $marksBodyH = 3.1 * $u;
+        $marksBodyH = 2.55 * $u; // 2 rows
     }
 
     $planned = $metaHdrH + $metaValH + (2 * $infoH) + $courseH + $contentH + $marksHdrH + $marksBodyH;
     $delta = $stretchH - $planned;
     if (abs($delta) > 0.05) {
-        $metaHdrH += $delta * 0.08;
-        $metaValH += $delta * 0.09;
-        $infoH += $delta * 0.11;   // ×2 rows ≈ 0.22
-        $courseH += $delta * 0.12;
-        $contentH += $delta * 0.12;
-        $marksHdrH += $delta * 0.08;
-        $marksBodyH += $delta * 0.29;
+        if ($isTyping) {
+            $metaHdrH += $delta * 0.08;
+            $metaValH += $delta * 0.09;
+            $infoH += $delta * 0.11;   // ×2 rows ≈ 0.22
+            $courseH += $delta * 0.12;
+            $contentH += $delta * 0.12;
+            $marksHdrH += $delta * 0.08;
+            $marksBodyH += $delta * 0.29;
+        } else {
+            // Prefer Course Contents when redistributing leftover space (GIIT only)
+            $metaHdrH += $delta * 0.06;
+            $metaValH += $delta * 0.07;
+            $infoH += $delta * 0.08;
+            $courseH += $delta * 0.08;
+            $contentH += $delta * 0.40;
+            $marksHdrH += $delta * 0.06;
+            $marksBodyH += $delta * 0.17;
+        }
     }
 
     $unit = $tw / 28;
@@ -307,20 +305,8 @@ function outputStatementOfMarksPdf(array $d): ?string
             $cell($x, $py, $pW, $rh, (string)$parts[$i]['label'], false, 'C', $FONT, '', true);
             $cell($x + $pW, $py, $mW, $rh, sprintf('%02d/%02d', $obt, $max), false, 'C', $FONT, 'B');
         }
-    } elseif ($isItSplit) {
-        $itRows = [
-            ['ATC / Internal Assessment', $atc60, 60],
-            ['Main Exam', $exam40, 40],
-            ['Total', $score, 100],
-        ];
-        $rh = $marksBodyH / 3;
-        for ($i = 0; $i < 3; $i++) {
-            $py = $marksY + $marksHdrH + $i * $rh;
-            $style = ($i === 2) ? 'B' : '';
-            $cell($x, $py, $pW, $rh, $itRows[$i][0], false, 'C', $FONT, $style, true);
-            $cell($x + $pW, $py, $mW, $rh, sprintf('%02d/%02d', $itRows[$i][1], $itRows[$i][2]), false, 'C', $FONT, 'B');
-        }
     } else {
+        // GIIT: Maximum Marks / Marks Obtained only (no ATC vs Main Exam split)
         $rh = $marksBodyH / 2;
         $cell($x, $marksY + $marksHdrH, $pW, $rh, 'Maximum Marks', false, 'C', $FONT, 'B');
         $cell($x + $pW, $marksY + $marksHdrH, $mW, $rh, '100', false, 'C', $FONT, 'B');
