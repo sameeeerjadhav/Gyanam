@@ -474,6 +474,10 @@ try {
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                         Bulk Generate
                     </button>
+                    <button type="button" id="htBulkWaBtn" onclick="openBulkWhatsApp()" style="white-space:nowrap;height:42px;padding:0 1rem;border:none;border-radius:10px;background:linear-gradient(135deg,#25D366,#128C7E);color:#fff;font-weight:800;font-size:.82rem;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                        Bulk WhatsApp
+                    </button>
                 </form>
             </div>
 
@@ -541,7 +545,7 @@ try {
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                                                 Generate
                                             </button>
-                                            <button onclick="openExamNotify(<?= $student['id'] ?>)" class="ht-btn-wa-notify" title="Send WhatsApp Exam Notification">
+                                            <button onclick="sendHallTicketWhatsApp(<?= $student['id'] ?>)" class="ht-btn-wa-notify" title="Send hall ticket details via WhatsApp">
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                                             </button>
                                         <?php else: ?>
@@ -655,6 +659,38 @@ try {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                 Print Hall Ticket
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ BULK WHATSAPP HALL TICKET ═══ -->
+<div id="bulkWaModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10001;align-items:center;justify-content:center;padding:1rem" onclick="if(event.target===this)closeBulkWaModal()">
+    <div style="background:#fff;border-radius:20px;width:min(560px,96vw);overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.25);max-height:92vh;overflow-y:auto">
+        <div style="background:linear-gradient(135deg,#25D366,#128C7E);padding:1.2rem 1.4rem;display:flex;align-items:center;justify-content:space-between">
+            <div>
+                <div style="color:#fff;font-size:1rem;font-weight:800">Bulk WhatsApp — Hall Tickets</div>
+                <div style="color:rgba(255,255,255,.85);font-size:.78rem;margin-top:.15rem"><span id="bulkWaCount">0</span> student(s) ready</div>
+            </div>
+            <button type="button" onclick="closeBulkWaModal()" style="border:none;background:rgba(255,255,255,.2);border-radius:8px;color:#fff;padding:.35rem .75rem;cursor:pointer;font-weight:700">✕</button>
+        </div>
+        <div style="padding:1.25rem 1.4rem;display:flex;flex-direction:column;gap:.9rem">
+            <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:.75rem 1rem;font-size:.8rem;color:#166534;line-height:1.45">
+                WhatsApp opens one chat at a time (browser popup rules). Click <strong>Send next</strong> for each student. Message includes full hall ticket details (User ID = registration number).
+            </div>
+            <div id="bulkWaSkipped" style="font-size:.78rem;color:#b45309;font-weight:600"></div>
+            <div style="display:flex;flex-direction:column;gap:.3rem">
+                <label style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">Optional note (added to every message)</label>
+                <input type="text" id="bulkWaNote" placeholder="e.g. Bring Aadhaar card" oninput="updateBulkWaPreview()" style="height:42px;border:1.5px solid #e5e7eb;border-radius:10px;padding:0 .9rem;font-size:.9rem;font-family:inherit;outline:none;width:100%;box-sizing:border-box">
+            </div>
+            <div>
+                <div id="bulkWaCurrent" style="font-size:.8rem;font-weight:700;color:#128C7E;margin-bottom:.4rem"></div>
+                <div id="bulkWaPreview" style="background:#e9feee;border:1.5px solid #86efac;border-radius:10px;padding:1rem;font-size:.78rem;color:#1a3a1a;white-space:pre-line;line-height:1.55;max-height:220px;overflow:auto"></div>
+            </div>
+            <div id="bulkWaProgress" style="font-size:.78rem;color:#64748b;min-height:1.1em"></div>
+        </div>
+        <div style="padding:1rem 1.4rem 1.25rem;border-top:1.5px solid #e5e7eb;display:flex;justify-content:flex-end;gap:.75rem">
+            <button type="button" onclick="closeBulkWaModal()" style="border:1.5px solid #e5e7eb;background:#fff;border-radius:10px;padding:.55rem 1.25rem;font-size:.85rem;font-weight:700;cursor:pointer;color:#374151">Close</button>
+            <button type="button" id="bulkWaSendBtn" onclick="sendNextBulkWhatsApp()" style="border:none;background:linear-gradient(135deg,#25D366,#128C7E);border-radius:10px;padding:.55rem 1.4rem;font-size:.85rem;font-weight:700;cursor:pointer;color:#fff">Send first message</button>
         </div>
     </div>
 </div>
@@ -785,10 +821,17 @@ function toggleHtSelectAll(master) {
 function updateHtBulkBtn() {
     const n = getSelectedHtIds().length;
     const btn = document.getElementById('htBulkGenerateBtn');
-    if (!btn) return;
-    btn.innerHTML = n > 0
-        ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Bulk Generate (${n})`
-        : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Bulk Generate`;
+    if (btn) {
+        btn.innerHTML = n > 0
+            ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Bulk Generate (${n})`
+            : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Bulk Generate`;
+    }
+    const waBtn = document.getElementById('htBulkWaBtn');
+    if (waBtn) {
+        waBtn.innerHTML = n > 0
+            ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> Bulk WhatsApp (${n})`
+            : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> Bulk WhatsApp`;
+    }
     const master = document.getElementById('htSelectAll');
     if (master) {
         const all = document.querySelectorAll('.ht-row-check');
@@ -1158,9 +1201,178 @@ function closeHallTicketModal() {
     document.getElementById('hallTicketModal').style.display = 'none';
 }
 
-/* ── WhatsApp Exam Notification ─────────────────────────────── */
+/* ── WhatsApp: Hall Ticket + message ─────────────────────────── */
 let _enStudent = null;
+let _bulkWaQueue = [];
+let _bulkWaIndex = 0;
 
+function normalizeWaPhone(mobile) {
+    const digits = String(mobile || '').replace(/\D/g, '');
+    if (!digits || digits.length < 10) return '';
+    return digits.length === 10 ? ('91' + digits) : digits;
+}
+
+function buildHallTicketWhatsAppMsg(student, extraNote) {
+    const fullName = [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(' ');
+    const regNo = studentLoginId(student) || '-';
+    const sched = getExamScheduleInfo(student);
+    const centre = atcDetails.name || 'Exam Centre';
+    const addr = [atcDetails.address, atcDetails.city, atcDetails.district, atcDetails.state]
+        .filter(Boolean).join(', ') + (atcDetails.pin_code ? ' - ' + atcDetails.pin_code : '');
+    const note = String(extraNote || '').trim();
+
+    let msg = `🎫 *EXAMINATION HALL TICKET*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `Dear *${fullName}*,\n\n`;
+    msg += `Please find your hall ticket details below. Carry this message / print to the exam centre.\n\n`;
+    msg += `👤 *Candidate:* ${fullName}\n`;
+    msg += `🆔 *Registration / Exam User ID:* ${regNo}\n`;
+    msg += `📚 *Course:* ${student.course || '—'}\n\n`;
+    msg += `📅 *Exam Date:* ${sched.date}\n`;
+    msg += `⏰ *Exam Time:* ${sched.time}\n`;
+    msg += `🗓 *Slot:* ${sched.slot || '—'}\n`;
+    msg += `🏫 *Centre:* ${centre}\n`;
+    if (addr) msg += `📍 *Address:* ${addr}\n`;
+    msg += `\n⚠️ Report 30 minutes early. Bring original photo ID with this hall ticket.\n`;
+    msg += `🔑 Login to exam portal with User ID: *${regNo}*\n`;
+    if (note) msg += `\n📌 ${note}\n`;
+    msg += `\nRegards,\n${centre}\nGyanam India`;
+    return msg;
+}
+
+function openWhatsAppWithMsg(mobile, msg) {
+    const phone = normalizeWaPhone(mobile);
+    if (!phone) {
+        alert('No valid mobile number found.');
+        return false;
+    }
+    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(msg), '_blank');
+    return true;
+}
+
+/** Single-student: send hall ticket details via WhatsApp (+ open print for PDF attach). */
+function sendHallTicketWhatsApp(studentId) {
+    const student = students.find(s => s.id == studentId);
+    if (!student) return;
+
+    if (!student.share_paid) {
+        showShareNotPaidAlert();
+        return;
+    }
+    if (!student.photo || String(student.photo).trim() === '') {
+        showNoPhotoAlert();
+        return;
+    }
+    if (!student.sched_exam_date) {
+        const go = confirm('Exam date/time/slot is not set for this student.\n\nOpen Generate to set schedule first?');
+        if (go) generateHallTicket(studentId);
+        return;
+    }
+    if (!normalizeWaPhone(student.mobile)) {
+        alert('No valid mobile number found for this student.');
+        return;
+    }
+
+    const msg = buildHallTicketWhatsAppMsg(student);
+    openWhatsAppWithMsg(student.mobile, msg);
+    // Also prepare printable hall ticket so ATC can attach PDF in WhatsApp if needed
+    try {
+        document.getElementById('hallTicketContent').innerHTML = buildHallTicketHtml(student);
+        printHallTicket();
+    } catch (e) { /* ignore print errors */ }
+}
+
+function openBulkWhatsApp() {
+    const ids = getSelectedHtIds();
+    if (!ids.length) {
+        alert('Select one or more eligible students first.');
+        return;
+    }
+
+    const ready = [];
+    const skipped = [];
+    ids.forEach(id => {
+        const s = students.find(x => x.id == id);
+        if (!s) return;
+        if (!s.sched_exam_date) {
+            skipped.push((s.first_name || '') + ' (no schedule)');
+            return;
+        }
+        if (!normalizeWaPhone(s.mobile)) {
+            skipped.push((s.first_name || '') + ' (no mobile)');
+            return;
+        }
+        ready.push(s);
+    });
+
+    if (!ready.length) {
+        alert('None of the selected students are ready.\n\nEach needs: Generate schedule (date/time/slot) + valid mobile.\n\n' + (skipped.length ? skipped.join('\n') : ''));
+        return;
+    }
+
+    _bulkWaQueue = ready;
+    _bulkWaIndex = 0;
+    document.getElementById('bulkWaCount').textContent = String(ready.length);
+    document.getElementById('bulkWaSkipped').textContent = skipped.length
+        ? ('Skipped: ' + skipped.join(', '))
+        : '';
+    document.getElementById('bulkWaNote').value = '';
+    document.getElementById('bulkWaProgress').textContent = '';
+    document.getElementById('bulkWaSendBtn').textContent = 'Send first message';
+    document.getElementById('bulkWaSendBtn').style.display = '';
+    document.getElementById('bulkWaModal').style.display = 'flex';
+    updateBulkWaPreview();
+}
+
+function closeBulkWaModal() {
+    document.getElementById('bulkWaModal').style.display = 'none';
+    _bulkWaQueue = [];
+    _bulkWaIndex = 0;
+}
+
+function updateBulkWaPreview() {
+    const s = _bulkWaQueue[_bulkWaIndex];
+    const note = document.getElementById('bulkWaNote').value;
+    const box = document.getElementById('bulkWaPreview');
+    const meta = document.getElementById('bulkWaCurrent');
+    if (!s) {
+        meta.textContent = 'Done';
+        box.textContent = 'All selected students processed.';
+        return;
+    }
+    const name = [s.first_name, s.middle_name, s.last_name].filter(Boolean).join(' ');
+    meta.textContent = `Student ${_bulkWaIndex + 1} of ${_bulkWaQueue.length}: ${name} · ${s.mobile || ''}`;
+    box.textContent = buildHallTicketWhatsAppMsg(s, note);
+}
+
+function sendNextBulkWhatsApp() {
+    if (!_bulkWaQueue.length || _bulkWaIndex >= _bulkWaQueue.length) {
+        document.getElementById('bulkWaProgress').textContent = 'All messages opened.';
+        document.getElementById('bulkWaSendBtn').style.display = 'none';
+        return;
+    }
+    const s = _bulkWaQueue[_bulkWaIndex];
+    const note = document.getElementById('bulkWaNote').value;
+    const msg = buildHallTicketWhatsAppMsg(s, note);
+    const ok = openWhatsAppWithMsg(s.mobile, msg);
+    if (!ok) return;
+
+    _bulkWaIndex++;
+    const left = _bulkWaQueue.length - _bulkWaIndex;
+    document.getElementById('bulkWaProgress').textContent = ok
+        ? `Opened WhatsApp for previous student. ${left} remaining.`
+        : '';
+    if (_bulkWaIndex >= _bulkWaQueue.length) {
+        document.getElementById('bulkWaSendBtn').style.display = 'none';
+        document.getElementById('bulkWaCurrent').textContent = 'All done — send each chat from WhatsApp.';
+        document.getElementById('bulkWaPreview').textContent = 'Finished opening WhatsApp for all selected students.';
+        return;
+    }
+    document.getElementById('bulkWaSendBtn').textContent = 'Send next (' + left + ' left)';
+    updateBulkWaPreview();
+}
+
+/* Legacy custom notify modal (kept for optional use) */
 function openExamNotify(studentId) {
     const s = students.find(x => x.id == studentId);
     if (!s) return;
@@ -1170,14 +1382,12 @@ function openExamNotify(studentId) {
     document.getElementById('enStudentId').value = s.id;
     document.getElementById('enStudentBadge').textContent = fullName + ' · ' + (s.mobile || 'No mobile');
 
-    // Pre-fill center from ATC details
     const atcCenter = (atcDetails.name || '') + (atcDetails.district ? ', ' + atcDetails.district : '');
     document.getElementById('enCenter').value = atcCenter;
-
-    // Pre-fill course name from student course
     document.getElementById('enCourseName').value = (s.course || '') + ' Final Exam';
+    if (s.sched_exam_date) document.getElementById('enExamDate').value = s.sched_exam_date;
+    if (s.sched_exam_time) document.getElementById('enExamTime').value = String(s.sched_exam_time).slice(0, 5);
 
-    // Attach live preview listeners
     ['enExamTopic','enCourseName','enExamDate','enExamTime','enCenter','enDirector'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -1215,6 +1425,10 @@ function formatExamTime(timeStr) {
 
 function buildExamMsg() {
     if (!_enStudent) return '';
+    // Prefer full hall-ticket style message when schedule exists
+    if (_enStudent.sched_exam_date) {
+        return buildHallTicketWhatsAppMsg(_enStudent);
+    }
     const fullName = [_enStudent.first_name, _enStudent.middle_name, _enStudent.last_name].filter(Boolean).join(' ');
     const topic    = document.getElementById('enExamTopic').value.trim() || '[Exam Topic]';
     const course   = document.getElementById('enCourseName').value.trim() || '[Course Name]';
@@ -1238,15 +1452,17 @@ function sendExamNotify() {
         alert('No valid mobile number found for this student.');
         return;
     }
+    if (_enStudent.sched_exam_date) {
+        openWhatsAppWithMsg(_enStudent.mobile, buildHallTicketWhatsAppMsg(_enStudent));
+        return;
+    }
     const topic = document.getElementById('enExamTopic').value.trim();
     const date  = document.getElementById('enExamDate').value;
     if (!topic || !date) {
         alert('Please fill in at least the Exam Topic and Exam Date.');
         return;
     }
-    const waPhone = mobile.length === 10 ? '91' + mobile : mobile;
-    const msg = buildExamMsg();
-    window.open('https://wa.me/' + waPhone + '?text=' + encodeURIComponent(msg), '_blank');
+    openWhatsAppWithMsg(_enStudent.mobile, buildExamMsg());
 }
 
 function getExamScheduleInfo(student) {
