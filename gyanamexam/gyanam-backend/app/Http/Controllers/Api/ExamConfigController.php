@@ -8,6 +8,7 @@ use App\Models\LiveExamSession;
 use App\Models\Question;
 use App\Models\QuestionBank;
 use App\Models\Student;
+use App\Services\ExamCourseAssignmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -67,6 +68,10 @@ class ExamConfigController extends Controller
         }
 
         $exam = ExamConfig::create($data);
+
+        // Auto-assign to every student registered for this course (demo open; main locked until ATC unlock)
+        app(ExamCourseAssignmentService::class)->assignExamToCourseStudents($exam);
+
         return response()->json($exam->load('questionBank'), 201);
     }
 
@@ -130,7 +135,13 @@ class ExamConfigController extends Controller
             LiveExamSession::where('exam_config_id', $exam->id)->update(['question_ids' => null]);
         }
 
-        return response()->json($exam->fresh()->load('questionBank'));
+        $exam = $exam->fresh();
+        // Re-sync course students when subject/active changes (or anytime after update while active)
+        if ($exam && $exam->active) {
+            app(ExamCourseAssignmentService::class)->assignExamToCourseStudents($exam);
+        }
+
+        return response()->json($exam->load('questionBank'));
     }
 
     public function destroy($id)
@@ -143,6 +154,9 @@ class ExamConfigController extends Controller
     {
         $exam = ExamConfig::findOrFail($id);
         $exam->update(['active' => !$exam->active]);
+        if ($exam->active) {
+            app(ExamCourseAssignmentService::class)->assignExamToCourseStudents($exam->fresh());
+        }
         return response()->json(['active' => $exam->active]);
     }
 }

@@ -122,7 +122,9 @@ class AuthController extends Controller
                 'exam_configs.total_questions',
                 'exam_configs.passing_score',
                 'exam_configs.proctored',
-            ]);
+            ])
+            ->filter(fn ($e) => \App\Services\ExamCourseAssignmentService::coursesMatch($student->course, $e->subject))
+            ->values();
 
         $payload['assigned_exams'] = $assigned->map(fn ($e) => [
             'id'              => $e->id,
