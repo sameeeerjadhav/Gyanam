@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Student;
 use App\Models\ExamConfig;
+use App\Services\ExamCourseAssignmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -65,6 +66,11 @@ class StudentController extends Controller
             $student->exams()->syncWithoutDetaching($examIds);
         }
 
+        // Auto-attach demo/main for the student's registered course
+        if (!empty($student->course)) {
+            app(ExamCourseAssignmentService::class)->assignCourseExamsToStudent($student);
+        }
+
         return response()->json($student->load('exams'), $status);
     }
 
@@ -98,6 +104,10 @@ class StudentController extends Controller
         $examIds = $request->input('exam_ids', $request->input('exams'));
         if ($examIds !== null) {
             $student->exams()->sync($examIds);
+        }
+
+        if (!empty($student->fresh()->course)) {
+            app(ExamCourseAssignmentService::class)->assignCourseExamsToStudent($student->fresh());
         }
 
         return response()->json($student->load('exams'));

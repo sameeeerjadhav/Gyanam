@@ -63,7 +63,7 @@ class ExamAssignmentController extends Controller
         $data = $request->validate([
             'student_id'   => 'required|exists:students,id',
             'exam_id'      => 'required|exists:exam_configs,id',
-            'max_attempts' => 'integer|min:1|max:10',
+            'max_attempts' => 'integer|min:1|max:255',
         ]);
 
         $user    = $request->user();
@@ -74,10 +74,16 @@ class ExamAssignmentController extends Controller
             abort(403, 'You can only assign exams to students in your centre.');
         }
 
-        // Upsert the pivot row
+        $exam = ExamConfig::findOrFail($data['exam_id']);
+        $isDemo = in_array(strtolower((string) $exam->exam_type), ['demo', 'practice'], true);
+        $maxAttempts = $isDemo
+            ? \App\Services\ExamCourseAssignmentService::DEMO_MAX_ATTEMPTS
+            : (int) ($data['max_attempts'] ?? 1);
+
+        // Upsert the pivot row — assigned_by unlocks main exams for the student
         $student->exams()->syncWithoutDetaching([
             $data['exam_id'] => [
-                'max_attempts'        => $data['max_attempts'] ?? 1,
+                'max_attempts'        => $maxAttempts,
                 'assigned_by_user_id' => $user->id,
                 'assigned_at'         => now(),
             ],
@@ -95,10 +101,15 @@ class ExamAssignmentController extends Controller
             'student_ids'  => 'required|array',
             'student_ids.*'=> 'exists:students,id',
             'exam_id'      => 'required|exists:exam_configs,id',
-            'max_attempts' => 'integer|min:1|max:10',
+            'max_attempts' => 'integer|min:1|max:255',
         ]);
 
         $user = $request->user();
+        $exam = ExamConfig::findOrFail($data['exam_id']);
+        $isDemo = in_array(strtolower((string) $exam->exam_type), ['demo', 'practice'], true);
+        $maxAttempts = $isDemo
+            ? \App\Services\ExamCourseAssignmentService::DEMO_MAX_ATTEMPTS
+            : (int) ($data['max_attempts'] ?? 1);
         $assignedCount = 0;
 
         foreach ($data['student_ids'] as $studentId) {
@@ -112,7 +123,7 @@ class ExamAssignmentController extends Controller
 
             $student->exams()->syncWithoutDetaching([
                 $data['exam_id'] => [
-                    'max_attempts'        => $data['max_attempts'] ?? 1,
+                    'max_attempts'        => $maxAttempts,
                     'assigned_by_user_id' => $user->id,
                     'assigned_at'         => now(),
                 ],

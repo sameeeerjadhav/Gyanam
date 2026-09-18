@@ -975,8 +975,9 @@ export class StudentDashboard {
 
   renderExamCard(exam, index = 0) {
     const isDemo = (exam.exam_type || exam.examType) === 'demo' || exam.is_demo;
-    const locked = !!exam.locked || exam.access_status === 'awaiting_schedule';
-    const canAttempt = !locked && exam.attempt_info?.can_attempt !== false;
+    const locked = !!exam.locked || exam.access_status === 'awaiting_schedule' || exam.access_status === 'awaiting_hall_ticket';
+    const unlimited = !!exam.attempt_info?.unlimited || isDemo;
+    const canAttempt = !locked && (unlimited || exam.attempt_info?.can_attempt !== false);
     const duration = exam.duration || 0;
     const totalQs = exam.total_questions || exam.totalQuestions || 0;
     const passingScore = exam.passing_score || exam.passingScore || 60;
@@ -993,11 +994,11 @@ export class StudentDashboard {
       ? '<span class="sd-pill sd-pill-proctor">Proctored</span>'
       : '';
     const lockNote = locked
-      ? `<p class="sd-exam-sub" style="color:#b45309;margin-top:0.35rem">${this._esc(exam.lock_reason || 'Awaiting ATC schedule')}</p>`
+      ? `<p class="sd-exam-sub" style="color:#b45309;margin-top:0.35rem">${this._esc(exam.lock_reason || 'Locked until your ATC generates your hall ticket.')}</p>`
       : '';
     const startBtn = locked
       ? `<button type="button" class="sd-start" disabled style="opacity:0.55;cursor:not-allowed;background:#94a3b8;box-shadow:none">
-            Locked until scheduled
+            Locked until hall ticket
           </button>`
       : (canAttempt
         ? `<button type="button" class="start-exam-btn sd-start" data-exam-id="${dbId}">
@@ -1005,6 +1006,12 @@ export class StudentDashboard {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
           </button>`
         : `<button type="button" class="sd-start" disabled style="opacity:0.55;cursor:not-allowed">No attempts left</button>`);
+
+    const attemptsChip = unlimited
+      ? '<span class="sd-chip">Unlimited attempts</span>'
+      : (exam.attempt_info
+        ? `<span class="sd-chip">${exam.attempt_info.remaining ?? 0} attempt(s) left</span>`
+        : '');
 
     return `
       <article class="sd-exam-card${locked ? ' is-locked' : ''}" ${locked ? '' : `data-exam-id="${dbId}"`} style="animation-delay:${0.04 * index}s${locked ? ';opacity:0.92' : ''}">
@@ -1018,6 +1025,7 @@ export class StudentDashboard {
             <span class="sd-chip">${duration} min</span>
             <span class="sd-chip">${totalQs} questions</span>
             <span class="sd-chip">Pass ${passingScore}%</span>
+            ${attemptsChip}
           </div>
           ${startBtn}
         </div>
