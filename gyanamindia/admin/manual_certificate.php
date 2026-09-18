@@ -406,17 +406,14 @@ if ($selectedAtc) {
 
                             <div class="form-actions">
                                 <button type="submit" name="preview" value="1"
-                                        formaction="generate_manual_course_certificate.php"
-                                        class="btn-preview" id="btnPreviewCert" disabled>Preview Certificate</button>
+                                        formaction="generate_manual_certificate_pack.php"
+                                        class="btn-preview" id="btnPreviewPack" disabled>Preview</button>
                                 <button type="submit"
-                                        formaction="generate_manual_course_certificate.php"
-                                        class="btn-gen" id="btnDownloadCert" disabled>Download Certificate</button>
-                                <button type="submit" name="preview" value="1"
-                                        formaction="generate_manual_marksheet.php"
-                                        class="btn-preview" id="btnPreviewMarks" disabled>Preview Marksheet</button>
-                                <button type="submit"
-                                        formaction="generate_manual_marksheet.php"
-                                        class="btn-gen" id="btnDownloadMarks" disabled>Download Marksheet</button>
+                                        formaction="generate_manual_certificate_pack.php"
+                                        class="btn-gen" id="btnGenerateCert" disabled>Generate Certificate</button>
+                            </div>
+                            <div class="form-hint" style="margin-top:.65rem">
+                                Generates certificate + marksheet in one PDF and saves marks for ATC Student Marks.
                             </div>
                         </div>
                     </form>
@@ -445,10 +442,8 @@ const typingMarksWrap = document.getElementById('typingMarksWrap');
 const typingFields = document.getElementById('typingFields');
 const scoreHint = document.getElementById('scoreHint');
 const actionBtns = [
-    document.getElementById('btnPreviewCert'),
-    document.getElementById('btnDownloadCert'),
-    document.getElementById('btnPreviewMarks'),
-    document.getElementById('btnDownloadMarks'),
+    document.getElementById('btnPreviewPack'),
+    document.getElementById('btnGenerateCert'),
 ];
 const photoPreview = document.getElementById('photoPreview');
 const photoPlaceholder = document.getElementById('photoPlaceholder');
