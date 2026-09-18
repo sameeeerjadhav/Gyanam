@@ -177,6 +177,9 @@ if (isTypingCourse($student['course_type'] ?? null, $courseName)) {
         $saved = getAdmissionAtcMarks($pdo, $admissionId);
         if ($saved !== null) {
             $atc60In = (int)$saved['atc_marks'];
+            if ($exam40In === null && isset($saved['exam_marks']) && $saved['exam_marks'] !== null) {
+                $exam40In = (int)$saved['exam_marks'];
+            }
         }
     }
     if ($exam40In !== null && $atc60In !== null) {
@@ -191,7 +194,8 @@ if (isTypingCourse($student['course_type'] ?? null, $courseName)) {
             $atc60,
             (int)($student['atc_id'] ?? 0) ?: null,
             (int)($_SESSION['user_id'] ?? 0) ?: null,
-            'Admin'
+            'Admin',
+            $exam40
         );
         if ($grade === 'Fail') {
             http_response_code(400);
