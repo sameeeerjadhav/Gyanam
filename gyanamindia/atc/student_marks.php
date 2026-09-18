@@ -297,20 +297,114 @@ foreach ($admByReg as $reg => $adm) {
     ];
 }
 
-// ── Course filter ─────────────────────────────────────────────────────────────
+// ── Filters ───────────────────────────────────────────────────────────────────
 $courseFilter = trim($_GET['course'] ?? 'all');
-$allCourses  = array_values(array_unique(array_filter(array_column($grouped, 'course'))));
+$resultFilter = strtolower(trim($_GET['result'] ?? 'all')); // all|passed|failed|none
+$marksFilter  = strtolower(trim($_GET['marks'] ?? 'all'));  // all|complete|missing
+$typeFilter   = strtolower(trim($_GET['type'] ?? 'all'));   // all|it|other
+$searchFilter = trim($_GET['q'] ?? '');
+
+$allowedResults = ['all', 'passed', 'failed', 'none'];
+$allowedMarks   = ['all', 'complete', 'missing'];
+$allowedTypes   = ['all', 'it', 'other'];
+if (!in_array($resultFilter, $allowedResults, true)) $resultFilter = 'all';
+if (!in_array($marksFilter, $allowedMarks, true)) $marksFilter = 'all';
+if (!in_array($typeFilter, $allowedTypes, true)) $typeFilter = 'all';
+
+$allCourses = array_values(array_unique(array_filter(array_column($grouped, 'course'))));
 sort($allCourses);
 
+$smItMarksComplete = static function (array $g): bool {
+    if (empty($g['is_it'])) {
+        return true; // non-IT: N/A counts as complete for marks filter
+    }
+    return ($g['exam_40'] ?? null) !== null && ($g['atc_marks'] ?? null) !== null;
+};
+
+// Base pool for tab counts (course + type + search), before result/marks tabs
+$basePool = $grouped;
 if ($courseFilter !== 'all') {
-    $grouped = array_filter($grouped, fn($g) => $g['course'] === $courseFilter);
+    $basePool = array_filter($basePool, fn($g) => ($g['course'] ?? '') === $courseFilter);
+}
+if ($typeFilter === 'it') {
+    $basePool = array_filter($basePool, fn($g) => !empty($g['is_it']));
+} elseif ($typeFilter === 'other') {
+    $basePool = array_filter($basePool, fn($g) => empty($g['is_it']));
+}
+if ($searchFilter !== '') {
+    $q = mb_strtolower($searchFilter);
+    $basePool = array_filter($basePool, static function ($g) use ($q) {
+        $hay = mb_strtolower(($g['student_name'] ?? '') . ' ' . ($g['identifier'] ?? '') . ' ' . ($g['course'] ?? ''));
+        return strpos($hay, $q) !== false;
+    });
+}
+$basePool = array_values($basePool);
+
+$tabCounts = [
+    'all' => count($basePool),
+    'passed' => 0,
+    'failed' => 0,
+    'none' => 0,
+    'marks_complete' => 0,
+    'marks_missing' => 0,
+];
+foreach ($basePool as $g) {
+    $lr = strtolower((string)($g['latest_result'] ?? ''));
+    if ($lr === 'passed') $tabCounts['passed']++;
+    elseif ($lr === 'failed') $tabCounts['failed']++;
+    else $tabCounts['none']++;
+    if (!empty($g['is_it'])) {
+        if ($smItMarksComplete($g)) $tabCounts['marks_complete']++;
+        else $tabCounts['marks_missing']++;
+    }
+}
+
+$grouped = $basePool;
+if ($resultFilter === 'passed') {
+    $grouped = array_filter($grouped, fn($g) => strtolower((string)($g['latest_result'] ?? '')) === 'passed');
+} elseif ($resultFilter === 'failed') {
+    $grouped = array_filter($grouped, fn($g) => strtolower((string)($g['latest_result'] ?? '')) === 'failed');
+} elseif ($resultFilter === 'none') {
+    $grouped = array_filter($grouped, function ($g) {
+        $lr = strtolower((string)($g['latest_result'] ?? ''));
+        return $lr !== 'passed' && $lr !== 'failed';
+    });
+}
+if ($marksFilter === 'complete') {
+    $grouped = array_filter($grouped, fn($g) => !empty($g['is_it']) && $smItMarksComplete($g));
+} elseif ($marksFilter === 'missing') {
+    $grouped = array_filter($grouped, fn($g) => !empty($g['is_it']) && !$smItMarksComplete($g));
 }
 $grouped = array_values($grouped);
 
-// Stats (count unique students, not individual results)
+$smQs = static function (array $overrides = []) use ($courseFilter, $resultFilter, $marksFilter, $typeFilter, $searchFilter): string {
+    $p = [
+        'course' => $courseFilter,
+        'result' => $resultFilter,
+        'marks' => $marksFilter,
+        'type' => $typeFilter,
+        'q' => $searchFilter,
+    ];
+    foreach ($overrides as $k => $v) {
+        $p[$k] = $v;
+    }
+    $out = [];
+    foreach ($p as $k => $v) {
+        if ($v === '' || $v === null) continue;
+        if ($k === 'course' && $v === 'all') continue;
+        if ($k === 'result' && $v === 'all') continue;
+        if ($k === 'marks' && $v === 'all') continue;
+        if ($k === 'type' && $v === 'all') continue;
+        if ($k === 'q' && $v === '') continue;
+        $out[$k] = $v;
+    }
+    return $out ? ('?' . http_build_query($out)) : '?';
+};
+
+// Stats (count unique students in current filtered view)
 $totalStudents = count($grouped);
-$passedStudents = count(array_filter($grouped, fn($g) => strtolower($g['latest_result']) === 'passed'));
-$failedStudents = count(array_filter($grouped, fn($g) => strtolower($g['latest_result']) === 'failed'));
+$passedStudents = count(array_filter($grouped, fn($g) => strtolower((string)($g['latest_result'] ?? '')) === 'passed'));
+$failedStudents = count(array_filter($grouped, fn($g) => strtolower((string)($g['latest_result'] ?? '')) === 'failed'));
 $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
 ?>
 <!DOCTYPE html>
@@ -348,12 +442,22 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
 .sm-kpi-lbl{font-size:.7rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em;margin-top:.15rem}
 
 /* Toolbar */
-.sm-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem}
+.sm-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
 .sm-toolbar-left{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
-.sm-filter{padding:.55rem .85rem;border:1.5px solid var(--border-color);border-radius:9px;font-size:.82rem;font-weight:600;font-family:inherit;outline:none;cursor:pointer}
+.sm-filter{padding:.55rem .85rem;border:1.5px solid var(--border-color);border-radius:9px;font-size:.82rem;font-weight:600;font-family:inherit;outline:none;cursor:pointer;background:#fff;max-width:220px}
 .sm-filter:focus{border-color:var(--sm-brand)}
 .sm-search{padding:.55rem 1rem;border:1.5px solid var(--border-color);border-radius:9px;font-size:.82rem;font-family:inherit;outline:none;width:220px}
 .sm-search:focus{border-color:var(--sm-brand)}
+.sm-clear{height:38px;padding:0 .9rem;border:1.5px solid #e2e8f0;border-radius:9px;background:#fff;font-size:.78rem;font-weight:700;color:#64748b;text-decoration:none;display:inline-flex;align-items:center;cursor:pointer}
+.sm-clear:hover{border-color:#cbd5e1;color:#334155}
+
+/* Filter tabs */
+.sm-tabs{display:flex;flex-wrap:wrap;gap:.45rem;margin-bottom:1.15rem}
+.sm-tab{display:inline-flex;align-items:center;gap:.35rem;padding:.45rem .85rem;border-radius:999px;border:1.5px solid #e2e8f0;background:#fff;color:#475569;font-size:.78rem;font-weight:700;text-decoration:none;transition:all .12s}
+.sm-tab:hover{border-color:#c7d2fe;background:#f8faff;color:var(--sm-brand)}
+.sm-tab.active{background:var(--sm-brand);border-color:var(--sm-brand);color:#fff}
+.sm-tab .tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:1.35rem;height:1.2rem;padding:0 .35rem;border-radius:999px;font-size:.68rem;font-weight:800;background:#f1f5f9;color:#64748b}
+.sm-tab.active .tab-count{background:rgba(255,255,255,.25);color:#fff}
 
 /* Table card */
 .sm-card{background:#fff;border:1.5px solid var(--border-color);border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04)}
@@ -499,16 +603,39 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
         <?php endif; ?>
 
         <!-- Toolbar -->
-        <div class="sm-toolbar">
+        <form class="sm-toolbar" method="get" id="smFilterForm" action="student_marks.php">
             <div class="sm-toolbar-left">
-                <select class="sm-filter" onchange="location='?course='+this.value">
+                <select class="sm-filter" name="course" onchange="this.form.submit()">
                     <option value="all" <?= $courseFilter==='all'?'selected':'' ?>>All Courses</option>
                     <?php foreach ($allCourses as $c): ?>
                     <option value="<?= htmlspecialchars($c) ?>" <?= $courseFilter===$c?'selected':'' ?>><?= htmlspecialchars($c) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <input type="text" class="sm-search" id="smSearch" placeholder="Search by name, reg ID…" autocomplete="off">
+                <select class="sm-filter" name="type" onchange="this.form.submit()" style="max-width:140px">
+                    <option value="all" <?= $typeFilter==='all'?'selected':'' ?>>All types</option>
+                    <option value="it" <?= $typeFilter==='it'?'selected':'' ?>>IT only</option>
+                    <option value="other" <?= $typeFilter==='other'?'selected':'' ?>>Non-IT</option>
+                </select>
+                <select class="sm-filter" name="marks" onchange="this.form.submit()" style="max-width:170px">
+                    <option value="all" <?= $marksFilter==='all'?'selected':'' ?>>All marks</option>
+                    <option value="complete" <?= $marksFilter==='complete'?'selected':'' ?>>Marks complete</option>
+                    <option value="missing" <?= $marksFilter==='missing'?'selected':'' ?>>Marks pending</option>
+                </select>
+                <input type="hidden" name="result" value="<?= htmlspecialchars($resultFilter) ?>">
+                <input type="text" class="sm-search" name="q" id="smSearch" value="<?= htmlspecialchars($searchFilter) ?>" placeholder="Search by name, reg ID…" autocomplete="off">
+                <button type="submit" class="sm-filter" style="cursor:pointer;background:var(--sm-brand);color:#fff;border-color:var(--sm-brand)">Search</button>
+                <?php if ($courseFilter !== 'all' || $resultFilter !== 'all' || $marksFilter !== 'all' || $typeFilter !== 'all' || $searchFilter !== ''): ?>
+                <a class="sm-clear" href="student_marks.php">Clear</a>
+                <?php endif; ?>
             </div>
+        </form>
+
+        <div class="sm-tabs">
+            <a class="sm-tab <?= $resultFilter==='all' && $marksFilter==='all'?'active':'' ?>" href="<?= htmlspecialchars($smQs(['result' => 'all', 'marks' => 'all'])) ?>">All<span class="tab-count"><?= (int)$tabCounts['all'] ?></span></a>
+            <a class="sm-tab <?= $resultFilter==='passed'?'active':'' ?>" href="<?= htmlspecialchars($smQs(['result' => 'passed', 'marks' => 'all'])) ?>">Passed<span class="tab-count"><?= (int)$tabCounts['passed'] ?></span></a>
+            <a class="sm-tab <?= $resultFilter==='failed'?'active':'' ?>" href="<?= htmlspecialchars($smQs(['result' => 'failed', 'marks' => 'all'])) ?>">Failed<span class="tab-count"><?= (int)$tabCounts['failed'] ?></span></a>
+            <a class="sm-tab <?= $resultFilter==='none'?'active':'' ?>" href="<?= htmlspecialchars($smQs(['result' => 'none', 'marks' => 'all'])) ?>">No result<span class="tab-count"><?= (int)$tabCounts['none'] ?></span></a>
+            <a class="sm-tab <?= $marksFilter==='missing'?'active':'' ?>" href="<?= htmlspecialchars($smQs(['marks' => 'missing', 'result' => 'all'])) ?>">Marks pending<span class="tab-count"><?= (int)$tabCounts['marks_missing'] ?></span></a>
         </div>
 
         <?php if (!$integrationReady && empty($grouped)): ?>
@@ -551,7 +678,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                     <tr><td colspan="11">
                         <div class="sm-empty">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                            <p>No results found<?= $courseFilter !== 'all' ? ' for this course' : '' ?>.</p>
+                            <p>No students match the current filters<?= $courseFilter !== 'all' ? ' for this course' : '' ?>.</p>
                         </div>
                     </td></tr>
                 <?php else: ?>
@@ -790,20 +917,24 @@ function toggleSub(id, masterRow) {
     icon.textContent = isOpen ? '▸' : '▾';
 }
 
-// ── Search ──────────────────────────────────────────────────────────────────
-document.getElementById('smSearch').addEventListener('input', function() {
-    const q = this.value.toLowerCase();
-    document.querySelectorAll('#smTable tbody tr.sm-master').forEach(r => {
-        const match = (r.dataset.search || '').includes(q);
-        r.style.display = match ? '' : 'none';
-        const subId = r.querySelector('.sm-expand-icon')?.id?.replace('icon_', '');
-        if (subId) {
-            const sub = document.getElementById(subId);
-            if (sub && !match) { sub.classList.remove('open'); sub.style.display = 'none'; }
-            else if (sub && match) { sub.style.display = ''; }
-        }
+// ── Search (instant refine on current page) ─────────────────────────────────
+const smSearchEl = document.getElementById('smSearch');
+if (smSearchEl) {
+    smSearchEl.addEventListener('input', function() {
+        const q = this.value.toLowerCase().trim();
+        document.querySelectorAll('#smTable tbody tr.sm-master').forEach(r => {
+            const match = !q || (r.dataset.search || '').includes(q);
+            r.style.display = match ? '' : 'none';
+            const icon = r.querySelector('.sm-expand-icon');
+            const subId = icon?.id?.replace('icon_', '');
+            if (subId) {
+                const sub = document.getElementById(subId);
+                if (sub && !match) { sub.classList.remove('open'); sub.style.display = 'none'; }
+                else if (sub && match) { sub.style.display = ''; }
+            }
+        });
     });
-});
+}
 </script>
 </body>
 </html>
