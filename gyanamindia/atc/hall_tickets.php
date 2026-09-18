@@ -14,45 +14,38 @@ if (file_exists(__DIR__ . '/../includes/exam_integration.php')) {
 requireLogin(['ATC CENTER']);
 
 // ── AJAX: Save date/time/slot from Hall Ticket Generate + unlock main exam ───
-if (isset($_POST['ajax_save_hall_schedule'])) {
+if (isset($_POST['ajax_save_hall_schedule']) || isset($_POST['ajax_save_hall_schedule_bulk'])) {
     header('Content-Type: application/json');
     $pdo = getDBConnection();
     $aId = $_SESSION['atc_id'] ?? null;
-    $sid = intval($_POST['admission_id'] ?? 0);
     $date = trim((string)($_POST['exam_date'] ?? ''));
     $time = trim((string)($_POST['exam_time'] ?? '10:00'));
     $slot = trim((string)($_POST['exam_slot'] ?? 'Morning'));
     $hall = trim((string)($_POST['exam_hall'] ?? ''));
     $examPortalId = intval($_POST['exam_portal_id'] ?? 0) ?: null;
     $allowedAttempts = max(1, min(10, intval($_POST['allowed_attempts'] ?? 1)));
+    $examName = trim((string)($_POST['exam_name'] ?? ''));
 
-    if (!$aId || !$sid || $date === '') {
-        echo json_encode(['success' => false, 'message' => 'Exam date is required.']);
+    $ids = [];
+    if (!empty($_POST['admission_ids'])) {
+        $decoded = json_decode((string)$_POST['admission_ids'], true);
+        if (is_array($decoded)) {
+            $ids = array_values(array_unique(array_filter(array_map('intval', $decoded))));
+        }
+    }
+    $singleId = intval($_POST['admission_id'] ?? 0);
+    if ($singleId > 0 && empty($ids)) {
+        $ids = [$singleId];
+    }
+
+    if (!$aId || $date === '' || empty($ids)) {
+        echo json_encode(['success' => false, 'message' => 'Select student(s) and exam date.']);
         exit;
     }
     if (!in_array($slot, ['Morning', 'Afternoon', 'Evening'], true)) {
         $slot = 'Morning';
     }
 
-    $chk = $pdo->prepare('SELECT id, registration_id, roll_no, first_name, middle_name, last_name, course, photo FROM admissions WHERE id=? AND atc_id=?');
-    $chk->execute([$sid, $aId]);
-    $admRow = $chk->fetch(PDO::FETCH_ASSOC);
-    if (!$admRow) {
-        echo json_encode(['success' => false, 'message' => 'Student not found.']);
-        exit;
-    }
-
-    // Login ID must be registration number (fallback roll_no)
-    $loginId = trim((string)($admRow['registration_id'] ?? ''));
-    if ($loginId === '') {
-        $loginId = trim((string)($admRow['roll_no'] ?? ''));
-    }
-    if ($loginId === '') {
-        echo json_encode(['success' => false, 'message' => 'Student has no registration number.']);
-        exit;
-    }
-
-    // Ensure exam_schedules table exists (same schema as Exam Schedules page)
     try {
         if (!isSchemaFlagSet('schema_exam_schedules_v2')) {
             $pdo->exec("CREATE TABLE IF NOT EXISTS exam_schedules (
@@ -73,92 +66,151 @@ if (isset($_POST['ajax_save_hall_schedule'])) {
         }
     } catch (Exception $e) { /* ignore */ }
 
-    $examName = trim((string)($_POST['exam_name'] ?? ''));
-    $ex = $pdo->prepare('SELECT id FROM exam_schedules WHERE admission_id = ? AND atc_id = ?');
-    $ex->execute([$sid, $aId]);
-    if ($row = $ex->fetch(PDO::FETCH_ASSOC)) {
-        $pdo->prepare('UPDATE exam_schedules SET exam_date=?, exam_time=?, exam_slot=?, exam_hall=?, exam_name=?, exam_portal_id=?, allowed_attempts=? WHERE id=?')
-            ->execute([$date, $time, $slot, $hall, $examName ?: null, $examPortalId, $allowedAttempts, $row['id']]);
-    } else {
-        $pdo->prepare('INSERT INTO exam_schedules (admission_id, atc_id, exam_date, exam_time, exam_slot, exam_hall, exam_name, exam_portal_id, allowed_attempts) VALUES (?,?,?,?,?,?,?,?,?)')
-            ->execute([$sid, $aId, $date, $time, $slot, $hall, $examName ?: null, $examPortalId, $allowedAttempts]);
-    }
+    $atcCodeStmt = $pdo->prepare('SELECT atc_code FROM atc_centers WHERE id = ?');
+    $atcCodeStmt->execute([$aId]);
+    $syncAtcCode = $atcCodeStmt->fetchColumn() ?: ('ATC' . $aId);
+    $portalSlot = (stripos($slot, 'afternoon') !== false) ? 'SLOT2'
+        : ((stripos($slot, 'evening') !== false) ? 'SLOT3' : 'SLOT1');
+    $portalWindow = (stripos($slot, 'afternoon') !== false) ? 'AFTERNOON'
+        : ((stripos($slot, 'evening') !== false) ? 'EVENING' : 'MORNING');
 
-    $syncOk = false;
-    $unlockMsg = '';
-    try {
-        if (function_exists('syncStudentToExamPortal') && function_exists('examIntegrationReady') && examIntegrationReady()) {
-            $atcCodeStmt = $pdo->prepare('SELECT atc_code FROM atc_centers WHERE id = ?');
-            $atcCodeStmt->execute([$aId]);
-            $syncAtcCode = $atcCodeStmt->fetchColumn() ?: ('ATC' . $aId);
-            $syncName = trim(($admRow['first_name'] ?? '') . ' ' . (($admRow['middle_name'] ?? '') ? $admRow['middle_name'] . ' ' : '') . ($admRow['last_name'] ?? ''));
-            $portalSlot = (stripos($slot, 'afternoon') !== false) ? 'SLOT2'
-                : ((stripos($slot, 'evening') !== false) ? 'SLOT3' : 'SLOT1');
-            $portalWindow = (stripos($slot, 'afternoon') !== false) ? 'AFTERNOON'
-                : ((stripos($slot, 'evening') !== false) ? 'EVENING' : 'MORNING');
+    $portalReady = function_exists('syncStudentToExamPortal')
+        && function_exists('examIntegrationReady')
+        && examIntegrationReady();
 
-            syncStudentToExamPortal(
-                $loginId,
-                $syncName,
-                $syncAtcCode,
-                $portalSlot,
-                $portalWindow,
-                function_exists('examPortalAbsolutePhotoUrl') ? examPortalAbsolutePhotoUrl($admRow['photo'] ?? null) : null,
-                $admRow['course'] ?? null
-            );
-            $syncOk = true;
-
-            // Unlock main exam(s) for this student
-            $portalStudentId = null;
+    $portalByLogin = [];
+    $availableExams = [];
+    if ($portalReady) {
+        try {
             $esRes = fetchExamStudents();
             if (!empty($esRes['success']) && !empty($esRes['data'])) {
                 foreach ($esRes['data'] as $es) {
-                    if (($es['identifier'] ?? '') === $loginId && !empty($es['id'])) {
-                        $portalStudentId = intval($es['id']);
-                        break;
+                    $ident = trim((string)($es['identifier'] ?? ''));
+                    if ($ident !== '' && !empty($es['id'])) {
+                        $portalByLogin[$ident] = intval($es['id']);
                     }
                 }
             }
-
-            $examIdsToUnlock = [];
-            if ($examPortalId) {
-                $examIdsToUnlock[] = $examPortalId;
-            } elseif (function_exists('fetchAvailableExams')) {
+            if (!$examPortalId && function_exists('fetchAvailableExams')) {
                 $exRes = fetchAvailableExams();
-                $courseNorm = mb_strtolower(preg_replace('/\s+/u', ' ', trim((string)($admRow['course'] ?? ''))) ?? '');
-                if (!empty($exRes['success']) && !empty($exRes['data']) && $courseNorm !== '') {
-                    foreach ($exRes['data'] as $pe) {
-                        $etype = strtolower((string)($pe['exam_type'] ?? 'main'));
-                        if (in_array($etype, ['demo', 'practice'], true)) {
-                            continue;
+                if (!empty($exRes['success']) && !empty($exRes['data'])) {
+                    $availableExams = $exRes['data'];
+                }
+            }
+        } catch (Exception $e) { /* ignore */ }
+    }
+
+    $saved = 0;
+    $failed = [];
+    $loginIds = [];
+    $savedIds = [];
+
+    foreach ($ids as $sid) {
+        $chk = $pdo->prepare('SELECT id, registration_id, roll_no, first_name, middle_name, last_name, course, photo FROM admissions WHERE id=? AND atc_id=?');
+        $chk->execute([$sid, $aId]);
+        $admRow = $chk->fetch(PDO::FETCH_ASSOC);
+        if (!$admRow) {
+            $failed[] = "ID $sid not found";
+            continue;
+        }
+
+        $loginId = trim((string)($admRow['registration_id'] ?? ''));
+        if ($loginId === '') {
+            $loginId = trim((string)($admRow['roll_no'] ?? ''));
+        }
+        if ($loginId === '') {
+            $failed[] = 'Missing registration for admission ' . $sid;
+            continue;
+        }
+
+        $ex = $pdo->prepare('SELECT id FROM exam_schedules WHERE admission_id = ? AND atc_id = ?');
+        $ex->execute([$sid, $aId]);
+        if ($row = $ex->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->prepare('UPDATE exam_schedules SET exam_date=?, exam_time=?, exam_slot=?, exam_hall=?, exam_name=?, exam_portal_id=?, allowed_attempts=? WHERE id=?')
+                ->execute([$date, $time, $slot, $hall, $examName ?: null, $examPortalId, $allowedAttempts, $row['id']]);
+        } else {
+            $pdo->prepare('INSERT INTO exam_schedules (admission_id, atc_id, exam_date, exam_time, exam_slot, exam_hall, exam_name, exam_portal_id, allowed_attempts) VALUES (?,?,?,?,?,?,?,?,?)')
+                ->execute([$sid, $aId, $date, $time, $slot, $hall, $examName ?: null, $examPortalId, $allowedAttempts]);
+        }
+
+        if ($portalReady) {
+            try {
+                $syncName = trim(($admRow['first_name'] ?? '') . ' ' . (($admRow['middle_name'] ?? '') ? $admRow['middle_name'] . ' ' : '') . ($admRow['last_name'] ?? ''));
+                syncStudentToExamPortal(
+                    $loginId,
+                    $syncName,
+                    $syncAtcCode,
+                    $portalSlot,
+                    $portalWindow,
+                    function_exists('examPortalAbsolutePhotoUrl') ? examPortalAbsolutePhotoUrl($admRow['photo'] ?? null) : null,
+                    $admRow['course'] ?? null
+                );
+
+                $portalStudentId = $portalByLogin[$loginId] ?? null;
+                if (!$portalStudentId) {
+                    $esRes2 = fetchExamStudents();
+                    if (!empty($esRes2['success']) && !empty($esRes2['data'])) {
+                        foreach ($esRes2['data'] as $es) {
+                            $ident = trim((string)($es['identifier'] ?? ''));
+                            if ($ident !== '' && !empty($es['id'])) {
+                                $portalByLogin[$ident] = intval($es['id']);
+                            }
                         }
-                        $subj = mb_strtolower(preg_replace('/\s+/u', ' ', trim((string)($pe['subject'] ?? ''))) ?? '');
-                        if ($subj !== '' && $subj === $courseNorm && !empty($pe['id'])) {
-                            $examIdsToUnlock[] = intval($pe['id']);
+                        $portalStudentId = $portalByLogin[$loginId] ?? null;
+                    }
+                }
+
+                $examIdsToUnlock = [];
+                if ($examPortalId) {
+                    $examIdsToUnlock[] = $examPortalId;
+                } else {
+                    $courseNorm = mb_strtolower(preg_replace('/\s+/u', ' ', trim((string)($admRow['course'] ?? ''))) ?? '');
+                    if ($courseNorm !== '') {
+                        foreach ($availableExams as $pe) {
+                            $etype = strtolower((string)($pe['exam_type'] ?? 'main'));
+                            if (in_array($etype, ['demo', 'practice'], true)) {
+                                continue;
+                            }
+                            $subj = mb_strtolower(preg_replace('/\s+/u', ' ', trim((string)($pe['subject'] ?? ''))) ?? '');
+                            if ($subj !== '' && $subj === $courseNorm && !empty($pe['id'])) {
+                                $examIdsToUnlock[] = intval($pe['id']);
+                            }
                         }
                     }
                 }
-            }
 
-            if ($portalStudentId && !empty($examIdsToUnlock)) {
-                foreach (array_unique($examIdsToUnlock) as $eid) {
-                    assignExamToStudent($portalStudentId, $eid, $allowedAttempts);
+                if ($portalStudentId && !empty($examIdsToUnlock)) {
+                    foreach (array_unique($examIdsToUnlock) as $eid) {
+                        assignExamToStudent($portalStudentId, $eid, $allowedAttempts);
+                    }
                 }
-                $unlockMsg = ' Main exam unlocked for student login ' . $loginId . '.';
+            } catch (Exception $e) {
+                // schedule still saved locally
             }
         }
-    } catch (Exception $e) {
-        $unlockMsg = ' Schedule saved locally; exam portal sync failed.';
+
+        $saved++;
+        $savedIds[] = $sid;
+        $loginIds[] = $loginId;
+    }
+
+    if ($saved === 0) {
+        echo json_encode(['success' => false, 'message' => 'No schedules saved. ' . implode('; ', $failed)]);
+        exit;
     }
 
     echo json_encode([
         'success' => true,
-        'message' => 'Exam schedule saved.' . $unlockMsg,
-        'login_id' => $loginId,
+        'message' => $saved === 1
+            ? ('Exam schedule saved. Login ID: ' . ($loginIds[0] ?? ''))
+            : ("Scheduled {$saved} student(s)." . (!empty($failed) ? ' Some skipped.' : '')),
+        'saved' => $saved,
+        'admission_ids' => $savedIds,
+        'login_ids' => $loginIds,
         'exam_date' => $date,
         'exam_time' => $time,
         'exam_slot' => $slot,
-        'synced' => $syncOk,
+        'failed' => $failed,
     ]);
     exit;
 }
@@ -418,6 +470,10 @@ try {
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                         Search
                     </button>
+                    <button type="button" class="ht-btn-generate" id="htBulkGenerateBtn" onclick="openBulkHallTicketGenerate()" style="white-space:nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Bulk Generate
+                    </button>
                 </form>
             </div>
 
@@ -426,6 +482,9 @@ try {
                 <table class="ht-table">
                     <thead>
                         <tr>
+                            <th style="width:42px">
+                                <input type="checkbox" id="htSelectAll" title="Select all eligible" onclick="toggleHtSelectAll(this)">
+                            </th>
                             <th>Roll No</th>
                             <th>Student Name</th>
                             <th>Course</th>
@@ -437,7 +496,7 @@ try {
                     <tbody>
                         <?php if (empty($students)): ?>
                             <tr>
-                                <td colspan="6" class="ht-table-empty">
+                                <td colspan="7" class="ht-table-empty">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                                     <p>No students found.</p>
                                 </td>
@@ -451,6 +510,11 @@ try {
                                     $fullName = $student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name'];
                                 ?>
                                 <tr>
+                                    <td>
+                                        <?php if ($canGenerate): ?>
+                                            <input type="checkbox" class="ht-row-check" value="<?= (int)$student['id'] ?>" onchange="updateHtBulkBtn()">
+                                        <?php endif; ?>
+                                    </td>
                                     <td>
                                         <span class="ht-roll-badge"><?= htmlspecialchars($student['roll_no']) ?></span>
                                     </td>
@@ -511,6 +575,7 @@ try {
         </div>
         <div style="padding:1.35rem 1.4rem;display:flex;flex-direction:column;gap:1rem">
             <input type="hidden" id="htSchedAdmId">
+            <input type="hidden" id="htSchedMode" value="single">
             <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:.75rem 1rem;font-size:.8rem;color:#1e40af;line-height:1.45">
                 Choose exam date, time and slot. Student exam login ID will be their <strong>registration number</strong>.
             </div>
@@ -708,6 +773,49 @@ function studentLoginId(student) {
     return String(student.registration_id || student.roll_no || '').trim();
 }
 
+function getSelectedHtIds() {
+    return Array.from(document.querySelectorAll('.ht-row-check:checked')).map(el => parseInt(el.value, 10)).filter(Boolean);
+}
+
+function toggleHtSelectAll(master) {
+    document.querySelectorAll('.ht-row-check').forEach(cb => { cb.checked = !!master.checked; });
+    updateHtBulkBtn();
+}
+
+function updateHtBulkBtn() {
+    const n = getSelectedHtIds().length;
+    const btn = document.getElementById('htBulkGenerateBtn');
+    if (!btn) return;
+    btn.innerHTML = n > 0
+        ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Bulk Generate (${n})`
+        : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Bulk Generate`;
+    const master = document.getElementById('htSelectAll');
+    if (master) {
+        const all = document.querySelectorAll('.ht-row-check');
+        master.checked = all.length > 0 && Array.from(all).every(c => c.checked);
+    }
+}
+
+function openBulkHallTicketGenerate() {
+    const ids = getSelectedHtIds();
+    if (ids.length === 0) {
+        alert('Select one or more eligible students (Share Paid + Photo) first.');
+        return;
+    }
+    document.getElementById('htSchedMode').value = 'bulk';
+    document.getElementById('htSchedAdmId').value = ids.join(',');
+    document.getElementById('htSchedSub').textContent = ids.length + ' student(s) selected';
+    document.getElementById('htSchedLoginHint').textContent = 'Each student\'s exam login User ID will be their registration number.';
+    document.getElementById('htSchedDate').value = '';
+    document.getElementById('htSchedTime').value = '10:00';
+    document.getElementById('htSchedSlot').value = 'Morning';
+    document.getElementById('htSchedHall').value = '';
+    document.getElementById('htSchedMsg').textContent = '';
+    const examSel = document.getElementById('htSchedExam');
+    if (examSel) examSel.value = '0';
+    document.getElementById('htSchedModal').style.display = 'flex';
+}
+
 function closeHtSchedModal() {
     document.getElementById('htSchedModal').style.display = 'none';
 }
@@ -728,7 +836,8 @@ function generateHallTicket(studentId) {
 
     const fullName = `${student.first_name} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name}`;
     const loginId = studentLoginId(student);
-    document.getElementById('htSchedAdmId').value = student.id;
+    document.getElementById('htSchedMode').value = 'single';
+    document.getElementById('htSchedAdmId').value = String(student.id);
     document.getElementById('htSchedSub').textContent = fullName + (loginId ? ' · Login: ' + loginId : '');
     document.getElementById('htSchedLoginHint').textContent = loginId
         ? 'Exam portal User ID / login will be: ' + loginId
@@ -744,7 +853,11 @@ function generateHallTicket(studentId) {
 }
 
 function confirmHtScheduleAndGenerate() {
-    const admId = document.getElementById('htSchedAdmId').value;
+    const mode = document.getElementById('htSchedMode').value || 'single';
+    const rawIds = document.getElementById('htSchedAdmId').value;
+    const ids = mode === 'bulk'
+        ? rawIds.split(',').map(x => parseInt(x, 10)).filter(Boolean)
+        : [parseInt(rawIds, 10)].filter(Boolean);
     const date = document.getElementById('htSchedDate').value;
     const time = document.getElementById('htSchedTime').value || '10:00';
     const slot = document.getElementById('htSchedSlot').value || 'Morning';
@@ -752,6 +865,11 @@ function confirmHtScheduleAndGenerate() {
     const msgEl = document.getElementById('htSchedMsg');
     const btn = document.getElementById('htSchedConfirmBtn');
 
+    if (!ids.length) {
+        msgEl.style.color = '#b91c1c';
+        msgEl.textContent = 'No students selected.';
+        return;
+    }
     if (!date) {
         msgEl.style.color = '#b91c1c';
         msgEl.textContent = 'Please select an exam date.';
@@ -768,8 +886,9 @@ function confirmHtScheduleAndGenerate() {
     }
 
     const fd = new FormData();
-    fd.append('ajax_save_hall_schedule', '1');
-    fd.append('admission_id', admId);
+    fd.append(ids.length > 1 ? 'ajax_save_hall_schedule_bulk' : 'ajax_save_hall_schedule', '1');
+    fd.append('admission_ids', JSON.stringify(ids));
+    if (ids.length === 1) fd.append('admission_id', String(ids[0]));
     fd.append('exam_date', date);
     fd.append('exam_time', time);
     fd.append('exam_slot', slot);
@@ -779,7 +898,7 @@ function confirmHtScheduleAndGenerate() {
     fd.append('allowed_attempts', '1');
 
     btn.disabled = true;
-    btn.textContent = 'Saving…';
+    btn.textContent = ids.length > 1 ? `Saving ${ids.length}…` : 'Saving…';
     msgEl.style.color = '#64748b';
     msgEl.textContent = 'Saving schedule and syncing exam login…';
 
@@ -793,16 +912,22 @@ function confirmHtScheduleAndGenerate() {
                 msgEl.textContent = res.message || 'Could not save schedule.';
                 return;
             }
-            // Update local student cache so ticket shows the new schedule
-            const student = students.find(s => s.id == admId);
-            if (student) {
-                student.sched_exam_date = date;
-                student.sched_exam_time = time.length === 5 ? time + ':00' : time;
-                student.sched_exam_slot = slot;
-                student.sched_exam_hall = hall;
-            }
+            const savedIds = Array.isArray(res.admission_ids) && res.admission_ids.length ? res.admission_ids : ids;
+            savedIds.forEach(id => {
+                const student = students.find(s => s.id == id);
+                if (student) {
+                    student.sched_exam_date = date;
+                    student.sched_exam_time = time.length === 5 ? time + ':00' : time;
+                    student.sched_exam_slot = slot;
+                    student.sched_exam_hall = hall;
+                }
+            });
             closeHtSchedModal();
-            renderAndPrintHallTicket(parseInt(admId, 10));
+            if (savedIds.length === 1) {
+                renderAndPrintHallTicket(parseInt(savedIds[0], 10));
+            } else {
+                renderAndPrintHallTicketsBulk(savedIds.map(id => parseInt(id, 10)));
+            }
         })
         .catch(() => {
             btn.disabled = false;
@@ -812,19 +937,15 @@ function confirmHtScheduleAndGenerate() {
         });
 }
 
-function renderAndPrintHallTicket(studentId) {
-    const student = students.find(s => s.id == studentId);
-    if (!student) { alert('Student not found'); return; }
-
+function buildHallTicketHtml(student) {
     const fullName = `${student.first_name} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name}`;
     const photoPath = student.photo ? `../${student.photo}` : '../assets/logo.png';
     const examAddr = [atcDetails.address, atcDetails.city, atcDetails.district, atcDetails.state].filter(Boolean).join(', ') + (atcDetails.pin_code ? ' - ' + atcDetails.pin_code : '');
     const regNo = studentLoginId(student) || '-';
     const examSchedule = getExamScheduleInfo(student);
 
-    document.getElementById('hallTicketContent').innerHTML = `
-        <div class="ht-print">
-          <!-- HEADER -->
+    return `
+        <div class="ht-print" style="page-break-after:always">
           <table class="ht-print-tbl">
             <tr>
               <td class="ht-p-center" style="width:20%">
@@ -837,14 +958,9 @@ function renderAndPrintHallTicket(studentId) {
               <td style="width:20%"></td>
             </tr>
           </table>
-
           <br>
-
-          <!-- CANDIDATE DETAILS -->
           <table class="ht-print-tbl">
-            <tr>
-              <th colspan="4" class="ht-p-center">Candidate Details</th>
-            </tr>
+            <tr><th colspan="4" class="ht-p-center">Candidate Details</th></tr>
             <tr>
               <td class="ht-p-bold" style="width:25%">Candidate Name</td>
               <td style="width:35%">${fullName}</td>
@@ -861,14 +977,9 @@ function renderAndPrintHallTicket(studentId) {
               <td>${student.course || '-'}</td>
             </tr>
           </table>
-
           <br>
-
-          <!-- EXAMINATION DETAILS -->
           <table class="ht-print-tbl">
-            <tr>
-              <th colspan="4" class="ht-p-center">Examination Details</th>
-            </tr>
+            <tr><th colspan="4" class="ht-p-center">Examination Details</th></tr>
             <tr>
               <td class="ht-p-bold" style="width:25%">Examination Date</td>
               <td style="width:25%">${examSchedule.date}</td>
@@ -890,24 +1001,16 @@ function renderAndPrintHallTicket(studentId) {
               <td colspan="3">${examAddr || '-'}</td>
             </tr>
           </table>
-
           <br>
-
-          <!-- SIGNATURES -->
           <table class="ht-print-tbl">
             <tr>
               <td class="ht-p-center ht-p-bold" style="height:90px">Student Signature</td>
               <td class="ht-p-center ht-p-bold" style="height:90px">Invigilator Signature</td>
             </tr>
           </table>
-
           <br>
-
-          <!-- INSTRUCTIONS -->
           <table class="ht-print-tbl">
-            <tr>
-              <th class="ht-p-center">Instructions for Students</th>
-            </tr>
+            <tr><th class="ht-p-center">Instructions for Students</th></tr>
             <tr>
               <td>
                 <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.8">
@@ -924,7 +1027,26 @@ function renderAndPrintHallTicket(studentId) {
           </table>
         </div>
     `;
+}
 
+function renderAndPrintHallTicket(studentId) {
+    const student = students.find(s => s.id == studentId);
+    if (!student) { alert('Student not found'); return; }
+    document.getElementById('hallTicketContent').innerHTML = buildHallTicketHtml(student);
+    printHallTicket();
+}
+
+function renderAndPrintHallTicketsBulk(studentIds) {
+    const parts = [];
+    studentIds.forEach(id => {
+        const student = students.find(s => s.id == id);
+        if (student) parts.push(buildHallTicketHtml(student));
+    });
+    if (!parts.length) {
+        alert('No hall tickets to print.');
+        return;
+    }
+    document.getElementById('hallTicketContent').innerHTML = parts.join('');
     printHallTicket();
 }
 
