@@ -189,7 +189,7 @@ class ExamAssignmentController extends Controller
             ->when($user->centre_id, function ($q) use ($user) {
                 $q->whereHas('questionBank.assignments', fn($a) => $a->where('centre_id', $user->centre_id));
             })
-            ->get(['id', 'exam_id', 'title', 'subject', 'total_questions', 'duration', 'passing_score', 'proctored']);
+            ->get(['id', 'exam_id', 'title', 'subject', 'exam_type', 'total_questions', 'duration', 'passing_score', 'proctored']);
 
         return response()->json($exams);
     }
