@@ -130,7 +130,8 @@ if ($exam40Manual !== null && $atc60Manual !== null
         $atc60Manual,
         $studentAtcId ?: null,
         (int)($_SESSION['user_id'] ?? 0) ?: null,
-        'Admin'
+        'Admin',
+        $exam40Manual
     );
 }
 

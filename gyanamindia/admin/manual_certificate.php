@@ -129,6 +129,9 @@ foreach ($students as $s) {
     $speeds = typingMarksheetSpeedDefaults($s['course'] ?? '');
     $isTyping = isTypingCourse($s['course_type'] ?? null, $s['course'] ?? null);
     $typingSaved = $isTyping ? getAdmissionTypingMarks($pdo, (int)$s['id'], $speeds['wpm'], $speeds['kph']) : null;
+    $itSaved = isGiitItCourse($s['course_type'] ?? null, $s['course'] ?? null)
+        ? getAdmissionAtcMarks($pdo, (int)$s['id'])
+        : null;
     $studentOptions[] = [
         'id' => (int)$s['id'],
         'name' => $fullName,
@@ -146,6 +149,9 @@ foreach ($students as $s) {
         'wpm' => $speeds['wpm'],
         'kph' => $speeds['kph'],
         'typing_by_key' => $typingSaved['by_key'] ?? new stdClass(),
+        'saved_exam_40' => $itSaved !== null && isset($itSaved['exam_marks']) && $itSaved['exam_marks'] !== null
+            ? (int)$itSaved['exam_marks'] : null,
+        'saved_atc_60' => $itSaved !== null ? (int)$itSaved['atc_marks'] : null,
     ];
 }
 
@@ -565,8 +571,16 @@ if (select) {
         panel.style.display = 'block';
         if (s.is_typing) buildTypingFields(s);
         setEnabled(true, !!s.is_it, !!s.is_typing);
-        if (s.is_it && exam40Input) exam40Input.focus();
-        else if (s.is_typing) {
+        if (s.is_it) {
+            if (exam40Input && s.saved_exam_40 !== null && s.saved_exam_40 !== undefined) {
+                exam40Input.value = String(s.saved_exam_40);
+            }
+            if (atc60Input && s.saved_atc_60 !== null && s.saved_atc_60 !== undefined) {
+                atc60Input.value = String(s.saved_atc_60);
+            }
+            syncItTotal();
+            if (exam40Input) exam40Input.focus();
+        } else if (s.is_typing) {
             const first = typingFields.querySelector('input');
             if (first) first.focus();
         } else scoreInput.focus();

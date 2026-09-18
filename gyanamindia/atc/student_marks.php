@@ -21,17 +21,22 @@ $userId   = (int)($_SESSION['user_id'] ?? 0);
 
 ensureAdmissionAtcMarksSchema($pdo);
 
-// ── AJAX: save ATC internal marks (/60) for IT students ──────────────────────
+// ── AJAX: save IT marks (Exam /40 + Internal /60) ────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_save_atc_marks'])) {
     header('Content-Type: application/json');
     $admissionId = (int)($_POST['admission_id'] ?? 0);
     $marks = (int)($_POST['atc_marks'] ?? -1);
+    $examMarks = isset($_POST['exam_marks']) ? (int)$_POST['exam_marks'] : -1;
     if ($admissionId <= 0) {
         echo json_encode(['success' => false, 'message' => 'Invalid student.']);
         exit;
     }
     if ($marks < 0 || $marks > 60) {
         echo json_encode(['success' => false, 'message' => 'Internal marks must be between 0 and 60.']);
+        exit;
+    }
+    if ($examMarks < 0 || $examMarks > 40) {
+        echo json_encode(['success' => false, 'message' => 'Exam marks must be between 0 and 40.']);
         exit;
     }
     $chk = $pdo->prepare("
@@ -48,14 +53,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_save_atc_marks']
         exit;
     }
     if (!isGiitItCourse($row['course_type'] ?? null, $row['course'] ?? null)) {
-        echo json_encode(['success' => false, 'message' => 'Internal marks out of 60 apply only to IT courses.']);
+        echo json_encode(['success' => false, 'message' => 'IT marks apply only to IT courses.']);
         exit;
     }
-    if (!upsertAdmissionAtcMarks($pdo, $admissionId, $marks, $atcId, $userId, 'ATC CENTER')) {
+    if (!upsertAdmissionAtcMarks($pdo, $admissionId, $marks, $atcId, $userId, 'ATC CENTER', $examMarks)) {
         echo json_encode(['success' => false, 'message' => 'Could not save marks.']);
         exit;
     }
-    echo json_encode(['success' => true, 'message' => 'Internal marks saved.', 'atc_marks' => $marks]);
+    $total = $examMarks + $marks;
+    echo json_encode([
+        'success' => true,
+        'message' => 'Marks saved.',
+        'atc_marks' => $marks,
+        'exam_marks' => $examMarks,
+        'total' => $total,
+        'grade' => courseExamGradeFromScore($total),
+    ]);
     exit;
 }
 
@@ -214,16 +227,23 @@ foreach ($grouped as $key => &$g) {
     $adm = $admByReg[$key] ?? null;
     $g['admission_id'] = $adm ? (int)$adm['id'] : 0;
     $g['is_it'] = $adm ? !empty($adm['is_it']) : isGiitItCourse(null, $g['course'] ?? null);
-    $g['atc_marks'] = ($g['admission_id'] && array_key_exists($g['admission_id'], $marksMap))
+    $rowMarks = ($g['admission_id'] && array_key_exists($g['admission_id'], $marksMap))
         ? $marksMap[$g['admission_id']]
         : null;
+    $g['atc_marks'] = $rowMarks !== null ? (int)$rowMarks['atc_marks'] : null;
+    $manualExam = $rowMarks !== null ? ($rowMarks['exam_marks'] ?? null) : null;
     $pass = ($key !== '' && isset($passIndex[$key])) ? $passIndex[$key] : null;
+    $examSource = $pass;
+    if (!$examSource && $manualExam !== null) {
+        $examSource = ['exam_40' => (int)$manualExam, 'score' => (int)round(((int)$manualExam / 40) * 100)];
+    }
     $composed = function_exists('composeItCertificateScores')
-        ? composeItCertificateScores($pass, $g['atc_marks'])
+        ? composeItCertificateScores($examSource, $g['atc_marks'])
         : ['exam_40' => null, 'total' => null, 'grade' => '', 'complete' => false];
-    $g['exam_40'] = $pass ? ($composed['exam_40'] ?? null) : null;
-    $g['it_total'] = $composed['total'] ?? null;
-    $g['it_grade'] = $composed['grade'] ?? '';
+    $g['exam_40'] = $examSource ? ($composed['exam_40'] ?? null) : null;
+    $g['exam_from_manual'] = !$pass && $manualExam !== null;
+    $g['it_total'] = !empty($composed['complete']) ? ($composed['total'] ?? null) : null;
+    $g['it_grade'] = !empty($composed['complete']) ? ($composed['grade'] ?? '') : '';
     if (empty($g['photo']) && $adm && !empty($adm['photo'])) {
         $g['photo'] = $adm['photo'];
     }
@@ -246,10 +266,16 @@ foreach ($admByReg as $reg => $adm) {
         ($adm['last_name'] ?? '')
     );
     $admId = (int)$adm['id'];
-    $atcMarks = array_key_exists($admId, $marksMap) ? $marksMap[$admId] : null;
+    $rowMarks = array_key_exists($admId, $marksMap) ? $marksMap[$admId] : null;
+    $atcMarks = $rowMarks !== null ? (int)$rowMarks['atc_marks'] : null;
+    $manualExam = $rowMarks !== null ? ($rowMarks['exam_marks'] ?? null) : null;
     $pass = isset($passIndex[$reg]) ? $passIndex[$reg] : null;
+    $examSource = $pass;
+    if (!$examSource && $manualExam !== null) {
+        $examSource = ['exam_40' => (int)$manualExam, 'score' => (int)round(((int)$manualExam / 40) * 100)];
+    }
     $composed = function_exists('composeItCertificateScores')
-        ? composeItCertificateScores($pass, $atcMarks)
+        ? composeItCertificateScores($examSource, $atcMarks)
         : ['exam_40' => null, 'total' => null, 'grade' => '', 'complete' => false];
     $grouped[$reg] = [
         'student_name' => $fullName !== '' ? $fullName : $reg,
@@ -264,9 +290,10 @@ foreach ($admByReg as $reg => $adm) {
         'admission_id' => $admId,
         'is_it' => true,
         'atc_marks' => $atcMarks,
-        'exam_40' => $pass ? ($composed['exam_40'] ?? null) : null,
-        'it_total' => $composed['total'] ?? null,
-        'it_grade' => $composed['grade'] ?? '',
+        'exam_40' => $examSource ? ($composed['exam_40'] ?? null) : null,
+        'exam_from_manual' => !$pass && $manualExam !== null,
+        'it_total' => !empty($composed['complete']) ? ($composed['total'] ?? null) : null,
+        'it_grade' => !empty($composed['complete']) ? ($composed['grade'] ?? '') : '',
     ];
 }
 
@@ -367,16 +394,18 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
 .sm-attempts{display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .55rem;border-radius:6px;font-size:.7rem;font-weight:700;background:var(--sm-violet-lt);color:var(--sm-violet);border:1px solid #c4b5fd;cursor:pointer;transition:all .15s}
 .sm-attempts:hover{background:#ede9fe}
 
-/* Internal marks */
-.sm-int-cell{min-width:140px}
-.sm-int-form{display:flex;align-items:center;gap:.35rem;margin:0}
-.sm-int-input{width:64px;height:34px;border:1.5px solid #e2e8f0;border-radius:8px;padding:0 .4rem;font-weight:700;text-align:center;font-family:inherit;font-size:.82rem}
+/* Internal / exam marks */
+.sm-int-cell{min-width:200px}
+.sm-int-form{display:flex;flex-direction:column;gap:.35rem;margin:0;align-items:stretch}
+.sm-int-row{display:flex;align-items:center;gap:.35rem}
+.sm-int-lbl{font-size:.62rem;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;width:52px;flex-shrink:0}
+.sm-int-input{width:64px;height:32px;border:1.5px solid #e2e8f0;border-radius:8px;padding:0 .4rem;font-weight:700;text-align:center;font-family:inherit;font-size:.82rem}
 .sm-int-input:focus{outline:none;border-color:var(--sm-brand)}
-.sm-int-btn{height:34px;padding:0 .7rem;border:none;border-radius:8px;background:#059669;color:#fff;font-weight:800;font-size:.72rem;cursor:pointer;white-space:nowrap}
+.sm-int-btn{height:32px;padding:0 .7rem;border:none;border-radius:8px;background:#059669;color:#fff;font-weight:800;font-size:.72rem;cursor:pointer;white-space:nowrap;align-self:flex-start;margin-top:.15rem}
 .sm-int-btn:hover{background:#047857}
 .sm-int-btn:disabled{opacity:.6;cursor:wait}
-.sm-int-note{font-size:.68rem;color:#64748b;margin-top:.2rem}
-.sm-int-msg{font-size:.68rem;font-weight:700;margin-top:.15rem;min-height:1em}
+.sm-int-note{font-size:.68rem;color:#64748b;margin-top:.1rem}
+.sm-int-msg{font-size:.68rem;font-weight:700;margin-top:.1rem;min-height:1em}
 .sm-int-na{color:#94a3b8;font-size:.78rem;font-weight:600}
 .sm-banner{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:12px;padding:.75rem 1rem;font-size:.84rem;font-weight:600;margin-bottom:1.15rem;line-height:1.45}
 
@@ -425,7 +454,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
             </button>
             <div class="header-greeting">
                 <h2>Student Marks</h2>
-                <p>Exam results & IT internal marks (out of 60) — one place</p>
+                <p>Exam results & IT marks (Exam /40 + Internal /60)</p>
             </div>
         </div>
         <div class="header-right">
@@ -461,8 +490,8 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
         </div>
 
         <div class="sm-banner">
-            For <strong>IT courses</strong>: enter <strong>Internal /60</strong> here (Main exam is /40 from the portal). Total = Exam + Internal.
-            Non-IT rows show “—” for internals.
+            For <strong>IT courses</strong>: enter <strong>Exam /40</strong> + <strong>Internal /60</strong> here (or they appear after Admin Manual Certificate).
+            Total = Exam + Internal. Non-IT rows show "—" for these fields.
         </div>
 
         <?php if ($fetchError): ?>
@@ -513,7 +542,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                     <th>Latest Exam</th>
                     <th>Best Score</th>
                     <th>Result</th>
-                    <th>Internal /60</th>
+                    <th>Exam /40 + Int /60</th>
                     <th>Total</th>
                     <th>Attempts</th>
                 </tr></thead>
@@ -589,12 +618,25 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                         <td class="sm-int-cell" onclick="event.stopPropagation()">
                             <?php if ($isIt && $admId > 0): ?>
                                 <form class="sm-int-form" onsubmit="return saveInternalMarks(event, <?= $admId ?>)">
-                                    <input class="sm-int-input" type="number" name="atc_marks" min="0" max="60" required
-                                           value="<?= $atcMarks !== null ? (int)$atcMarks : '' ?>" placeholder="0–60"
-                                           title="ATC internal marks out of 60">
+                                    <div class="sm-int-row">
+                                        <span class="sm-int-lbl">Exam</span>
+                                        <input class="sm-int-input" type="number" name="exam_marks" min="0" max="40" required
+                                               value="<?= $exam40 !== null ? (int)$exam40 : '' ?>" placeholder="0–40"
+                                               title="Main exam marks out of 40">
+                                        <span style="font-size:.68rem;color:#94a3b8;font-weight:700">/40</span>
+                                    </div>
+                                    <div class="sm-int-row">
+                                        <span class="sm-int-lbl">Internal</span>
+                                        <input class="sm-int-input" type="number" name="atc_marks" min="0" max="60" required
+                                               value="<?= $atcMarks !== null ? (int)$atcMarks : '' ?>" placeholder="0–60"
+                                               title="ATC internal marks out of 60">
+                                        <span style="font-size:.68rem;color:#94a3b8;font-weight:700">/60</span>
+                                    </div>
                                     <button type="submit" class="sm-int-btn">Save</button>
                                 </form>
-                                <div class="sm-int-note">Exam <?= $exam40 !== null ? ((int)$exam40 . '/40') : '—/40' ?></div>
+                                <?php if (!empty($g['exam_from_manual'])): ?>
+                                    <div class="sm-int-note">From manual certificate</div>
+                                <?php endif; ?>
                                 <div class="sm-int-msg" id="imsg_<?= $admId ?>"></div>
                             <?php else: ?>
                                 <span class="sm-int-na">—</span>
@@ -698,18 +740,25 @@ function saveInternalMarks(e, admissionId) {
     e.preventDefault();
     e.stopPropagation();
     const form = e.target;
-    const input = form.querySelector('input[name="atc_marks"]');
+    const intInput = form.querySelector('input[name="atc_marks"]');
+    const examInput = form.querySelector('input[name="exam_marks"]');
     const btn = form.querySelector('button[type="submit"]');
     const msg = document.getElementById('imsg_' + admissionId);
-    const marks = parseInt(input.value, 10);
+    const marks = parseInt(intInput.value, 10);
+    const examMarks = parseInt(examInput.value, 10);
+    if (Number.isNaN(examMarks) || examMarks < 0 || examMarks > 40) {
+        if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Exam: enter 0–40'; }
+        return false;
+    }
     if (Number.isNaN(marks) || marks < 0 || marks > 60) {
-        if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Enter 0–60'; }
+        if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Internal: enter 0–60'; }
         return false;
     }
     const fd = new FormData();
     fd.append('ajax_save_atc_marks', '1');
     fd.append('admission_id', String(admissionId));
     fd.append('atc_marks', String(marks));
+    fd.append('exam_marks', String(examMarks));
     btn.disabled = true;
     if (msg) { msg.style.color = '#64748b'; msg.textContent = 'Saving…'; }
     fetch('student_marks.php', { method: 'POST', body: fd })
@@ -721,7 +770,6 @@ function saveInternalMarks(e, admissionId) {
                 return;
             }
             if (msg) { msg.style.color = '#059669'; msg.textContent = 'Saved'; }
-            // Refresh total without full reload
             setTimeout(() => location.reload(), 450);
         })
         .catch(() => {

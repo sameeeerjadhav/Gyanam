@@ -146,7 +146,7 @@ foreach ($students as &$s) {
     $s['is_it']        = isGiitItCourse($s['course_type'] ?? null, $s['course'] ?? null);
     $s['is_typing']    = isTypingCourse($s['course_type'] ?? null, $s['course'] ?? null);
     $admId = (int)$s['id'];
-    $s['atc_marks'] = array_key_exists($admId, $marksMap) ? $marksMap[$admId] : null;
+    $s['atc_marks'] = array_key_exists($admId, $marksMap) ? (int)$marksMap[$admId]['atc_marks'] : null;
     $s['typing_total'] = null;
     if ($s['is_typing']) {
         $t = $typingMap[$admId] ?? null;

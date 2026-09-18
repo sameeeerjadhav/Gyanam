@@ -3394,32 +3394,47 @@ function scaleExamMarksTo40(int $correct, int $total): int
 
 function ensureAdmissionAtcMarksSchema(PDO $pdo): void
 {
-    if (isSchemaFlagSet('schema_admission_atc_marks_v1')) {
-        return;
+    if (!isSchemaFlagSet('schema_admission_atc_marks_v1')) {
+        try {
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS admission_atc_marks (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    admission_id INT NOT NULL,
+                    atc_id INT NULL,
+                    atc_marks TINYINT UNSIGNED NOT NULL DEFAULT 0,
+                    exam_marks TINYINT UNSIGNED NULL DEFAULT NULL,
+                    updated_by_user_id INT NULL,
+                    updated_by_role VARCHAR(40) NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uniq_admission (admission_id),
+                    KEY idx_atc (atc_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ");
+            markSchemaFlag('schema_admission_atc_marks_v1');
+            markSchemaFlag('schema_admission_atc_marks_v2');
+        } catch (Exception $e) {
+            // leave unset so next request retries
+        }
     }
-    try {
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS admission_atc_marks (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                admission_id INT NOT NULL,
-                atc_id INT NULL,
-                atc_marks TINYINT UNSIGNED NOT NULL DEFAULT 0,
-                updated_by_user_id INT NULL,
-                updated_by_role VARCHAR(40) NULL,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY uniq_admission (admission_id),
-                KEY idx_atc (atc_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ");
-        markSchemaFlag('schema_admission_atc_marks_v1');
-    } catch (Exception $e) {
-        // leave unset so next request retries
+    if (!isSchemaFlagSet('schema_admission_atc_marks_v2')) {
+        try {
+            $pdo->exec('ALTER TABLE admission_atc_marks ADD COLUMN exam_marks TINYINT UNSIGNED NULL DEFAULT NULL AFTER atc_marks');
+            markSchemaFlag('schema_admission_atc_marks_v2');
+        } catch (Exception $e) {
+            try {
+                $col = $pdo->query("SHOW COLUMNS FROM admission_atc_marks LIKE 'exam_marks'")->fetch(PDO::FETCH_ASSOC);
+                if ($col) {
+                    markSchemaFlag('schema_admission_atc_marks_v2');
+                }
+            } catch (Exception $e2) {
+            }
+        }
     }
 }
 
 /**
- * @return array{admission_id:int,atc_id:?int,atc_marks:int,updated_at:?string}|null
+ * @return array{admission_id:int,atc_id:?int,atc_marks:int,exam_marks:?int,updated_at:?string}|null
  */
 function getAdmissionAtcMarks(PDO $pdo, int $admissionId): ?array
 {
@@ -3428,7 +3443,7 @@ function getAdmissionAtcMarks(PDO $pdo, int $admissionId): ?array
     }
     ensureAdmissionAtcMarksSchema($pdo);
     try {
-        $st = $pdo->prepare('SELECT admission_id, atc_id, atc_marks, updated_at FROM admission_atc_marks WHERE admission_id = ? LIMIT 1');
+        $st = $pdo->prepare('SELECT admission_id, atc_id, atc_marks, exam_marks, updated_at FROM admission_atc_marks WHERE admission_id = ? LIMIT 1');
         $st->execute([$admissionId]);
         $row = $st->fetch(PDO::FETCH_ASSOC);
         if (!$row) {
@@ -3438,6 +3453,7 @@ function getAdmissionAtcMarks(PDO $pdo, int $admissionId): ?array
             'admission_id' => (int)$row['admission_id'],
             'atc_id' => isset($row['atc_id']) ? (int)$row['atc_id'] : null,
             'atc_marks' => (int)$row['atc_marks'],
+            'exam_marks' => isset($row['exam_marks']) && $row['exam_marks'] !== null ? (int)$row['exam_marks'] : null,
             'updated_at' => $row['updated_at'] ?? null,
         ];
     } catch (Exception $e) {
@@ -3446,7 +3462,7 @@ function getAdmissionAtcMarks(PDO $pdo, int $admissionId): ?array
 }
 
 /**
- * @return array<int,int> admission_id => atc_marks
+ * @return array<int,array{atc_marks:int,exam_marks:?int}> admission_id => marks row
  */
 function getAdmissionAtcMarksMap(PDO $pdo, array $admissionIds): array
 {
@@ -3458,36 +3474,45 @@ function getAdmissionAtcMarksMap(PDO $pdo, array $admissionIds): array
     $map = [];
     try {
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $st = $pdo->prepare("SELECT admission_id, atc_marks FROM admission_atc_marks WHERE admission_id IN ($placeholders)");
+        $st = $pdo->prepare("SELECT admission_id, atc_marks, exam_marks FROM admission_atc_marks WHERE admission_id IN ($placeholders)");
         $st->execute($ids);
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $map[(int)$row['admission_id']] = (int)$row['atc_marks'];
+            $map[(int)$row['admission_id']] = [
+                'atc_marks' => (int)$row['atc_marks'],
+                'exam_marks' => isset($row['exam_marks']) && $row['exam_marks'] !== null ? (int)$row['exam_marks'] : null,
+            ];
         }
     } catch (Exception $e) {
     }
     return $map;
 }
 
+/**
+ * @param int|null $examMarks null = leave exam_marks unchanged on update; insert as NULL
+ */
 function upsertAdmissionAtcMarks(
     PDO $pdo,
     int $admissionId,
     int $atcMarks,
     ?int $atcId = null,
     ?int $updatedByUserId = null,
-    ?string $updatedByRole = null
+    ?string $updatedByRole = null,
+    ?int $examMarks = null
 ): bool {
     if ($admissionId <= 0) {
         return false;
     }
     $atcMarks = max(0, min(60, $atcMarks));
+    $examVal = $examMarks !== null ? max(0, min(40, $examMarks)) : null;
     ensureAdmissionAtcMarksSchema($pdo);
     try {
         $st = $pdo->prepare("
-            INSERT INTO admission_atc_marks (admission_id, atc_id, atc_marks, updated_by_user_id, updated_by_role)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO admission_atc_marks (admission_id, atc_id, atc_marks, exam_marks, updated_by_user_id, updated_by_role)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 atc_id = VALUES(atc_id),
                 atc_marks = VALUES(atc_marks),
+                exam_marks = IF(VALUES(exam_marks) IS NULL, exam_marks, VALUES(exam_marks)),
                 updated_by_user_id = VALUES(updated_by_user_id),
                 updated_by_role = VALUES(updated_by_role),
                 updated_at = CURRENT_TIMESTAMP
@@ -3496,6 +3521,7 @@ function upsertAdmissionAtcMarks(
             $admissionId,
             $atcId,
             $atcMarks,
+            $examVal,
             $updatedByUserId,
             $updatedByRole !== null ? substr($updatedByRole, 0, 40) : null,
         ]);
