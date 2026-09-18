@@ -16,17 +16,93 @@ requireLogin(['ATC CENTER']);
 
 $pdo      = getDBConnection();
 $userName = sanitize(getUserName());
-$atcId    = $_SESSION['atc_id'] ?? null;
+$atcId    = (int)($_SESSION['atc_id'] ?? 0);
+$userId   = (int)($_SESSION['user_id'] ?? 0);
+
+ensureAdmissionAtcMarksSchema($pdo);
+
+// ── AJAX: save ATC internal marks (/60) for IT students ──────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_save_atc_marks'])) {
+    header('Content-Type: application/json');
+    $admissionId = (int)($_POST['admission_id'] ?? 0);
+    $marks = (int)($_POST['atc_marks'] ?? -1);
+    if ($admissionId <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Invalid student.']);
+        exit;
+    }
+    if ($marks < 0 || $marks > 60) {
+        echo json_encode(['success' => false, 'message' => 'Internal marks must be between 0 and 60.']);
+        exit;
+    }
+    $chk = $pdo->prepare("
+        SELECT a.id, a.course, c.course_type
+        FROM admissions a
+        LEFT JOIN courses c ON c.course_name = a.course AND c.status = 'Active'
+        WHERE a.id = ? AND a.atc_id = ? AND a.status = 'Active'
+        LIMIT 1
+    ");
+    $chk->execute([$admissionId, $atcId]);
+    $row = $chk->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        echo json_encode(['success' => false, 'message' => 'Student not found for this ATC.']);
+        exit;
+    }
+    if (!isGiitItCourse($row['course_type'] ?? null, $row['course'] ?? null)) {
+        echo json_encode(['success' => false, 'message' => 'Internal marks out of 60 apply only to IT courses.']);
+        exit;
+    }
+    if (!upsertAdmissionAtcMarks($pdo, $admissionId, $marks, $atcId, $userId, 'ATC CENTER')) {
+        echo json_encode(['success' => false, 'message' => 'Could not save marks.']);
+        exit;
+    }
+    echo json_encode(['success' => true, 'message' => 'Internal marks saved.', 'atc_marks' => $marks]);
+    exit;
+}
 
 $integrationReady = function_exists('examIntegrationReady') && examIntegrationReady();
+
+// ── Map ATC admissions (for internals + IT students without results yet) ─────
+$admByReg = []; // registration_id => admission row
+$admIds = [];
+try {
+    $st = $pdo->prepare("
+        SELECT a.id, a.registration_id, a.roll_no, a.first_name, a.middle_name, a.last_name,
+               a.course, a.photo, c.course_type
+        FROM admissions a
+        LEFT JOIN courses c ON c.course_name = a.course AND c.status = 'Active'
+        WHERE a.atc_id = ? AND a.status = 'Active'
+        ORDER BY a.first_name ASC, a.last_name ASC
+    ");
+    $st->execute([$atcId]);
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $a) {
+        $reg = trim((string)($a['registration_id'] ?? ''));
+        if ($reg === '') {
+            $reg = trim((string)($a['roll_no'] ?? ''));
+        }
+        if ($reg === '') {
+            continue;
+        }
+        $a['login_id'] = $reg;
+        $a['is_it'] = isGiitItCourse($a['course_type'] ?? null, $a['course'] ?? null);
+        $admByReg[$reg] = $a;
+        $admIds[] = (int)$a['id'];
+    }
+} catch (Exception $e) {
+    $admByReg = [];
+}
+$marksMap = getAdmissionAtcMarksMap($pdo, $admIds);
 
 // ── Fetch marks from Exam Portal API ─────────────────────────────────────────
 $examResults = [];
 $fetchError  = null;
+$passIndex = [];
 if ($integrationReady) {
     $res = fetchAllExamResultsComplete();
     if ($res['success']) {
         $examResults = $res['data']['submissions'] ?? [];
+        if (function_exists('buildExamPassIndex')) {
+            $passIndex = buildExamPassIndex($examResults);
+        }
     } else {
         $fetchError = $res['error'] ?? 'Failed to fetch results.';
     }
@@ -133,6 +209,67 @@ foreach ($grouped as &$g) {
 }
 unset($g);
 
+// Enrich with admission_id / IT flag / ATC internals; add IT students with no exam rows yet
+foreach ($grouped as $key => &$g) {
+    $adm = $admByReg[$key] ?? null;
+    $g['admission_id'] = $adm ? (int)$adm['id'] : 0;
+    $g['is_it'] = $adm ? !empty($adm['is_it']) : isGiitItCourse(null, $g['course'] ?? null);
+    $g['atc_marks'] = ($g['admission_id'] && array_key_exists($g['admission_id'], $marksMap))
+        ? $marksMap[$g['admission_id']]
+        : null;
+    $pass = ($key !== '' && isset($passIndex[$key])) ? $passIndex[$key] : null;
+    $composed = function_exists('composeItCertificateScores')
+        ? composeItCertificateScores($pass, $g['atc_marks'])
+        : ['exam_40' => null, 'total' => null, 'grade' => '', 'complete' => false];
+    $g['exam_40'] = $pass ? ($composed['exam_40'] ?? null) : null;
+    $g['it_total'] = $composed['total'] ?? null;
+    $g['it_grade'] = $composed['grade'] ?? '';
+    if (empty($g['photo']) && $adm && !empty($adm['photo'])) {
+        $g['photo'] = $adm['photo'];
+    }
+    if ($adm && (empty($g['course']) || $g['course'] === '—')) {
+        $g['course'] = $adm['course'] ?? $g['course'];
+    }
+}
+unset($g);
+
+foreach ($admByReg as $reg => $adm) {
+    if (empty($adm['is_it'])) {
+        continue;
+    }
+    if (isset($grouped[$reg])) {
+        continue;
+    }
+    $fullName = trim(
+        ($adm['first_name'] ?? '') . ' ' .
+        (!empty($adm['middle_name']) ? $adm['middle_name'] . ' ' : '') .
+        ($adm['last_name'] ?? '')
+    );
+    $admId = (int)$adm['id'];
+    $atcMarks = array_key_exists($admId, $marksMap) ? $marksMap[$admId] : null;
+    $pass = isset($passIndex[$reg]) ? $passIndex[$reg] : null;
+    $composed = function_exists('composeItCertificateScores')
+        ? composeItCertificateScores($pass, $atcMarks)
+        : ['exam_40' => null, 'total' => null, 'grade' => '', 'complete' => false];
+    $grouped[$reg] = [
+        'student_name' => $fullName !== '' ? $fullName : $reg,
+        'identifier' => $reg,
+        'course' => (string)($adm['course'] ?? ''),
+        'photo' => (string)($adm['photo'] ?? ''),
+        'exams' => [],
+        'latest_result' => '—',
+        'best_percentage' => null,
+        'total_attempts' => 0,
+        'latest_exam' => ['exam_date' => '—', 'exam_title' => '—', 'result' => '—'],
+        'admission_id' => $admId,
+        'is_it' => true,
+        'atc_marks' => $atcMarks,
+        'exam_40' => $pass ? ($composed['exam_40'] ?? null) : null,
+        'it_total' => $composed['total'] ?? null,
+        'it_grade' => $composed['grade'] ?? '',
+    ];
+}
+
 // ── Course filter ─────────────────────────────────────────────────────────────
 $courseFilter = trim($_GET['course'] ?? 'all');
 $allCourses  = array_values(array_unique(array_filter(array_column($grouped, 'course'))));
@@ -230,6 +367,19 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
 .sm-attempts{display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .55rem;border-radius:6px;font-size:.7rem;font-weight:700;background:var(--sm-violet-lt);color:var(--sm-violet);border:1px solid #c4b5fd;cursor:pointer;transition:all .15s}
 .sm-attempts:hover{background:#ede9fe}
 
+/* Internal marks */
+.sm-int-cell{min-width:140px}
+.sm-int-form{display:flex;align-items:center;gap:.35rem;margin:0}
+.sm-int-input{width:64px;height:34px;border:1.5px solid #e2e8f0;border-radius:8px;padding:0 .4rem;font-weight:700;text-align:center;font-family:inherit;font-size:.82rem}
+.sm-int-input:focus{outline:none;border-color:var(--sm-brand)}
+.sm-int-btn{height:34px;padding:0 .7rem;border:none;border-radius:8px;background:#059669;color:#fff;font-weight:800;font-size:.72rem;cursor:pointer;white-space:nowrap}
+.sm-int-btn:hover{background:#047857}
+.sm-int-btn:disabled{opacity:.6;cursor:wait}
+.sm-int-note{font-size:.68rem;color:#64748b;margin-top:.2rem}
+.sm-int-msg{font-size:.68rem;font-weight:700;margin-top:.15rem;min-height:1em}
+.sm-int-na{color:#94a3b8;font-size:.78rem;font-weight:600}
+.sm-banner{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:12px;padding:.75rem 1rem;font-size:.84rem;font-weight:600;margin-bottom:1.15rem;line-height:1.45}
+
 /* Expand toggle */
 .sm-expand-icon{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:#f1f5f9;color:var(--text-secondary);transition:all .15s;font-size:.75rem;flex-shrink:0;border:none;cursor:pointer}
 .sm-expand-icon:hover{background:var(--sm-brand-lt);color:var(--sm-brand)}
@@ -275,7 +425,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
             </button>
             <div class="header-greeting">
                 <h2>Student Marks</h2>
-                <p>View exam results, marks & performance — grouped by student</p>
+                <p>Exam results & IT internal marks (out of 60) — one place</p>
             </div>
         </div>
         <div class="header-right">
@@ -310,6 +460,11 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
             </div>
         </div>
 
+        <div class="sm-banner">
+            For <strong>IT courses</strong>: enter <strong>Internal /60</strong> here (Main exam is /40 from the portal). Total = Exam + Internal.
+            Non-IT rows show “—” for internals.
+        </div>
+
         <?php if ($fetchError): ?>
         <div class="sm-error">⚠️ <?= htmlspecialchars($fetchError) ?></div>
         <?php endif; ?>
@@ -333,8 +488,8 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                 <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
-            <h4>Exam Portal Not Configured</h4>
-            <p>Results will appear here once the Exam Portal integration is set up, or when exam statuses are updated locally through the Exam Schedules page.</p>
+            <h4>No students found</h4>
+            <p>IT students will appear here for internal marks once admitted. Exam results appear when the Exam Portal is connected or schedules are updated.</p>
         </div>
         <?php else: ?>
 
@@ -358,11 +513,13 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                     <th>Latest Exam</th>
                     <th>Best Score</th>
                     <th>Result</th>
+                    <th>Internal /60</th>
+                    <th>Total</th>
                     <th>Attempts</th>
                 </tr></thead>
                 <tbody>
                 <?php if (empty($grouped)): ?>
-                    <tr><td colspan="9">
+                    <tr><td colspan="11">
                         <div class="sm-empty">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                             <p>No results found<?= $courseFilter !== 'all' ? ' for this course' : '' ?>.</p>
@@ -372,15 +529,21 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                     <?php foreach ($grouped as $i => $g):
                         $hasPhoto = !empty($g['photo']);
                         $initial  = strtoupper(substr($g['student_name'], 0, 1));
-                        $isPassed = strtolower($g['latest_result']) === 'passed';
+                        $isPassed = strtolower((string)$g['latest_result']) === 'passed';
                         $bestPct  = $g['best_percentage'];
                         $pctClass = $bestPct !== null ? ($bestPct >= 75 ? 'high' : ($bestPct >= 40 ? 'mid' : 'low')) : '';
-                        $latest   = $g['latest_exam'];
+                        $latest   = $g['latest_exam'] ?? ['exam_date' => '—'];
                         $latestDate = '—';
                         if (($latest['exam_date'] ?? '') && $latest['exam_date'] !== '—') {
                             try { $latestDate = date('d M Y', strtotime($latest['exam_date'])); } catch (Exception $e) { $latestDate = $latest['exam_date']; }
                         }
                         $rowId = 'sub_' . $i;
+                        $isIt = !empty($g['is_it']);
+                        $admId = (int)($g['admission_id'] ?? 0);
+                        $atcMarks = $g['atc_marks'] ?? null;
+                        $exam40 = $g['exam_40'] ?? null;
+                        $itTotal = $g['it_total'] ?? null;
+                        $itGrade = $g['it_grade'] ?? '';
                     ?>
                     <!-- Master row -->
                     <tr class="sm-master" data-search="<?= htmlspecialchars(strtolower($g['student_name'] . ' ' . $g['identifier'] . ' ' . $g['course'])) ?>" onclick="toggleSub('<?= $rowId ?>', this)">
@@ -414,24 +577,52 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                             <?php endif; ?>
                         </td>
                         <td>
+                            <?php if (($g['latest_result'] ?? '—') === '—'): ?>
+                                <span style="color:#94a3b8">—</span>
+                            <?php else: ?>
                             <span class="sm-badge sm-badge-<?= $isPassed ? 'passed' : 'failed' ?>">
                                 <span class="sm-badge-dot"></span>
                                 <?= htmlspecialchars($g['latest_result']) ?>
                             </span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="sm-int-cell" onclick="event.stopPropagation()">
+                            <?php if ($isIt && $admId > 0): ?>
+                                <form class="sm-int-form" onsubmit="return saveInternalMarks(event, <?= $admId ?>)">
+                                    <input class="sm-int-input" type="number" name="atc_marks" min="0" max="60" required
+                                           value="<?= $atcMarks !== null ? (int)$atcMarks : '' ?>" placeholder="0–60"
+                                           title="ATC internal marks out of 60">
+                                    <button type="submit" class="sm-int-btn">Save</button>
+                                </form>
+                                <div class="sm-int-note">Exam <?= $exam40 !== null ? ((int)$exam40 . '/40') : '—/40' ?></div>
+                                <div class="sm-int-msg" id="imsg_<?= $admId ?>"></div>
+                            <?php else: ?>
+                                <span class="sm-int-na">—</span>
+                            <?php endif; ?>
+                        </td>
+                        <td onclick="event.stopPropagation()">
+                            <?php if ($isIt && $itTotal !== null): ?>
+                                <strong><?= (int)$itTotal ?></strong><?php if ($itGrade !== ''): ?> <span style="font-size:.72rem;color:#64748b">(<?= htmlspecialchars($itGrade) ?>)</span><?php endif; ?>
+                            <?php else: ?>
+                                <span style="color:#94a3b8">—</span>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <span class="sm-attempts" title="Click to view all attempts">
-                                📝 <?= $g['total_attempts'] ?> attempt<?= $g['total_attempts'] > 1 ? 's' : '' ?>
+                                📝 <?= (int)$g['total_attempts'] ?> attempt<?= ((int)$g['total_attempts']) === 1 ? '' : 's' ?>
                             </span>
                         </td>
                     </tr>
                     <!-- Expandable sub-row with all exam history -->
                     <tr class="sm-sub-row" id="<?= $rowId ?>">
-                        <td colspan="9">
+                        <td colspan="11">
                             <div class="sm-sub-label">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                                 Exam History — <?= htmlspecialchars($g['student_name']) ?>
                             </div>
+                            <?php if (empty($g['exams'])): ?>
+                                <div style="padding:.75rem;color:#64748b;font-size:.82rem;font-weight:600">No exam attempts yet. You can still save internal marks above.</div>
+                            <?php else: ?>
                             <table class="sm-sub-table">
                                 <thead><tr>
                                     <th>#</th>
@@ -485,6 +676,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -502,6 +694,43 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
 
 <script src="../assets/js/dashboard.js"></script>
 <script>
+function saveInternalMarks(e, admissionId) {
+    e.preventDefault();
+    e.stopPropagation();
+    const form = e.target;
+    const input = form.querySelector('input[name="atc_marks"]');
+    const btn = form.querySelector('button[type="submit"]');
+    const msg = document.getElementById('imsg_' + admissionId);
+    const marks = parseInt(input.value, 10);
+    if (Number.isNaN(marks) || marks < 0 || marks > 60) {
+        if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Enter 0–60'; }
+        return false;
+    }
+    const fd = new FormData();
+    fd.append('ajax_save_atc_marks', '1');
+    fd.append('admission_id', String(admissionId));
+    fd.append('atc_marks', String(marks));
+    btn.disabled = true;
+    if (msg) { msg.style.color = '#64748b'; msg.textContent = 'Saving…'; }
+    fetch('student_marks.php', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(res => {
+            btn.disabled = false;
+            if (!res.success) {
+                if (msg) { msg.style.color = '#b91c1c'; msg.textContent = res.message || 'Save failed'; }
+                return;
+            }
+            if (msg) { msg.style.color = '#059669'; msg.textContent = 'Saved'; }
+            // Refresh total without full reload
+            setTimeout(() => location.reload(), 450);
+        })
+        .catch(() => {
+            btn.disabled = false;
+            if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Network error'; }
+        });
+    return false;
+}
+
 // ── Toggle sub-row ──────────────────────────────────────────────────────────
 function toggleSub(id, masterRow) {
     const subRow = document.getElementById(id);
@@ -519,7 +748,6 @@ document.getElementById('smSearch').addEventListener('input', function() {
     document.querySelectorAll('#smTable tbody tr.sm-master').forEach(r => {
         const match = (r.dataset.search || '').includes(q);
         r.style.display = match ? '' : 'none';
-        // Also hide the sub-row if master is hidden
         const subId = r.querySelector('.sm-expand-icon')?.id?.replace('icon_', '');
         if (subId) {
             const sub = document.getElementById(subId);

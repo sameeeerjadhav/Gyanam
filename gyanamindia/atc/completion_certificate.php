@@ -381,7 +381,7 @@ a.btn-generate { text-decoration:none; }
                             </span>
                         </td>
                         <td>
-                            <a class="btn-generate" href="it_internal_marks.php">
+                            <a class="btn-generate" href="student_marks.php">
                                 Enter /60
                             </a>
                         </td>
