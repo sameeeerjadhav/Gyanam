@@ -50,16 +50,22 @@ class StudentExamController extends Controller
                 'exam_configs.proctoring_settings', 'exam_configs.is_global_practice',
                 'exam_configs.question_bank_id',
             ])
-            // Only exams for this student's registered course
+            // Explicit ATC/admin assign always visible; auto-attached still need course match
             ->filter(function ($exam) use ($student) {
+                if (!empty($exam->pivot->assigned_by_user_id)) {
+                    return true;
+                }
                 return ExamCourseAssignmentService::coursesMatch($student->course, $exam->subject);
             })
             ->values();
 
-        // Also require question bank assigned to student's ATC (when centre known)
+        // Question bank must be assigned to student's ATC — except explicit unlocks
         $centre = trim((string) ($student->centre_name ?? ''));
         if ($centre !== '') {
             $exams = $exams->filter(function ($exam) use ($centre) {
+                if (!empty($exam->pivot->assigned_by_user_id)) {
+                    return true;
+                }
                 $bankId = (int) ($exam->question_bank_id ?? 0);
                 if ($bankId <= 0) {
                     return false;

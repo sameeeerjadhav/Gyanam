@@ -112,6 +112,7 @@ class AuthController extends Controller
 
         $assigned = $student->exams()
             ->where('active', true)
+            ->withPivot(['assigned_by_user_id'])
             ->orderBy('title')
             ->get([
                 'exam_configs.id',
@@ -123,7 +124,12 @@ class AuthController extends Controller
                 'exam_configs.passing_score',
                 'exam_configs.proctored',
             ])
-            ->filter(fn ($e) => \App\Services\ExamCourseAssignmentService::coursesMatch($student->course, $e->subject))
+            ->filter(function ($e) use ($student) {
+                if (!empty($e->pivot->assigned_by_user_id)) {
+                    return true;
+                }
+                return \App\Services\ExamCourseAssignmentService::coursesMatch($student->course, $e->subject);
+            })
             ->values();
 
         $payload['assigned_exams'] = $assigned->map(fn ($e) => [
