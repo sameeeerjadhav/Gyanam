@@ -106,14 +106,17 @@ class QuestionBankController extends Controller
         ]);
 
         // ATC/DLC: auto-assign to their own centre
-        // Admin: use provided centres, otherwise auto-assign to all IT ATCs (fallback: all synced ATCs)
+        // Admin: use provided centres, otherwise auto-assign to all IT + Typing ATCs (fallback: all synced ATCs)
         if ($user->isAdmin()) {
             $centres = array_values(array_unique(array_filter(
                 array_map(static fn ($c) => trim((string) $c), $data['assigned_to'] ?? []),
                 static fn ($c) => $c !== ''
             )));
             if ($centres === []) {
-                $centres = PortalAtcCentres::codesMatchingType('IT');
+                $centres = array_values(array_unique(array_merge(
+                    PortalAtcCentres::codesMatchingType('IT'),
+                    PortalAtcCentres::codesMatchingType('Typing')
+                )));
                 if ($centres === []) {
                     $centres = PortalAtcCentres::codes();
                 }
@@ -206,14 +209,17 @@ class QuestionBankController extends Controller
     }
 
     /**
-     * One-shot: assign every bank that has no centres yet to all IT ATCs
-     * (falls back to every synced ATC if no IT centres are listed).
+     * One-shot: assign every bank that has no centres yet to all IT + Typing ATCs
+     * (falls back to every synced ATC if none match).
      */
     public function backfillUnassigned(Request $request)
     {
         $this->authorizeAdmin($request);
 
-        $centres = PortalAtcCentres::codesMatchingType('IT');
+        $centres = array_values(array_unique(array_merge(
+            PortalAtcCentres::codesMatchingType('IT'),
+            PortalAtcCentres::codesMatchingType('Typing')
+        )));
         if ($centres === []) {
             $centres = PortalAtcCentres::codes();
         }
@@ -236,7 +242,7 @@ class QuestionBankController extends Controller
         return response()->json([
             'message'       => count($updated) === 0
                 ? 'All question banks already have assignments.'
-                : 'Assigned ' . count($updated) . ' bank(s) to ' . count($centres) . ' IT ATC centre(s).',
+                : 'Assigned ' . count($updated) . ' bank(s) to ' . count($centres) . ' IT/Typing ATC centre(s).',
             'banks_updated' => count($updated),
             'centres'       => count($centres),
             'banks'         => $updated,

@@ -775,13 +775,13 @@ $inactiveCount = $counts['Inactive'] ?? 0;
                         $examSyncTotal = (int)$pdo->query("
                             SELECT COUNT(*) FROM courses
                             WHERE status = 'Active'
-                              AND UPPER(TRIM(COALESCE(course_type, ''))) = 'IT'
+                              AND UPPER(TRIM(COALESCE(course_type, ''))) IN ('IT', 'TYPING')
                         ")->fetchColumn();
                     } catch (Exception $e) {}
                     ?>
-                    <button type="button" class="btn-courses-sync" id="sync-exam-courses-btn" title="Push all Active IT courses to Exam Portal QB/Exam dropdowns">
+                    <button type="button" class="btn-courses-sync" id="sync-exam-courses-btn" title="Push all Active IT and Typing courses to Exam Portal QB/Exam dropdowns">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
-                        Sync IT Courses to Exam<?= $examSyncTotal ? ' (' . $examSyncTotal . ')' : '' ?>
+                        Sync IT/Typing to Exam<?= $examSyncTotal ? ' (' . $examSyncTotal . ')' : '' ?>
                     </button>
                     <button class="btn-add" onclick="location.href='course_form.php?action=add'">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>

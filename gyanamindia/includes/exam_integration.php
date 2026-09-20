@@ -541,14 +541,14 @@ function deletePortalUserFromExam(string $username): array
  */
 function syncCoursesToExamPortal(PDO $pdo): array
 {
-    // Exam portal QB/exams use IT courses only â€” push all Active IT courses
+    // Exam portal QB/exams use Active IT + Typing courses
     try {
         $stmt = $pdo->query("
             SELECT id, course_name, course_type, duration, status
             FROM courses
             WHERE status = 'Active'
-              AND UPPER(TRIM(COALESCE(course_type, ''))) = 'IT'
-            ORDER BY course_name ASC
+              AND UPPER(TRIM(COALESCE(course_type, ''))) IN ('IT', 'TYPING')
+            ORDER BY course_type ASC, course_name ASC
         ");
     } catch (Throwable $e) {
         // Older DBs may lack status / course_type
@@ -556,8 +556,8 @@ function syncCoursesToExamPortal(PDO $pdo): array
             $stmt = $pdo->query("
                 SELECT id, course_name, course_type, duration, 'Active' AS status
                 FROM courses
-                WHERE UPPER(TRIM(COALESCE(course_type, ''))) = 'IT'
-                ORDER BY course_name ASC
+                WHERE UPPER(TRIM(COALESCE(course_type, ''))) IN ('IT', 'TYPING')
+                ORDER BY course_type ASC, course_name ASC
             ");
         } catch (Throwable $e2) {
             $stmt = $pdo->query("SELECT id, course_name, course_type, duration FROM courses ORDER BY course_name ASC");
@@ -565,7 +565,7 @@ function syncCoursesToExamPortal(PDO $pdo): array
     }
     $courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Normalize + keep only IT Active (in case of fallback query)
+    // Normalize + keep only IT / Typing Active (in case of fallback query)
     $normalized = [];
     foreach ($courses as $c) {
         $status = trim((string)($c['status'] ?? 'Active'));
@@ -573,7 +573,7 @@ function syncCoursesToExamPortal(PDO $pdo): array
             $status = 'Active';
         }
         $type = strtoupper(trim((string)($c['course_type'] ?? '')));
-        if ($type !== 'IT') {
+        if (!in_array($type, ['IT', 'TYPING'], true)) {
             continue;
         }
         if (strcasecmp($status, 'Active') !== 0) {
@@ -586,7 +586,7 @@ function syncCoursesToExamPortal(PDO $pdo): array
         $normalized[] = [
             'id'          => $c['id'] ?? null,
             'course_name' => $name,
-            'course_type' => $c['course_type'] ?? 'IT',
+            'course_type' => $c['course_type'] ?? $type,
             'duration'    => $c['duration'] ?? null,
             'status'      => 'Active',
         ];
@@ -598,7 +598,7 @@ function syncCoursesToExamPortal(PDO $pdo): array
         return [
             'success'   => false,
             'data'      => ['source_count' => 0, 'count' => 0],
-            'error'     => 'No Active IT courses found in the main portal database to sync.',
+            'error'     => 'No Active IT/Typing courses found in the main portal database to sync.',
             'http_code' => 0,
         ];
     }
@@ -610,7 +610,7 @@ function syncCoursesToExamPortal(PDO $pdo): array
 
     if (empty($result['success'])) {
         $err = $result['error'] ?? 'Sync failed';
-        $result['error'] = $err . " (tried to push {$sourceCount} Active IT course(s) from main portal DB)";
+        $result['error'] = $err . " (tried to push {$sourceCount} Active IT/Typing course(s) from main portal DB)";
         $result['data'] = array_merge(is_array($result['data'] ?? null) ? $result['data'] : [], [
             'source_count' => $sourceCount,
         ]);
@@ -628,24 +628,24 @@ function syncCoursesToExamPortal(PDO $pdo): array
     $data['source_count'] = $sourceCount;
     $data['count'] = $sourceCount;
     $data['verified_count'] = $verifiedCount;
-    $data['message'] = "{$sourceCount} Active IT course(s) pushed to Exam Portal.";
+    $data['message'] = "{$sourceCount} Active IT/Typing course(s) pushed to Exam Portal.";
 
     if ($verifiedCount === null) {
         $result['success'] = false;
-        $result['error'] = "Pushed {$sourceCount} Active IT course(s), but could not verify exam portal storage. Check EXAM_API_URL / token.";
+        $result['error'] = "Pushed {$sourceCount} Active IT/Typing course(s), but could not verify exam portal storage. Check EXAM_API_URL / token.";
         $result['data'] = $data;
         return $result;
     }
 
     if ($verifiedCount < $sourceCount) {
         $result['success'] = false;
-        $result['error'] = "Pushed {$sourceCount} Active IT course(s), but exam portal still has only {$verifiedCount}. "
+        $result['error'] = "Pushed {$sourceCount} Active IT/Typing course(s), but exam portal still has only {$verifiedCount}. "
             . 'Check write permissions on gyanam-backend/storage/app (portal_courses.json).';
         $result['data'] = $data;
         return $result;
     }
 
-    $data['message'] = "{$verifiedCount} Active IT course(s) synced and verified on Exam Portal.";
+    $data['message'] = "{$verifiedCount} Active IT/Typing course(s) synced and verified on Exam Portal.";
     $result['data'] = $data;
     return $result;
 }

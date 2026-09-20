@@ -85,14 +85,18 @@ async function getPortalCourses(ApiClient, { force = false } = {}) {
     const res = await ApiClient.getPortalCourses({ fresh: !!force });
     const list = Array.isArray(res.courses) ? res.courses : [];
     _coursesSyncedAt = res.synced_at || null;
-    // Exam portal: Active IT only (API already filters; keep a client safeguard)
+    // Exam portal: Active IT + Typing (API already filters; keep a client safeguard)
     _coursesCache = list
       .filter(c => {
         const type = String(c.course_type || '').trim().toUpperCase();
         const status = String(c.status || 'Active').trim().toLowerCase();
-        return type === 'IT' && status !== 'inactive';
+        return (type === 'IT' || type === 'TYPING') && status !== 'inactive';
       })
-      .sort((a, b) => String(a.course_name || '').localeCompare(String(b.course_name || '')));
+      .sort((a, b) => {
+        const ta = String(a.course_type || '').localeCompare(String(b.course_type || ''));
+        if (ta !== 0) return ta;
+        return String(a.course_name || '').localeCompare(String(b.course_name || ''));
+      });
   } catch (e) {
     _coursesCache = [];
     _coursesSyncedAt = null;
@@ -104,9 +108,11 @@ function courseSubjectFieldHtml(courses, selectedValue = '', inputId = 'nb-subje
   const selected = String(selectedValue || '');
   const options = (courses || []).map(c => {
     const val = String(c.course_name || '');
+    const type = String(c.course_type || '').trim();
+    const typeTag = type ? ` [${type.replace(/</g, '&lt;')}]` : '';
     const sel = val === selected ? ' selected' : '';
     const dur = c.duration ? ` · ${String(c.duration).replace(/</g, '&lt;')}` : '';
-    return `<option value="${val.replace(/"/g, '&quot;')}"${sel}>${val.replace(/</g, '&lt;')}${dur}</option>`;
+    return `<option value="${val.replace(/"/g, '&quot;')}"${sel}>${val.replace(/</g, '&lt;')}${typeTag}${dur}</option>`;
   }).join('');
   const syncHint = _coursesSyncedAt
     ? ` Last sync: ${String(_coursesSyncedAt).replace('T', ' ').slice(0, 19)}.`
@@ -118,14 +124,14 @@ function courseSubjectFieldHtml(courses, selectedValue = '', inputId = 'nb-subje
     : '';
   return `
     <input type="search" id="${inputId}-filter" class="form-input" autocomplete="off"
-      placeholder="Filter IT courses…" style="margin-bottom:0.4rem">
+      placeholder="Filter IT / Typing courses…" style="margin-bottom:0.4rem">
     <select id="${inputId}" class="form-input" style="width:100%;max-width:100%">
-      <option value="">— Select an Active IT course —</option>
+      <option value="">— Select an Active IT or Typing course —</option>
       ${orphan}
       ${options}
     </select>
     <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.35rem">
-      ${(courses || []).length} Active IT course(s) from main portal.${syncHint}
+      ${(courses || []).length} Active IT/Typing course(s) from main portal.${syncHint}
       <button type="button" id="nb-refresh-courses" class="btn btn-ghost btn-sm" style="padding:0 0.35rem;font-size:0.75rem">Refresh list</button>
     </p>`;
 }
@@ -696,7 +702,7 @@ function showNewBankModal(ApiClient, currentUser, bank = null, courses = []) {
     try {
       const fresh = await getPortalCourses(ApiClient, { force: true });
       showNewBankModal(ApiClient, currentUser, bank, fresh);
-      modalService.toast(fresh.length ? `${fresh.length} Active IT course(s) loaded` : 'Still no Active IT courses — sync from main portal Admin › Courses', fresh.length ? 'success' : 'error');
+      modalService.toast(fresh.length ? `${fresh.length} Active IT/Typing course(s) loaded` : 'Still no Active IT/Typing courses — sync from main portal Admin › Courses', fresh.length ? 'success' : 'error');
     } catch (e) {
       modalService.toast('Refresh failed: ' + e.message, 'error');
       if (btn) { btn.disabled = false; btn.textContent = 'Refresh list'; }
