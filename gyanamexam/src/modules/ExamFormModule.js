@@ -86,15 +86,19 @@ export async function renderExamForm(ApiClient, { loadPage }) {
     return placeholder + rows;
   })();
 
-  // Active IT courses only for exam subject
+  // Active IT + Typing courses for exam subject
   if (Array.isArray(courses) && courses.length) {
     courses = courses
       .filter(c => {
         const type = String(c.course_type || '').trim().toUpperCase();
         const status = String(c.status || 'Active').trim().toLowerCase();
-        return type === 'IT' && status !== 'inactive';
+        return (type === 'IT' || type === 'TYPING') && status !== 'inactive';
       })
-      .sort((a, b) => String(a.course_name || '').localeCompare(String(b.course_name || '')));
+      .sort((a, b) => {
+        const ta = String(a.course_type || '').localeCompare(String(b.course_type || ''));
+        if (ta !== 0) return ta;
+        return String(a.course_name || '').localeCompare(String(b.course_name || ''));
+      });
   }
 
   let subjectField;
@@ -102,26 +106,28 @@ export async function renderExamForm(ApiClient, { loadPage }) {
     const cur = String(exam?.subject || '');
     const opts = courses.map(c => {
       const val = String(c.course_name || '');
+      const type = String(c.course_type || '').trim();
+      const typeTag = type ? ` [${type.replace(/</g, '&lt;')}]` : '';
       const sel = val === cur ? ' selected' : '';
       const dur = c.duration ? ` · ${String(c.duration).replace(/</g, '&lt;')}` : '';
-      return `<option value="${val.replace(/"/g, '&quot;')}"${sel}>${val.replace(/</g, '&lt;')}${dur}</option>`;
+      return `<option value="${val.replace(/"/g, '&quot;')}"${sel}>${val.replace(/</g, '&lt;')}${typeTag}${dur}</option>`;
     }).join('');
     const orphan = cur && !courses.some(c => String(c.course_name || '') === cur)
       ? `<option value="${cur.replace(/"/g, '&quot;')}" selected>${cur.replace(/</g, '&lt;')} (current)</option>`
       : '';
     subjectField = `
       <input type="search" id="ex-subj-filter" class="form-input" autocomplete="off"
-        placeholder="Filter IT courses…" style="margin-bottom:0.4rem">
+        placeholder="Filter IT / Typing courses…" style="margin-bottom:0.4rem">
       <select id="ex-subj" class="form-input" style="width:100%;max-width:100%">
-        <option value="">— Select an Active IT course —</option>
+        <option value="">— Select an Active IT or Typing course —</option>
         ${orphan}
         ${opts}
       </select>
-      <p class="field-hint">${courses.length} Active IT course(s) from main portal. Sync from Gyanam India Admin › Courses.</p>`;
+      <p class="field-hint">${courses.length} Active IT/Typing course(s) from main portal. Sync from Gyanam India Admin › Courses.</p>`;
   } else {
     subjectField = `
-      <input id="ex-subj" class="form-input" value="${exam?.subject || ''}" placeholder="No Active IT courses synced yet">
-      <p class="field-hint">Sync Active IT courses from Gyanam India Admin › Courses → Sync to Exam Portal.</p>`;
+      <input id="ex-subj" class="form-input" value="${exam?.subject || ''}" placeholder="No Active IT/Typing courses synced yet">
+      <p class="field-hint">Sync Active IT/Typing courses from Gyanam India Admin › Courses → Sync to Exam Portal.</p>`;
   }
 
   el.innerHTML = `

@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Log;
  * Stores courses in JSON + Laravel cache so the exam portal admin frontend
  * can populate QB / exam subject dropdowns with real course names.
  *
- * Exam portal lists Active IT courses only.
+ * Exam portal lists Active IT + Typing courses.
  */
 class PortalCourseController extends Controller
 {
@@ -26,7 +26,7 @@ class PortalCourseController extends Controller
     }
 
     /**
-     * Keep Active IT courses only (case-insensitive).
+     * Keep Active IT + Typing courses only (case-insensitive).
      *
      * @param  array<int,mixed>  $courses
      * @return array<int,array<string,mixed>>
@@ -47,19 +47,23 @@ class PortalCourseController extends Controller
             if ($status === '') {
                 $status = 'Active';
             }
-            if ($type !== 'IT' || $status !== 'ACTIVE') {
+            if (!in_array($type, ['IT', 'TYPING'], true) || $status !== 'ACTIVE') {
                 continue;
             }
             $out[] = [
                 'id'          => $row['id'] ?? null,
                 'course_name' => $name,
-                'course_type' => $row['course_type'] ?? 'IT',
+                'course_type' => $row['course_type'] ?? $type,
                 'duration'    => $row['duration'] ?? null,
                 'status'      => 'Active',
             ];
         }
 
         usort($out, static function ($a, $b) {
+            $ta = strcasecmp((string) ($a['course_type'] ?? ''), (string) ($b['course_type'] ?? ''));
+            if ($ta !== 0) {
+                return $ta;
+            }
             return strcasecmp((string) $a['course_name'], (string) $b['course_name']);
         });
 
@@ -171,7 +175,7 @@ class PortalCourseController extends Controller
         }
 
         return response()->json([
-            'message'   => $storedCount . ' Active IT courses synced successfully.',
+            'message'   => $storedCount . ' Active IT/Typing courses synced successfully.',
             'count'     => $storedCount,
             'synced_at' => $payload['synced_at'],
         ]);
@@ -200,7 +204,7 @@ class PortalCourseController extends Controller
                 'courses'   => [],
                 'synced_at' => $data['synced_at'],
                 'count'     => 0,
-                'message'   => 'No Active IT courses synced yet. Sync from Gyanam India Admin › Courses.',
+                'message'   => 'No Active IT/Typing courses synced yet. Sync from Gyanam India Admin › Courses.',
             ]);
         }
 
