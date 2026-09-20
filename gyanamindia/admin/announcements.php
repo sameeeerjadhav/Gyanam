@@ -15,6 +15,19 @@ $message = '';
 $error = '';
 ensureAnnouncementAtcVisibilitySchema($pdo);
 
+// Flash after Post/Redirect/Get (avoids resubmit / session weirdness)
+if (!empty($_SESSION['banner_flash']) && is_array($_SESSION['banner_flash'])) {
+    $message = (string)($_SESSION['banner_flash']['message'] ?? '');
+    $error = (string)($_SESSION['banner_flash']['error'] ?? '');
+    unset($_SESSION['banner_flash']);
+}
+
+$bannerFlashRedirect = static function (string $ok = '', string $err = ''): void {
+    $_SESSION['banner_flash'] = ['message' => $ok, 'error' => $err];
+    header('Location: announcements.php');
+    exit;
+};
+
 $atcCentersForVis = [];
 try {
     $atcCentersForVis = $pdo->query("
@@ -249,6 +262,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+    // Always redirect after POST (PRG) — keeps multi-type saves stable and avoids resubmit
+    $bannerFlashRedirect($message, $error);
 }
 
 // Fetch all banners
@@ -303,9 +318,8 @@ foreach ($banners as $b) {
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
     <style>
-    /* ── Layout ── */
-    .banners-layout { display:grid; grid-template-columns:360px 1fr; gap:1.5rem; align-items:start; }
-    @media(max-width:1024px){ .banners-layout{ grid-template-columns:1fr; } }
+    /* ── Layout: full-width form on top, banners below ── */
+    .banners-layout { display:flex; flex-direction:column; gap:1.75rem; }
 
     /* ── Status Cards ── */
     .status-bar { display:grid; grid-template-columns:repeat(3, 1fr); gap:1rem; margin-bottom:1.75rem; }
@@ -340,39 +354,53 @@ foreach ($banners as $b) {
     .status-card.atc .slide-dot { background:#3b82f6; }
     .status-card.dlc .slide-dot { background:#10b981; }
 
-    /* ── Upload Card ── */
+    /* ── Upload Card (full width) ── */
     .upload-card {
         background:var(--bg-surface,#fff);
         border:1px solid var(--border-color,#e2e8f0);
         border-radius:var(--radius-xl,16px);
-        padding:1.5rem;
+        padding:1.5rem 1.75rem 1.75rem;
         box-shadow:0 2px 8px rgba(0,0,0,.04);
-        position:sticky; top:90px;
+        width:100%;
+        box-sizing:border-box;
     }
     .upload-card-header {
         display:flex;align-items:center;gap:.65rem;
-        font-size:.95rem;font-weight:800;color:var(--text-primary,#0f1523);
-        padding-bottom:.9rem;margin-bottom:1.1rem;
+        font-size:1.05rem;font-weight:800;color:var(--text-primary,#0f1523);
+        padding-bottom:.9rem;margin-bottom:1.25rem;
         border-bottom:1px solid var(--border-color,#e2e8f0);
     }
-    .upload-card-header svg { width:18px;height:18px;stroke:var(--primary-500,#6366f1);fill:none; }
+    .upload-card-header svg { width:20px;height:20px;stroke:var(--primary-500,#6366f1);fill:none; }
+    .upload-grid {
+        display:grid;
+        grid-template-columns:minmax(260px, 1fr) minmax(320px, 1.4fr);
+        gap:1.5rem 2rem;
+        align-items:start;
+    }
+    @media(max-width:900px){ .upload-grid{ grid-template-columns:1fr; } }
+    .upload-fields { display:grid; grid-template-columns:1fr 1fr; gap:0 .9rem; }
+    @media(max-width:700px){ .upload-fields{ grid-template-columns:1fr; } }
+    .upload-fields .form-group.full { grid-column:1 / -1; }
+    .upload-actions { grid-column:1 / -1; display:flex; justify-content:flex-end; margin-top:.35rem; }
+    .btn-upload { width:auto; min-width:200px; padding:.8rem 1.5rem; }
 
     /* File Drop Zone */
     .drop-zone {
         border:2px dashed #c7d2fe;border-radius:12px;
-        padding:1.5rem 1rem;text-align:center;margin-bottom:1rem;
+        padding:2rem 1.25rem;text-align:center;margin-bottom:1rem;
         background:#f5f7ff;cursor:pointer;transition:all .25s;
-        position:relative;overflow:hidden;
+        position:relative;overflow:hidden;min-height:180px;
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
     }
     .drop-zone:hover,.drop-zone.drag-over { border-color:#6366f1;background:#eef0fd; }
-    .drop-zone svg { width:32px;height:32px;color:#818cf8;margin-bottom:.5rem; }
-    .drop-zone p { font-size:.82rem;color:#475569;font-weight:500;margin:0; }
-    .drop-zone span { font-size:.72rem;color:#94a3b8;display:block;margin-top:.25rem; }
+    .drop-zone svg { width:40px;height:40px;color:#818cf8;margin-bottom:.5rem; }
+    .drop-zone p { font-size:.88rem;color:#475569;font-weight:600;margin:0; }
+    .drop-zone span { font-size:.75rem;color:#94a3b8;display:block;margin-top:.3rem; }
     .drop-zone input[type=file] { position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%; }
 
     /* Image Preview */
     #imgPreviewWrap { display:none;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:1rem;position:relative; }
-    #imgPreview { width:100%;height:130px;object-fit:cover;display:block; }
+    #imgPreview { width:100%;height:200px;object-fit:cover;display:block; }
     #removePreview {
         position:absolute;top:6px;right:6px;background:rgba(0,0,0,.55);color:#fff;
         border:none;border-radius:50%;width:24px;height:24px;font-size:.85rem;
@@ -383,7 +411,7 @@ foreach ($banners as $b) {
     .form-group { margin-bottom:.9rem; }
     .form-label { display:block;font-size:.78rem;font-weight:700;color:var(--text-secondary,#475569);margin-bottom:.35rem;letter-spacing:.01em; }
     .form-control {
-        width:100%;padding:.6rem .85rem;
+        width:100%;padding:.65rem .9rem;
         border:1.5px solid var(--border-color,#e2e8f0);
         border-radius:9px;font-size:.875rem;
         font-family:inherit;color:var(--text-primary,#0f1523);
@@ -393,15 +421,60 @@ foreach ($banners as $b) {
     }
     .form-control:focus { border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.1);outline:none; }
     .btn-upload {
-        width:100%;padding:.75rem;border:none;border-radius:10px;
+        padding:.75rem 1.25rem;border:none;border-radius:10px;
         background:linear-gradient(135deg,#6366f1,#8b5cf6);
         color:#fff;font-size:.875rem;font-weight:700;
-        cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;
+        cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
         font-family:inherit;transition:all .25s;
         box-shadow:0 4px 14px rgba(99,102,241,.3);
     }
     .btn-upload:hover { transform:translateY(-2px);box-shadow:0 6px 20px rgba(99,102,241,.4); }
     .btn-upload:active { transform:translateY(0); }
+
+    /* ATC assign — simple */
+    .atc-assign-box {
+        border:1.5px solid #e2e8f0; border-radius:12px; padding:1rem 1.1rem;
+        background:#fafbff;
+    }
+    .scope-row { display:flex; flex-wrap:wrap; gap:.55rem .85rem; margin-bottom:.75rem; }
+    .scope-opt {
+        display:inline-flex; align-items:center; gap:.4rem;
+        font-size:.82rem; font-weight:700; color:#334155; cursor:pointer;
+        padding:.35rem .7rem; border-radius:8px; border:1.5px solid #e2e8f0; background:#fff;
+    }
+    .scope-opt:has(input:checked) { border-color:#6366f1; background:#eef2ff; color:#4338ca; }
+    .scope-opt input { accent-color:#6366f1; }
+    .type-pill-row { display:flex; flex-wrap:wrap; gap:.5rem; }
+    .type-pill {
+        display:inline-flex; align-items:center; gap:.4rem;
+        padding:.55rem .9rem; border-radius:10px; border:1.5px solid #e2e8f0;
+        background:#fff; font-size:.82rem; font-weight:700; color:#334155; cursor:pointer;
+        user-select:none;
+    }
+    .type-pill:has(input:checked) { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; }
+    .type-pill input { accent-color:#2563eb; width:16px; height:16px; }
+    .field-hint { font-size:.72rem; color:#64748b; margin-top:.55rem; line-height:1.4; font-weight:500; }
+    .atc-filter-row { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:.5rem; }
+    .atc-filter-row select, .atc-filter-row input {
+        flex:1; min-width:140px; padding:.45rem .65rem; border:1.5px solid #e2e8f0;
+        border-radius:8px; font-size:.8rem; font-family:inherit;
+    }
+    .mini-btn-row { display:flex; gap:.4rem; margin-bottom:.5rem; }
+    .mini-btn {
+        border:1px solid #e2e8f0; background:#fff; border-radius:7px;
+        padding:.3rem .65rem; font-size:.72rem; font-weight:700; color:#475569; cursor:pointer;
+    }
+    .mini-btn:hover { background:#f8fafc; }
+    .atc-check-list {
+        max-height:220px; overflow:auto; border:1px solid #e2e8f0; border-radius:10px;
+        background:#fff; padding:.35rem;
+    }
+    .atc-check-list label {
+        display:flex; gap:.55rem; align-items:flex-start; padding:.45rem .55rem;
+        border-radius:8px; cursor:pointer; font-size:.8rem;
+    }
+    .atc-check-list label:hover { background:#f8fafc; }
+    .atc-check-list .meta { font-size:.68rem; color:#94a3b8; font-weight:500; }
 
     /* ── Alert ── */
     .alert {
@@ -494,8 +567,8 @@ foreach ($banners as $b) {
     .modal-overlay.open { opacity:1;pointer-events:auto; }
     .edit-modal {
         background:var(--bg-surface,#fff);border-radius:var(--radius-xl,16px);
-        width:min(520px,95vw);
-        max-height:min(90vh, 760px);
+        width:min(640px,95vw);
+        max-height:min(90vh, 820px);
         display:flex;flex-direction:column;
         overflow:hidden;
         box-shadow:0 20px 60px rgba(0,0,0,.18);
@@ -681,116 +754,118 @@ foreach ($banners as $b) {
             </div>
 
             <div class="banners-layout">
-                <!-- Upload Form -->
-                <div>
-                    <div class="upload-card">
-                        <div class="upload-card-header">
-                            <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                            Upload New Banner
-                        </div>
-                        <form method="POST" enctype="multipart/form-data" id="uploadForm">
-                            <input type="hidden" name="action" value="upload">
-
-                            <div class="drop-zone" id="dropZone">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                <p>Click or drag &amp; drop here</p>
-                                <span>Image (JPG, PNG, WEBP) &middot; Video (MP4, WEBM)</span>
-                                <input type="file" name="banner_image" id="bannerFile" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" required>
+                <!-- Upload Form (full width) -->
+                <div class="upload-card">
+                    <div class="upload-card-header">
+                        <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        Upload New Banner
+                    </div>
+                    <form method="POST" enctype="multipart/form-data" id="uploadForm" onsubmit="return prepareBannerForm('upload')">
+                        <input type="hidden" name="action" value="upload">
+                        <div class="upload-grid">
+                            <div>
+                                <div class="drop-zone" id="dropZone">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                    <p>Click or drag &amp; drop media here</p>
+                                    <span>Image (JPG, PNG, WEBP) · Video (MP4, WEBM) · Max 12 MB</span>
+                                    <input type="file" name="banner_image" id="bannerFile" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" required>
+                                </div>
+                                <div id="imgPreviewWrap">
+                                    <img id="imgPreview" src="" alt="Preview">
+                                    <video id="vidPreview" style="display:none;width:100%;height:200px;object-fit:cover" muted playsinline></video>
+                                    <button type="button" id="removePreview" title="Remove">&times;</button>
+                                </div>
                             </div>
-
-                            <div id="imgPreviewWrap">
-                                <img id="imgPreview" src="" alt="Preview">
-                                <video id="vidPreview" style="display:none;width:100%;height:130px;object-fit:cover;border-radius:10px;border:1px solid #e2e8f0" muted playsinline></video>
-                                <button type="button" id="removePreview" title="Remove">&times;</button>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label">Title / Event Name</label>
-                                <input type="text" name="title" class="form-control" placeholder="e.g. Happy Diwali 2026" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Show To</label>
-                                <select name="target_audience" id="uploadAudience" class="form-control" onchange="syncAtcAssignPanels()">
-                                    <option value="All">All — Admin, ATC &amp; DLC</option>
-                                    <option value="Admin">Admin Dashboard Only</option>
-                                    <option value="ATC">ATC Centers Only</option>
-                                    <option value="DLC">DLC Offices Only</option>
-                                </select>
-                            </div>
-                            <div class="form-group" id="uploadAtcAssignWrap">
-                                <label class="form-label">Assign to ATC Centers</label>
-                                <div class="atc-assign-box">
-                                    <div class="scope-row">
-                                        <label class="scope-opt"><input type="radio" name="visibility_scope" value="all" checked onchange="syncAtcAssignPanels()"> All Centers</label>
-                                        <label class="scope-opt"><input type="radio" name="visibility_scope" value="type" onchange="syncAtcAssignPanels()"> By Center Type</label>
-                                        <label class="scope-opt"><input type="radio" name="visibility_scope" value="specific" onchange="syncAtcAssignPanels()"> Specific Centers</label>
-                                    </div>
-                                    <div id="uploadAtcTypePanel" hidden>
-                                        <div class="type-pill-row">
-                                            <?php foreach ($masterTypes as $t): ?>
-                                            <label class="type-pill">
-                                                <input type="checkbox" name="center_types[]" value="<?= htmlspecialchars($t) ?>" class="upload-type-check">
-                                                <?= htmlspecialchars($t) ?>
-                                            </label>
-                                            <?php endforeach; ?>
+                            <div class="upload-fields">
+                                <div class="form-group full">
+                                    <label class="form-label">Title / Event Name</label>
+                                    <input type="text" name="title" class="form-control" placeholder="e.g. Happy Diwali 2026" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Show To</label>
+                                    <select name="target_audience" id="uploadAudience" class="form-control" onchange="syncAtcAssignPanels()">
+                                        <option value="All">All — Admin, ATC &amp; DLC</option>
+                                        <option value="Admin">Admin Dashboard Only</option>
+                                        <option value="ATC">ATC Centers Only</option>
+                                        <option value="DLC">DLC Offices Only</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Initial Status</label>
+                                    <select name="status" class="form-control">
+                                        <option value="Active">Active — Publish now</option>
+                                        <option value="Inactive">Inactive — Draft</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" id="orientationGroup">
+                                    <label class="form-label">Orientation</label>
+                                    <select name="orientation" class="form-control">
+                                        <option value="auto">Auto-detect (recommended)</option>
+                                        <option value="horizontal">Horizontal (Landscape)</option>
+                                        <option value="vertical">Vertical (Portrait / Reel)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group full" id="uploadAtcAssignWrap">
+                                    <label class="form-label">Who should see this on ATC dashboards?</label>
+                                    <div class="atc-assign-box">
+                                        <div class="scope-row">
+                                            <label class="scope-opt"><input type="radio" name="visibility_scope" value="all" checked onchange="syncAtcAssignPanels()"> All Centers</label>
+                                            <label class="scope-opt"><input type="radio" name="visibility_scope" value="type" onchange="syncAtcAssignPanels()"> By Center Type</label>
+                                            <label class="scope-opt"><input type="radio" name="visibility_scope" value="specific" onchange="syncAtcAssignPanels()"> Specific Centers</label>
                                         </div>
-                                        <div class="field-hint">Shows to every ATC whose center type includes the selected type(s). Combo centers match if they include that type.</div>
-                                    </div>
-                                    <div id="uploadAtcSpecific" hidden>
-                                        <div class="atc-filter-row">
-                                            <select id="uploadAtcTypeFilter" onchange="filterAtcChecks('upload')">
-                                                <option value="">All Types</option>
+                                        <div id="uploadAtcTypePanel" hidden>
+                                            <div class="type-pill-row">
                                                 <?php foreach ($masterTypes as $t): ?>
-                                                <option value="<?= htmlspecialchars($t) ?>"><?= htmlspecialchars($t) ?></option>
+                                                <label class="type-pill">
+                                                    <input type="checkbox" name="center_types[]" value="<?= htmlspecialchars($t) ?>" class="upload-type-check">
+                                                    <?= htmlspecialchars($t) ?>
+                                                </label>
                                                 <?php endforeach; ?>
-                                            </select>
-                                            <input type="search" id="uploadAtcSearch" placeholder="Search ATC…" oninput="filterAtcChecks('upload')">
+                                            </div>
+                                            <div class="field-hint">Select one or more types. Combo ATCs (e.g. Abacus + IT) match if they include any selected type.</div>
                                         </div>
-                                        <div class="mini-btn-row">
-                                            <button type="button" class="mini-btn" onclick="selectFilteredAtcs('upload', true)">Select filtered</button>
-                                            <button type="button" class="mini-btn" onclick="selectFilteredAtcs('upload', false)">Clear filtered</button>
-                                        </div>
-                                        <div class="atc-check-list" id="uploadAtcList">
-                                            <?php foreach ($atcCentersForVis as $c):
-                                                $ctype = (string)($c['center_type'] ?? '');
-                                            ?>
-                                            <label data-name="<?= htmlspecialchars(strtolower($c['name'])) ?>" data-type="<?= htmlspecialchars($ctype) ?>">
-                                                <input type="checkbox" name="visible_atc_ids[]" value="<?= (int)$c['id'] ?>">
-                                                <span>
-                                                    <strong><?= htmlspecialchars($c['name']) ?></strong>
-                                                    <div class="meta"><?= htmlspecialchars(trim($ctype . ' · ' . ($c['district'] ?? ''), ' ·')) ?></div>
-                                                </span>
-                                            </label>
-                                            <?php endforeach; ?>
-                                            <?php if (empty($atcCentersForVis)): ?>
-                                            <div style="padding:.6rem;color:#94a3b8;font-size:.78rem">No active ATC centres found.</div>
-                                            <?php endif; ?>
+                                        <div id="uploadAtcSpecific" hidden>
+                                            <div class="atc-filter-row">
+                                                <select id="uploadAtcTypeFilter" onchange="filterAtcChecks('upload')">
+                                                    <option value="">All Types</option>
+                                                    <?php foreach ($masterTypes as $t): ?>
+                                                    <option value="<?= htmlspecialchars($t) ?>"><?= htmlspecialchars($t) ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <input type="search" id="uploadAtcSearch" placeholder="Search ATC…" oninput="filterAtcChecks('upload')">
+                                            </div>
+                                            <div class="mini-btn-row">
+                                                <button type="button" class="mini-btn" onclick="selectFilteredAtcs('upload', true)">Select filtered</button>
+                                                <button type="button" class="mini-btn" onclick="selectFilteredAtcs('upload', false)">Clear filtered</button>
+                                            </div>
+                                            <div class="atc-check-list" id="uploadAtcList">
+                                                <?php foreach ($atcCentersForVis as $c):
+                                                    $ctype = (string)($c['center_type'] ?? '');
+                                                ?>
+                                                <label data-name="<?= htmlspecialchars(strtolower($c['name'])) ?>" data-type="<?= htmlspecialchars($ctype) ?>">
+                                                    <input type="checkbox" name="visible_atc_ids[]" value="<?= (int)$c['id'] ?>" class="upload-atc-check">
+                                                    <span>
+                                                        <strong><?= htmlspecialchars($c['name']) ?></strong>
+                                                        <div class="meta"><?= htmlspecialchars(trim($ctype . ' · ' . ($c['district'] ?? ''), ' ·')) ?></div>
+                                                    </span>
+                                                </label>
+                                                <?php endforeach; ?>
+                                                <?php if (empty($atcCentersForVis)): ?>
+                                                <div style="padding:.6rem;color:#94a3b8;font-size:.78rem">No active ATC centres found.</div>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+                                <div class="upload-actions">
+                                    <button type="submit" class="btn-upload">
+                                        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                        Upload Banner
+                                    </button>
+                                </div>
                             </div>
-                            <div class="form-group" id="orientationGroup">
-                                <label class="form-label">Orientation</label>
-                                <select name="orientation" class="form-control">
-                                    <option value="auto">Auto-detect (recommended)</option>
-                                    <option value="horizontal">Horizontal (Landscape)</option>
-                                    <option value="vertical">Vertical (Portrait / Reel)</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Initial Status</label>
-                                <select name="status" class="form-control">
-                                    <option value="Active">Active — Publish Immediately</option>
-                                    <option value="Inactive">Inactive — Draft</option>
-                                </select>
-                            </div>
-
-                            <button type="submit" class="btn-upload">
-                                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                Upload Banner
-                            </button>
-                        </form>
-                    </div>
+                        </div>
+                    </form>
                 </div>
 
                 <!-- Banners List -->
@@ -804,7 +879,7 @@ foreach ($banners as $b) {
                     <div class="empty-state">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                         <h3>No banners uploaded yet</h3>
-                        <p>Use the form on the left to upload your first dashboard banner.</p>
+                        <p>Use the form above to upload your first dashboard banner.</p>
                     </div>
                     <?php else: ?>
                     <div class="banners-grid">
@@ -930,9 +1005,10 @@ foreach ($banners as $b) {
         </div>
         <div class="edit-modal-body">
             <img id="editImgPreview" class="edit-img-preview" src="" alt="Current Banner">
-            <form method="POST" enctype="multipart/form-data" id="editForm">
+            <form method="POST" enctype="multipart/form-data" id="editForm" onsubmit="return prepareBannerForm('edit')">
                 <input type="hidden" name="action" value="edit">
                 <input type="hidden" name="banner_id" id="editBannerId">
+                <input type="hidden" name="visibility_scope" id="editVisibilityScopeHidden" value="all">
 
                 <div class="form-group">
                     <label class="form-label">Replace Media <span style="color:#94a3b8;font-weight:500">(optional — leave blank to keep current)</span></label>
@@ -1041,8 +1117,17 @@ function centreTypeMatches(centreType, filterType) {
     const ft = String(filterType).toLowerCase();
     if (ft === 'abacus') return raw.includes('abacus');
     if (ft === 'vedic maths' || ft === 'vedic') return raw.includes('vedic');
+    if (ft === 'typing') return raw.includes('typing');
     if (ft === 'it') return /(^|[^a-z])it([^a-z]|$)/.test(raw) || raw.includes('all three');
     return raw.includes(ft);
+}
+
+/** Enable only the active ATC-assign inputs so unused fields never POST. */
+function setPanelInputsEnabled(panel, enabled) {
+    if (!panel) return;
+    panel.querySelectorAll('input, select, textarea').forEach(el => {
+        el.disabled = !enabled;
+    });
 }
 
 function syncAtcAssignPanels() {
@@ -1060,6 +1145,8 @@ function syncAtcAssignPanels() {
     const uploadSpecific = document.getElementById('uploadAtcSpecific');
     if (uploadTypePanel) uploadTypePanel.hidden = uploadScope !== 'type' || hideUploadAtc;
     if (uploadSpecific) uploadSpecific.hidden = uploadScope !== 'specific' || hideUploadAtc;
+    setPanelInputsEnabled(uploadTypePanel, uploadScope === 'type' && !hideUploadAtc);
+    setPanelInputsEnabled(uploadSpecific, uploadScope === 'specific' && !hideUploadAtc);
 
     const editScope = document.querySelector('#editForm input[name="edit_visibility_scope"]:checked')?.value
         || (document.getElementById('editScopeSpecific')?.checked ? 'specific' : (document.getElementById('editScopeType')?.checked ? 'type' : 'all'));
@@ -1067,6 +1154,45 @@ function syncAtcAssignPanels() {
     const editBox = document.getElementById('editAtcSpecific');
     if (editTypePanel) editTypePanel.hidden = editScope !== 'type' || hideEditAtc;
     if (editBox) editBox.hidden = editScope !== 'specific' || hideEditAtc;
+    setPanelInputsEnabled(editTypePanel, editScope === 'type' && !hideEditAtc);
+    setPanelInputsEnabled(editBox, editScope === 'specific' && !hideEditAtc);
+
+    const editHidden = document.getElementById('editVisibilityScopeHidden');
+    if (editHidden) editHidden.value = hideEditAtc ? 'all' : editScope;
+}
+
+function prepareBannerForm(which) {
+    syncAtcAssignPanels();
+    const isEdit = which === 'edit';
+    const form = document.getElementById(isEdit ? 'editForm' : 'uploadForm');
+    if (!form) return true;
+
+    const aud = (isEdit
+        ? document.getElementById('editAudience')?.value
+        : document.getElementById('uploadAudience')?.value) || 'All';
+    const needsAtc = aud === 'All' || aud === 'ATC';
+
+    if (needsAtc) {
+        const scope = isEdit
+            ? (document.querySelector('#editForm input[name="edit_visibility_scope"]:checked')?.value || 'all')
+            : (document.querySelector('#uploadForm input[name="visibility_scope"]:checked')?.value || 'all');
+
+        if (scope === 'type') {
+            const checks = form.querySelectorAll(isEdit ? '.edit-type-check:checked' : '.upload-type-check:checked');
+            if (!checks.length) {
+                alert('Select at least one center type, or choose All Centers.');
+                return false;
+            }
+        }
+        if (scope === 'specific') {
+            const checks = form.querySelectorAll(isEdit ? '.edit-atc-check:checked' : '.upload-atc-check:checked');
+            if (!checks.length) {
+                alert('Select at least one ATC center, or choose All Centers / By Center Type.');
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 function filterAtcChecks(which) {

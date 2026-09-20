@@ -4363,7 +4363,12 @@ function ensureAnnouncementAtcVisibilitySchema(PDO $pdo): void {
             $pdo->exec("ALTER TABLE announcements ADD COLUMN visibility_scope VARCHAR(20) NOT NULL DEFAULT 'all' COMMENT 'all|type|specific'");
         }
         if (!in_array('center_types', $cols, true)) {
-            $pdo->exec("ALTER TABLE announcements ADD COLUMN center_types VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'JSON list of master types when visibility_scope=type'");
+            $pdo->exec("ALTER TABLE announcements ADD COLUMN center_types TEXT NULL COMMENT 'JSON list of master types when visibility_scope=type'");
+        } else {
+            $ctType = $typeByField['center_types'] ?? '';
+            if ($ctType !== '' && !str_contains($ctType, 'text') && !str_contains($ctType, 'blob')) {
+                $pdo->exec("ALTER TABLE announcements MODIFY COLUMN center_types TEXT NULL COMMENT 'JSON list of master types when visibility_scope=type'");
+            }
         }
 
         // Repair rows corrupted by old ENUM (empty / unknown audience)
@@ -4444,7 +4449,11 @@ function normalizeAnnouncementCenterTypes($raw): array {
  */
 function encodeAnnouncementCenterTypes(array $types): string {
     $types = normalizeAnnouncementCenterTypes($types);
-    return $types === [] ? '' : json_encode($types, JSON_UNESCAPED_UNICODE);
+    if ($types === []) {
+        return '';
+    }
+    $json = json_encode(array_values($types), JSON_UNESCAPED_UNICODE);
+    return is_string($json) ? $json : '';
 }
 
 /**
@@ -4614,12 +4623,13 @@ function saveAnnouncementAtcVisibility(
     if ($scope !== 'specific') {
         return;
     }
+    $ids = array_values(array_unique(array_filter(array_map('intval', $atcIds), static fn($id) => $id > 0)));
+    if ($ids === []) {
+        return;
+    }
     $ins = $pdo->prepare('INSERT IGNORE INTO announcement_atc_visibility (announcement_id, atc_id) VALUES (?, ?)');
-    foreach ($atcIds as $atcId) {
-        $atcId = (int)$atcId;
-        if ($atcId > 0) {
-            $ins->execute([$announcementId, $atcId]);
-        }
+    foreach ($ids as $atcId) {
+        $ins->execute([$announcementId, $atcId]);
     }
 }
 
