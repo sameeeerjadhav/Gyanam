@@ -451,23 +451,35 @@ export async function renderStudents(ApiClient, { currentUser }) {
                 <div class="form-group" style="margin:0;flex:1;min-width:200px">
                   <label class="form-label">Exam</label>
                   <select id="new-exam-select" class="form-input" style="height:38px">
-                    ${unassigned.map(e => `<option value="${e.id}" data-type="${e.exam_type || ''}">${e.title} (${e.subject || 'N/A'}) — ${(e.exam_type || 'main')}</option>`).join('')}
+                    ${unassigned.map(e => {
+                      const t = String(e.exam_type || 'main').toLowerCase();
+                      return `<option value="${e.id}" data-exam-type="${t}">${e.title} (${e.subject || 'N/A'}) — ${t}</option>`;
+                    }).join('')}
                   </select>
                 </div>
-                <div class="form-group" style="margin:0;width:140px" id="new-exam-attempts-wrap">
+                <div class="form-group" style="margin:0;width:160px" id="new-exam-attempts-wrap">
                   <label class="form-label">Max Attempts</label>
                   <input id="new-exam-attempts" type="number" class="form-input" value="1" min="1" max="10">
+                </div>
+                <div class="form-group" style="margin:0;width:160px;display:none" id="new-exam-unlimited-wrap">
+                  <label class="form-label">Attempts</label>
+                  <div class="form-input" style="display:flex;align-items:center;background:var(--gray-50);color:#2563eb;font-weight:600;height:38px;box-sizing:border-box">Unlimited</div>
                 </div>
                 <button class="btn btn-primary" style="height:38px;margin-bottom:0" onclick="doAssignExam(${studentId})">+ Assign</button>
               </div>`}
         </div>`;
+      const examTypeById = Object.fromEntries(
+        (allExams || []).map(e => [String(e.id), String(e.exam_type || '').toLowerCase()])
+      );
       const examSel = document.getElementById('new-exam-select');
       const syncAttemptsUi = () => {
-        const opt = examSel?.selectedOptions?.[0];
-        const type = (opt?.getAttribute('data-type') || '').toLowerCase();
+        const id = String(examSel?.value || '');
+        const type = (examTypeById[id] || examSel?.selectedOptions?.[0]?.getAttribute('data-exam-type') || '').toLowerCase();
         const isDemo = type === 'demo' || type === 'practice';
-        const wrap = document.getElementById('new-exam-attempts-wrap');
-        if (wrap) wrap.style.display = isDemo ? 'none' : '';
+        const attemptsWrap = document.getElementById('new-exam-attempts-wrap');
+        const unlimitedWrap = document.getElementById('new-exam-unlimited-wrap');
+        if (attemptsWrap) attemptsWrap.style.display = isDemo ? 'none' : '';
+        if (unlimitedWrap) unlimitedWrap.style.display = isDemo ? '' : 'none';
         const input = document.getElementById('new-exam-attempts');
         if (input && isDemo) input.value = '255';
       };
@@ -490,7 +502,9 @@ export async function renderStudents(ApiClient, { currentUser }) {
 
     window.doAssignExam = async (sId) => {
       const eId = document.getElementById('new-exam-select')?.value;
-      const type = (document.getElementById('new-exam-select')?.selectedOptions?.[0]?.getAttribute('data-type') || '').toLowerCase();
+      const type = (
+        document.getElementById('new-exam-select')?.selectedOptions?.[0]?.getAttribute('data-exam-type') || ''
+      ).toLowerCase();
       const isDemo = type === 'demo' || type === 'practice';
       const max = isDemo ? 255 : (parseInt(document.getElementById('new-exam-attempts')?.value) || 1);
       if (!eId) return;
