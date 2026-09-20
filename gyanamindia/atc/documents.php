@@ -22,7 +22,17 @@ if (!in_array($type, ['documents', 'banners', 'question_banks'], true)) {
 }
 
 $searchTerm = trim((string)($_GET['search'] ?? ''));
+$courseFilter = trim((string)($_GET['course'] ?? 'all'));
+$mediaFilter = strtolower(trim((string)($_GET['media'] ?? 'all'))); // banners: all|image|video
+$sortBy = strtolower(trim((string)($_GET['sort'] ?? 'updated'))); // updated|name|questions|date
 $error = isset($_GET['err']) ? sanitize((string)$_GET['err']) : '';
+
+if (!in_array($mediaFilter, ['all', 'image', 'video'], true)) {
+    $mediaFilter = 'all';
+}
+if (!in_array($sortBy, ['updated', 'name', 'questions', 'date', 'size'], true)) {
+    $sortBy = 'updated';
+}
 
 // Question bank PDF download
 if ($type === 'question_banks' && isset($_GET['download'])) {
@@ -90,7 +100,13 @@ if ($type === 'documents') {
         $sp = '%' . $searchTerm . '%';
         $params = [$sp, $sp];
     }
-    $sql .= ' ORDER BY d.upload_date DESC';
+    if ($sortBy === 'name') {
+        $sql .= ' ORDER BY d.original_name ASC';
+    } elseif ($sortBy === 'size') {
+        $sql .= ' ORDER BY d.file_size DESC';
+    } else {
+        $sql .= ' ORDER BY d.upload_date DESC';
+    }
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -103,6 +119,19 @@ if ($type === 'documents') {
             return str_contains(strtolower((string)($b['title'] ?? '')), $q);
         }));
     }
+    if ($mediaFilter === 'image' || $mediaFilter === 'video') {
+        $banners = array_values(array_filter($banners, static function ($b) use ($mediaFilter) {
+            $path = (string)($b['image_path'] ?? '');
+            $isVid = in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), ['mp4', 'webm', 'ogg'], true);
+            return $mediaFilter === 'video' ? $isVid : !$isVid;
+        }));
+    }
+    usort($banners, static function ($a, $b) use ($sortBy) {
+        if ($sortBy === 'name') {
+            return strcasecmp((string)($a['title'] ?? ''), (string)($b['title'] ?? ''));
+        }
+        return strtotime((string)($b['created_at'] ?? '1970-01-01')) <=> strtotime((string)($a['created_at'] ?? '1970-01-01'));
+    });
     $counts['banners'] = count($banners);
 } else {
     if ($atcCode === '') {
@@ -115,6 +144,12 @@ if ($type === 'documents') {
             $error = $error !== '' ? $error : ($res['error'] ?? 'Could not load question banks');
         } else {
             $banks = filterQuestionBanksByAtcActiveCourses($res['banks'], $activeCourseNames);
+            if ($courseFilter !== '' && $courseFilter !== 'all') {
+                $cf = strtolower($courseFilter);
+                $banks = array_values(array_filter($banks, static function ($b) use ($cf) {
+                    return strtolower(trim((string)($b['subject'] ?? ''))) === $cf;
+                }));
+            }
             if ($searchTerm !== '') {
                 $q = strtolower($searchTerm);
                 $banks = array_values(array_filter($banks, static function ($b) use ($q) {
@@ -122,10 +157,28 @@ if ($type === 'documents') {
                         || str_contains(strtolower((string)($b['subject'] ?? '')), $q);
                 }));
             }
+            usort($banks, static function ($a, $b) use ($sortBy) {
+                if ($sortBy === 'name') {
+                    return strcasecmp((string)($a['title'] ?? ''), (string)($b['title'] ?? ''));
+                }
+                if ($sortBy === 'questions') {
+                    return (int)($b['questions_count'] ?? 0) <=> (int)($a['questions_count'] ?? 0);
+                }
+                return strtotime((string)($b['updated_at'] ?? '1970-01-01')) <=> strtotime((string)($a['updated_at'] ?? '1970-01-01'));
+            });
             $counts['question_banks'] = count($banks);
         }
     }
 }
+
+$qbCourseOptions = [];
+foreach ($activeCourseNames as $cn) {
+    $cn = trim((string)$cn);
+    if ($cn !== '') {
+        $qbCourseOptions[$cn] = $cn;
+    }
+}
+ksort($qbCourseOptions, SORT_NATURAL | SORT_FLAG_CASE);
 
 function formatFileSize($bytes) {
     $bytes = (int)$bytes;
@@ -160,9 +213,11 @@ $tabMeta = [
         .filter-pills { display:flex; gap:.45rem; flex-wrap:wrap; margin-bottom:1rem; }
         .filter-pill {
             display:inline-flex; align-items:center; gap:.35rem;
-            padding:.4rem .85rem; border-radius:999px; font-size:.8rem; font-weight:700;
+            padding:.45rem .95rem; border-radius:999px; font-size:.8rem; font-weight:700;
             text-decoration:none; color:#64748b; background:#fff; border:1.5px solid #e5e7eb;
+            transition:all .15s;
         }
+        .filter-pill:hover { border-color:#c7d2fe; color:#4361ee; background:#f8faff; }
         .filter-pill.active { background:#4361ee; color:#fff; border-color:#4361ee; }
         .filter-pill .n {
             min-width:1.2rem; height:1.2rem; border-radius:999px; font-size:.68rem;
@@ -174,6 +229,71 @@ $tabMeta = [
             background:#fef2f2; border:1px solid #fecaca; color:#b91c1c;
             border-radius:10px; padding:.75rem 1rem; font-size:.84rem; margin-bottom:1rem;
         }
+
+        .dl-toolbar {
+            display:flex; align-items:flex-start; justify-content:space-between;
+            gap:1rem; flex-wrap:wrap; margin-bottom:1.15rem;
+        }
+        .dl-toolbar-title h3 {
+            margin:0; font-size:1.05rem; font-weight:800; color:var(--text-primary,#0f1523);
+            display:flex; align-items:center; gap:.5rem;
+        }
+        .dl-toolbar-title .badge-count {
+            display:inline-flex; align-items:center; justify-content:center;
+            min-width:1.5rem; height:1.5rem; padding:0 .45rem; border-radius:999px;
+            background:#eef2ff; color:#4361ee; font-size:.72rem; font-weight:800;
+        }
+        .dl-toolbar-title p {
+            margin:.25rem 0 0; font-size:.78rem; color:#94a3b8; font-weight:500;
+        }
+        .dl-filters {
+            display:flex; flex-wrap:wrap; align-items:center; gap:.55rem;
+            background:#fff; border:1.5px solid #e5e7eb; border-radius:14px;
+            padding:.55rem .65rem; box-shadow:0 1px 2px rgba(15,23,42,.03);
+        }
+        .dl-select {
+            height:40px; border:1.5px solid #e2e8f0; border-radius:10px;
+            padding:0 .75rem; font-size:.82rem; font-weight:650; font-family:inherit;
+            color:#334155; background:#f8fafc; outline:none; cursor:pointer;
+            min-width:140px; max-width:220px;
+        }
+        .dl-select:focus { border-color:#4361ee; background:#fff; box-shadow:0 0 0 3px rgba(67,97,238,.12); }
+        .dl-search {
+            display:flex; align-items:center; gap:.45rem;
+            height:40px; padding:0 .75rem 0 .85rem;
+            border:1.5px solid #e2e8f0; border-radius:10px;
+            background:#f8fafc; min-width:200px; flex:1;
+        }
+        .dl-search:focus-within { border-color:#4361ee; background:#fff; box-shadow:0 0 0 3px rgba(67,97,238,.12); }
+        .dl-search svg { width:16px; height:16px; color:#94a3b8; flex-shrink:0; }
+        .dl-search input {
+            border:none; outline:none; background:transparent; width:100%;
+            font-size:.84rem; font-family:inherit; color:#0f172a; font-weight:500;
+        }
+        .dl-search input::placeholder { color:#94a3b8; font-weight:500; }
+        .dl-btn-search {
+            height:40px; padding:0 1.1rem; border:none; border-radius:10px;
+            background:linear-gradient(135deg,#4361ee,#6366f1);
+            color:#fff; font-size:.82rem; font-weight:800; font-family:inherit;
+            cursor:pointer; display:inline-flex; align-items:center; gap:.4rem;
+            box-shadow:0 4px 12px rgba(67,97,238,.28); transition:transform .15s, box-shadow .15s;
+            white-space:nowrap;
+        }
+        .dl-btn-search:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(67,97,238,.35); }
+        .dl-btn-search:active { transform:none; }
+        .dl-btn-search svg { width:15px; height:15px; }
+        .dl-btn-clear {
+            height:40px; padding:0 .9rem; border:1.5px solid #e2e8f0; border-radius:10px;
+            background:#fff; color:#64748b; font-size:.78rem; font-weight:700;
+            text-decoration:none; display:inline-flex; align-items:center;
+        }
+        .dl-btn-clear:hover { border-color:#cbd5e1; color:#334155; background:#f8fafc; }
+        @media (max-width:720px) {
+            .dl-filters { width:100%; }
+            .dl-search { min-width:0; width:100%; flex:1 1 100%; }
+            .dl-select { max-width:none; flex:1; }
+        }
+
         .documents-table thead th {
             text-transform:uppercase; font-size:.75rem; letter-spacing:.5px;
             font-weight:700; color:var(--text-secondary); padding:1rem;
@@ -249,18 +369,69 @@ $tabMeta = [
                 <div class="dl-err"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
-            <div class="page-toolbar">
-                <h3>
-                    <?= htmlspecialchars($tabMeta[$type]) ?>
-                    <span class="badge-count"><?= (int)$counts[$type] ?></span>
-                </h3>
-                <form method="GET" style="display:flex;gap:.75rem;">
+            <?php
+            $hasExtraFilters = ($searchTerm !== '')
+                || ($courseFilter !== '' && $courseFilter !== 'all')
+                || ($mediaFilter !== 'all')
+                || ($sortBy !== 'updated' && $sortBy !== 'date');
+            $toolbarHint = match ($type) {
+                'question_banks' => 'Only banks for your activated courses',
+                'banners' => 'Banners assigned to your centre',
+                default => 'Shared documents from Head Office',
+            };
+            ?>
+            <div class="dl-toolbar">
+                <div class="dl-toolbar-title">
+                    <h3>
+                        <?= htmlspecialchars($tabMeta[$type]) ?>
+                        <span class="badge-count"><?= (int)$counts[$type] ?></span>
+                    </h3>
+                    <p><?= htmlspecialchars($toolbarHint) ?></p>
+                </div>
+                <form method="GET" class="dl-filters" action="documents.php">
                     <input type="hidden" name="type" value="<?= htmlspecialchars($type) ?>">
-                    <div class="search-bar">
+
+                    <?php if ($type === 'question_banks'): ?>
+                    <select class="dl-select" name="course" onchange="this.form.submit()" title="Filter by course">
+                        <option value="all" <?= $courseFilter === 'all' || $courseFilter === '' ? 'selected' : '' ?>>All courses</option>
+                        <?php foreach ($qbCourseOptions as $cn): ?>
+                        <option value="<?= htmlspecialchars($cn) ?>" <?= strcasecmp($courseFilter, $cn) === 0 ? 'selected' : '' ?>><?= htmlspecialchars($cn) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select class="dl-select" name="sort" onchange="this.form.submit()" title="Sort">
+                        <option value="updated" <?= $sortBy === 'updated' ? 'selected' : '' ?>>Newest updated</option>
+                        <option value="name" <?= $sortBy === 'name' ? 'selected' : '' ?>>Name A–Z</option>
+                        <option value="questions" <?= $sortBy === 'questions' ? 'selected' : '' ?>>Most questions</option>
+                    </select>
+                    <?php elseif ($type === 'banners'): ?>
+                    <select class="dl-select" name="media" onchange="this.form.submit()" title="Media type">
+                        <option value="all" <?= $mediaFilter === 'all' ? 'selected' : '' ?>>All media</option>
+                        <option value="image" <?= $mediaFilter === 'image' ? 'selected' : '' ?>>Images only</option>
+                        <option value="video" <?= $mediaFilter === 'video' ? 'selected' : '' ?>>Videos only</option>
+                    </select>
+                    <select class="dl-select" name="sort" onchange="this.form.submit()" title="Sort">
+                        <option value="date" <?= in_array($sortBy, ['date', 'updated'], true) ? 'selected' : '' ?>>Newest first</option>
+                        <option value="name" <?= $sortBy === 'name' ? 'selected' : '' ?>>Title A–Z</option>
+                    </select>
+                    <?php else: ?>
+                    <select class="dl-select" name="sort" onchange="this.form.submit()" title="Sort">
+                        <option value="date" <?= in_array($sortBy, ['date', 'updated'], true) ? 'selected' : '' ?>>Newest first</option>
+                        <option value="name" <?= $sortBy === 'name' ? 'selected' : '' ?>>Name A–Z</option>
+                        <option value="size" <?= $sortBy === 'size' ? 'selected' : '' ?>>Largest first</option>
+                    </select>
+                    <?php endif; ?>
+
+                    <div class="dl-search">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                        <input type="text" name="search" placeholder="Search…" value="<?= htmlspecialchars($searchTerm) ?>">
+                        <input type="text" name="search" placeholder="<?= $type === 'question_banks' ? 'Search bank or course…' : 'Search…' ?>" value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off">
                     </div>
-                    <button type="submit" class="btn-primary" style="padding:0 1.5rem;">Search</button>
+                    <button type="submit" class="dl-btn-search">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        Search
+                    </button>
+                    <?php if ($hasExtraFilters): ?>
+                    <a class="dl-btn-clear" href="documents.php?type=<?= urlencode($type) ?>">Clear</a>
+                    <?php endif; ?>
                 </form>
             </div>
 
@@ -380,7 +551,11 @@ $tabMeta = [
                     <?php else: foreach ($banks as $i => $bank):
                         $id = (int)($bank['id'] ?? 0);
                         $updated = !empty($bank['updated_at']) ? date('d M Y', strtotime((string)$bank['updated_at'])) : '—';
-                        $dl = 'documents.php?type=question_banks&download=' . $id;
+                        $dlQs = ['type' => 'question_banks', 'download' => $id];
+                        if ($searchTerm !== '') $dlQs['search'] = $searchTerm;
+                        if ($courseFilter !== '' && $courseFilter !== 'all') $dlQs['course'] = $courseFilter;
+                        if ($sortBy !== 'updated') $dlQs['sort'] = $sortBy;
+                        $dl = 'documents.php?' . http_build_query($dlQs);
                     ?>
                         <tr>
                             <td style="text-align:center;font-weight:600;color:var(--text-secondary)"><?= $i + 1 ?></td>
