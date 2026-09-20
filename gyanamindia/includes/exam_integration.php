@@ -722,6 +722,109 @@ function examPortalAtcCodeFromSession(?PDO $pdo = null): string
 }
 
 /**
+ * Course names this ATC has activated (fee set with matching HO share), for QB downloads etc.
+ *
+ * @return list<string>
+ */
+function getAtcActiveCourseNames(PDO $pdo, int $atcId): array
+{
+    if ($atcId <= 0) {
+        return [];
+    }
+    try {
+        ensureDualMaterialCourseSchema($pdo);
+    } catch (Throwable $e) {
+    }
+    try {
+        $st = $pdo->prepare("
+            SELECT c.course_name,
+                   c.material_type,
+                   c.ho_share, c.ho_share_with_material, c.ho_share_without_material,
+                   acf.final_fee AS my_fee,
+                   acf.fee_with_material, acf.fee_without_material
+            FROM atc_course_fees acf
+            INNER JOIN courses c ON c.id = acf.course_id AND c.status = 'Active'
+            WHERE acf.atc_id = ?
+        ");
+        $st->execute([$atcId]);
+        $names = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $c) {
+            $feeWith = (float)($c['fee_with_material'] ?? 0);
+            $feeWithout = (float)($c['fee_without_material'] ?? 0);
+            $legacyFee = (float)($c['my_fee'] ?? 0);
+            $hoWith = (float)($c['ho_share_with_material'] ?? 0);
+            $hoWithout = (float)($c['ho_share_without_material'] ?? 0);
+            $legacyHo = (float)($c['ho_share'] ?? 0);
+            if ($feeWith <= 0 && $feeWithout <= 0 && $legacyFee > 0) {
+                if (($c['material_type'] ?? '') === 'With Material') {
+                    $feeWith = $legacyFee;
+                } else {
+                    $feeWithout = $legacyFee;
+                }
+            }
+            if ($hoWith <= 0 && $hoWithout <= 0 && $legacyHo > 0) {
+                if (($c['material_type'] ?? '') === 'With Material') {
+                    $hoWith = $legacyHo;
+                } else {
+                    $hoWithout = $legacyHo;
+                }
+            }
+            $active = ($feeWith > 0 && $hoWith > 0) || ($feeWithout > 0 && $hoWithout > 0);
+            if (!$active) {
+                continue;
+            }
+            $name = trim((string)($c['course_name'] ?? ''));
+            if ($name !== '') {
+                $names[$name] = $name;
+            }
+        }
+        return array_values($names);
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+/**
+ * Keep only question banks whose subject matches an ATC-active course name.
+ *
+ * @param list<array> $banks
+ * @param list<string> $activeCourseNames
+ * @return list<array>
+ */
+function filterQuestionBanksByAtcActiveCourses(array $banks, array $activeCourseNames): array
+{
+    $norm = static function (?string $v): string {
+        $v = trim((string)$v);
+        if ($v === '') {
+            return '';
+        }
+        $v = preg_replace('/\s+/u', ' ', $v) ?? $v;
+        return function_exists('mb_strtolower') ? mb_strtolower($v) : strtolower($v);
+    };
+    $allowed = [];
+    foreach ($activeCourseNames as $name) {
+        $key = $norm($name);
+        if ($key !== '') {
+            $allowed[$key] = true;
+        }
+    }
+    if ($allowed === []) {
+        return [];
+    }
+    $out = [];
+    foreach ($banks as $b) {
+        if (!is_array($b)) {
+            continue;
+        }
+        $subj = $norm($b['subject'] ?? '');
+        if ($subj !== '' && isset($allowed[$subj])) {
+            $out[] = $b;
+        }
+    }
+    return $out;
+}
+
+/**
  * List question banks assigned to an ATC centre code.
  *
  * @return array{success:bool,banks:list<array>,error:?string}
