@@ -210,6 +210,14 @@ class StudentExamController extends Controller
 
         $isDemo = ExamCourseAssignmentService::isDemoExam($exam);
 
+        // Demo exams always keep unlimited attempts on the pivot
+        if ($isDemo && $pivot && (int) ($pivot->max_attempts ?? 0) < ExamCourseAssignmentService::DEMO_MAX_ATTEMPTS) {
+            $student->exams()->updateExistingPivot((int) $examId, [
+                'max_attempts' => ExamCourseAssignmentService::DEMO_MAX_ATTEMPTS,
+            ]);
+            $pivot->max_attempts = ExamCourseAssignmentService::DEMO_MAX_ATTEMPTS;
+        }
+
         // Course demo: allow start without prior ATC unlock (auto-attach)
         if (!$pivot && $isDemo && $this->studentMayStartCourseDemo($student, $exam)) {
             $student->exams()->syncWithoutDetaching([
@@ -234,6 +242,7 @@ class StudentExamController extends Controller
             abort(403, 'This exam is locked until your ATC generates your hall ticket.');
         }
 
+        // Demo: never block on attempt count
         $maxAttempts = $isDemo
             ? ExamCourseAssignmentService::DEMO_MAX_ATTEMPTS
             : (int) ($pivot->max_attempts ?? 1);

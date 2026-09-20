@@ -63,7 +63,9 @@ export class PreExamGate {
     const exams = Array.isArray(list) ? list : (list?.data || []);
     this.exam = exams.find(e => String(e.id) === String(this.examId)) || null;
     if (!this.exam) throw new Error('This exam is not assigned to you or is no longer available.');
-    if (this.exam.attempt_info && !this.exam.attempt_info.can_attempt) {
+    const isDemo = (this.exam.exam_type || '') === 'demo' || !!this.exam.is_demo;
+    const unlimited = isDemo || !!this.exam.attempt_info?.unlimited;
+    if (!unlimited && this.exam.attempt_info && !this.exam.attempt_info.can_attempt) {
       throw new Error('No attempts remaining for this exam.');
     }
   }
