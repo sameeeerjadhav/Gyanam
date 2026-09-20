@@ -21,7 +21,7 @@ class ExamAssignmentController extends Controller
             ->with(['exams' => function ($q) {
                 $q->withPivot(['max_attempts', 'assigned_at', 'assigned_by_user_id'])
                   ->select('exam_configs.id', 'exam_configs.exam_id', 'exam_configs.title',
-                           'exam_configs.subject', 'exam_configs.active');
+                           'exam_configs.subject', 'exam_configs.exam_type', 'exam_configs.active');
             }])
             ->get(['id', 'identifier', 'name', 'centre_name', 'exam_slot'])
             ->map(function ($student) {
@@ -29,15 +29,22 @@ class ExamAssignmentController extends Controller
                     $used = $student->submissions()
                         ->where('exam_config_id', $exam->id)
                         ->count();
+                    $isDemo = \App\Services\ExamCourseAssignmentService::isDemoExam($exam);
+                    $maxAttempts = $isDemo
+                        ? \App\Services\ExamCourseAssignmentService::DEMO_MAX_ATTEMPTS
+                        : (int) $exam->pivot->max_attempts;
                     return [
                         'exam_id'        => $exam->id,
                         'exam_code'      => $exam->exam_id,
                         'title'          => $exam->title,
                         'subject'        => $exam->subject,
+                        'exam_type'      => $exam->exam_type,
+                        'is_demo'        => $isDemo,
                         'active'         => $exam->active,
-                        'max_attempts'   => $exam->pivot->max_attempts,
+                        'max_attempts'   => $isDemo ? null : $maxAttempts,
                         'used_attempts'  => $used,
-                        'remaining'      => max(0, $exam->pivot->max_attempts - $used),
+                        'remaining'      => $isDemo ? null : max(0, $maxAttempts - $used),
+                        'unlimited'      => $isDemo,
                         'assigned_at'    => $exam->pivot->assigned_at,
                     ];
                 });
@@ -143,7 +150,7 @@ class ExamAssignmentController extends Controller
     public function updateAttempts(Request $request, $studentId, $examId)
     {
         $data = $request->validate([
-            'max_attempts' => 'required|integer|min:1|max:10',
+            'max_attempts' => 'required|integer|min:1|max:255',
         ]);
 
         $user    = $request->user();
@@ -153,11 +160,23 @@ class ExamAssignmentController extends Controller
             abort(403, 'You can only modify assignments in your centre.');
         }
 
+        $exam = ExamConfig::findOrFail($examId);
+        $isDemo = \App\Services\ExamCourseAssignmentService::isDemoExam($exam);
+        $maxAttempts = $isDemo
+            ? \App\Services\ExamCourseAssignmentService::DEMO_MAX_ATTEMPTS
+            : (int) $data['max_attempts'];
+
         $student->exams()->updateExistingPivot($examId, [
-            'max_attempts' => $data['max_attempts'],
+            'max_attempts' => $maxAttempts,
         ]);
 
-        return response()->json(['message' => 'Attempt limit updated.']);
+        return response()->json([
+            'message' => $isDemo
+                ? 'Demo exams always have unlimited attempts.'
+                : 'Attempt limit updated.',
+            'max_attempts' => $maxAttempts,
+            'unlimited' => $isDemo,
+        ]);
     }
 
     /**

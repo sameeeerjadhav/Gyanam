@@ -426,16 +426,21 @@ export async function renderStudents(ApiClient, { currentUser }) {
           ? `<p style="font-size:0.82rem;color:var(--text-muted)">No exams assigned yet.</p>`
           : `<div class="table-wrap"><table>
                 <thead><tr><th>Exam</th><th>Subject</th><th>Attempts Used</th><th>Max Allowed</th><th>Actions</th></tr></thead>
-                <tbody>${student.assignments.map(a => `<tr>
-                  <td style="font-weight:600">${a.title}</td>
+                <tbody>${student.assignments.map(a => {
+                  const isDemo = a.is_demo || a.unlimited || (a.exam_type || '') === 'demo';
+                  return `<tr>
+                  <td style="font-weight:600">${a.title}${isDemo ? ' <span class="badge badge-blue" style="font-size:0.65rem">Demo</span>' : ''}</td>
                   <td style="color:var(--text-muted);font-size:0.82rem">${a.subject || '—'}</td>
-                  <td><span class="badge ${a.remaining === 0 ? 'badge-red' : 'badge-blue'}">${a.used_attempts} / ${a.max_attempts}</span></td>
-                  <td><div style="display:flex;align-items:center;gap:0.5rem">
+                  <td><span class="badge badge-blue">${a.used_attempts}${isDemo ? '' : ` / ${a.max_attempts}`}</span></td>
+                  <td>${isDemo
+                    ? `<span class="badge badge-blue">Unlimited</span>`
+                    : `<div style="display:flex;align-items:center;gap:0.5rem">
                     <input type="number" id="att-${a.exam_id}" value="${a.max_attempts}" min="1" max="10" style="width:60px;padding:3px 6px;border:1px solid var(--gray-300);border-radius:4px;font-size:0.82rem">
                     <button class="btn btn-outline btn-sm" onclick="updateAttemptLimit(${studentId},${a.exam_id})">Update</button>
-                  </div></td>
+                  </div>`}</td>
                   <td><button class="btn btn-danger btn-sm" onclick="removeAssignment(${studentId},${a.exam_id})">Remove</button></td>
-                </tr>`).join('')}</tbody>
+                </tr>`;
+                }).join('')}</tbody>
               </table></div>`}
         </div>
         <div style="border-top:1px solid var(--gray-200);padding-top:1rem">
@@ -446,16 +451,31 @@ export async function renderStudents(ApiClient, { currentUser }) {
                 <div class="form-group" style="margin:0;flex:1;min-width:200px">
                   <label class="form-label">Exam</label>
                   <select id="new-exam-select" class="form-input" style="height:38px">
-                    ${unassigned.map(e => `<option value="${e.id}">${e.title} (${e.subject || 'N/A'})</option>`).join('')}
+                    ${unassigned.map(e => `<option value="${e.id}" data-type="${e.exam_type || ''}">${e.title} (${e.subject || 'N/A'}) — ${(e.exam_type || 'main')}</option>`).join('')}
                   </select>
                 </div>
-                <div class="form-group" style="margin:0;width:120px">
+                <div class="form-group" style="margin:0;width:140px" id="new-exam-attempts-wrap">
                   <label class="form-label">Max Attempts</label>
                   <input id="new-exam-attempts" type="number" class="form-input" value="1" min="1" max="10">
+                  <p id="new-exam-attempts-hint" style="font-size:0.7rem;color:var(--text-muted);margin:0.25rem 0 0;display:none">Demo = unlimited</p>
                 </div>
                 <button class="btn btn-primary" style="height:38px;margin-bottom:0" onclick="doAssignExam(${studentId})">+ Assign</button>
               </div>`}
         </div>`;
+      const examSel = document.getElementById('new-exam-select');
+      const syncAttemptsUi = () => {
+        const opt = examSel?.selectedOptions?.[0];
+        const type = (opt?.getAttribute('data-type') || '').toLowerCase();
+        const isDemo = type === 'demo' || type === 'practice';
+        const wrap = document.getElementById('new-exam-attempts-wrap');
+        const input = document.getElementById('new-exam-attempts');
+        const hint = document.getElementById('new-exam-attempts-hint');
+        if (wrap) wrap.style.opacity = isDemo ? '0.55' : '1';
+        if (input) { input.disabled = isDemo; input.value = isDemo ? '255' : (input.value || '1'); }
+        if (hint) hint.style.display = isDemo ? 'block' : 'none';
+      };
+      examSel?.addEventListener('change', syncAttemptsUi);
+      syncAttemptsUi();
     }
 
     window.updateAttemptLimit = async (sId, eId) => {
