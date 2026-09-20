@@ -1,7 +1,8 @@
 <?php
 /**
- * Gyanam Portal — Login Page v3.0
+ * Gyanam Portal — Login Page v3.0.1
  * Premium split-screen layout with natural logo display
+ * Deploy probe: 2026-09-20 git auto-deploy check
  */
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/includes/auth.php';
@@ -27,6 +28,7 @@ $csrfToken = generateCSRFToken();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Gyanam India Educational Services — Secure Login Portal for Super Admin, DLC Office, and ATC Login users.">
     <title>Login — Gyanam India</title>
+    <!-- deploy-probe: 2026-09-20-v3.0.1 -->
     <link rel="stylesheet" href="assets/css/global.css">
     <link rel="stylesheet" href="assets/css/login.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
