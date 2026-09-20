@@ -110,6 +110,8 @@ class AuthController extends Controller
         $payload['registered_at'] = $student->created_at ? $student->created_at->toIso8601String() : null;
         $payload['profile_updated_at'] = $student->updated_at ? $student->updated_at->toIso8601String() : null;
 
+        app(\App\Services\ExamCourseAssignmentService::class)->assignCourseExamsToStudent($student);
+
         $assigned = $student->exams()
             ->where('active', true)
             ->withPivot(['assigned_by_user_id'])

@@ -417,7 +417,7 @@ function renderStudentsPanel(students, availableExams) {
                 ${(s.assignments || []).map(a => `
                   <span class="badge badge-primary" style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.7rem">
                     ${a.title}
-                    <span style="opacity:0.7;font-size:0.6rem">(${a.remaining}/${a.max_attempts})</span>
+                    <span style="opacity:0.7;font-size:0.6rem">${a.unlimited || a.is_demo ? '(unlimited)' : `(${a.remaining}/${a.max_attempts})`}</span>
                     <button onclick="event.stopPropagation();unassignStudentExam('${s.id}','${a.exam_id}','${a.title.replace(/'/g,"\\'")}')"
                       style="background:none;border:none;cursor:pointer;padding:0;line-height:1;color:inherit;opacity:0.75" title="Remove">✕</button>
                   </span>`).join('')}
@@ -497,7 +497,8 @@ async function showAssignModal(ApiClient, studentId, studentName, availableExams
     : availableExams
         .map(e => {
           const already = alreadyAssignedIds.includes(String(e.id));
-          return `<option value="${e.id}" ${already ? 'disabled style="color:#94a3b8"' : ''}>${e.title} — ${e.subject} (${e.total_questions}Q, ${e.duration}min)${e.proctored ? ' · 🛡️ Proctored' : ' · Normal'}${already ? ' ✓ Already assigned' : ''}</option>`;
+          const type = e.exam_type || 'main';
+          return `<option value="${e.id}" data-type="${type}" ${already ? 'disabled style="color:#94a3b8"' : ''}>${e.title} — ${e.subject} (${e.total_questions}Q, ${e.duration}min) · ${type}${e.proctored ? ' · Proctored' : ''}${already ? ' ✓ Already assigned' : ''}</option>`;
         })
         .join('');
 
@@ -522,7 +523,7 @@ async function showAssignModal(ApiClient, studentId, studentName, availableExams
             ${examOptions}
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="assign-attempts-wrap">
           <label class="form-label">Max Attempts</label>
           <select id="assign-attempts-select" class="form-select">
             <option value="1">1 attempt</option>
@@ -537,9 +538,20 @@ async function showAssignModal(ApiClient, studentId, studentName, availableExams
       </div>
     </div>`;
 
+  const syncAtcAttempts = () => {
+    const type = (document.getElementById('assign-exam-select')?.selectedOptions?.[0]?.getAttribute('data-type') || '').toLowerCase();
+    const isDemo = type === 'demo' || type === 'practice';
+    const wrap = document.getElementById('assign-attempts-wrap');
+    if (wrap) wrap.style.display = isDemo ? 'none' : '';
+  };
+  document.getElementById('assign-exam-select')?.addEventListener('change', syncAtcAttempts);
+  syncAtcAttempts();
+
   window.doATCAssignExam = async (sid) => {
     const examId = document.getElementById('assign-exam-select').value;
-    const maxAttempts = parseInt(document.getElementById('assign-attempts-select').value) || 1;
+    const type = (document.getElementById('assign-exam-select')?.selectedOptions?.[0]?.getAttribute('data-type') || '').toLowerCase();
+    const isDemo = type === 'demo' || type === 'practice';
+    const maxAttempts = isDemo ? 255 : (parseInt(document.getElementById('assign-attempts-select')?.value, 10) || 1);
     if (!examId) { modalService.toast('Please select an exam', 'error'); return; }
     try {
       await ApiClient.assignExam(parseInt(sid), parseInt(examId), maxAttempts);
@@ -573,7 +585,7 @@ async function showBulkAssignModal(ApiClient, availableExams) {
   const selectedIds = [...document.querySelectorAll('.atc-stu-select:checked')].map(cb => cb.value);
   if (selectedIds.length === 0) { modalService.toast('No students selected', 'error'); return; }
 
-  const examOpts = availableExams.map(e => `<option value="${e.id}">${e.title} — ${e.subject} (${e.total_questions}Q, ${e.duration}min)${e.proctored ? ' · 🛡️ Proctored' : ' · Normal'}</option>`).join('');
+  const examOpts = availableExams.map(e => `<option value="${e.id}" data-type="${e.exam_type || ''}">${e.title} — ${e.subject} (${e.total_questions}Q, ${e.duration}min) · ${e.exam_type || 'main'}${e.proctored ? ' · Proctored' : ''}</option>`).join('');
 
   getOverlay().style.display = 'flex';
   document.getElementById('modal-box').innerHTML = `
@@ -593,7 +605,7 @@ async function showBulkAssignModal(ApiClient, availableExams) {
           <label class="form-label">Select Exam to Assign *</label>
           <select id="atc-bulk-exam" class="form-select">${examOpts}</select>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="atc-bulk-attempts-wrap">
           <label class="form-label">Max Attempts</label>
           <select id="atc-bulk-attempts" class="form-select">
             <option value="1">1 attempt</option>
@@ -608,9 +620,20 @@ async function showBulkAssignModal(ApiClient, availableExams) {
       </div>
     </div>`;
 
+  const syncBulkAttempts = () => {
+    const type = (document.getElementById('atc-bulk-exam')?.selectedOptions?.[0]?.getAttribute('data-type') || '').toLowerCase();
+    const isDemo = type === 'demo' || type === 'practice';
+    const wrap = document.getElementById('atc-bulk-attempts-wrap');
+    if (wrap) wrap.style.display = isDemo ? 'none' : '';
+  };
+  document.getElementById('atc-bulk-exam')?.addEventListener('change', syncBulkAttempts);
+  syncBulkAttempts();
+
   window.doATCBulkAssign = async () => {
     const examId = document.getElementById('atc-bulk-exam').value;
-    const maxAttempts = parseInt(document.getElementById('atc-bulk-attempts').value) || 1;
+    const type = (document.getElementById('atc-bulk-exam')?.selectedOptions?.[0]?.getAttribute('data-type') || '').toLowerCase();
+    const isDemo = type === 'demo' || type === 'practice';
+    const maxAttempts = isDemo ? 255 : (parseInt(document.getElementById('atc-bulk-attempts')?.value, 10) || 1);
     const btn = document.getElementById('atc-bulk-confirm');
     if (!examId) return;
     try {
