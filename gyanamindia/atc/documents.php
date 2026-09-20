@@ -36,6 +36,16 @@ if ($type === 'question_banks' && isset($_GET['download'])) {
         header('Location: ' . $redirBase . '&err=' . urlencode('ATC code not found'));
         exit;
     }
+    $activeCourseNames = getAtcActiveCourseNames($pdo, $atcId);
+    $listed = fetchAssignedQuestionBanks($atcCode);
+    $allowedBanks = $listed['success']
+        ? filterQuestionBanksByAtcActiveCourses($listed['banks'], $activeCourseNames)
+        : [];
+    $allowedIds = array_map(static fn($b) => (int)($b['id'] ?? 0), $allowedBanks);
+    if (!in_array($bankId, $allowedIds, true)) {
+        header('Location: ' . $redirBase . '&err=' . urlencode('This question bank is only available for courses you have activated.'));
+        exit;
+    }
     $export = fetchQuestionBankExport($atcCode, $bankId, $withAnswers);
     if (!$export['success'] || empty($export['data'])) {
         header('Location: ' . $redirBase . '&err=' . urlencode($export['error'] ?? 'Download failed'));
@@ -53,6 +63,7 @@ $documents = [];
 $banners = [];
 $banks = [];
 $counts = ['documents' => 0, 'banners' => 0, 'question_banks' => 0];
+$activeCourseNames = getAtcActiveCourseNames($pdo, $atcId);
 
 // Always load counts for tabs
 try {
@@ -64,7 +75,7 @@ try {
 if ($atcCode !== '' && examIntegrationReady()) {
     $qbRes = fetchAssignedQuestionBanks($atcCode);
     if ($qbRes['success']) {
-        $counts['question_banks'] = count($qbRes['banks']);
+        $counts['question_banks'] = count(filterQuestionBanksByAtcActiveCourses($qbRes['banks'], $activeCourseNames));
     }
 }
 
@@ -103,7 +114,7 @@ if ($type === 'documents') {
         if (!$res['success']) {
             $error = $error !== '' ? $error : ($res['error'] ?? 'Could not load question banks');
         } else {
-            $banks = $res['banks'];
+            $banks = filterQuestionBanksByAtcActiveCourses($res['banks'], $activeCourseNames);
             if ($searchTerm !== '') {
                 $q = strtolower($searchTerm);
                 $banks = array_values(array_filter($banks, static function ($b) use ($q) {
@@ -363,7 +374,7 @@ $tabMeta = [
                     <?php if (empty($banks)): ?>
                         <tr>
                             <td colspan="5" class="table-empty">
-                                <p>No question banks assigned yet.</p>
+                                <p>No question banks for your active courses. Activate a course under Courses, then check here again.</p>
                             </td>
                         </tr>
                     <?php else: foreach ($banks as $i => $bank):
