@@ -618,8 +618,8 @@ export class StudentDashboard {
             <div class="sd-header-pattern" aria-hidden="true"></div>
             <div class="sd-header-inner">
               <div class="sd-brand">
-                <img class="sd-brand-logo" src="assets/giit_brand_logo.png" alt="GIIT"
-                     onerror="this.onerror=null;this.src='assets/giit_logo.png';this.onerror=function(){this.src='assets/logo.png'}">
+                <img class="sd-brand-logo" src="assets/giit_brand_logo.png?v=2" alt="GIIT"
+                     onerror="this.onerror=null;this.src='assets/giit_logo.png?v=2';this.onerror=function(){this.src='assets/logo.png'}">
                 <div class="sd-brand-meta">
                   <strong>Gyanam Institute of Information Technology</strong>
                   <span>Student Exam Portal</span>

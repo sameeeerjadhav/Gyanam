@@ -454,8 +454,8 @@ class ExamPage {
           <div class="exam-header-pattern" aria-hidden="true"></div>
           <div class="exam-header-inner">
             <div style="display:flex;align-items:center;gap:0.5rem;flex-shrink:0;min-width:0">
-              <img class="exam-header-logo" src="assets/giit_brand_logo.png" alt="GIIT"
-                   onerror="this.onerror=null;this.src='assets/giit_logo.png';this.onerror=function(){this.src='assets/logo.png'}">
+              <img class="exam-header-logo" src="assets/giit_brand_logo.png?v=2" alt="GIIT"
+                   onerror="this.onerror=null;this.src='assets/giit_logo.png?v=2';this.onerror=function(){this.src='assets/logo.png'}">
               <div class="exam-brand-meta">
                 <strong id="exam-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px">Loading...</strong>
                 <span>GIIT · <span id="exam-type"></span> · <span id="total-questions">—</span> Qs</span>
