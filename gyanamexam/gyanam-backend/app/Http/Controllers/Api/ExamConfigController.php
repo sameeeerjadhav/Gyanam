@@ -88,6 +88,7 @@ class ExamConfigController extends Controller
         $data = $request->validate([
             'title'               => 'sometimes|string',
             'subject'             => 'sometimes|string',
+            'exam_type'           => 'sometimes|in:demo,main,practice',
             'duration'            => 'sometimes|integer',
             'total_questions'     => 'sometimes|integer',
             'passing_score'       => 'sometimes|integer',
@@ -107,6 +108,7 @@ class ExamConfigController extends Controller
             'proctoring_settings.text_select_block'=> 'boolean',
         ]);
 
+        $oldType = strtolower((string) $exam->exam_type);
         $newBankId = (int) ($data['question_bank_id'] ?? $exam->question_bank_id);
         $newTotal  = (int) ($data['total_questions'] ?? $exam->total_questions);
         $bankChanged = $oldBankId !== $newBankId;
@@ -136,7 +138,18 @@ class ExamConfigController extends Controller
         }
 
         $exam = $exam->fresh();
-        // Re-sync course students when subject/active changes (or anytime after update while active)
+        $newType = strtolower((string) ($exam->exam_type ?? ''));
+
+        // Switching to demo → unlimited attempts for all current assignments
+        if ($exam && in_array($newType, ['demo', 'practice'], true) && $oldType !== $newType) {
+            \Illuminate\Support\Facades\DB::table('exam_student')
+                ->where('exam_config_id', $exam->id)
+                ->update([
+                    'max_attempts' => ExamCourseAssignmentService::DEMO_MAX_ATTEMPTS,
+                ]);
+        }
+
+        // Re-sync course students when subject/active/type changes (or anytime after update while active)
         if ($exam && $exam->active) {
             app(ExamCourseAssignmentService::class)->assignExamToCourseStudents($exam);
         }
