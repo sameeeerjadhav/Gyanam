@@ -447,7 +447,7 @@ export class PreExamGate {
     const totalQs = this.exam.total_questions || 20;
     const duration = this.exam.duration || 30;
     const body = [
-      'Welcome to MCCE Demo exam portal.',
+      'Welcome to GIIT Demo exam portal.',
       '',
       '1) All questions are MCQ type.',
       '',
