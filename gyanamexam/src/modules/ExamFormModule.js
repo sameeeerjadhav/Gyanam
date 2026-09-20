@@ -129,10 +129,6 @@ export async function renderExamForm(ApiClient, { loadPage }) {
           <span class="dash-chip">Choose Normal or Proctored mode</span>
         </p>
       </div>
-      <div class="dash-page-actions">
-        <button type="button" class="btn btn-outline btn-sm" id="exam-form-cancel">Cancel</button>
-        <button type="button" class="btn btn-primary btn-sm" id="exam-form-save">${isEdit ? 'Save Changes' : 'Create Exam'}</button>
-      </div>
     </div>
 
     <div class="card exam-form-card">
@@ -244,6 +240,10 @@ export async function renderExamForm(ApiClient, { loadPage }) {
         </div>
       </div>
       <p class="exam-form-note">Each student gets a random subset from the <strong>selected question bank only</strong>.</p>
+      <div class="exam-form-actions">
+        <button type="button" class="btn btn-outline" id="exam-form-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="exam-form-save">${isEdit ? 'Save Changes' : 'Create Exam'}</button>
+      </div>
     </div>
   </div>`;
 
