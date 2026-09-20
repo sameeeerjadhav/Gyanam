@@ -258,6 +258,9 @@ export async function renderStudents(ApiClient, { currentUser }) {
         <p id="student-count-label">${allStudents.length} student${allStudents.length === 1 ? '' : 's'}</p>
       </div>
       <div class="stu-header-actions">
+        <button id="assign-unassigned-btn" class="btn btn-outline btn-sm" title="Assign an exam to every student with no exams yet">
+          Assign to unassigned
+        </button>
         <button id="import-students-btn" class="btn btn-outline btn-sm">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
           Import CSV
@@ -359,6 +362,7 @@ export async function renderStudents(ApiClient, { currentUser }) {
 
   document.getElementById('add-student-btn').addEventListener('click', () => showStudentModal(ApiClient, currentUser));
   document.getElementById('import-students-btn').addEventListener('click', () => showImportStudentsModal(ApiClient, currentUser));
+  document.getElementById('assign-unassigned-btn')?.addEventListener('click', () => window.showAssignUnassignedModal());
 
   // ─── Student CRUD ────────────────────────────
   window.editStudent = async (id) => {
@@ -524,6 +528,70 @@ export async function renderStudents(ApiClient, { currentUser }) {
     } catch (e) {
       modalService.toast('Bulk assignment failed: ' + e.message, 'error');
       btn.disabled = false; btn.textContent = 'Confirm & Assign';
+    }
+  };
+
+  // ─── Assign to all unassigned students ───────
+  window.showAssignUnassignedModal = async () => {
+    const unassignedIds = allStudents
+      .filter(s => !(s.exams || []).length)
+      .map(s => String(s.id));
+    if (!unassignedIds.length) {
+      modalService.toast('All students already have at least one exam assigned.', 'info');
+      return;
+    }
+    try {
+      const exams = await ApiClient.getAssignableExams();
+      if (!exams.length) {
+        modalService.toast('No exams available to assign. Create an exam first.', 'error');
+        return;
+      }
+      getOverlay().style.display = 'flex';
+      document.getElementById('modal-box').innerHTML = `
+        <div class="modal-card" style="max-width:500px">
+          <div class="modal-header"><h3 class="modal-title">Assign to Unassigned Students</h3></div>
+          <div style="padding:1.5rem">
+            <p style="font-size:0.875rem;color:var(--text-muted);margin-bottom:1.5rem">
+              Assign one exam to <strong>${unassignedIds.length}</strong> student${unassignedIds.length === 1 ? '' : 's'} with no exams yet.
+              Students who already have exams will be skipped.
+            </p>
+            <div class="form-group">
+              <label class="form-label">Select Exam to Assign</label>
+              <select id="unassigned-exam-id" class="form-input">${exams.map(e => `<option value="${e.id}">${e.title} (${e.subject || 'N/A'})</option>`).join('')}</select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Max Allowed Attempts</label>
+              <input type="number" id="unassigned-max-attempts" class="form-input" value="1" min="1" max="10">
+              <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem">Default is 1 attempt.</p>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Cancel</button>
+            <button class="modal-btn modal-btn-confirm" id="unassigned-confirm-btn" onclick="doAssignUnassigned()">Confirm & Assign</button>
+          </div>
+        </div>`;
+      window.__unassignedStudentIds = unassignedIds;
+    } catch (e) {
+      modalService.toast('Failed to load exams: ' + e.message, 'error');
+    }
+  };
+
+  window.doAssignUnassigned = async () => {
+    const studentIds = window.__unassignedStudentIds || [];
+    const examId = document.getElementById('unassigned-exam-id')?.value;
+    const maxAttempts = parseInt(document.getElementById('unassigned-max-attempts')?.value, 10) || 1;
+    const btn = document.getElementById('unassigned-confirm-btn');
+    if (!examId || !studentIds.length) return;
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = 'Assigning…'; }
+      const res = await ApiClient.bulkAssignExam(studentIds, examId, maxAttempts);
+      modalService.toast(res.message || `Assigned to ${studentIds.length} students`, 'success');
+      window.__unassignedStudentIds = null;
+      window.closeModal();
+      renderStudents(ApiClient, { currentUser });
+    } catch (e) {
+      modalService.toast('Assignment failed: ' + e.message, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirm & Assign'; }
     }
   };
 
