@@ -71,21 +71,6 @@ export async function renderExamForm(ApiClient, { loadPage }) {
   const isProctored = !!exam?.proctored;
   const ps = exam?.proctoring_settings || {};
 
-  const bankOpts = (() => {
-    if (!banks.length) return '<option value="">No question banks created yet</option>';
-    const curBank = String(exam?.question_bank_id || '');
-    const rows = banks.map(b => {
-      const sel = curBank && curBank === String(b.id) ? 'selected' : '';
-      const subj = String(b.subject || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-      const title = String(b.title || '').replace(/</g, '&lt;');
-      return `<option value="${b.id}" data-subject="${subj}" ${sel}>${title} — ${subj} (${b.questions_count} Qs)</option>`;
-    }).join('');
-    const placeholder = curBank
-      ? ''
-      : '<option value="" selected disabled>— Select one question bank —</option>';
-    return placeholder + rows;
-  })();
-
   // Active IT + Typing courses for exam subject
   if (Array.isArray(courses) && courses.length) {
     courses = courses
@@ -101,19 +86,23 @@ export async function renderExamForm(ApiClient, { loadPage }) {
       });
   }
 
+  const norm = (s) => String(s || '').trim().toLowerCase();
+  const escAttr = (s) => String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const escHtml = (s) => String(s || '').replace(/</g, '&lt;');
+
   let subjectField;
   if (courses.length > 0) {
     const cur = String(exam?.subject || '');
     const opts = courses.map(c => {
       const val = String(c.course_name || '');
       const type = String(c.course_type || '').trim();
-      const typeTag = type ? ` [${type.replace(/</g, '&lt;')}]` : '';
+      const typeTag = type ? ` [${escHtml(type)}]` : '';
       const sel = val === cur ? ' selected' : '';
-      const dur = c.duration ? ` · ${String(c.duration).replace(/</g, '&lt;')}` : '';
-      return `<option value="${val.replace(/"/g, '&quot;')}"${sel}>${val.replace(/</g, '&lt;')}${typeTag}${dur}</option>`;
+      const dur = c.duration ? ` · ${escHtml(c.duration)}` : '';
+      return `<option value="${escAttr(val)}"${sel}>${escHtml(val)}${typeTag}${dur}</option>`;
     }).join('');
     const orphan = cur && !courses.some(c => String(c.course_name || '') === cur)
-      ? `<option value="${cur.replace(/"/g, '&quot;')}" selected>${cur.replace(/</g, '&lt;')} (current)</option>`
+      ? `<option value="${escAttr(cur)}" selected>${escHtml(cur)} (current)</option>`
       : '';
     subjectField = `
       <input type="search" id="ex-subj-filter" class="form-input" autocomplete="off"
@@ -123,10 +112,10 @@ export async function renderExamForm(ApiClient, { loadPage }) {
         ${orphan}
         ${opts}
       </select>
-      <p class="field-hint">${courses.length} Active IT/Typing course(s) from main portal. Sync from Gyanam India Admin › Courses.</p>`;
+      <p class="field-hint">${courses.length} Active IT/Typing course(s) from main portal.</p>`;
   } else {
     subjectField = `
-      <input id="ex-subj" class="form-input" value="${exam?.subject || ''}" placeholder="No Active IT/Typing courses synced yet">
+      <input id="ex-subj" class="form-input" value="${escAttr(exam?.subject || '')}" placeholder="No Active IT/Typing courses synced yet">
       <p class="field-hint">Sync Active IT/Typing courses from Gyanam India Admin › Courses → Sync to Exam Portal.</p>`;
   }
 
@@ -148,14 +137,19 @@ export async function renderExamForm(ApiClient, { loadPage }) {
 
     <div class="card exam-form-card">
       <div class="exam-form-grid">
-        <div class="form-group exam-span-2">
+        <div class="exam-form-section">
+          <span class="exam-form-section-title">Basic details</span>
+          <span class="exam-form-section-line"></span>
+        </div>
+
+        <div class="form-group exam-span-3">
           <label class="form-label">Exam Title *</label>
-          <input id="ex-title" class="form-input" value="${exam?.title || ''}" placeholder="e.g. Abacus Level 1 — Final Exam 2025">
+          <input id="ex-title" class="form-input" value="${escAttr(exam?.title || '')}" placeholder="e.g. TallyPrime — Final Exam 2025">
         </div>
 
         <div class="form-group">
           <label class="form-label">Exam ID <span style="font-weight:400;color:var(--text-muted)">(auto if blank)</span></label>
-          <input id="ex-id" class="form-input" value="${exam?.exam_id || ''}" placeholder="auto" ${isEdit ? 'readonly style="background:var(--gray-100)"' : ''}>
+          <input id="ex-id" class="form-input" value="${escAttr(exam?.exam_id || '')}" placeholder="auto" ${isEdit ? 'readonly style="background:var(--gray-100)"' : ''}>
         </div>
 
         <div class="form-group">
@@ -166,15 +160,32 @@ export async function renderExamForm(ApiClient, { loadPage }) {
           </select>
         </div>
 
+        <div class="form-group">
+          <label class="form-label">Duration (minutes)</label>
+          <input id="ex-dur" class="form-input" type="number" value="${exam?.duration || 30}" min="1">
+        </div>
+
+        <div class="exam-form-section">
+          <span class="exam-form-section-title">Course &amp; question bank</span>
+          <span class="exam-form-section-line"></span>
+        </div>
+
         <div class="form-group exam-span-2">
           <label class="form-label">Course / Subject *</label>
           ${subjectField}
         </div>
 
         <div class="form-group">
-          <label class="form-label">Duration (minutes)</label>
-          <input id="ex-dur" class="form-input" type="number" value="${exam?.duration || 30}" min="1">
+          <label class="form-label">Question Bank *</label>
+          <select id="ex-bank" class="form-select"></select>
+          <p id="ex-bank-hint" class="exam-bank-hint">Select a course to list its question banks only.</p>
         </div>
+
+        <div class="exam-form-section">
+          <span class="exam-form-section-title">Scoring</span>
+          <span class="exam-form-section-line"></span>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Questions to Show</label>
           <input id="ex-qs" class="form-input" type="number" value="${exam?.total_questions || 10}" min="1">
@@ -183,18 +194,18 @@ export async function renderExamForm(ApiClient, { loadPage }) {
           <label class="form-label">Passing Score (%)</label>
           <input id="ex-pass" class="form-input" type="number" value="${exam?.passing_score || 60}" min="1" max="100">
         </div>
-        <div class="form-group">
-          <label class="form-label">Question Bank *</label>
-          <select id="ex-bank" class="form-select">${bankOpts}</select>
-          <p style="margin:0.35rem 0 0;font-size:0.75rem;color:var(--text-muted)">Questions are taken only from this bank (never mixed with other banks).</p>
+
+        <div class="exam-form-section">
+          <span class="exam-form-section-title">Instructions &amp; mode</span>
+          <span class="exam-form-section-line"></span>
         </div>
 
-        <div class="form-group exam-span-2">
+        <div class="form-group exam-span-3">
           <label class="form-label">Instructions <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
-          <textarea id="ex-inst" class="form-textarea" rows="3" placeholder="Shown to student before the exam starts…">${exam?.instructions || ''}</textarea>
+          <textarea id="ex-inst" class="form-textarea" rows="3" placeholder="Shown to student before the exam starts…">${escHtml(exam?.instructions || '')}</textarea>
         </div>
 
-        <div class="form-group exam-span-2">
+        <div class="form-group exam-span-3">
           <label class="form-label" style="margin-bottom:0.55rem">Exam Mode *</label>
           <div class="exam-mode-grid">
             <label id="mode-normal-card" class="exam-mode-card ${isProctored ? '' : 'is-active-normal'}">
@@ -260,31 +271,58 @@ export async function renderExamForm(ApiClient, { loadPage }) {
   const exFilter = document.getElementById('ex-subj-filter');
   const exSelect = document.getElementById('ex-subj');
   const exBank = document.getElementById('ex-bank');
+  const exBankHint = document.getElementById('ex-bank-hint');
+  const preferredBankId = String(exam?.question_bank_id || '');
+
+  function banksForSubject(subject) {
+    const key = norm(subject);
+    if (!key) return [];
+    return banks.filter((b) => norm(b.subject) === key);
+  }
 
   function filterBanksBySubject() {
-    if (!exBank || !exSelect) return;
-    const subject = (exSelect.value || '').trim().toLowerCase();
-    let visible = 0;
-    Array.from(exBank.options).forEach((opt) => {
-      if (!opt.value) { opt.hidden = false; return; }
-      const bankSubj = String(opt.getAttribute('data-subject') || '').trim().toLowerCase();
-      // Prefer banks matching the selected course; if none match, keep all visible
-      opt.dataset._match = subject && bankSubj === subject ? '1' : '0';
-    });
-    const hasMatch = Array.from(exBank.options).some(o => o.value && o.dataset._match === '1');
-    Array.from(exBank.options).forEach((opt) => {
-      if (!opt.value) { opt.hidden = false; return; }
-      const show = !hasMatch || opt.dataset._match === '1';
-      opt.hidden = !show;
-      if (show) visible++;
-    });
-    // If current selection is hidden, clear it so admin must pick a matching bank
-    const selected = exBank.selectedOptions[0];
-    if (selected && selected.hidden) {
-      exBank.value = '';
+    if (!exBank) return;
+    const subject = (exSelect?.value || '').trim();
+    const prev = exBank.value || preferredBankId;
+    const matched = banksForSubject(subject);
+
+    if (!subject) {
+      exBank.innerHTML = '<option value="" selected disabled>— Select a course first —</option>';
+      exBank.disabled = true;
+      if (exBankHint) {
+        exBankHint.innerHTML = 'Select a course to list its question banks only.';
+      }
+      return;
     }
-    if (visible === 0 && hasMatch) {
-      /* keep placeholder */
+
+    exBank.disabled = false;
+    if (!banks.length) {
+      exBank.innerHTML = '<option value="">No question banks created yet</option>';
+      if (exBankHint) exBankHint.textContent = 'Create a question bank for this course first.';
+      return;
+    }
+
+    if (!matched.length) {
+      exBank.innerHTML = '<option value="" selected disabled>— No question banks for this course —</option>';
+      if (exBankHint) {
+        exBankHint.innerHTML = `No question banks match <strong>${escHtml(subject)}</strong>. Create one under Question Banks.`;
+      }
+      return;
+    }
+
+    const rows = matched.map((b) => {
+      const sel = prev && prev === String(b.id) ? ' selected' : '';
+      const title = escHtml(b.title || '');
+      const subj = escHtml(b.subject || '');
+      return `<option value="${b.id}"${sel}>${title} — ${subj} (${b.questions_count} Qs)</option>`;
+    }).join('');
+    const keepSel = matched.some((b) => String(b.id) === String(prev));
+    const placeholder = keepSel
+      ? ''
+      : '<option value="" selected disabled>— Select one question bank —</option>';
+    exBank.innerHTML = placeholder + rows;
+    if (exBankHint) {
+      exBankHint.innerHTML = `Showing <strong>${matched.length}</strong> question bank(s) for <strong>${escHtml(subject)}</strong> only.`;
     }
   }
 
@@ -299,6 +337,9 @@ export async function renderExamForm(ApiClient, { loadPage }) {
     });
   }
   exSelect?.addEventListener('change', filterBanksBySubject);
+  if (exSelect && exSelect.tagName === 'INPUT') {
+    exSelect.addEventListener('input', filterBanksBySubject);
+  }
   filterBanksBySubject();
 
   document.getElementById('exam-form-save')?.addEventListener('click', async () => {
