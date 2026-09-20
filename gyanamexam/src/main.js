@@ -10,9 +10,9 @@
 
 import router from './services/Router.js';
 import { getAuthModule } from './services/AuthenticationModule.js';
-import LoginPage from './pages/LoginPage.js?v=7';
-import { StudentDashboard } from './pages/StudentDashboard.js?v=17';
-import ExamPage from './pages/ExamPage.js?v=17';
+import LoginPage from './pages/LoginPage.js?v=8';
+import { StudentDashboard } from './pages/StudentDashboard.js?v=18';
+import ExamPage from './pages/ExamPage.js?v=18';
 import PreExamGate from './pages/PreExamGate.js?v=4';
 import ApiClient from './services/APIClient.js?v=6';
 
