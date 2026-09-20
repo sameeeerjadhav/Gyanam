@@ -909,6 +909,8 @@ function questionBankPdfText(string $text): string
 function questionBankPdfBrandPaths(): array
 {
     $candidatesLetterhead = [
+        __DIR__ . '/../assets/branding/newheaderHD.jpeg',
+        __DIR__ . '/../assets/templates/newheaderHD.jpeg',
         __DIR__ . '/../assets/branding/giit_letterhead.png',
         __DIR__ . '/../assets/templates/giit_marksheet_header.png',
     ];

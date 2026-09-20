@@ -27,9 +27,14 @@ class QuestionBankBrandedPdf extends FPDF
         $usable = $this->GetPageWidth() - $this->lMargin - $this->rMargin;
 
         if ($this->PageNo() === 1 && $this->letterheadPath && is_file($this->letterheadPath)) {
-            // Compact GIIT letterhead on first page only (~55% width, centered)
-            $bannerW = $usable * 0.55;
-            $bannerH = $bannerW * (542.0 / 1280.0);
+            // Updated GIIT letterhead (newheaderHD) — wide, centered on first page
+            $bannerW = min($usable * 0.78, 210.0);
+            $ratio = 520.0 / 1280.0;
+            $info = @getimagesize($this->letterheadPath);
+            if (is_array($info) && !empty($info[0]) && !empty($info[1])) {
+                $ratio = ((float)$info[1]) / ((float)$info[0]);
+            }
+            $bannerH = $bannerW * $ratio;
             $bannerX = $left + ($usable - $bannerW) / 2;
             $this->Image($this->letterheadPath, $bannerX, 5, $bannerW, $bannerH);
             $this->SetY(5 + $bannerH + 2);
