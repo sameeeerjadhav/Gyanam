@@ -196,15 +196,17 @@ class StudentExamController extends Controller
             abort(403, 'Practice exams are no longer available.');
         }
 
-        // Course-only gate
-        if (!ExamCourseAssignmentService::coursesMatch($student->course ?? '', $exam->subject)) {
-            abort(403, 'This exam is not available for your registered course.');
-        }
-
         $pivot = $student->exams()
             ->where('exam_config_id', $examId)
             ->withPivot(['max_attempts', 'assigned_by_user_id'])
             ->first()?->pivot;
+
+        $explicitlyAssigned = !empty($pivot?->assigned_by_user_id);
+
+        // Course gate for auto-attached exams; ATC/admin assign always allowed
+        if (!$explicitlyAssigned && !ExamCourseAssignmentService::coursesMatch($student->course ?? '', $exam->subject)) {
+            abort(403, 'This exam is not available for your registered course.');
+        }
 
         $isDemo = ExamCourseAssignmentService::isDemoExam($exam);
 
