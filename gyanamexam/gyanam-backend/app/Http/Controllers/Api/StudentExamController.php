@@ -8,7 +8,6 @@ use App\Models\ExamAnswerDraft;
 use App\Models\ExamConfig;
 use App\Models\ProctoringEvent;
 use App\Models\Question;
-use App\Models\QuestionBankAssignment;
 use App\Models\Submission;
 use App\Services\ExamCourseAssignmentService;
 use App\Services\LiveSessionService;
@@ -50,7 +49,7 @@ class StudentExamController extends Controller
                 'exam_configs.proctoring_settings', 'exam_configs.is_global_practice',
                 'exam_configs.question_bank_id',
             ])
-            // Explicit ATC/admin assign always visible; auto-attached still need course match
+            // Explicit ATC/admin assign always visible; course-matched scheduled exams always visible
             ->filter(function ($exam) use ($student) {
                 if (!empty($exam->pivot->assigned_by_user_id)) {
                     return true;
@@ -58,23 +57,6 @@ class StudentExamController extends Controller
                 return ExamCourseAssignmentService::coursesMatch($student->course, $exam->subject);
             })
             ->values();
-
-        // Question bank must be assigned to student's ATC — except explicit unlocks
-        $centre = trim((string) ($student->centre_name ?? ''));
-        if ($centre !== '') {
-            $exams = $exams->filter(function ($exam) use ($centre) {
-                if (!empty($exam->pivot->assigned_by_user_id)) {
-                    return true;
-                }
-                $bankId = (int) ($exam->question_bank_id ?? 0);
-                if ($bankId <= 0) {
-                    return false;
-                }
-                return QuestionBankAssignment::where('question_bank_id', $bankId)
-                    ->where('centre_id', $centre)
-                    ->exists();
-            })->values();
-        }
 
         $examIds = $exams->pluck('id')->all();
         $usedByExam = empty($examIds)
@@ -170,17 +152,8 @@ class StudentExamController extends Controller
         if (!ExamCourseAssignmentService::isDemoExam($exam)) {
             return false;
         }
-        if (!ExamCourseAssignmentService::coursesMatch($student->course ?? '', $exam->subject)) {
-            return false;
-        }
-        $centre = trim((string) ($student->centre_name ?? ''));
-        $bankId = (int) ($exam->question_bank_id ?? 0);
-        if ($centre === '' || $bankId <= 0) {
-            return false;
-        }
-        return QuestionBankAssignment::where('question_bank_id', $bankId)
-            ->where('centre_id', $centre)
-            ->exists();
+        // Course-matched demos are open to students on that course (no QB→centre gate)
+        return ExamCourseAssignmentService::coursesMatch($student->course ?? '', $exam->subject);
     }
 
     /**

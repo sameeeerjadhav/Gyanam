@@ -457,7 +457,6 @@ export async function renderStudents(ApiClient, { currentUser }) {
                 <div class="form-group" style="margin:0;width:140px" id="new-exam-attempts-wrap">
                   <label class="form-label">Max Attempts</label>
                   <input id="new-exam-attempts" type="number" class="form-input" value="1" min="1" max="10">
-                  <p id="new-exam-attempts-hint" style="font-size:0.7rem;color:var(--text-muted);margin:0.25rem 0 0;display:none">Demo = unlimited</p>
                 </div>
                 <button class="btn btn-primary" style="height:38px;margin-bottom:0" onclick="doAssignExam(${studentId})">+ Assign</button>
               </div>`}
@@ -468,11 +467,9 @@ export async function renderStudents(ApiClient, { currentUser }) {
         const type = (opt?.getAttribute('data-type') || '').toLowerCase();
         const isDemo = type === 'demo' || type === 'practice';
         const wrap = document.getElementById('new-exam-attempts-wrap');
+        if (wrap) wrap.style.display = isDemo ? 'none' : '';
         const input = document.getElementById('new-exam-attempts');
-        const hint = document.getElementById('new-exam-attempts-hint');
-        if (wrap) wrap.style.opacity = isDemo ? '0.55' : '1';
-        if (input) { input.disabled = isDemo; input.value = isDemo ? '255' : (input.value || '1'); }
-        if (hint) hint.style.display = isDemo ? 'block' : 'none';
+        if (input && isDemo) input.value = '255';
       };
       examSel?.addEventListener('change', syncAttemptsUi);
       syncAttemptsUi();
@@ -493,7 +490,9 @@ export async function renderStudents(ApiClient, { currentUser }) {
 
     window.doAssignExam = async (sId) => {
       const eId = document.getElementById('new-exam-select')?.value;
-      const max = parseInt(document.getElementById('new-exam-attempts')?.value) || 1;
+      const type = (document.getElementById('new-exam-select')?.selectedOptions?.[0]?.getAttribute('data-type') || '').toLowerCase();
+      const isDemo = type === 'demo' || type === 'practice';
+      const max = isDemo ? 255 : (parseInt(document.getElementById('new-exam-attempts')?.value) || 1);
       if (!eId) return;
       try { await ApiClient.assignExam(sId, eId, max); modalService.toast('Exam assigned successfully', 'success'); reloadAssignBody(); }
       catch (e) { modalService.toast(e.message, 'error'); }
@@ -517,12 +516,12 @@ export async function renderStudents(ApiClient, { currentUser }) {
             <p style="font-size:0.875rem;color:var(--text-muted);margin-bottom:1.5rem">Assigning to <strong>${selectedIds.length}</strong> selected students.</p>
             <div class="form-group">
               <label class="form-label">Select Exam to Assign</label>
-              <select id="bulk-exam-id" class="form-input">${exams.map(e => `<option value="${e.id}">${e.title} (${e.subject || 'N/A'})</option>`).join('')}</select>
+              <select id="bulk-exam-id" class="form-input">${exams.map(e => `<option value="${e.id}" data-type="${e.exam_type || ''}">${e.title} (${e.subject || 'N/A'}) — ${e.exam_type || 'main'}</option>`).join('')}</select>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="bulk-attempts-wrap">
               <label class="form-label">Max Allowed Attempts</label>
               <input type="number" id="bulk-max-attempts" class="form-input" value="1" min="1" max="10">
-              <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem">Default is 1 attempt.</p>
+              <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem">Default is 1 attempt. Hidden for demo exams (unlimited).</p>
             </div>
           </div>
           <div class="modal-actions">
@@ -530,13 +529,24 @@ export async function renderStudents(ApiClient, { currentUser }) {
             <button class="modal-btn modal-btn-confirm" id="bulk-confirm-btn" onclick="doBulkAssign()">Confirm & Assign</button>
           </div>
         </div>`;
+      const sel = document.getElementById('bulk-exam-id');
+      const sync = () => {
+        const type = (sel?.selectedOptions?.[0]?.getAttribute('data-type') || '').toLowerCase();
+        const isDemo = type === 'demo' || type === 'practice';
+        const wrap = document.getElementById('bulk-attempts-wrap');
+        if (wrap) wrap.style.display = isDemo ? 'none' : '';
+      };
+      sel?.addEventListener('change', sync);
+      sync();
     } catch (e) { modalService.toast('Failed to load exams: ' + e.message, 'error'); }
   };
 
   window.doBulkAssign = async () => {
     const selectedIds = [...document.querySelectorAll('.student-select:checked')].map(cb => cb.value);
     const examId = document.getElementById('bulk-exam-id').value;
-    const maxAttempts = parseInt(document.getElementById('bulk-max-attempts').value) || 1;
+    const type = (document.getElementById('bulk-exam-id')?.selectedOptions?.[0]?.getAttribute('data-type') || '').toLowerCase();
+    const isDemo = type === 'demo' || type === 'practice';
+    const maxAttempts = isDemo ? 255 : (parseInt(document.getElementById('bulk-max-attempts')?.value, 10) || 1);
     const btn = document.getElementById('bulk-confirm-btn');
     if (!examId) return;
     try {
@@ -577,12 +587,12 @@ export async function renderStudents(ApiClient, { currentUser }) {
             </p>
             <div class="form-group">
               <label class="form-label">Select Exam to Assign</label>
-              <select id="unassigned-exam-id" class="form-input">${exams.map(e => `<option value="${e.id}">${e.title} (${e.subject || 'N/A'})</option>`).join('')}</select>
+              <select id="unassigned-exam-id" class="form-input">${exams.map(e => `<option value="${e.id}" data-type="${e.exam_type || ''}">${e.title} (${e.subject || 'N/A'}) — ${e.exam_type || 'main'}</option>`).join('')}</select>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="unassigned-attempts-wrap">
               <label class="form-label">Max Allowed Attempts</label>
               <input type="number" id="unassigned-max-attempts" class="form-input" value="1" min="1" max="10">
-              <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem">Default is 1 attempt.</p>
+              <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem">Default is 1 attempt. Hidden for demo exams (unlimited).</p>
             </div>
           </div>
           <div class="modal-actions">
@@ -591,6 +601,15 @@ export async function renderStudents(ApiClient, { currentUser }) {
           </div>
         </div>`;
       window.__unassignedStudentIds = unassignedIds;
+      const sel = document.getElementById('unassigned-exam-id');
+      const sync = () => {
+        const type = (sel?.selectedOptions?.[0]?.getAttribute('data-type') || '').toLowerCase();
+        const isDemo = type === 'demo' || type === 'practice';
+        const wrap = document.getElementById('unassigned-attempts-wrap');
+        if (wrap) wrap.style.display = isDemo ? 'none' : '';
+      };
+      sel?.addEventListener('change', sync);
+      sync();
     } catch (e) {
       modalService.toast('Failed to load exams: ' + e.message, 'error');
     }
@@ -599,7 +618,9 @@ export async function renderStudents(ApiClient, { currentUser }) {
   window.doAssignUnassigned = async () => {
     const studentIds = window.__unassignedStudentIds || [];
     const examId = document.getElementById('unassigned-exam-id')?.value;
-    const maxAttempts = parseInt(document.getElementById('unassigned-max-attempts')?.value, 10) || 1;
+    const type = (document.getElementById('unassigned-exam-id')?.selectedOptions?.[0]?.getAttribute('data-type') || '').toLowerCase();
+    const isDemo = type === 'demo' || type === 'practice';
+    const maxAttempts = isDemo ? 255 : (parseInt(document.getElementById('unassigned-max-attempts')?.value, 10) || 1);
     const btn = document.getElementById('unassigned-confirm-btn');
     if (!examId || !studentIds.length) return;
     try {
