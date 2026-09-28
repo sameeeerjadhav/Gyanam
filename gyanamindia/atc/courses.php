@@ -12,6 +12,7 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/notifications.php';
+require_once __DIR__ . '/../includes/exam_integration.php';
 
 requireLogin(['ATC CENTER']);
 
@@ -25,6 +26,14 @@ $atcStmt->execute([$atcId]);
 $atcCenter = $atcStmt->fetch(PDO::FETCH_ASSOC);
 $centerType = $atcCenter['center_type'] ?? '';
 $allowedTypes = courseTypesForCenter($centerType);
+
+try {
+    if (function_exists('syncATCCentresToExamPortal')) {
+        syncATCCentresToExamPortal($pdo);
+    }
+} catch (Throwable $e) {
+    error_log('[ATC courses] exam portal course sync: ' . $e->getMessage());
+}
 
 // ── AJAX handlers ─────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {

@@ -320,7 +320,7 @@ function renderATCBanksPage(el, banks, ApiClient) {
     const list = document.getElementById('atc-banks-list');
     if (!list) return;
     if (banks.length === 0) {
-      list.innerHTML = `<div class="empty-state"><h3>No question banks assigned</h3><p>Contact the admin to assign question banks to your centre.</p></div>`;
+      list.innerHTML = `<div class="empty-state"><h3>No question banks for your active courses</h3><p>Activate a course under Courses on the main portal, then check here again.</p></div>`;
       return;
     }
     list.innerHTML = filtered.length === 0

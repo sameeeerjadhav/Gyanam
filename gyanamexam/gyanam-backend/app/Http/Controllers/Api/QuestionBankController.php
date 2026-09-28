@@ -83,8 +83,13 @@ class QuestionBankController extends Controller
         $banks = QuestionBank::with(['assignments', 'creator'])
             ->withCount('questions')
             ->visibleTo($user->centre_id, $user->username)
-            ->get()
-            ->map(fn($b) => $this->format($b));
+            ->get();
+
+        if (!$user->isAdmin()) {
+            $banks = $banks->filter(fn ($b) => PortalAtcCentres::centreAllowsSubject($user->centre_id, $b->subject))->values();
+        }
+
+        $banks = $banks->map(fn($b) => $this->format($b));
 
         return response()->json($banks);
     }
@@ -500,7 +505,12 @@ class QuestionBankController extends Controller
     private function findVisible(Request $request, $id): QuestionBank
     {
         $user = $request->user();
-        return QuestionBank::visibleTo($user->centre_id, $user->username)->findOrFail($id);
+        $bank = QuestionBank::visibleTo($user->centre_id, $user->username)->findOrFail($id);
+        if (!$user->isAdmin() && !PortalAtcCentres::centreAllowsSubject($user->centre_id, $bank->subject)) {
+            abort(404, 'This question bank is not available for your active courses.');
+        }
+
+        return $bank;
     }
 
     /** Drop cached exam question payloads so bilingual fields show immediately. */

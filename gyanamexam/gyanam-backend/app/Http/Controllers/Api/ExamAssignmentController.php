@@ -82,6 +82,9 @@ class ExamAssignmentController extends Controller
         }
 
         $exam = ExamConfig::findOrFail($data['exam_id']);
+        if (!$user->isAdmin() && !\App\Support\PortalAtcCentres::centreAllowsSubject($user->centre_id, $exam->subject)) {
+            abort(422, 'This exam is not for a course active at your centre.');
+        }
         $isDemo = in_array(strtolower((string) $exam->exam_type), ['demo', 'practice'], true);
         $maxAttempts = $isDemo
             ? \App\Services\ExamCourseAssignmentService::DEMO_MAX_ATTEMPTS
@@ -113,6 +116,9 @@ class ExamAssignmentController extends Controller
 
         $user = $request->user();
         $exam = ExamConfig::findOrFail($data['exam_id']);
+        if (!$user->isAdmin() && !\App\Support\PortalAtcCentres::centreAllowsSubject($user->centre_id, $exam->subject)) {
+            abort(422, 'This exam is not for a course active at your centre.');
+        }
         $isDemo = in_array(strtolower((string) $exam->exam_type), ['demo', 'practice'], true);
         $maxAttempts = $isDemo
             ? \App\Services\ExamCourseAssignmentService::DEMO_MAX_ATTEMPTS
@@ -209,6 +215,10 @@ class ExamAssignmentController extends Controller
                 $q->whereHas('questionBank.assignments', fn($a) => $a->where('centre_id', $user->centre_id));
             })
             ->get(['id', 'exam_id', 'title', 'subject', 'exam_type', 'total_questions', 'duration', 'passing_score', 'proctored']);
+
+        if (!$user->isAdmin()) {
+            $exams = $exams->filter(fn ($exam) => \App\Support\PortalAtcCentres::centreAllowsSubject($user->centre_id, $exam->subject))->values();
+        }
 
         return response()->json($exams);
     }

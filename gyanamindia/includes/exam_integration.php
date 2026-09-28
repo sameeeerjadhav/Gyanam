@@ -675,12 +675,18 @@ function fetchPortalCourses(): array
 function syncATCCentresToExamPortal(PDO $pdo): array
 {
     $stmt = $pdo->query("
-        SELECT atc_code AS code, name, center_type AS centre_type, district, state
+        SELECT id, atc_code AS code, name, center_type AS centre_type, district, state
         FROM atc_centers
         WHERE status = 'Active' AND atc_code IS NOT NULL AND atc_code != ''
         ORDER BY name
     ");
-    $centres = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $centres = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $atcId = (int)($row['id'] ?? 0);
+        unset($row['id']);
+        $row['active_courses'] = getAtcActiveCourseNames($pdo, $atcId);
+        $centres[] = $row;
+    }
 
     return examApi_request('POST', '/portal-atc-centres', [
         'centres' => $centres,
