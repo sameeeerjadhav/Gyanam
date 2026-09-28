@@ -76,17 +76,18 @@ export async function renderATC(ApiClient, ctx) {
   window._atcCurrentUser = currentUser;
   window._atcCtx = ctx;
 
+  if (section === 'banks') {
+    renderATCBanksPage(el, banks, ApiClient);
+    return;
+  }
+
   const centreName = currentUser.centre_id || 'Your Centre';
   const meta = ATC_SECTIONS[section];
-  const countNote = section === 'banks'
-    ? `${banks.length} question bank(s)`
-    : section === 'students'
+  const countNote = section === 'students'
       ? `${students.length} students`
       : centreName;
 
-  const panelHtml = section === 'banks'
-    ? `<div id="atc-panel-qb">${renderQBPanel(banks)}</div>`
-    : section === 'students'
+  const panelHtml = section === 'students'
       ? `<div id="atc-panel-students">${renderStudentsPanel(students, availableExams)}</div>`
       : section === 'results'
         ? `<div id="atc-panel-results">${renderResultsPanel(resultsData)}</div>`
@@ -285,45 +286,109 @@ function renderResultsPanel(data) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-function renderQBPanel(banks) {
-  if (banks.length === 0) {
-    return `
-      <div class="card" style="text-align:center;padding:3rem">
-        <div style="font-size:3rem;margin-bottom:1rem">📭</div>
-        <h3 style="color:var(--text-muted)">No Question Banks Assigned</h3>
-        <p style="color:var(--text-muted);font-size:0.875rem">Contact the admin to assign question banks to your centre.</p>
-      </div>`;
-  }
-  return `
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.25rem">
-      ${banks.map(b => renderQBCard(b)).join('')}
-    </div>`;
+function atcEsc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
 }
 
-function renderQBCard(b) {
-  const qCount = b.questions_count ?? 0;
-  return `
-    <div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s"
-         onclick="atcViewQB(${b.id})"
-         onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.1)'"
-         onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="height:4px;background:linear-gradient(90deg,#4361ee,#7c3aed)"></div>
-      <div style="padding:1.25rem">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.75rem;margin-bottom:0.75rem">
-          <div>
-            <div style="font-weight:700;font-size:1rem;color:var(--gray-900);line-height:1.3">${b.title}</div>
-            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.15rem">${b.subject}</div>
-          </div>
-          <div style="width:40px;height:40px;background:#eff6ff;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1.25rem">📚</div>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:var(--text-muted)">
-            <strong style="color:var(--gray-800)">${qCount}</strong> questions &nbsp;·&nbsp; by ${b.created_by || 'Admin'}
-          </div>
-          <span style="font-size:0.75rem;color:#4361ee;font-weight:600">View →</span>
-        </div>
+function renderATCBanksPage(el, banks, ApiClient) {
+  const subjects = [...new Set(banks.map(b => String(b.subject || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+  let filterText = '';
+  let filterCourse = '';
+
+  function filteredBanks() {
+    return banks.filter(b => {
+      const title = String(b.title || '').toLowerCase();
+      const subject = String(b.subject || '').toLowerCase();
+      const q = filterText.toLowerCase();
+      const matchesText = !q || title.includes(q) || subject.includes(q);
+      const matchesCourse = !filterCourse || String(b.subject || '') === filterCourse;
+      return matchesText && matchesCourse;
+    });
+  }
+
+  function renderList() {
+    const filtered = filteredBanks();
+    const countEl = document.getElementById('atc-banks-count');
+    if (countEl) {
+      countEl.textContent = filtered.length === banks.length
+        ? `${banks.length} bank(s) total`
+        : `Showing ${filtered.length} of ${banks.length} bank(s)`;
+    }
+    const list = document.getElementById('atc-banks-list');
+    if (!list) return;
+    if (banks.length === 0) {
+      list.innerHTML = `<div class="empty-state"><h3>No question banks assigned</h3><p>Contact the admin to assign question banks to your centre.</p></div>`;
+      return;
+    }
+    list.innerHTML = filtered.length === 0
+      ? `<div class="empty-state"><h3>No matching question banks</h3><p>Try a different search or course.</p></div>`
+      : filtered.map(b => {
+          const qCount = Number(b.questions_count) || 0;
+          return `
+            <div class="card" style="margin-bottom:1rem">
+              <div style="padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
+                <div style="flex:1;min-width:200px">
+                  <div style="font-weight:700;font-size:0.95rem">${atcEsc(b.title)}</div>
+                  <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem">${qCount} questions · ${atcEsc(b.subject || '—')} · by ${atcEsc(b.created_by || 'Admin')}</div>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="atcViewQB(${Number(b.id)})">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                  View
+                </button>
+              </div>
+            </div>`;
+        }).join('');
+  }
+
+  el.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h2>Question Banks</h2>
+        <p id="atc-banks-count">${banks.length} bank(s) total</p>
       </div>
-    </div>`;
+    </div>
+    <div class="card" style="margin-bottom:1.5rem;padding:1rem;background:var(--gray-50)">
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center">
+        <div style="flex:1;min-width:220px;position:relative">
+          <input type="text" id="atc-bank-search" class="form-input" placeholder="Search title or course..." style="padding-left:2.5rem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--gray-400)">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
+        </div>
+        <div style="min-width:220px;flex:1">
+          <select id="atc-bank-course" class="form-select">
+            <option value="">All courses</option>
+            ${subjects.map(s => `<option value="${atcEsc(s)}">${atcEsc(s)}</option>`).join('')}
+          </select>
+        </div>
+        <button type="button" id="atc-bank-clear" class="btn btn-outline btn-sm">Clear filters</button>
+      </div>
+    </div>
+    <div id="atc-banks-list"></div>
+  `;
+
+  window.atcViewQB = (bankId) => viewQBQuestions(ApiClient, banks.find(b => b.id == bankId));
+  renderList();
+  document.getElementById('atc-bank-search')?.addEventListener('input', (e) => {
+    filterText = e.target.value;
+    renderList();
+  });
+  document.getElementById('atc-bank-course')?.addEventListener('change', (e) => {
+    filterCourse = e.target.value;
+    renderList();
+  });
+  document.getElementById('atc-bank-clear')?.addEventListener('click', () => {
+    filterText = '';
+    filterCourse = '';
+    const search = document.getElementById('atc-bank-search');
+    const course = document.getElementById('atc-bank-course');
+    if (search) search.value = '';
+    if (course) course.value = '';
+    renderList();
+  });
 }
 
 // ── View QB Questions (full-page overlay) ───────────────────────────
