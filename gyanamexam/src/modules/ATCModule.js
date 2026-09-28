@@ -126,7 +126,7 @@ export async function renderATC(ApiClient, ctx) {
   };
 
   // ── Window functions ──────────────────────────────────────
-  window.atcViewQB = (bankId) => viewQBQuestions(ApiClient, banks.find(b => b.id == bankId));
+  window.atcViewQB = (bankId) => viewQBQuestions(el, ApiClient, banks, banks.find(b => b.id == bankId));
   window.showAssignModal = (studentId, studentName) => showAssignModal(ApiClient, studentId, studentName, availableExams, students);
   window.unassignStudentExam = (studentId, examId, examTitle) => unassignExam(ApiClient, studentId, examId, examTitle);
   window.atcEditStudent = (id) => editStudentModal(ApiClient, students.find(s => s.id == id));
@@ -370,7 +370,7 @@ function renderATCBanksPage(el, banks, ApiClient) {
     <div id="atc-banks-list"></div>
   `;
 
-  window.atcViewQB = (bankId) => viewQBQuestions(ApiClient, banks.find(b => b.id == bankId));
+  window.atcViewQB = (bankId) => viewQBQuestions(el, ApiClient, banks, banks.find(b => b.id == bankId));
   renderList();
   document.getElementById('atc-bank-search')?.addEventListener('input', (e) => {
     filterText = e.target.value;
@@ -392,58 +392,93 @@ function renderATCBanksPage(el, banks, ApiClient) {
 }
 
 // ── View QB Questions (full-page overlay) ───────────────────────────
-async function viewQBQuestions(ApiClient, bank) {
-  if (!bank) return;
-  getOverlay().style.display = 'flex';
-  const box = document.getElementById('modal-box');
-  box.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px"><div class="loader"></div></div>';
-
-  try {
-    const questions = await ApiClient.getQuestionBankQuestions(bank.id);
-    box.innerHTML = `
-      <div class="modal-card" style="max-width:800px;width:95vw;padding:0;max-height:90vh;display:flex;flex-direction:column">
-        <div class="modal-header" style="background:linear-gradient(135deg,#4361ee,#7c3aed);flex-shrink:0">
-          <div style="display:flex;align-items:center;gap:0.75rem">
-            <div style="width:36px;height:36px;background:rgba(255,255,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.1rem">📚</div>
-            <div>
-              <h3 class="modal-title" style="color:#fff;margin:0">${bank.title}</h3>
-              <p style="color:rgba(255,255,255,0.75);margin:0;font-size:0.8rem">${bank.subject} · ${questions.length} question(s)</p>
-            </div>
-          </div>
-          <button onclick="closeModal()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:0.3rem 0.65rem;cursor:pointer;font-size:1rem">×</button>
-        </div>
-        <div style="flex:1;overflow-y:auto;padding:1.25rem">
-          ${questions.length === 0 ? '<p style="text-align:center;color:var(--text-muted);padding:2rem">No questions in this bank yet.</p>' : `
-          <div style="display:flex;flex-direction:column;gap:1rem">
-            ${questions.map((q, i) => {
-              const opts = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
-              return `
-                <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:12px;padding:1rem 1.25rem">
-                  <div style="display:flex;align-items:flex-start;gap:0.75rem;margin-bottom:0.625rem">
-                    <span style="background:#4361ee;color:#fff;font-weight:700;font-size:0.75rem;min-width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</span>
-                    <div style="font-weight:600;font-size:0.9rem;line-height:1.45;color:var(--gray-900)">${q.text}</div>
-                  </div>
-                  <div style="padding-left:2.5rem;display:flex;flex-direction:column;gap:0.35rem">
-                    ${(opts || []).map(o => {
-                      const isCorrect = o.id === q.correct_answer;
-                      return `<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;padding:0.3rem 0.5rem;border-radius:6px;${isCorrect ? 'background:#dcfce7;border:1px solid #86efac;font-weight:600;color:#166534' : 'color:var(--gray-600)'}">
-                        <span style="font-weight:700;font-size:0.75rem;text-transform:uppercase;min-width:16px">${o.id}.</span>
-                        ${o.text}
-                        ${isCorrect ? '<span style="margin-left:auto;font-size:0.7rem">✅ Correct</span>' : ''}
-                      </div>`;
-                    }).join('')}
-                  </div>
-                </div>`;
-            }).join('')}
-          </div>`}
-        </div>
-        <div class="modal-actions" style="border-top:1px solid var(--gray-200);padding:0.75rem 1.25rem;flex-shrink:0">
-          <button class="modal-btn modal-btn-confirm" onclick="closeModal()">Close</button>
-        </div>
-      </div>`;
-  } catch (e) {
-    box.innerHTML = `<div class="modal-card"><p style="color:var(--danger)">${e.message}</p><div class="modal-actions"><button class="modal-btn modal-btn-confirm" onclick="closeModal()">Close</button></div></div>`;
+function atcQuestionOptions(q) {
+  if (Array.isArray(q?.options)) return q.options;
+  if (typeof q?.options === 'string') {
+    try { const parsed = JSON.parse(q.options); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
   }
+  return [];
+}
+
+async function viewQBQuestions(el, ApiClient, banks, bank) {
+  if (!bank || !el) return;
+  el.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text-muted)">Loading questions...</div>';
+
+  let questions = [];
+  try {
+    questions = await ApiClient.getQuestionBankQuestions(bank.id);
+  } catch (e) {
+    el.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--danger)">${atcEsc(e.message || 'Failed to load questions.')}</div>`;
+    return;
+  }
+
+  const bankTitle = atcEsc(bank.title || '');
+  const bankSubject = atcEsc(bank.subject || '');
+  const creatorName = atcEsc(bank.created_by || bank.creator_name || 'Admin');
+
+  el.innerHTML = `
+    <div style="margin-bottom:1.25rem">
+      <button id="atc-back-to-banks" class="btn btn-outline btn-sm" style="margin-bottom:1rem">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
+        Back to Question Banks
+      </button>
+      <div>
+        <h2 style="font-size:1.25rem;font-weight:800;margin-bottom:0.25rem">${bankTitle}</h2>
+        <p style="font-size:0.85rem;color:var(--text-muted)">${bankSubject} · ${questions.length} questions · by ${creatorName}</p>
+      </div>
+    </div>
+    ${questions.length === 0
+      ? '<div class="card" style="padding:3rem;text-align:center;color:var(--text-muted)"><h3>No questions yet</h3><p>This bank has no questions.</p></div>'
+      : `<div class="card">
+          <div class="table-wrap" style="max-height:calc(100vh - 280px);overflow:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:50px">#</th>
+                  <th>Question</th>
+                  <th style="width:70px">Lang</th>
+                  <th>Options</th>
+                  <th style="width:140px">Answer</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${questions.map((q, i) => {
+                  const opts = atcQuestionOptions(q);
+                  const hasMr = !!(q.text_mr || opts.some(o => o.text_mr));
+                  const answerOpt = opts.find(o => String(o.id) === String(q.correct_answer));
+                  const answerLabel = atcEsc(answerOpt?.text || q.correct_answer || '—');
+                  const optionsHtml = opts.map(o =>
+                    '<span style="display:inline-block;background:var(--gray-50);border:1px solid var(--gray-200);padding:0.15rem 0.4rem;border-radius:4px;margin:0.1rem">'
+                    + atcEsc(String(o.id || '').toUpperCase()) + ': ' + atcEsc(o.text)
+                    + (o.text_mr ? '<br><span style="color:#047857">' + atcEsc(o.text_mr) + '</span>' : '')
+                    + '</span>'
+                  ).join(' ');
+                  return `
+                    <tr>
+                      <td style="font-weight:600;color:var(--text-muted)">${i + 1}</td>
+                      <td style="max-width:300px;line-height:1.5">
+                        <div>${atcEsc(q.text)}</div>
+                        ${q.text_mr
+                          ? `<div style="margin-top:0.25rem;color:#047857;font-size:0.88rem;font-family:'Noto Sans Devanagari',sans-serif">${atcEsc(q.text_mr)}</div>`
+                          : '<div style="margin-top:0.2rem;font-size:0.75rem;color:#94a3b8">No Marathi</div>'}
+                      </td>
+                      <td>${hasMr ? '<span class="badge badge-green">EN+MR</span>' : '<span class="badge" style="background:#f1f5f9;color:#64748b">EN</span>'}</td>
+                      <td style="font-size:0.8rem;color:var(--text-muted);max-width:240px">${optionsHtml || '—'}</td>
+                      <td><span class="badge badge-green">${answerLabel}</span></td>
+                    </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div style="padding:0.65rem 1rem;border-top:1px solid var(--gray-200);font-size:0.8rem;color:var(--text-muted);font-weight:600">
+            Showing ${questions.length} question${questions.length !== 1 ? 's' : ''}
+          </div>
+        </div>`}
+  `;
+
+  document.getElementById('atc-back-to-banks')?.addEventListener('click', () => {
+    renderATCBanksPage(el, banks, ApiClient);
+  });
 }
 
 
