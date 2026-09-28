@@ -1,11 +1,12 @@
 /**
- * ATCModule.js — ATC Portal: three-tab view
- *   Tab 1: Question Banks assigned to this ATC (clickable → view questions)
- *   Tab 2: My Students + assign/edit/history + bulk assign
- *   Tab 3: Live Monitoring (centre-scoped)
+ * ATCModule.js — ATC Portal pages (one section per sidebar page)
+ *   banks:    Question banks assigned to this centre
+ *   students: My students + assign / edit / history / bulk assign
+ *   live:     Live monitoring (centre-scoped)
+ *   results:  Centre submissions
  *
  * Backend scoping is enforced server-side. This module respects it.
- * Version: v3
+ * Version: v4
  */
 import modalService from '../services/ModalService.js';
 
@@ -25,96 +26,88 @@ function getOverlay() {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  MAIN RENDER
 // ═══════════════════════════════════════════════════════════════════════════════
+const ATC_SECTIONS = {
+  banks: {
+    title: 'Question Banks',
+    subtitle: 'Banks assigned to your centre. Open a bank to review its questions.',
+  },
+  students: {
+    title: 'My Students',
+    subtitle: 'Assign exams, review history, and update students at your centre.',
+  },
+  live: {
+    title: 'Live Monitoring',
+    subtitle: 'Students from your centre who are in an exam right now.',
+  },
+  results: {
+    title: 'Results',
+    subtitle: 'Submissions from students at your centre.',
+  },
+};
+
 export async function renderATC(ApiClient, ctx) {
+  const section = ATC_SECTIONS[ctx.section] ? ctx.section : 'banks';
   const { currentUser, getScopedLive } = ctx;
   const el = document.getElementById('page-content');
   if (!el) return;
 
   el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px"><div class="loader"></div></div>';
 
-  let banks = [], students = [], availableExams = [], resultsData = {};
+  let banks = [];
+  let students = [];
+  let availableExams = [];
+  let resultsData = {};
   try {
-    [banks, students, availableExams, resultsData] = await Promise.all([
-      ApiClient.getQuestionBanks(),
-      ApiClient.getAssignedStudents(),
-      ApiClient.getAssignableExams(),
-      ApiClient.getResults(),
-    ]);
+    if (section === 'banks') {
+      banks = await ApiClient.getQuestionBanks();
+    } else if (section === 'students') {
+      [students, availableExams] = await Promise.all([
+        ApiClient.getAssignedStudents(),
+        ApiClient.getAssignableExams(),
+      ]);
+    } else if (section === 'results') {
+      resultsData = await ApiClient.getResults();
+    }
   } catch (e) {
     el.innerHTML = `<div class="card" style="text-align:center;padding:3rem;color:var(--danger)">Failed to load: ${e.message}</div>`;
     return;
   }
 
-  // Store for refresh
   window._atcCurrentUser = currentUser;
   window._atcCtx = ctx;
 
   const centreName = currentUser.centre_id || 'Your Centre';
+  const meta = ATC_SECTIONS[section];
+  const countNote = section === 'banks'
+    ? `${banks.length} question bank(s)`
+    : section === 'students'
+      ? `${students.length} students`
+      : centreName;
+
+  const panelHtml = section === 'banks'
+    ? `<div id="atc-panel-qb">${renderQBPanel(banks)}</div>`
+    : section === 'students'
+      ? `<div id="atc-panel-students">${renderStudentsPanel(students, availableExams)}</div>`
+      : section === 'results'
+        ? `<div id="atc-panel-results">${renderResultsPanel(resultsData)}</div>`
+        : `<div id="atc-panel-live"><div style="display:flex;align-items:center;justify-content:center;height:120px"><div class="loader"></div></div></div>`;
 
   el.innerHTML = `
-    <div class="page-header" style="margin-bottom:1.25rem">
+    <div class="page-header">
       <div>
-        <h2 style="margin:0">ATC Dashboard</h2>
-        <p style="margin:0.25rem 0 0;color:var(--text-muted);font-size:0.875rem">
-          📍 ${centreName} &nbsp;·&nbsp; ${students.length} students &nbsp;·&nbsp; ${banks.length} question bank(s) assigned
-        </p>
+        <h2>${meta.title}</h2>
+        <p>${meta.subtitle} · ${countNote}</p>
       </div>
     </div>
-
-    <!-- Tabs -->
-    <div style="display:flex;gap:0;border-bottom:2px solid var(--gray-200);margin-bottom:1.5rem">
-      <button id="atc-tab-qb" class="atc-tab"
-        style="padding:0.625rem 1.25rem;border:none;background:none;font-weight:600;font-size:0.9rem;cursor:pointer;border-bottom:2px solid #2563eb;margin-bottom:-2px;color:#2563eb">
-        📚 Question Banks <span class="badge badge-primary" style="margin-left:0.25rem">${banks.length}</span>
-      </button>
-      <button id="atc-tab-students" class="atc-tab"
-        style="padding:0.625rem 1.25rem;border:none;background:none;font-weight:600;font-size:0.9rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-muted)">
-        👥 My Students <span class="badge badge-gray" style="margin-left:0.25rem">${students.length}</span>
-      </button>
-      <button id="atc-tab-live" class="atc-tab"
-        style="padding:0.625rem 1.25rem;border:none;background:none;font-weight:600;font-size:0.9rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-muted)">
-        🔴 Live Monitoring
-      </button>
-      <button id="atc-tab-results" class="atc-tab"
-        style="padding:0.625rem 1.25rem;border:none;background:none;font-weight:600;font-size:0.9rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-muted)">
-        📊 Results
-      </button>
-    </div>
-
-    <!-- Tab Panels -->
-    <div id="atc-panel-qb">${renderQBPanel(banks)}</div>
-    <div id="atc-panel-students" style="display:none">${renderStudentsPanel(students, availableExams)}</div>
-    <div id="atc-panel-live" style="display:none"><div style="display:flex;align-items:center;justify-content:center;height:120px"><div class="loader"></div></div></div>
-    <div id="atc-panel-results" style="display:none">${renderResultsPanel(resultsData)}</div>
+    ${panelHtml}
   `;
 
-  // ── Tab switching ──────────────────────────────────────
   let _liveTimer = null;
-  const tabs = ['qb', 'students', 'live', 'results'];
 
-  window.switchATCTab = (tab) => {
-    tabs.forEach(t => {
-      document.getElementById(`atc-panel-${t}`).style.display = t === tab ? '' : 'none';
-      const btn = document.getElementById(`atc-tab-${t}`);
-      btn.style.borderBottomColor = t === tab ? '#2563eb' : 'transparent';
-      btn.style.color = t === tab ? '#2563eb' : 'var(--text-muted)';
-    });
-
-    // Start / stop live monitoring
-    if (tab === 'live') {
-      startLiveRefresh();
-    } else {
-      stopLiveRefresh();
-    }
-  };
-
-  tabs.forEach(t => {
-    document.getElementById(`atc-tab-${t}`).addEventListener('click', () => window.switchATCTab(t));
-  });
-
-  // ── Student search ──────────────────────────────────────
-  const searchEl = document.getElementById('atc-student-search');
-  if (searchEl) searchEl.addEventListener('input', () => filterStudentRows(searchEl.value));
+  if (section === 'students') {
+    const searchEl = document.getElementById('atc-student-search');
+    if (searchEl) searchEl.addEventListener('input', () => filterStudentRows(searchEl.value));
+  }
 
   // ── Bulk select ─────────────────────────────────────────
   window.atcToggleAll = (master) => {
@@ -234,8 +227,8 @@ export async function renderATC(ApiClient, ctx) {
     if (_liveTimer) { clearTimeout(_liveTimer); _liveTimer = null; }
   }
 
-  // Return controller for page cleanup
-  return { stop: stopLiveRefresh };
+  if (section === 'live') startLiveRefresh();
+  return section === 'live' ? { stop: stopLiveRefresh } : undefined;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

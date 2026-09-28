@@ -126,7 +126,7 @@
         </div>
         <div>
           <div class="sidebar-brand-name">Gyanam</div>
-          <div class="sidebar-brand-role">Admin Portal</div>
+          <div class="sidebar-brand-role" id="sidebar-brand-role">Admin Portal</div>
         </div>
       </div>
       <nav class="sidebar-nav">
@@ -176,13 +176,35 @@
           </svg>
           Results & Analytics
         </button>
-        <div class="sidebar-nav-section">ATC Portal</div>
-        <button class="sidebar-link active" data-page="atc">
+        <div class="sidebar-nav-section" data-audience="atc">My Centre</div>
+        <button class="sidebar-link" data-page="atc-banks" data-audience="atc">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round"
-              d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+              d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
           </svg>
-          ATC Dashboard
+          Question Banks
+        </button>
+        <button class="sidebar-link" data-page="atc-students" data-audience="atc">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+          </svg>
+          My Students
+        </button>
+        <button class="sidebar-link" data-page="atc-live" data-audience="atc">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Live Monitoring
+        </button>
+        <button class="sidebar-link" data-page="atc-results" data-audience="atc">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+          </svg>
+          Results
         </button>
         <div class="sidebar-nav-section">Settings</div>
         <button class="sidebar-link" data-page="credentials">
@@ -240,7 +262,7 @@
     import { renderExams } from './src/modules/ExamsModule.js?v=7';
     import { renderStudents } from './src/modules/StudentsModule.js?v=12';
     import { renderResults } from './src/modules/ResultsModule.js?v=3';
-    import { renderATC } from './src/modules/ATCModule.js?v=7';
+    import { renderATC } from './src/modules/ATCModule.js?v=8';
     import { renderCredentials } from './src/modules/CredentialsModule.js?v=1';
     import { renderAssignBank } from './src/modules/AssignBankModule.js?v=1';
     import { renderExamForm } from './src/modules/ExamFormModule.js?v=8';
@@ -287,18 +309,21 @@
     // ─── Session restore on load ───────────────────────────────────────
     const ADMIN_PAGES = new Set([
       'dashboard', 'live', 'questions', 'exams', 'students', 'results',
-      'atc', 'credentials', 'assign-bank', 'exam-form',
+      'credentials', 'assign-bank', 'exam-form',
+      'atc-banks', 'atc-students', 'atc-live', 'atc-results',
     ]);
+    const ATC_PAGES = ['atc-banks', 'atc-students', 'atc-live', 'atc-results'];
 
     function resolveStartPage(user) {
       const isATC = user.role === 'atc' || user.role === 'dlc';
-      const fallback = isATC ? 'atc' : 'dashboard';
+      const fallback = isATC ? 'atc-banks' : 'dashboard';
       const fromHash = (location.hash || '').replace(/^#\/?/, '').trim();
       const fromStore = sessionStorage.getItem('gyanam_admin_page') || '';
-      const candidate = fromHash || fromStore || fallback;
+      let candidate = fromHash || fromStore || fallback;
+      if (candidate === 'atc') candidate = 'atc-banks';
       if (!ADMIN_PAGES.has(candidate)) return fallback;
-      if (isATC && !['atc', 'results'].includes(candidate)) return fallback;
-      if (!isATC && candidate === 'atc') return fallback;
+      if (isATC && !ATC_PAGES.includes(candidate)) return fallback;
+      if (!isATC && ATC_PAGES.includes(candidate)) return fallback;
       return candidate;
     }
 
@@ -371,7 +396,7 @@
         document.getElementById('sidebar-avatar').textContent = username.charAt(0).toUpperCase();
         showPortal();
         // Fresh login always lands on role home (ignore stale hash)
-        const home = (user.role === 'atc' || user.role === 'dlc') ? 'atc' : 'dashboard';
+        const home = (user.role === 'atc' || user.role === 'dlc') ? 'atc-banks' : 'dashboard';
         sessionStorage.removeItem('gyanam_admin_page');
         if (location.hash) history.replaceState(null, '', location.pathname + location.search);
         loadPage(home);
@@ -390,6 +415,10 @@
       document.getElementById('portal-app').style.display = 'flex';
       document.getElementById('sidebar-uname').textContent = currentUser.username;
       document.getElementById('sidebar-urole').textContent = currentUser.role === 'atc' ? 'ATC Login' : currentUser.role === 'dlc' ? 'DLC Login' : 'Administrator';
+      const brandRole = document.getElementById('sidebar-brand-role');
+      if (brandRole) {
+        brandRole.textContent = currentUser.role === 'atc' ? 'ATC Portal' : currentUser.role === 'dlc' ? 'DLC Portal' : 'Admin Portal';
+      }
       document.getElementById('sidebar-avatar').textContent = (currentUser.username || 'A').charAt(0).toUpperCase();
       setupSidebar();
     }
@@ -407,11 +436,9 @@
       document.querySelectorAll('.sidebar-link[data-page]').forEach(btn => {
         const page = btn.dataset.page;
         if (isATC) {
-          // ATC sees only: atc, results
-          btn.style.display = ['atc', 'results'].includes(page) ? '' : 'none';
+          btn.style.display = ATC_PAGES.includes(page) ? '' : 'none';
         } else {
-          // Admin sees all EXCEPT the atc-specific page
-          btn.style.display = page === 'atc' ? 'none' : '';
+          btn.style.display = ATC_PAGES.includes(page) ? 'none' : '';
         }
       });
 
@@ -444,11 +471,12 @@
     async function loadPage(page, { skipHash = false } = {}) {
       if (!currentUser) return;
       const isATC = currentUser.role === 'atc' || currentUser.role === 'dlc';
+      if (page === 'atc') page = 'atc-banks';
       if (!ADMIN_PAGES.has(page)) {
-        page = isATC ? 'atc' : 'dashboard';
-      } else if (isATC && !['atc', 'results'].includes(page)) {
-        page = 'atc';
-      } else if (!isATC && page === 'atc') {
+        page = isATC ? 'atc-banks' : 'dashboard';
+      } else if (isATC && !ATC_PAGES.includes(page)) {
+        page = 'atc-banks';
+      } else if (!isATC && ATC_PAGES.includes(page)) {
         page = 'dashboard';
       }
 
@@ -463,7 +491,11 @@
         dashboard: 'Dashboard', live: 'Live Monitoring',
         questions: 'Question Banks', exams: 'Exam Configurations',
         students: 'Student Records', results: 'Results & Analytics',
-        atc: 'ATC Dashboard', credentials: 'Portal Credentials',
+        credentials: 'Portal Credentials',
+        'atc-banks': 'Question Banks',
+        'atc-students': 'My Students',
+        'atc-live': 'Live Monitoring',
+        'atc-results': 'Results',
         'assign-bank': 'Assign to ATC Centres',
         'exam-form': 'Exam Configuration',
       };
@@ -486,7 +518,10 @@
         exams:     () => renderExams(ApiClient, ctx),
         students:  () => renderStudents(ApiClient, ctx),
         results:   () => renderResults(ApiClient, ctx),
-        atc:       () => renderATC(ApiClient, ctx),
+        'atc-banks':    () => renderATC(ApiClient, { ...ctx, section: 'banks' }),
+        'atc-students': () => renderATC(ApiClient, { ...ctx, section: 'students' }),
+        'atc-live':     () => renderATC(ApiClient, { ...ctx, section: 'live' }),
+        'atc-results':  () => renderATC(ApiClient, { ...ctx, section: 'results' }),
         credentials: () => renderCredentials(ApiClient, ctx),
         'assign-bank': () => renderAssignBank(ApiClient, ctx),
         'exam-form': () => renderExamForm(ApiClient, ctx),
