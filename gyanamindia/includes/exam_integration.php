@@ -684,13 +684,33 @@ function syncATCCentresToExamPortal(PDO $pdo): array
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
         $atcId = (int)($row['id'] ?? 0);
         unset($row['id']);
-        $row['active_courses'] = getAtcActiveCourseNames($pdo, $atcId);
+        $row['active_courses'] = getAtcActiveCourseNames($pdo, $atcId, false);
         $centres[] = $row;
     }
 
     return examApi_request('POST', '/portal-atc-centres', [
         'centres' => $centres,
     ]);
+}
+
+/**
+ * Push ATC active courses to the exam portal at most once every few minutes.
+ */
+function syncATCCentresToExamPortalIfDue(PDO $pdo, int $minSeconds = 120): void
+{
+    if (!examIntegrationReady()) {
+        return;
+    }
+    $last = (int)($_SESSION['exam_atc_course_sync_at'] ?? 0);
+    if ($last > 0 && (time() - $last) < $minSeconds) {
+        return;
+    }
+    $_SESSION['exam_atc_course_sync_at'] = time();
+    try {
+        syncATCCentresToExamPortal($pdo);
+    } catch (Throwable $e) {
+        error_log('[exam] ATC course sync: ' . $e->getMessage());
+    }
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -732,7 +752,7 @@ function examPortalAtcCodeFromSession(?PDO $pdo = null): string
  *
  * @return list<string>
  */
-function getAtcActiveCourseNames(PDO $pdo, int $atcId): array
+function getAtcActiveCourseNames(PDO $pdo, int $atcId, bool $requireHoShare = true): array
 {
     if ($atcId <= 0) {
         return [];
@@ -775,7 +795,9 @@ function getAtcActiveCourseNames(PDO $pdo, int $atcId): array
                     $hoWithout = $legacyHo;
                 }
             }
-            $active = ($feeWith > 0 && $hoWith > 0) || ($feeWithout > 0 && $hoWithout > 0);
+            $feeActive = ($feeWith > 0) || ($feeWithout > 0) || ($legacyFee > 0);
+            $shareActive = ($feeWith > 0 && $hoWith > 0) || ($feeWithout > 0 && $hoWithout > 0);
+            $active = $requireHoShare ? $shareActive : $feeActive;
             if (!$active) {
                 continue;
             }

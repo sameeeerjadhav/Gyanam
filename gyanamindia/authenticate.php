@@ -6,6 +6,7 @@
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/includes/exam_integration.php';
 
 startSecureSession();
 
@@ -93,6 +94,14 @@ try {
     $_SESSION['dlc_id']        = $user['dlc_id'];
     $_SESSION['atc_id']        = $user['atc_id'];
     $_SESSION['login_time']    = time();
+
+    try {
+        if (function_exists('syncATCCentresToExamPortalIfDue') && isset($pdo) && $pdo instanceof PDO) {
+            syncATCCentresToExamPortalIfDue($pdo, 0);
+        }
+    } catch (Throwable $e) {
+        error_log('[login] ATC course sync: ' . $e->getMessage());
+    }
 
     // Redirect to appropriate dashboard
     redirect(getDashboardURL($user['role']));

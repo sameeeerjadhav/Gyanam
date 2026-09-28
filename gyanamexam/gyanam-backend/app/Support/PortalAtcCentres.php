@@ -92,7 +92,7 @@ class PortalAtcCentres
         }
 
         foreach (self::all() as $centre) {
-            if (trim((string) ($centre['code'] ?? '')) !== $code) {
+            if (strcasecmp(trim((string) ($centre['code'] ?? '')), $code) !== 0) {
                 continue;
             }
             if (!array_key_exists('active_courses', $centre) || !is_array($centre['active_courses'])) {

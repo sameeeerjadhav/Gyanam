@@ -45,6 +45,21 @@ try {
     }
 }
 
+if (!function_exists('syncATCCentresToExamPortalIfDue')) {
+    $examFile = __DIR__ . '/../includes/exam_integration.php';
+    if (is_file($examFile)) {
+        require_once $examFile;
+    }
+}
+if (function_exists('syncATCCentresToExamPortalIfDue')) {
+    try {
+        $_syncPdo = isset($pdo) && $pdo instanceof PDO ? $pdo : getDBConnection();
+        syncATCCentresToExamPortalIfDue($_syncPdo);
+    } catch (Throwable $_syncE) {
+        error_log('[ATC sidebar] exam course sync: ' . $_syncE->getMessage());
+    }
+}
+
 // Resolve logo web path (relative to /atc/*.php)
 $_sidebarLogoUrl = '';
 if ($_sidebarAtcLogo !== '') {
