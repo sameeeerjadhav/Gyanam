@@ -1059,7 +1059,7 @@ function buildHallTicketHtml(student) {
                 <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.8">
                   <li style="margin-bottom:6px">Report to the exam centre at least 30 minutes before the exam time.</li>
                   <li style="margin-bottom:6px">Candidate must carry the hall ticket and original photo ID.</li>
-                  <li style="margin-bottom:6px">Exam portal login User ID is your Registration Number: <b>${regNo}</b>.</li>
+                  <li style="margin-bottom:6px">Exam portal: <b>https://exam.gyanamindia.com</b>. Login User ID is your Registration Number: <b>${regNo}</b>.</li>
                   <li style="margin-bottom:6px">If any mistake is found in candidate details, report immediately to centre staff.</li>
                   <li style="margin-bottom:6px">Candidate must sign the attendance sheet before the start of exam.</li>
                   <li style="margin-bottom:6px">Opening any other window during the exam will terminate the exam.</li>
@@ -1234,7 +1234,7 @@ function buildHallTicketWhatsAppMsg(student, extraNote) {
     msg += `🏫 *Centre:* ${centre}\n`;
     if (addr) msg += `📍 *Address:* ${addr}\n`;
     msg += `\n⚠️ Report 30 minutes early. Bring original photo ID with this hall ticket.\n`;
-    msg += `🔑 Login to exam portal with User ID: *${regNo}*\n`;
+    msg += `🔑 Login at https://exam.gyanamindia.com with User ID: *${regNo}*\n`;
     if (note) msg += `\n📌 ${note}\n`;
     msg += `\nRegards,\n${centre}\nGyanam India`;
     return msg;

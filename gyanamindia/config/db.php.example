@@ -16,7 +16,7 @@ if (function_exists('date_default_timezone_set')) {
 }
 
 // ─── Exam Portal API Integration ─────────────────────────────────────────────
-define('EXAM_API_URL', 'https://your-exam-domain/gyanam-backend/public/index.php/api/v1');
+define('EXAM_API_URL', 'https://exam.gyanamindia.com/gyanam-backend/public/index.php/api/v1');
 define('EXAM_API_TOKEN', 'your_sanctum_token_here');
 
 function getDBConnection(): PDO {

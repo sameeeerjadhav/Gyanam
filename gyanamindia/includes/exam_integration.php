@@ -3,7 +3,7 @@
  * Exam Portal Integration â€” Gyanam India
  *
  * Helper functions for communicating with the Laravel-based Exam Portal API
- * at gyanamexam.labxco.in via server-to-server cURL requests.
+ * at exam.gyanamindia.com via server-to-server cURL requests.
  *
  * Results endpoints support pagination (?page=&per_page=&q=). Prefer paginated
  * fetches for large centres. See gyanamexam/docs/PRODUCTION_CAPACITY.md before
