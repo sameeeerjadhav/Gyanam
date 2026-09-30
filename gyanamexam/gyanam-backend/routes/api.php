@@ -40,6 +40,7 @@ Route::prefix('v1')->group(function () {
         Route::delete('question-banks/{bankId}/questions/{qId}',[QuestionBankController::class, 'destroyQuestion']);
 
         // Exam Configs
+        Route::post('exam-configs/bulk-from-banks', [ExamConfigController::class, 'bulkFromBanks']);
         Route::apiResource('exam-configs', ExamConfigController::class);
         Route::patch('exam-configs/{id}/toggle-active', [ExamConfigController::class, 'toggleActive']);
 

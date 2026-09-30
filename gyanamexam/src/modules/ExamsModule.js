@@ -57,7 +57,11 @@ export async function renderExams(ApiClient, { loadPage } = {}) {
   el.innerHTML = `
   <div class="page-header">
     <div><h2>Exam Configurations</h2><p id="exam-count-label">${allConfigs.length} exam(s) configured</p></div>
-    <button id="add-exam-btn" class="btn btn-primary">+ New Exam</button>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end">
+      <button id="bulk-demo-btn" class="btn btn-outline" type="button">Create Demo exams</button>
+      <button id="bulk-main-btn" class="btn btn-outline" type="button">Create Main exams</button>
+      <button id="add-exam-btn" class="btn btn-primary" type="button">+ New Exam</button>
+    </div>
   </div>
 
   <div class="card" style="margin-bottom:1.5rem; padding:1rem; display:flex; gap:1rem; flex-wrap:wrap; align-items:center; background: var(--gray-50)">
@@ -96,6 +100,49 @@ export async function renderExams(ApiClient, { loadPage } = {}) {
   document.getElementById('ex-type-filter').addEventListener('change', e => { filterType = e.target.value; renderTable(); });
   document.getElementById('ex-status-filter').addEventListener('change', e => { filterStatus = e.target.value; renderTable(); });
   document.getElementById('add-exam-btn').addEventListener('click', () => openExamForm(null));
+
+  async function bulkCreate(kind) {
+    const isDemo = kind === 'demo';
+    const label = isDemo ? 'Demo' : 'Main';
+    const mode = isDemo ? 'Normal' : 'Proctored';
+    const ok = await modalService.confirm(
+      `Create a ${label} exam for every question bank that does not already have one.<br><br>Title: course name ${label.toUpperCase()}<br>Duration: 1 hour<br>Questions to show: 40 (fewer only if the bank is smaller)<br>Mode: ${mode}<br>Questions are randomized.<br><br>You can edit the name, question count, and other settings afterwards. Banks that already have a ${label} exam are skipped.`,
+      { title: `Create ${label} exams`, confirmText: `Create ${label} exams`, type: 'warning' }
+    );
+    if (!ok) return;
+
+    const demoBtn = document.getElementById('bulk-demo-btn');
+    const mainBtn = document.getElementById('bulk-main-btn');
+    const addBtn = document.getElementById('add-exam-btn');
+    [demoBtn, mainBtn, addBtn].forEach(btn => { if (btn) btn.disabled = true; });
+    const activeBtn = isDemo ? demoBtn : mainBtn;
+    const previous = activeBtn ? activeBtn.textContent : '';
+    if (activeBtn) activeBtn.textContent = 'Creating…';
+
+    try {
+      const result = await ApiClient.bulkCreateExams(kind);
+      const created = result.created || [];
+      const skipped = result.skipped || [];
+      const failed = result.failed || [];
+      const capped = created.filter(row => row.capped).length;
+      const parts = [`Created ${created.length} ${label} exam(s).`];
+      if (skipped.length) parts.push(`Skipped ${skipped.length} that already had a ${label} exam.`);
+      if (capped) parts.push(`${capped} show fewer than 40 questions because the bank is smaller.`);
+      if (failed.length) {
+        const names = failed.slice(0, 4).map(row => row.bank).join(', ');
+        parts.push(`${failed.length} not created${names ? ` (${names})` : ''}.`);
+      }
+      modalService.toast(parts.join(' '), failed.length && !created.length ? 'error' : 'success');
+      renderExams(ApiClient, { loadPage });
+    } catch (e) {
+      modalService.toast('Could not create exams: ' + e.message, 'error');
+      [demoBtn, mainBtn, addBtn].forEach(btn => { if (btn) btn.disabled = false; });
+      if (activeBtn) activeBtn.textContent = previous;
+    }
+  }
+
+  document.getElementById('bulk-demo-btn')?.addEventListener('click', () => bulkCreate('demo'));
+  document.getElementById('bulk-main-btn')?.addEventListener('click', () => bulkCreate('main'));
 
   window.editExam = (id) => openExamForm(id);
 

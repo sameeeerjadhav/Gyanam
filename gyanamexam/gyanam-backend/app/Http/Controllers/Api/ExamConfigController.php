@@ -75,6 +75,106 @@ class ExamConfigController extends Controller
         return response()->json($exam->load('questionBank'), 201);
     }
 
+    /**
+     * Create one demo or main exam per question bank that does not already have that type.
+     * POST /api/v1/exam-configs/bulk-from-banks  { kind: demo|main }
+     */
+    public function bulkFromBanks(Request $request)
+    {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Only an admin can bulk-create exams.'], 403);
+        }
+
+        $kind = $request->validate([
+            'kind' => 'required|in:demo,main',
+        ])['kind'];
+
+        set_time_limit(180);
+
+        $proctored = $kind === 'main';
+        $suffix = $kind === 'demo' ? 'DEMO' : 'MAIN';
+        $proctoring = $proctored ? [
+            'camera' => false,
+            'microphone' => false,
+            'copy_paste_block' => true,
+            'right_click_block' => true,
+            'tab_switch_limit' => 3,
+            'fullscreen_enforce' => true,
+            'devtools_detect' => true,
+            'text_select_block' => true,
+        ] : null;
+
+        $existingBankIds = ExamConfig::query()
+            ->where('exam_type', $kind)
+            ->where('is_global_practice', false)
+            ->pluck('question_bank_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $created = [];
+        $skipped = [];
+        $failed = [];
+
+        $banks = QuestionBank::withCount('questions')->orderBy('subject')->orderBy('title')->get();
+        foreach ($banks as $bank) {
+            $course = trim((string) $bank->subject);
+            $label = $course !== '' ? $course : trim((string) $bank->title);
+            $count = (int) $bank->questions_count;
+
+            if (in_array((int) $bank->id, $existingBankIds, true)) {
+                $skipped[] = ['bank' => $label, 'reason' => 'Already has a ' . $kind . ' exam'];
+                continue;
+            }
+            if ($course === '') {
+                $failed[] = ['bank' => $label !== '' ? $label : ('Bank #' . $bank->id), 'reason' => 'No course / subject on the question bank'];
+                continue;
+            }
+            if ($count < 1) {
+                $failed[] = ['bank' => $course, 'reason' => 'Question bank has no questions'];
+                continue;
+            }
+
+            $show = min(40, $count);
+            try {
+                $exam = ExamConfig::create([
+                    'exam_id' => 'exam_' . Str::random(8),
+                    'title' => $course . ' ' . $suffix,
+                    'subject' => $course,
+                    'exam_type' => $kind,
+                    'duration' => 60,
+                    'total_questions' => $show,
+                    'passing_score' => 60,
+                    'question_bank_id' => $bank->id,
+                    'created_by_user_id' => $request->user()->id,
+                    'instructions' => null,
+                    'active' => true,
+                    'randomize_questions' => true,
+                    'proctored' => $proctored,
+                    'proctoring_settings' => $proctoring,
+                    'is_global_practice' => false,
+                ]);
+                app(ExamCourseAssignmentService::class)->assignExamToCourseStudents($exam);
+                $created[] = [
+                    'id' => $exam->id,
+                    'title' => $exam->title,
+                    'questions' => $show,
+                    'bank_questions' => $count,
+                    'capped' => $show < 40,
+                ];
+                $existingBankIds[] = (int) $bank->id;
+            } catch (\Throwable $e) {
+                $failed[] = ['bank' => $course, 'reason' => 'Could not create the exam'];
+            }
+        }
+
+        return response()->json([
+            'kind' => $kind,
+            'created' => $created,
+            'skipped' => $skipped,
+            'failed' => $failed,
+        ]);
+    }
+
     public function show($id)
     {
         return response()->json(ExamConfig::with(['questionBank','students'])->findOrFail($id));
