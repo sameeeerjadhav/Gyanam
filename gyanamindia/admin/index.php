@@ -1200,7 +1200,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             <div class="cc-grid cc-grid-4">
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-staff.png', 'xl', 'Total logins') ?>
+                        <?= cc_png('icon-total-logins.png', 'xl', 'Total logins') ?>
                         <h3>Total Logins</h3>
                     </div>
                     <div class="cc-metric-value blue"><?= (int)$totalUsers ?></div>
@@ -1208,7 +1208,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-admissions.png', 'xl', 'ATC logins') ?>
+                        <?= cc_png('icon-atc-logins.png', 'xl', 'ATC logins') ?>
                         <h3>ATC Logins</h3>
                     </div>
                     <div class="cc-metric-value green"><?= (int)$totalATC ?></div>
@@ -1216,7 +1216,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-material.png', 'xl', 'DLC logins') ?>
+                        <?= cc_png('icon-dlc-logins.png', 'xl', 'DLC logins') ?>
                         <h3>DLC Logins</h3>
                     </div>
                     <div class="cc-metric-value blue"><?= (int)$totalDLC ?></div>
@@ -1224,7 +1224,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                 </div>
                 <div class="cc-card cc-card-pad clickable" onclick="openDetailModal('pending_exam')" title="Pending exam students">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-pending.png', 'xl', 'Pending exam') ?>
+                        <?= cc_png('icon-exam-pending.png', 'xl', 'Pending exam') ?>
                         <h3>Pending Exam</h3>
                     </div>
                     <div class="cc-metric-value orange"><?= (int)$pendingExam ?></div>

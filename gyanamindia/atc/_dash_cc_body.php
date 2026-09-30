@@ -48,7 +48,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-grid cc-grid-4">
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_png('icon-share-revenue.png', 'xl', 'Balance') ?>
+                            <?= cc_png('icon-balance.png', 'xl', 'Balance') ?>
                             <h3>Balance Amount</h3>
                         </div>
                         <div class="cc-metric-label">Pending fees (active)</div>
