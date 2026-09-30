@@ -154,6 +154,13 @@
           </svg>
           Question Banks
         </button>
+        <button class="sidebar-link" data-page="courses">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+          </svg>
+          Courses
+        </button>
         <button class="sidebar-link" data-page="exams">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round"
@@ -254,12 +261,13 @@
 
   <script type="module">
     import { CONFIG } from './src/config.js?v=3';
-    import ApiClient from './src/services/APIClient.js?v=9';
+    import ApiClient from './src/services/APIClient.js?v=10';
     import modalService from './src/services/ModalService.js?v=3';
     import { renderDashboard } from './src/modules/DashboardModule.js?v=3';
     import { renderLive } from './src/modules/LiveMonitorModule.js?v=3';
     import { renderQuestions } from './src/modules/QuestionsModule.js?v=14';
-    import { renderExams } from './src/modules/ExamsModule.js?v=8';
+    import { renderExams } from './src/modules/ExamsModule.js?v=9';
+    import { renderCourses } from './src/modules/CoursesModule.js?v=1';
     import { renderStudents } from './src/modules/StudentsModule.js?v=12';
     import { renderResults } from './src/modules/ResultsModule.js?v=3';
     import { renderATC } from './src/modules/ATCModule.js?v=11';
@@ -308,7 +316,7 @@
 
     // ─── Session restore on load ───────────────────────────────────────
     const ADMIN_PAGES = new Set([
-      'dashboard', 'live', 'questions', 'exams', 'students', 'results',
+      'dashboard', 'live', 'questions', 'courses', 'exams', 'students', 'results',
       'credentials', 'assign-bank', 'exam-form',
       'atc-banks', 'atc-students', 'atc-live', 'atc-results',
     ]);
@@ -489,7 +497,7 @@
         '<div style="display:flex;align-items:center;justify-content:center;height:200px"><div class="loader"></div></div>';
       const titles = {
         dashboard: 'Dashboard', live: 'Live Monitoring',
-        questions: 'Question Banks', exams: 'Exam Configurations',
+        questions: 'Question Banks', courses: 'Courses', exams: 'Exam Configurations',
         students: 'Student Records', results: 'Results & Analytics',
         credentials: 'Portal Credentials',
         'atc-banks': 'Question Banks',
@@ -515,6 +523,7 @@
         dashboard: () => renderDashboard(ApiClient, ctx),
         live:      () => renderLive(ApiClient, ctx),
         questions: () => renderQuestions(ApiClient, ctx),
+        courses:   () => renderCourses(ApiClient),
         exams:     () => renderExams(ApiClient, ctx),
         students:  () => renderStudents(ApiClient, ctx),
         results:   () => renderResults(ApiClient, ctx),

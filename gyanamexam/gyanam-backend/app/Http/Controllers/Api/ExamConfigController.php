@@ -76,8 +76,8 @@ class ExamConfigController extends Controller
     }
 
     /**
-     * Create one demo or main exam per question bank that does not already have that type.
-     * POST /api/v1/exam-configs/bulk-from-banks  { kind: demo|main }
+     * Create one demo or main exam for each selected course that does not already have that type.
+     * POST /api/v1/exam-configs/bulk-from-banks  { kind: demo|main, subjects: string[] }
      */
     public function bulkFromBanks(Request $request)
     {
@@ -85,9 +85,23 @@ class ExamConfigController extends Controller
             return response()->json(['message' => 'Only an admin can bulk-create exams.'], 403);
         }
 
-        $kind = $request->validate([
+        $data = $request->validate([
             'kind' => 'required|in:demo,main',
-        ])['kind'];
+            'subjects' => 'required|array|min:1|max:200',
+            'subjects.*' => 'string|max:255',
+        ]);
+        $kind = $data['kind'];
+        $wanted = [];
+        foreach ($data['subjects'] as $name) {
+            $label = trim((string) $name);
+            $key = ExamCourseAssignmentService::normalizeCourse($label);
+            if ($key !== '') {
+                $wanted[$key] = $label;
+            }
+        }
+        if ($wanted === []) {
+            return response()->json(['message' => 'Select at least one course.'], 422);
+        }
 
         set_time_limit(180);
 
@@ -114,10 +128,16 @@ class ExamConfigController extends Controller
         $created = [];
         $skipped = [];
         $failed = [];
+        $matched = [];
 
         $banks = QuestionBank::withCount('questions')->orderBy('subject')->orderBy('title')->get();
         foreach ($banks as $bank) {
             $course = trim((string) $bank->subject);
+            $key = ExamCourseAssignmentService::normalizeCourse($course);
+            if ($key === '' || !isset($wanted[$key])) {
+                continue;
+            }
+            $matched[$key] = true;
             $label = $course !== '' ? $course : trim((string) $bank->title);
             $count = (int) $bank->questions_count;
 
@@ -164,6 +184,12 @@ class ExamConfigController extends Controller
                 $existingBankIds[] = (int) $bank->id;
             } catch (\Throwable $e) {
                 $failed[] = ['bank' => $course, 'reason' => 'Could not create the exam'];
+            }
+        }
+
+        foreach ($wanted as $key => $label) {
+            if (!isset($matched[$key])) {
+                $failed[] = ['bank' => $label, 'reason' => 'No question bank for this course'];
             }
         }
 

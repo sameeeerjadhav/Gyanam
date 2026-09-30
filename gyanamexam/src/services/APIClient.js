@@ -176,7 +176,7 @@ class ApiClient {
   // ─── Exam Configs ──────────────────────────
   static getExams() { return this.get('/exam-configs'); }
   static createExam(data) { return this.post('/exam-configs', data); }
-  static bulkCreateExams(kind) { return this.post('/exam-configs/bulk-from-banks', { kind }); }
+  static bulkCreateExams(kind, subjects) { return this.post('/exam-configs/bulk-from-banks', { kind, subjects }); }
   static updateExam(id, data) { return this.put(`/exam-configs/${id}`, data); }
   static deleteExam(id) { return this.delete(`/exam-configs/${id}`); }
   static toggleExam(id) { return this.patch(`/exam-configs/${id}/toggle-active`); }
