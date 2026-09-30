@@ -164,13 +164,16 @@ try {
     if (function_exists('ensureIssuedCertificatesTable')) {
         ensureIssuedCertificatesTable($pdo);
     }
-    $certifiedStudents = (int)$pdo->query('SELECT COUNT(*) FROM issued_certificates')->fetchColumn();
-} catch (Exception $e) {}
-try {
-    $issuedAlt = (int)$pdo->query("SELECT COUNT(*) FROM certificates WHERE status = 'Issued'")->fetchColumn();
-    if ($issuedAlt > $certifiedStudents) {
-        $certifiedStudents = $issuedAlt;
-    }
+    // One row is inserted on every print. Count each student once.
+    $certifiedStudents = (int)$pdo->query("
+        SELECT COUNT(DISTINCT CASE
+            WHEN admission_id IS NOT NULL AND admission_id > 0 THEN CONCAT('a:', admission_id)
+            WHEN TRIM(reg_id) <> '' THEN CONCAT('r:', LOWER(TRIM(reg_id)))
+            ELSE CONCAT('n:', LOWER(TRIM(student_name)))
+        END)
+        FROM issued_certificates
+        WHERE cert_no NOT LIKE 'SAMPLE%'
+    ")->fetchColumn();
 } catch (Exception $e) {}
 try {
     $certPrintPending = (int)$pdo->query("SELECT COUNT(*) FROM certificates WHERE status = 'Pending'")->fetchColumn();
@@ -1360,7 +1363,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         <h3>Certified Students</h3>
                     </div>
                     <div class="cc-metric-value green"><?= (int)$certifiedStudents ?></div>
-                    <div class="cc-metric-label">Certificates issued</div>
+                    <div class="cc-metric-label">Students certified</div>
                 </a>
                 <a class="cc-card cc-card-pad" href="dispatches.php?date=today" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
