@@ -3,7 +3,7 @@
  * Runs BEFORE getExamQuestions so the live timer does not start early.
  * Final "Start Exam" click is used as the user gesture for fullscreen / camera.
  */
-import ApiClient from '../services/APIClient.js?v=7';
+import ApiClient from '../services/APIClient.js?v=8';
 
 const SLOT_LABELS = {
   SLOT1: 'Slot 1 (Morning)',
@@ -33,8 +33,6 @@ export class PreExamGate {
     this.step = 0;
     this.exam = null;
     this.termsAccepted = false;
-    this.centreApproved = false;
-    this.controllerToken = '';
     this.identityConfirmed = false;
     this.capturedPhoto = null; // data URL of still capture
     this._cameraStream = null;
@@ -66,6 +64,9 @@ export class PreExamGate {
     this.exam = exams.find(e => String(e.id) === String(this.examId)) || null;
     if (!this.exam) throw new Error('This exam is not assigned to you or is no longer available.');
     const isDemo = (this.exam.exam_type || '') === 'demo' || !!this.exam.is_demo;
+    if (!isDemo && this.exam.centre_open === false) {
+      throw new Error('Exams are closed at your centre. Ask your ATC to open them from the exam portal.');
+    }
     const unlimited = isDemo || !!this.exam.attempt_info?.unlimited;
     if (!unlimited && this.exam.attempt_info && !this.exam.attempt_info.can_attempt) {
       throw new Error('No attempts remaining for this exam.');
@@ -86,11 +87,6 @@ export class PreExamGate {
 
   get needsCamera() {
     return this.isProctored && !!this.settings.camera;
-  }
-
-  get needsController() {
-    const type = String(this.exam?.exam_type || '').toLowerCase();
-    return type !== 'demo' && type !== 'practice' && !this.exam?.is_demo;
   }
 
   destroy() {
@@ -132,14 +128,12 @@ export class PreExamGate {
   }
 
   _steps() {
-    const steps = [
+    return [
       { key: 'identity', label: 'Identity' },
       { key: 'rules', label: 'Rules' },
       { key: 'terms', label: 'Instructions' },
+      { key: 'ready', label: 'Start' },
     ];
-    if (this.needsController) steps.push({ key: 'centre', label: 'Centre' });
-    steps.push({ key: 'ready', label: 'Start' });
-    return steps;
   }
 
   _render() {
@@ -320,25 +314,6 @@ export class PreExamGate {
       return;
     }
 
-    if (key === 'centre' && !this.centreApproved) {
-      const password = document.getElementById('peg-centre-password')?.value || '';
-      if (!password.trim()) {
-        this._setError('Ask your ATC to enter the centre password.');
-        return;
-      }
-      const btn = document.getElementById('peg-next');
-      if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
-      try {
-        const res = await ApiClient.approveExamController(this.examId, password);
-        this.controllerToken = res?.token || '';
-        this.centreApproved = true;
-      } catch (e) {
-        this._setError(e.message || 'That centre password is not correct.');
-        if (btn) { btn.disabled = false; btn.textContent = 'Continue'; }
-        return;
-      }
-    }
-
     if (this.step < steps.length - 1) {
       this.step += 1;
       this._render();
@@ -371,7 +346,6 @@ export class PreExamGate {
       enteredFullscreen,
       cameraStream: stream,
       capturedPhoto: this.capturedPhoto || null,
-      controllerToken: this.controllerToken || '',
     });
   }
 
@@ -379,21 +353,7 @@ export class PreExamGate {
     if (key === 'identity') return this._identityHTML();
     if (key === 'rules') return this._rulesHTML();
     if (key === 'terms') return this._termsHTML();
-    if (key === 'centre') return this._centreHTML();
     return this._readyHTML();
-  }
-
-  _centreHTML() {
-    if (this.centreApproved) {
-      return `
-        <h2 class="peg-h2">Centre approved</h2>
-        <p class="peg-lead">The ATC password was accepted. Continue to start the exam on this computer.</p>`;
-    }
-    return `
-      <h2 class="peg-h2">Centre approval</h2>
-      <p class="peg-lead">This exam can start only at the centre. Your ATC types their exam-portal password here. It is checked once and is not saved.</p>
-      <label class="peg-h2" for="peg-centre-password" style="display:block;font-size:0.85rem;margin-bottom:0.4rem">ATC password</label>
-      <input id="peg-centre-password" class="form-input" type="password" autocomplete="off" placeholder="ATC password" style="width:100%;max-width:420px">`;
   }
 
   _identityHTML() {

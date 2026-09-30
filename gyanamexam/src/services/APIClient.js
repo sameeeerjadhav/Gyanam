@@ -217,14 +217,10 @@ class ApiClient {
   }
 
   // ─── Student Exam flow ─────────────────────
-  static approveExamController(examId, password) {
-    return this.post(`/student/exam/${examId}/controller-approve`, { password });
-  }
-  static getExamQuestions(id, controllerToken) {
-    const headers = {};
-    if (controllerToken) headers['X-Controller-Token'] = controllerToken;
-    return this.request(`/student/exam/${id}/questions`, { method: 'GET', headers });
-  }
+  static getExamQuestions(id) { return this.get(`/student/exam/${id}/questions`); }
+  static getCentreExamAccess() { return this.get('/centre-exam-access'); }
+  static openCentreExamAccess(password) { return this.post('/centre-exam-access/open', { password }); }
+  static closeCentreExamAccess() { return this.post('/centre-exam-access/close', {}); }
   static pulseHeartbeat(id) { return this.post(`/student/exam/${id}/heartbeat`); }
   static saveExamAnswers(id, payload) { return this.post(`/student/exam/${id}/answers`, payload); }
   static logProctoringEvent(id, payload) { return this.post(`/student/exam/${id}/proctoring-events`, payload); }

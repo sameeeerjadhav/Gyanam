@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\PortalUserController;
 use App\Http\Controllers\Api\PortalCourseController;
 use App\Http\Controllers\Api\PortalATCController;
 use App\Http\Controllers\Api\QuestionFlagController;
+use App\Http\Controllers\Api\CentreExamAccessController;
 
 // ─── Public Auth ─────────────────────────────────────────────────────────────
 Route::prefix('v1')->group(function () {
@@ -88,6 +89,11 @@ Route::prefix('v1')->group(function () {
         // Portal ATC Centre Sync (atc metadata + centre_type from main Gyanam India portal)
         Route::get ('portal-atc-centres',  [PortalATCController::class, 'index']);
         Route::post('portal-atc-centres',  [PortalATCController::class, 'sync']);
+
+        Route::get ('centre-exam-access',       [CentreExamAccessController::class, 'show']);
+        Route::post('centre-exam-access/open',  [CentreExamAccessController::class, 'open'])
+            ->middleware('throttle:exam-controller');
+        Route::post('centre-exam-access/close', [CentreExamAccessController::class, 'close']);
     });
 
     // ─── Student Portal Routes ────────────────────────────────────────────────
@@ -96,8 +102,6 @@ Route::prefix('v1')->group(function () {
         Route::get ('/me',                              [AuthController::class, 'studentMe']);
         Route::get ('/exams',                           [StudentExamController::class, 'myExams']);
         Route::get ('/history',                         [StudentExamController::class, 'myHistory']);
-        Route::post('/exam/{examId}/controller-approve', [StudentExamController::class, 'approveController'])
-            ->middleware('throttle:exam-controller');
         Route::get ('/exam/{examId}/questions',         [StudentExamController::class, 'getQuestions'])
             ->middleware('throttle:exam-paper');
         Route::post('/exam/{examId}/heartbeat',         [StudentExamController::class, 'heartbeat'])
