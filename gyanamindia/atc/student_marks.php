@@ -138,20 +138,52 @@ try {
 // ── Build flat results array ──────────────────────────────────────────────────
 $flatResults = [];
 
-// From API
+$smNormName = static function (string $name): string {
+    $name = preg_replace('/\s+/u', ' ', trim($name)) ?? '';
+    return mb_strtolower($name);
+};
+$smNormCourse = static function (string $course): string {
+    $course = preg_replace('/\s+/u', ' ', trim($course)) ?? '';
+    $course = preg_replace('/\s+(main|demo)$/iu', '', $course) ?? $course;
+    return mb_strtolower(trim($course));
+};
+$smResultLabel = static function ($result, $score, $passing): string {
+    $raw = strtolower(trim((string)$result));
+    if ($raw === 'pass' || $raw === 'passed') return 'Passed';
+    if ($raw === 'fail' || $raw === 'failed') return 'Failed';
+    if ($raw !== '') return (string)$result;
+    return ((float)$score >= (float)$passing) ? 'Passed' : 'Failed';
+};
+
+// From API. Identifier lives on the nested student, not the submission itself.
 if (!empty($examResults)) {
     foreach ($examResults as $r) {
+        $identifier = trim((string)($r['identifier'] ?? ''));
+        if ($identifier === '' && !empty($r['student']['identifier'])) {
+            $identifier = trim((string)$r['student']['identifier']);
+        }
+        if ($identifier === '') {
+            $identifier = trim((string)($r['registration_id'] ?? ''));
+        }
+        $examTitle = (string)($r['exam_title'] ?? $r['title'] ?? ($r['exam']['title'] ?? '—'));
+        $course = trim((string)($r['subject'] ?? $r['course'] ?? ''));
+        if ($course === '' && !empty($r['student']['course'])) {
+            $course = trim((string)$r['student']['course']);
+        }
+        if ($course === '') {
+            $course = $examTitle;
+        }
         $flatResults[] = [
-            'student_name'   => $r['student_name'] ?? $r['name'] ?? '—',
-            'identifier'     => $r['identifier'] ?? $r['registration_id'] ?? '—',
-            'course'         => $r['subject'] ?? $r['course'] ?? $r['exam_title'] ?? '—',
-            'exam_title'     => $r['exam_title'] ?? $r['title'] ?? '—',
+            'student_name'   => $r['student_name'] ?? $r['name'] ?? ($r['student']['name'] ?? '—'),
+            'identifier'     => $identifier !== '' ? $identifier : '—',
+            'course'         => $course,
+            'exam_title'     => $examTitle,
             'exam_date'      => $r['completed_at'] ?? $r['exam_date'] ?? $r['submitted_at'] ?? '—',
             'marks_obtained' => $r['score'] ?? $r['marks_obtained'] ?? $r['total_score'] ?? 0,
             'total_marks'    => $r['max_score'] ?? $r['total_marks'] ?? $r['out_of'] ?? 100,
             'percentage'     => $r['percentage'] ?? null,
-            'result'         => $r['result'] ?? $r['status'] ?? (($r['score'] ?? 0) >= ($r['passing_score'] ?? 40) ? 'Passed' : 'Failed'),
-            'photo'          => $r['photo'] ?? '',
+            'result'         => $smResultLabel($r['result'] ?? $r['status'] ?? '', $r['score'] ?? 0, $r['passing_score'] ?? 40),
+            'photo'          => $r['photo'] ?? ($r['student']['photo_url'] ?? ''),
             'source'         => 'api',
         ];
     }
@@ -222,6 +254,75 @@ foreach ($grouped as &$g) {
 }
 unset($g);
 
+// Exam rows whose login id is missing are a second copy of the same admission.
+// Attach them to that admission so one student is one row.
+$admByName = [];
+foreach ($admByReg as $reg => $adm) {
+    $fullName = trim(
+        ($adm['first_name'] ?? '') . ' ' .
+        (!empty($adm['middle_name']) ? $adm['middle_name'] . ' ' : '') .
+        ($adm['last_name'] ?? '')
+    );
+    $nameKey = $smNormName($fullName);
+    if ($nameKey !== '') {
+        $admByName[$nameKey][] = $reg;
+    }
+}
+$rekey = [];
+foreach ($grouped as $key => $g) {
+    if (isset($admByReg[$key])) {
+        continue;
+    }
+    $candidates = $admByName[$smNormName((string)$g['student_name'])] ?? [];
+    $match = null;
+    $examCourse = $smNormCourse((string)($g['course'] ?? ''));
+    foreach ($candidates as $reg) {
+        $admCourse = $smNormCourse((string)($admByReg[$reg]['course'] ?? ''));
+        if ($admCourse !== '' && $examCourse !== '' && ($admCourse === $examCourse || str_contains($examCourse, $admCourse) || str_contains($admCourse, $examCourse))) {
+            $match = $reg;
+            break;
+        }
+    }
+    if ($match === null && count($candidates) === 1) {
+        $match = $candidates[0];
+    }
+    if ($match !== null && (string)$match !== (string)$key) {
+        $rekey[$key] = $match;
+    }
+}
+foreach ($rekey as $from => $to) {
+    if (!isset($grouped[$from]) || (string)$from === (string)$to) {
+        continue;
+    }
+    if (!isset($grouped[$to])) {
+        $grouped[$to] = $grouped[$from];
+    } else {
+        $grouped[$to]['exams'] = array_merge($grouped[$to]['exams'], $grouped[$from]['exams']);
+        usort($grouped[$to]['exams'], function ($a, $b) {
+            return strtotime($b['exam_date'] ?? '1970-01-01') - strtotime($a['exam_date'] ?? '1970-01-01');
+        });
+        $hasPassed = false;
+        $bestPct = null;
+        foreach ($grouped[$to]['exams'] as $ex) {
+            if (strtolower((string)$ex['result']) === 'passed') $hasPassed = true;
+            $p = $ex['percentage'];
+            if ($p === null && is_numeric($ex['marks_obtained']) && is_numeric($ex['total_marks']) && $ex['total_marks'] > 0) {
+                $p = round(($ex['marks_obtained'] / $ex['total_marks']) * 100, 1);
+            }
+            if ($p !== null && ($bestPct === null || $p > $bestPct)) $bestPct = $p;
+        }
+        $grouped[$to]['latest_result'] = $hasPassed ? 'Passed' : ($grouped[$to]['exams'][0]['result'] ?? '—');
+        $grouped[$to]['best_percentage'] = $bestPct;
+        $grouped[$to]['total_attempts'] = count($grouped[$to]['exams']);
+        $grouped[$to]['latest_exam'] = $grouped[$to]['exams'][0];
+    }
+    $grouped[$to]['identifier'] = $to;
+    if (!empty($admByReg[$to]['course'])) {
+        $grouped[$to]['course'] = $admByReg[$to]['course'];
+    }
+    unset($grouped[$from]);
+}
+
 // Enrich with admission_id / IT flag / ATC internals; add IT students with no exam rows yet
 foreach ($grouped as $key => &$g) {
     $adm = $admByReg[$key] ?? null;
@@ -247,8 +348,8 @@ foreach ($grouped as $key => &$g) {
     if (empty($g['photo']) && $adm && !empty($adm['photo'])) {
         $g['photo'] = $adm['photo'];
     }
-    if ($adm && (empty($g['course']) || $g['course'] === '—')) {
-        $g['course'] = $adm['course'] ?? $g['course'];
+    if ($adm && !empty($adm['course'])) {
+        $g['course'] = $adm['course'];
     }
 }
 unset($g);
