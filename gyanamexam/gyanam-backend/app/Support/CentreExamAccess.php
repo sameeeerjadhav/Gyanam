@@ -11,13 +11,21 @@ class CentreExamAccess
 
     public static function isOpen(?string $centre): bool
     {
+        return self::windowOpen(self::row($centre));
+    }
+
+    public static function allowsStudent(?string $centre, int $studentId): bool
+    {
         $row = self::row($centre);
-        if ($row === null) {
+        if (!self::windowOpen($row)) {
             return false;
         }
-        $expires = strtotime((string) ($row['expires_at'] ?? ''));
+        if (($row['scope'] ?? 'all') !== 'students') {
+            return true;
+        }
+        $ids = array_map('intval', is_array($row['student_ids'] ?? null) ? $row['student_ids'] : []);
 
-        return $expires !== false && $expires > time();
+        return in_array($studentId, $ids, true);
     }
 
     public static function status(string $centre): array
@@ -29,18 +37,25 @@ class CentreExamAccess
             'open' => $open,
             'expires_at' => $open ? ($row['expires_at'] ?? null) : null,
             'opened_at' => $open ? ($row['opened_at'] ?? null) : null,
+            'scope' => $open ? (($row['scope'] ?? 'all') === 'students' ? 'students' : 'all') : 'all',
+            'student_ids' => $open && (($row['scope'] ?? 'all') === 'students')
+                ? array_values(array_map('intval', is_array($row['student_ids'] ?? null) ? $row['student_ids'] : []))
+                : [],
         ];
     }
 
-    public static function open(string $centre, int $userId, int $hours = 3): array
+    public static function open(string $centre, int $userId, int $hours = 3, string $scope = 'all', array $studentIds = []): array
     {
         $hours = max(1, min(6, $hours));
+        $scope = $scope === 'students' ? 'students' : 'all';
         $now = now();
         $row = [
             'opened_at' => $now->toIso8601String(),
             'expires_at' => $now->copy()->addHours($hours)->toIso8601String(),
             'opened_by' => $userId,
             'hours' => $hours,
+            'scope' => $scope,
+            'student_ids' => $scope === 'students' ? array_values(array_unique(array_map('intval', $studentIds))) : [],
         ];
         self::write($centre, $row);
 
@@ -101,9 +116,8 @@ class CentreExamAccess
         $all = self::read();
         $out = [];
         foreach (self::cleanCodes($centres) as $centre) {
-            $row = $all[$centre] ?? null;
-            $expires = is_array($row) ? strtotime((string) ($row['expires_at'] ?? '')) : false;
-            $open = $expires !== false && $expires > time();
+            $row = is_array($all[$centre] ?? null) ? $all[$centre] : null;
+            $open = self::windowOpen($row);
             $out[$centre] = [
                 'open' => $open,
                 'expires_at' => $open ? ($row['expires_at'] ?? null) : null,
@@ -128,6 +142,16 @@ class CentreExamAccess
         }
 
         return array_values($codes);
+    }
+
+    private static function windowOpen(?array $row): bool
+    {
+        if ($row === null) {
+            return false;
+        }
+        $expires = strtotime((string) ($row['expires_at'] ?? ''));
+
+        return $expires !== false && $expires > time();
     }
 
     private static function row(?string $centre): ?array

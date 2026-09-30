@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Student;
 use App\Models\User;
 use App\Support\CentreExamAccess;
 use App\Support\PortalAtcCentres;
@@ -14,26 +15,64 @@ class CentreExamAccessController extends Controller
     public function show(Request $request)
     {
         $centre = $this->centreCode($request);
+        $status = CentreExamAccess::status($centre);
+        $students = Student::query()
+            ->where('centre_name', $centre)
+            ->orderBy('name')
+            ->get(['id', 'identifier', 'name'])
+            ->map(fn ($student) => [
+                'id' => (int) $student->id,
+                'identifier' => (string) $student->identifier,
+                'name' => (string) $student->name,
+            ])
+            ->values();
 
-        return response()->json(CentreExamAccess::status($centre));
+        return response()->json(array_merge($status, [
+            'students' => $students,
+        ]));
     }
 
     public function open(Request $request)
     {
         $user = $request->user();
         $centre = $this->centreCode($request);
-        $password = (string) $request->validate([
+        $data = $request->validate([
             'password' => 'required|string|max:200',
-        ])['password'];
+            'scope' => 'nullable|in:all,students',
+            'student_ids' => 'nullable|array|max:500',
+            'student_ids.*' => 'integer',
+        ]);
+        $password = (string) $data['password'];
 
         if (!Hash::check($password, (string) $user->password)) {
             return response()->json(['message' => 'Password is not correct.'], 422);
         }
 
-        $status = CentreExamAccess::open($centre, (int) $user->id, 3);
+        $scope = ($data['scope'] ?? 'all') === 'students' ? 'students' : 'all';
+        $studentIds = [];
+        if ($scope === 'students') {
+            $requested = array_values(array_unique(array_map('intval', $data['student_ids'] ?? [])));
+            if ($requested === []) {
+                return response()->json(['message' => 'Select at least one student.'], 422);
+            }
+            $studentIds = Student::query()
+                ->where('centre_name', $centre)
+                ->whereIn('id', $requested)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            if ($studentIds === []) {
+                return response()->json(['message' => 'Select students from your centre.'], 422);
+            }
+        }
+
+        $status = CentreExamAccess::open($centre, (int) $user->id, 3, $scope, $studentIds);
+        $who = $scope === 'students'
+            ? count($studentIds) . ' selected student(s)'
+            : 'all students at your centre';
 
         return response()->json(array_merge($status, [
-            'message' => 'Main exams are open at your centre for 3 hours.',
+            'message' => 'Main exams are open for ' . $who . ' for 3 hours.',
         ]));
     }
 

@@ -68,7 +68,7 @@ class StudentExamController extends Controller
                 ->groupBy('exam_config_id')
                 ->pluck('used', 'exam_config_id');
 
-        $centreOpen = CentreExamAccess::isOpen($student->centre_name ?? '');
+        $centreOpen = CentreExamAccess::allowsStudent($student->centre_name ?? '', (int) $student->id);
 
         $payload = $exams->map(function ($exam) use ($usedByExam, $centreOpen) {
             $isDemo = ExamCourseAssignmentService::isDemoExam($exam);
@@ -266,7 +266,7 @@ class StudentExamController extends Controller
 
         // A new main attempt starts only while this centre has exams open.
         // An exam already in progress can refresh after the centre closes.
-        if (!$isDemo && !$existing && !CentreExamAccess::isOpen($student->centre_name ?? '')) {
+        if (!$isDemo && !$existing && !CentreExamAccess::allowsStudent($student->centre_name ?? '', (int) $student->id)) {
             abort(403, 'Exams are closed at your centre. Ask your ATC to open them from the exam portal.');
         }
 

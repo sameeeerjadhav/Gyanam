@@ -219,7 +219,13 @@ class ApiClient {
   // ─── Student Exam flow ─────────────────────
   static getExamQuestions(id) { return this.get(`/student/exam/${id}/questions`); }
   static getCentreExamAccess() { return this.get('/centre-exam-access'); }
-  static openCentreExamAccess(password) { return this.post('/centre-exam-access/open', { password }); }
+  static openCentreExamAccess(password, options = {}) {
+    return this.post('/centre-exam-access/open', {
+      password,
+      scope: options.scope || 'all',
+      student_ids: options.studentIds || [],
+    });
+  }
   static closeCentreExamAccess() { return this.post('/centre-exam-access/close', {}); }
   static getAdminCentreExamAccess() { return this.get('/centre-exam-access/centres'); }
   static openAdminCentreExamAccess(password, centres) {

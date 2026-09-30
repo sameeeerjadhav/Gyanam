@@ -25,24 +25,53 @@ export async function renderCentreAccess(ApiClient) {
   }
 
   const open = !!status.open;
+  const students = Array.isArray(status.students) ? status.students : [];
+  const selectedIds = new Set((status.student_ids || []).map((id) => String(id)));
+  const specific = status.scope === 'students';
+  const allowedNames = students
+    .filter((student) => selectedIds.has(String(student.id)))
+    .map((student) => student.name)
+    .filter(Boolean);
+  const who = !open
+    ? 'Students cannot start a main exam until you open access.'
+    : specific
+      ? `${selectedIds.size} selected student(s) can start main exams until <strong>${formatWhen(status.expires_at)}</strong>.`
+      : `All students can start main exams until <strong>${formatWhen(status.expires_at)}</strong>.`;
+
   el.innerHTML = `
     <div class="page-header">
       <div>
         <h2>Exam access</h2>
-        <p>Open main exams once for every student at your centre.</p>
+        <p>Open main exams for all students, or only the students you select.</p>
       </div>
     </div>
-    <div class="card" style="max-width:640px;padding:1.5rem">
+    <div class="card" style="max-width:760px;padding:1.5rem">
       <p style="margin:0 0 1rem;font-size:0.95rem">
-        ${open
-          ? `<span class="badge badge-green">Open</span> Students can start main exams until <strong>${formatWhen(status.expires_at)}</strong>.`
-          : `<span class="badge badge-gray">Closed</span> Students cannot start a main exam from home or at the centre.`}
+        ${open ? '<span class="badge badge-green">Open</span>' : '<span class="badge badge-gray">Closed</span>'}
+        ${who}
       </p>
+      ${open && specific && allowedNames.length ? `<p style="margin:0 0 1rem;color:var(--text-secondary);font-size:0.88rem">${esc(allowedNames.join(', '))}</p>` : ''}
       <p style="margin:0 0 1rem;color:var(--text-secondary);font-size:0.88rem">
-        Enter your ATC password here, on your own computer. You do not type it on each student computer.
-        Demo exams stay available either way. Closing stops new starts. An exam that has already started can still be finished.
+        Enter your ATC password on this computer. Demo exams stay available either way.
+        Closing stops new starts. An exam that has already started can still be finished.
       </p>
       ${open ? '' : `
+        <div class="form-group">
+          <label class="form-label">Who can start</label>
+          <label style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.4rem">
+            <input type="radio" name="centre-access-scope" value="all" checked> All students
+          </label>
+          <label style="display:flex;gap:0.5rem;align-items:center">
+            <input type="radio" name="centre-access-scope" value="students"> Specific students
+          </label>
+        </div>
+        <div id="centre-access-students" style="display:none;margin-bottom:1rem;max-height:280px;overflow:auto;border:1px solid var(--gray-200);border-radius:8px;padding:0.75rem">
+          ${students.length ? students.map((student) => `
+            <label style="display:flex;gap:0.5rem;align-items:center;padding:0.25rem 0">
+              <input class="centre-student-check" type="checkbox" value="${student.id}">
+              <span>${esc(student.name)} <span style="color:var(--text-muted)">${esc(student.identifier || '')}</span></span>
+            </label>`).join('') : '<p style="margin:0;color:var(--text-muted)">No students at this centre.</p>'}
+        </div>
         <div class="form-group">
           <label class="form-label" for="centre-access-password">Your ATC password</label>
           <input id="centre-access-password" class="form-input" type="password" autocomplete="current-password" style="max-width:360px">
@@ -52,17 +81,34 @@ export async function renderCentreAccess(ApiClient) {
       ${open ? `<button id="centre-access-close" class="btn btn-outline" type="button">Close exams</button>` : ''}
     </div>`;
 
+  document.querySelectorAll('input[name="centre-access-scope"]').forEach((input) => {
+    input.addEventListener('change', () => {
+      const box = document.getElementById('centre-access-students');
+      if (box) box.style.display = input.value === 'students' && input.checked ? 'block' : box.style.display;
+      if (input.value === 'all' && input.checked && box) box.style.display = 'none';
+      if (input.value === 'students' && input.checked && box) box.style.display = 'block';
+    });
+  });
+
   document.getElementById('centre-access-open')?.addEventListener('click', async () => {
     const password = document.getElementById('centre-access-password')?.value || '';
     if (!password.trim()) {
       modalService.toast('Enter your ATC password', 'error');
       return;
     }
+    const scope = document.querySelector('input[name="centre-access-scope"]:checked')?.value || 'all';
+    const studentIds = scope === 'students'
+      ? Array.from(document.querySelectorAll('.centre-student-check:checked')).map((box) => Number(box.value))
+      : [];
+    if (scope === 'students' && !studentIds.length) {
+      modalService.toast('Select at least one student', 'error');
+      return;
+    }
     const btn = document.getElementById('centre-access-open');
     if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
     try {
-      await ApiClient.openCentreExamAccess(password);
-      modalService.toast('Main exams are open for 3 hours', 'success');
+      await ApiClient.openCentreExamAccess(password, { scope, studentIds });
+      modalService.toast(scope === 'students' ? 'Main exams are open for the selected students' : 'Main exams are open for all students', 'success');
       renderCentreAccess(ApiClient);
     } catch (e) {
       modalService.toast(e.message || 'Could not open exams', 'error');
