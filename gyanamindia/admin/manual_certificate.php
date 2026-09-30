@@ -413,7 +413,7 @@ if ($selectedAtc) {
                                         class="btn-gen" id="btnGenerateCert" disabled>Generate Certificate</button>
                             </div>
                             <div class="form-hint" style="margin-top:.65rem">
-                                Generates certificate + marksheet in one PDF and saves marks for ATC Student Marks.
+                                Generates certificate + marksheet in one PDF, saves the marks, and records the student as Passed.
                             </div>
                         </div>
                     </form>

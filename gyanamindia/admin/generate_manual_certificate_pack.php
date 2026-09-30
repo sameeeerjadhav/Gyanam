@@ -176,17 +176,6 @@ if (!$isTyping && isGiitItCourse($courseType, $courseName)) {
     );
 }
 
-if ($score < 40 || $score > 100) {
-    http_response_code(400);
-    die('<b>Error:</b> Score must be between 40 and 100 (passing grade required).');
-}
-
-$grade = courseExamGradeFromScore($score);
-if ($grade === 'Fail') {
-    http_response_code(400);
-    die('<b>Error:</b> Certificate cannot be issued — score is below passing grade.');
-}
-
 $issueDateRaw = trim((string)($src['issue_date'] ?? ''));
 $issueTs = $issueDateRaw !== '' ? strtotime($issueDateRaw) : time();
 if ($issueTs === false) {
@@ -195,6 +184,18 @@ if ($issueTs === false) {
 $dateOfIssue = date('d/m/Y', $issueTs);
 $examDate = date('Y-m-d', $issueTs);
 $monthYear = date('F-Y', $issueTs);
+
+$grade = courseExamGradeFromScore($score);
+if ($score < 40 || $score > 100) {
+    http_response_code(400);
+    die('<b>Error:</b> Score must be between 40 and 100 (passing grade required).');
+}
+if ($grade === 'Fail') {
+    http_response_code(400);
+    die('<b>Error:</b> Certificate cannot be issued — score is below passing grade.');
+}
+
+recordManualCertificateExamStatus($pdo, $admissionId, $studentAtcId, $score, $examDate, $courseName);
 
 $durationLine = 'The course duration is ' . $duration;
 $gradeLine = courseCertificateGradeLine($grade);

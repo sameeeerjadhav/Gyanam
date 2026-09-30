@@ -3532,6 +3532,66 @@ function upsertAdmissionAtcMarks(
 }
 
 /**
+ * Store Passed or Failed for a manual certificate so Student Marks and exam status match the score.
+ */
+function recordManualCertificateExamStatus(
+    PDO $pdo,
+    int $admissionId,
+    int $atcId,
+    int $score,
+    string $examDate,
+    string $courseName
+): void {
+    if ($admissionId <= 0 || $atcId <= 0) {
+        return;
+    }
+    $status = ($score >= 40 && courseExamGradeFromScore($score) !== 'Fail') ? 'Passed' : 'Failed';
+    $examDate = trim($examDate) !== '' ? $examDate : date('Y-m-d');
+    $courseName = trim($courseName);
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS exam_schedules (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            admission_id INT NOT NULL,
+            atc_id INT NOT NULL,
+            exam_date DATE DEFAULT NULL,
+            exam_time TIME NOT NULL DEFAULT '10:00:00',
+            exam_slot ENUM('Morning','Afternoon','Evening') NOT NULL DEFAULT 'Morning',
+            exam_hall VARCHAR(100) DEFAULT NULL,
+            exam_name VARCHAR(255) DEFAULT NULL,
+            exam_portal_id INT DEFAULT NULL,
+            allowed_attempts TINYINT UNSIGNED NOT NULL DEFAULT 1,
+            exam_status ENUM('Scheduled','Appeared','Passed','Failed','Absent') NOT NULL DEFAULT 'Scheduled',
+            notes TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_atc_id (atc_id),
+            INDEX idx_admission_id (admission_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $ex = $pdo->prepare('SELECT id, exam_status FROM exam_schedules WHERE admission_id = ? AND atc_id = ? ORDER BY id DESC LIMIT 1');
+        $ex->execute([$admissionId, $atcId]);
+        $row = $ex->fetch(PDO::FETCH_ASSOC);
+        if ($row && ($row['exam_status'] ?? '') === 'Passed' && $status === 'Failed') {
+            return;
+        }
+        if ($row) {
+            $pdo->prepare("UPDATE exam_schedules SET exam_status = ?, exam_date = COALESCE(exam_date, ?), exam_name = COALESCE(NULLIF(exam_name, ''), ?) WHERE id = ?")
+                ->execute([$status, $examDate, $courseName !== '' ? $courseName : null, (int)$row['id']]);
+            return;
+        }
+        $pdo->prepare('INSERT INTO exam_schedules (admission_id, atc_id, exam_date, exam_name, exam_status, notes) VALUES (?,?,?,?,?,?)')
+            ->execute([
+                $admissionId,
+                $atcId,
+                $examDate,
+                $courseName !== '' ? $courseName : null,
+                $status,
+                'Recorded from manual certificate',
+            ]);
+    } catch (Exception $e) {
+    }
+}
+
+/**
  * Compose IT certificate scores from exam(/40) + ATC(/60).
  *
  * @param array|null $examPass from examSubmissionPassRecord / fetchStudentPassingExamResult

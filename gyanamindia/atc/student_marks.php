@@ -378,14 +378,20 @@ foreach ($admByReg as $reg => $adm) {
     $composed = function_exists('composeItCertificateScores')
         ? composeItCertificateScores($examSource, $atcMarks)
         : ['exam_40' => null, 'total' => null, 'grade' => '', 'complete' => false];
+    $manualResult = '—';
+    $manualPct = null;
+    if (!empty($composed['complete']) && ($composed['total'] ?? null) !== null) {
+        $manualPct = (int)$composed['total'];
+        $manualResult = (($composed['grade'] ?? '') === 'Fail' || $manualPct < 40) ? 'Failed' : 'Passed';
+    }
     $grouped[$reg] = [
         'student_name' => $fullName !== '' ? $fullName : $reg,
         'identifier' => $reg,
         'course' => (string)($adm['course'] ?? ''),
         'photo' => (string)($adm['photo'] ?? ''),
         'exams' => [],
-        'latest_result' => '—',
-        'best_percentage' => null,
+        'latest_result' => $manualResult,
+        'best_percentage' => $manualPct,
         'total_attempts' => 0,
         'latest_exam' => ['exam_date' => '—', 'exam_title' => '—', 'result' => '—'],
         'admission_id' => $admId,
