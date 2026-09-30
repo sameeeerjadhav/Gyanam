@@ -2,7 +2,7 @@
 /**
  * Gyanam Portal — Admin: Print Certificates
  * Lists students who are eligible for an exam certificate (passed).
- * Certificate is printed via admin/generate_course_certificate.php
+ * Certificate and marksheet print together via admin/generate_course_print_pack.php
  * (GIIT for IT courses, Gyanam Abacus for Abacus/Vedic Maths).
  */
 require_once __DIR__ . '/../config/db.php';
@@ -565,12 +565,10 @@ $returnQs = http_build_query(array_filter([
                     <td style="text-align:center">
                         <div class="cert-actions">
                         <?php if (!empty($s['print_ready'])): ?>
-                        <a href="generate_marksheet.php?reg_id=<?= urlencode($regId) ?>&preview=1"
-                           target="_blank" class="btn-marks">Print Marksheet</a>
-                        <a href="generate_course_certificate.php?reg_id=<?= urlencode($regId) ?>&preview=1"
-                           target="_blank" class="btn-cert">
+                        <a href="generate_course_print_pack.php?reg_id=<?= urlencode($regId) ?>&preview=1"
+                           target="_blank" class="btn-cert" title="Print certificate and marksheet">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                            Print Certificate
+                            Print
                         </a>
                         <?php else: ?>
                         <span class="btn-cert-disabled" title="<?php

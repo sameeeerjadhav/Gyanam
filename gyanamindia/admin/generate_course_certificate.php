@@ -373,6 +373,11 @@ try {
         }
     }
 
+    if (!empty($GLOBALS['GYANAM_CAPTURE_PDF'])) {
+        $GLOBALS['GYANAM_CAPTURED_PDF'] = $pdf->Output('S');
+        return;
+    }
+
     // ── Output ────────────────────────────────────────────────────────────────
     $dest     = $preview ? 'I' : 'D';
     $safeReg  = preg_replace('/[^A-Za-z0-9_-]/', '_', $regId);

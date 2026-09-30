@@ -338,7 +338,7 @@ if ($isTyping && !$isSample) {
     ));
 }
 
-outputStatementOfMarksPdf([
+$marksPayload = [
     'student_id'      => $studentId,
     'full_name'       => $fullName,
     'atc_name'        => $atcName,
@@ -358,4 +358,11 @@ outputStatementOfMarksPdf([
     'wpm'             => $speeds['wpm'],
     'kph'             => $speeds['kph'],
     'preview'         => isset($_GET['preview']),
-]);
+];
+if (!empty($GLOBALS['GYANAM_CAPTURE_PDF'])) {
+    $marksPayload['return_string'] = true;
+    $marksPayload['preview'] = true;
+    $GLOBALS['GYANAM_CAPTURED_PDF'] = outputStatementOfMarksPdf($marksPayload);
+    return;
+}
+outputStatementOfMarksPdf($marksPayload);
