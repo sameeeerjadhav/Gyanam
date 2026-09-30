@@ -96,6 +96,8 @@ Route::prefix('v1')->group(function () {
         Route::get ('/me',                              [AuthController::class, 'studentMe']);
         Route::get ('/exams',                           [StudentExamController::class, 'myExams']);
         Route::get ('/history',                         [StudentExamController::class, 'myHistory']);
+        Route::post('/exam/{examId}/controller-approve', [StudentExamController::class, 'approveController'])
+            ->middleware('throttle:exam-controller');
         Route::get ('/exam/{examId}/questions',         [StudentExamController::class, 'getQuestions'])
             ->middleware('throttle:exam-paper');
         Route::post('/exam/{examId}/heartbeat',         [StudentExamController::class, 'heartbeat'])

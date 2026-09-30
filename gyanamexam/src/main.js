@@ -13,8 +13,8 @@ import { getAuthModule } from './services/AuthenticationModule.js';
 import LoginPage from './pages/LoginPage.js?v=8';
 import { StudentDashboard } from './pages/StudentDashboard.js?v=18';
 import ExamPage from './pages/ExamPage.js?v=18';
-import PreExamGate from './pages/PreExamGate.js?v=4';
-import ApiClient from './services/APIClient.js?v=6';
+import PreExamGate from './pages/PreExamGate.js?v=5';
+import ApiClient from './services/APIClient.js?v=7';
 
 // Single shared auth module
 const authModule = getAuthModule();
@@ -119,7 +119,7 @@ function setupRoutes(appContainer) {
       const seed = user?.identifier || user?.id || examId;
       await new Promise((r) => setTimeout(r, stampedeDelayMs(seed, 12000, 800)));
       const data = await withBackoff(
-        () => ApiClient.getExamQuestions(examId),
+        () => ApiClient.getExamQuestions(examId, gateResult?.controllerToken || ''),
         { retries: 4, baseMs: 1000, maxMs: 8000, label: 'get-questions' }
       );
       const { exam, questions, draft } = data;

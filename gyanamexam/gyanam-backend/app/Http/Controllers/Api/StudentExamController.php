@@ -9,12 +9,14 @@ use App\Models\ExamConfig;
 use App\Models\ProctoringEvent;
 use App\Models\Question;
 use App\Models\Submission;
+use App\Models\User;
 use App\Services\ExamCourseAssignmentService;
 use App\Services\LiveSessionService;
 use App\Services\ProctorMediaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -157,6 +159,86 @@ class StudentExamController extends Controller
     }
 
     /**
+     * One password check so a main exam can start only at the centre.
+     * POST /api/v1/student/exam/{examId}/controller-approve  { password }
+     */
+    public function approveController(Request $request, $examId)
+    {
+        $student = $request->user();
+        $exam = ExamConfig::findOrFail($examId);
+
+        if (ExamCourseAssignmentService::isDemoExam($exam)) {
+            return response()->json([
+                'approved' => true,
+                'required' => false,
+                'token' => null,
+            ]);
+        }
+
+        $password = (string) $request->validate([
+            'password' => 'required|string|max:200',
+        ])['password'];
+
+        $centre = trim((string) ($student->centre_name ?? ''));
+        $matched = false;
+        if ($centre !== '') {
+            $atcs = User::query()
+                ->where('role', 'atc')
+                ->where('centre_id', $centre)
+                ->get(['id', 'password']);
+            foreach ($atcs as $atc) {
+                $hash = (string) $atc->password;
+                if ($hash !== '' && Hash::check($password, $hash)) {
+                    $matched = true;
+                    break;
+                }
+            }
+        }
+        if (!$matched) {
+            return response()->json(['message' => 'That centre password is not correct.'], 422);
+        }
+
+        return response()->json([
+            'approved' => true,
+            'required' => true,
+            'token' => $this->makeControllerToken((int) $student->id, (int) $examId),
+        ]);
+    }
+
+    private function makeControllerToken(int $studentId, int $examId): string
+    {
+        $exp = time() + 1800;
+        $payload = $studentId . '|' . $examId . '|' . $exp;
+        $sig = hash_hmac('sha256', $payload, (string) config('app.key'));
+
+        return $payload . '.' . $sig;
+    }
+
+    private function controllerTokenValid(int $studentId, int $examId, string $token): bool
+    {
+        $token = trim($token);
+        $pos = strrpos($token, '.');
+        if ($pos === false) {
+            return false;
+        }
+        $payload = substr($token, 0, $pos);
+        $sig = substr($token, $pos + 1);
+        $expected = hash_hmac('sha256', $payload, (string) config('app.key'));
+        if ($sig === '' || !hash_equals($expected, $sig)) {
+            return false;
+        }
+        $parts = explode('|', $payload);
+        if (count($parts) !== 3) {
+            return false;
+        }
+        if ((int) $parts[0] !== $studentId || (int) $parts[1] !== $examId) {
+            return false;
+        }
+
+        return (int) $parts[2] >= time();
+    }
+
+    /**
      * Get (shuffled/cached) questions for an exam session + resume draft + remaining time.
      */
     public function getQuestions(Request $request, $examId)
@@ -256,6 +338,15 @@ class StudentExamController extends Controller
         // New attempts require an active exam; in-progress sessions may still finish
         if (!$exam->active && !$existing) {
             abort(403, 'This exam is not currently active.');
+        }
+
+        // Main exams start only after the centre ATC types their password once.
+        // An exam already in progress can refresh without asking again.
+        if (!$isDemo && !$existing) {
+            $token = (string) $request->header('X-Controller-Token', '');
+            if (!$this->controllerTokenValid((int) $student->id, (int) $examId, $token)) {
+                abort(403, 'Your ATC must enter the centre password on this computer before the exam can start.');
+            }
         }
 
         $cacheKey = "exam_qs:{$examId}:{$student->id}:{$attemptNumber}";

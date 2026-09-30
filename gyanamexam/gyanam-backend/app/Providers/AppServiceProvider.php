@@ -38,5 +38,8 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('exam-submit', function (Request $request) {
             return Limit::perMinute(4)->by('sub:' . ($request->user()?->id ?: $request->ip()));
         });
+        RateLimiter::for('exam-controller', function (Request $request) {
+            return Limit::perMinute(5)->by('ctrl:' . ($request->user()?->id ?: $request->ip()));
+        });
     }
 }
