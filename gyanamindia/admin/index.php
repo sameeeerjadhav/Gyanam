@@ -1319,7 +1319,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             <div class="cc-grid cc-grid-4">
                 <div class="cc-card cc-card-pad clickable" onclick="openDetailModal('inquiries')" title="View inquiries">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-staff.png', 'xl', 'Inquiries') ?>
+                        <?= cc_png('icon-inquiries.png', 'xl', 'Inquiries') ?>
                         <h3>Inquiries</h3>
                     </div>
                     <div class="cc-metric-value blue"><?= (int)$totalInquiries ?></div>

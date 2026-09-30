@@ -109,7 +109,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_png('icon-staff.png', 'xl', 'Enquiries') ?>
+                            <?= cc_png('icon-inquiries.png', 'xl', 'Enquiries') ?>
                             <h3>Enquiries</h3>
                         </div>
                         <div class="cc-kv"><span class="k">Total</span><span class="v"><?= (int)($totalInquiries + $totalTelephonic) ?></span></div>
@@ -221,7 +221,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card cc-span-2">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <?= cc_png('icon-staff.png', 'xl', 'Recent enquiries') ?>
+                                <?= cc_png('icon-inquiries.png', 'xl', 'Recent enquiries') ?>
                             <h3>Recent Enquiries</h3>
                                 <a class="cc-link" href="inquiries.php">Show All</a>
                             </div>
