@@ -90,10 +90,14 @@ Route::prefix('v1')->group(function () {
         Route::get ('portal-atc-centres',  [PortalATCController::class, 'index']);
         Route::post('portal-atc-centres',  [PortalATCController::class, 'sync']);
 
-        Route::get ('centre-exam-access',       [CentreExamAccessController::class, 'show']);
-        Route::post('centre-exam-access/open',  [CentreExamAccessController::class, 'open'])
+        Route::get ('centre-exam-access',              [CentreExamAccessController::class, 'show']);
+        Route::get ('centre-exam-access/centres',      [CentreExamAccessController::class, 'centres']);
+        Route::post('centre-exam-access/open',         [CentreExamAccessController::class, 'open'])
             ->middleware('throttle:exam-controller');
-        Route::post('centre-exam-access/close', [CentreExamAccessController::class, 'close']);
+        Route::post('centre-exam-access/close',        [CentreExamAccessController::class, 'close']);
+        Route::post('centre-exam-access/open-centres', [CentreExamAccessController::class, 'openCentres'])
+            ->middleware('throttle:exam-controller');
+        Route::post('centre-exam-access/close-centres',[CentreExamAccessController::class, 'closeCentres']);
     });
 
     // ─── Student Portal Routes ────────────────────────────────────────────────

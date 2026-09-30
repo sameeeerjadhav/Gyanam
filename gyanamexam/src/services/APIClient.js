@@ -221,6 +221,13 @@ class ApiClient {
   static getCentreExamAccess() { return this.get('/centre-exam-access'); }
   static openCentreExamAccess(password) { return this.post('/centre-exam-access/open', { password }); }
   static closeCentreExamAccess() { return this.post('/centre-exam-access/close', {}); }
+  static getAdminCentreExamAccess() { return this.get('/centre-exam-access/centres'); }
+  static openAdminCentreExamAccess(password, centres) {
+    return this.post('/centre-exam-access/open-centres', { password, centres });
+  }
+  static closeAdminCentreExamAccess(centres) {
+    return this.post('/centre-exam-access/close-centres', { centres });
+  }
   static pulseHeartbeat(id) { return this.post(`/student/exam/${id}/heartbeat`); }
   static saveExamAnswers(id, payload) { return this.post(`/student/exam/${id}/answers`, payload); }
   static logProctoringEvent(id, payload) { return this.post(`/student/exam/${id}/proctoring-events`, payload); }

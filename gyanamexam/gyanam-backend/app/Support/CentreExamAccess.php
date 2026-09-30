@@ -54,6 +54,82 @@ class CentreExamAccess
         return self::status($centre);
     }
 
+    /**
+     * @param  list<string>  $centres
+     */
+    public static function openMany(array $centres, int $userId, int $hours = 3): int
+    {
+        $hours = max(1, min(6, $hours));
+        $now = now();
+        $row = [
+            'opened_at' => $now->toIso8601String(),
+            'expires_at' => $now->copy()->addHours($hours)->toIso8601String(),
+            'opened_by' => $userId,
+            'hours' => $hours,
+        ];
+        $codes = self::cleanCodes($centres);
+        self::mutate(function (array &$all) use ($codes, $row) {
+            foreach ($codes as $code) {
+                $all[$code] = $row;
+            }
+        });
+
+        return count($codes);
+    }
+
+    /**
+     * @param  list<string>  $centres
+     */
+    public static function closeMany(array $centres): int
+    {
+        $codes = self::cleanCodes($centres);
+        self::mutate(function (array &$all) use ($codes) {
+            foreach ($codes as $code) {
+                unset($all[$code]);
+            }
+        });
+
+        return count($codes);
+    }
+
+    /**
+     * @param  list<string>  $centres
+     * @return array<string, array{open:bool, expires_at:?string}>
+     */
+    public static function annotate(array $centres): array
+    {
+        $all = self::read();
+        $out = [];
+        foreach (self::cleanCodes($centres) as $centre) {
+            $row = $all[$centre] ?? null;
+            $expires = is_array($row) ? strtotime((string) ($row['expires_at'] ?? '')) : false;
+            $open = $expires !== false && $expires > time();
+            $out[$centre] = [
+                'open' => $open,
+                'expires_at' => $open ? ($row['expires_at'] ?? null) : null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<string>  $centres
+     * @return list<string>
+     */
+    private static function cleanCodes(array $centres): array
+    {
+        $codes = [];
+        foreach ($centres as $centre) {
+            $centre = trim((string) $centre);
+            if ($centre !== '') {
+                $codes[$centre] = $centre;
+            }
+        }
+
+        return array_values($codes);
+    }
+
     private static function row(?string $centre): ?array
     {
         $centre = trim((string) $centre);
@@ -79,6 +155,17 @@ class CentreExamAccess
 
     private static function write(string $centre, ?array $row): void
     {
+        self::mutate(function (array &$all) use ($centre, $row) {
+            if ($row === null) {
+                unset($all[$centre]);
+            } else {
+                $all[$centre] = $row;
+            }
+        });
+    }
+
+    private static function mutate(callable $change): void
+    {
         $path = storage_path('app/' . self::FILE);
         $dir = dirname($path);
         if (!is_dir($dir)) {
@@ -95,11 +182,7 @@ class CentreExamAccess
             if (!is_array($all)) {
                 $all = [];
             }
-            if ($row === null) {
-                unset($all[$centre]);
-            } else {
-                $all[$centre] = $row;
-            }
+            $change($all);
             rewind($fh);
             ftruncate($fh, 0);
             fwrite($fh, json_encode($all));

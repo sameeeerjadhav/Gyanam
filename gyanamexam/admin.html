@@ -168,6 +168,13 @@
           </svg>
           Exam Configurations
         </button>
+        <button class="sidebar-link" data-page="exam-access">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+          Exam access
+        </button>
         <div class="sidebar-nav-section">Students</div>
         <button class="sidebar-link" data-page="students">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -268,7 +275,7 @@
 
   <script type="module">
     import { CONFIG } from './src/config.js?v=3';
-    import ApiClient from './src/services/APIClient.js?v=11';
+    import ApiClient from './src/services/APIClient.js?v=12';
     import modalService from './src/services/ModalService.js?v=3';
     import { renderDashboard } from './src/modules/DashboardModule.js?v=3';
     import { renderLive } from './src/modules/LiveMonitorModule.js?v=3';
@@ -278,7 +285,7 @@
     import { renderStudents } from './src/modules/StudentsModule.js?v=12';
     import { renderResults } from './src/modules/ResultsModule.js?v=3';
     import { renderATC } from './src/modules/ATCModule.js?v=11';
-    import { renderCentreAccess } from './src/modules/CentreAccessModule.js?v=1';
+    import { renderCentreAccess, renderAdminCentreAccess } from './src/modules/CentreAccessModule.js?v=2';
     import { renderCredentials } from './src/modules/CredentialsModule.js?v=1';
     import { renderAssignBank } from './src/modules/AssignBankModule.js?v=1';
     import { renderExamForm } from './src/modules/ExamFormModule.js?v=8';
@@ -324,7 +331,7 @@
 
     // ─── Session restore on load ───────────────────────────────────────
     const ADMIN_PAGES = new Set([
-      'dashboard', 'live', 'questions', 'courses', 'exams', 'students', 'results',
+      'dashboard', 'live', 'questions', 'courses', 'exams', 'exam-access', 'students', 'results',
       'credentials', 'assign-bank', 'exam-form',
       'atc-banks', 'atc-students', 'atc-live', 'atc-results', 'atc-access',
     ]);
@@ -506,6 +513,7 @@
       const titles = {
         dashboard: 'Dashboard', live: 'Live Monitoring',
         questions: 'Question Banks', courses: 'Courses', exams: 'Exam Configurations',
+        'exam-access': 'Exam access',
         students: 'Student Records', results: 'Results & Analytics',
         credentials: 'Portal Credentials',
         'atc-banks': 'Question Banks',
@@ -534,6 +542,7 @@
         questions: () => renderQuestions(ApiClient, ctx),
         courses:   () => renderCourses(ApiClient),
         exams:     () => renderExams(ApiClient, ctx),
+        'exam-access': () => renderAdminCentreAccess(ApiClient),
         students:  () => renderStudents(ApiClient, ctx),
         results:   () => renderResults(ApiClient, ctx),
         'atc-banks':    () => renderATC(ApiClient, { ...ctx, section: 'banks' }),
