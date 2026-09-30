@@ -345,7 +345,7 @@ foreach ($grouped as $key => &$g) {
     $g['exam_from_manual'] = !$pass && $manualExam !== null;
     $g['it_total'] = !empty($composed['complete']) ? ($composed['total'] ?? null) : null;
     $g['it_grade'] = !empty($composed['complete']) ? ($composed['grade'] ?? '') : '';
-    if (empty($g['photo']) && $adm && !empty($adm['photo'])) {
+    if ($adm && !empty($adm['photo'])) {
         $g['photo'] = $adm['photo'];
     }
     if ($adm && !empty($adm['course'])) {
@@ -785,6 +785,13 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                 <?php else: ?>
                     <?php foreach ($grouped as $i => $g):
                         $hasPhoto = !empty($g['photo']);
+                        $photoSrc = '';
+                        if ($hasPhoto) {
+                            $photoPath = trim((string)$g['photo']);
+                            $photoSrc = preg_match('#^https?://#i', $photoPath)
+                                ? $photoPath
+                                : ('../' . ltrim($photoPath, '/'));
+                        }
                         $initial  = strtoupper(substr($g['student_name'], 0, 1));
                         $isPassed = strtolower((string)$g['latest_result']) === 'passed';
                         $bestPct  = $g['best_percentage'];
@@ -811,7 +818,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                         <td>
                             <div class="sm-stu-cell">
                                 <?php if ($hasPhoto): ?>
-                                    <img src="../<?= htmlspecialchars($g['photo']) ?>" class="sm-stu-photo" alt="">
+                                    <img src="<?= htmlspecialchars($photoSrc) ?>" class="sm-stu-photo" alt="">
                                 <?php else: ?>
                                     <div class="sm-stu-initials"><?= $initial ?></div>
                                 <?php endif; ?>
