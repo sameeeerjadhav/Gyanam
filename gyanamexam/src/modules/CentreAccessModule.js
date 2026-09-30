@@ -132,21 +132,23 @@ export async function renderAdminCentreAccess(ApiClient) {
         <thead>
           <tr>
             <th style="width:42px"><input id="admin-access-all" type="checkbox" aria-label="Select all ATCs"></th>
-            <th>ATC</th>
+            <th>ATC name</th>
+            <th>Owner</th>
             <th>Code</th>
             <th>Students</th>
           </tr>
         </thead>
         <tbody id="admin-access-body">
           ${centres.map((centre) => `
-            <tr data-name="${esc((centre.name || '') + ' ' + (centre.code || ''))}">
-              <td><input class="admin-access-check" type="checkbox" value="${esc(centre.code)}" aria-label="Select ${esc(centre.name)}"></td>
-              <td style="font-weight:600">${esc(centre.name)}</td>
+            <tr data-name="${esc((centre.name || '') + ' ' + (centre.owner || '') + ' ' + (centre.code || ''))}">
+              <td><input class="admin-access-check" type="checkbox" value="${esc(centre.code)}" aria-label="Select ${esc(centre.name || centre.owner)}"></td>
+              <td style="font-weight:600">${esc(centre.name || '—')}</td>
+              <td>${esc(centre.owner || '—')}</td>
               <td>${esc(centre.code)}</td>
               <td>${centre.open
                 ? `<span class="badge badge-green">Open until ${esc(formatWhen(centre.expires_at))}</span>`
                 : '<span class="badge badge-gray">Closed</span>'}</td>
-            </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem">No ATC logins found.</td></tr>'}
+            </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:2rem">No ATC logins found.</td></tr>'}
         </tbody>
       </table>
     </div>`;

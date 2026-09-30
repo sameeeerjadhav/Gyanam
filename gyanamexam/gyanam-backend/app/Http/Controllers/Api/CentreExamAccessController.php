@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\CentreExamAccess;
+use App\Support\PortalAtcCentres;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -56,6 +57,15 @@ class CentreExamAccessController extends Controller
             ->orderBy('name')
             ->get(['centre_id', 'name']);
 
+        $centreNames = [];
+        foreach (PortalAtcCentres::all() as $synced) {
+            $code = strtolower(trim((string) ($synced['code'] ?? '')));
+            $label = trim((string) ($synced['name'] ?? ''));
+            if ($code !== '' && $label !== '') {
+                $centreNames[$code] = $label;
+            }
+        }
+
         $centres = [];
         foreach ($rows as $row) {
             $code = trim((string) $row->centre_id);
@@ -64,7 +74,8 @@ class CentreExamAccessController extends Controller
             }
             $centres[$code] = [
                 'code' => $code,
-                'name' => (string) $row->name,
+                'name' => $centreNames[strtolower($code)] ?? '',
+                'owner' => (string) $row->name,
             ];
         }
         $flags = CentreExamAccess::annotate(array_keys($centres));
@@ -73,6 +84,11 @@ class CentreExamAccessController extends Controller
             $flag = $flags[$code] ?? ['open' => false, 'expires_at' => null];
             $list[] = array_merge($centre, $flag);
         }
+        usort($list, function ($a, $b) {
+            $left = $a['name'] !== '' ? $a['name'] : $a['owner'];
+            $right = $b['name'] !== '' ? $b['name'] : $b['owner'];
+            return strcasecmp($left, $right);
+        });
 
         return response()->json(['centres' => $list]);
     }
