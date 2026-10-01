@@ -277,11 +277,19 @@ try {
     }
 } catch (Exception $e) { /* share_payments table may not exist yet */ }
 
+try {
+    $pdo->query('SELECT exam_status FROM exam_schedules LIMIT 1');
+} catch (Exception $e) {
+    try {
+        $pdo->exec("ALTER TABLE exam_schedules ADD COLUMN exam_status ENUM('Scheduled','Appeared','Passed','Failed','Absent') NOT NULL DEFAULT 'Scheduled'");
+    } catch (Exception $e2) {}
+}
+
 // ── Fetch students ────────────────────────────────────────────────────────────
 $searchTerm   = $_GET['search'] ?? '';
 $courseFilter = $_GET['course'] ?? 'all';
 
-$sql    = "SELECT a.*, es.exam_date AS sched_exam_date, es.exam_time AS sched_exam_time, es.exam_slot AS sched_exam_slot, es.exam_hall AS sched_exam_hall
+$sql    = "SELECT a.*, es.exam_date AS sched_exam_date, es.exam_time AS sched_exam_time, es.exam_slot AS sched_exam_slot, es.exam_hall AS sched_exam_hall, es.exam_status AS sched_exam_status
            FROM admissions a
            LEFT JOIN exam_schedules es ON es.admission_id = a.id AND es.atc_id = a.atc_id
            WHERE a.atc_id = ? AND a.status = 'Active'";
@@ -329,6 +337,50 @@ $courses = $stmt->fetchAll(PDO::FETCH_COLUMN);
 $stmt = $pdo->prepare("SELECT * FROM atc_centers WHERE id = ?");
 $stmt->execute([$atcId]);
 $atcDetails = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Finished main exams (portal result or local Passed/Failed) so the row stops saying Generate.
+$examOutcome = [];
+$atcCode = trim((string)($atcDetails['atc_code'] ?? ''));
+$atcName = trim((string)($atcDetails['name'] ?? ''));
+if (function_exists('examIntegrationReady') && examIntegrationReady() && function_exists('fetchAllExamResultsComplete')) {
+    $byReg = [];
+    foreach ($students as $s) {
+        $reg = strtoupper(trim((string)($s['registration_id'] ?? '')));
+        if ($reg === '') {
+            $reg = strtoupper(trim((string)($s['roll_no'] ?? '')));
+        }
+        if ($reg !== '') {
+            $byReg[$reg] = (int)$s['id'];
+        }
+    }
+    try {
+        $res = fetchAllExamResultsComplete();
+        $subs = (!empty($res['success']) && !empty($res['data']['submissions']) && is_array($res['data']['submissions']))
+            ? $res['data']['submissions'] : [];
+        foreach ($subs as $sub) {
+            if (!is_array($sub) || (function_exists('examSubmissionIsDemo') && examSubmissionIsDemo($sub))) {
+                continue;
+            }
+            $centre = trim((string)($sub['centre_name'] ?? ''));
+            if ($centre !== '' && strcasecmp($centre, $atcCode) !== 0 && strcasecmp($centre, $atcName) !== 0) {
+                continue;
+            }
+            $ident = strtoupper(trim((string)($sub['student']['identifier'] ?? ($sub['identifier'] ?? ''))));
+            if ($ident === '' || !isset($byReg[$ident])) {
+                continue;
+            }
+            $raw = strtolower(trim((string)($sub['result'] ?? '')));
+            $label = ($raw === 'pass' || $raw === 'passed') ? 'Passed' : (($raw === 'fail' || $raw === 'failed') ? 'Failed' : 'Exam done');
+            $admId = $byReg[$ident];
+            if (($examOutcome[$admId] ?? '') === 'Passed') {
+                continue;
+            }
+            $examOutcome[$admId] = $label;
+        }
+    } catch (Throwable $e) {
+        $examOutcome = [];
+    }
+}
 
 // ── Fetch exam assignments from Exam Portal for hall ticket schedule ──────────
 $examAssignments = []; // keyed by student identifier
@@ -511,11 +563,22 @@ try {
                                     $sharePaid = !empty($student['share_paid']);
                                     $hasPhoto  = !empty($student['photo']) && file_exists(__DIR__ . '/../' . $student['photo']);
                                     $canGenerate = $sharePaid && $hasPhoto;
+                                    $ticketReady = !empty($student['sched_exam_date']);
+                                    $localStatus = (string)($student['sched_exam_status'] ?? '');
+                                    $doneLabel = '';
+                                    if (in_array($localStatus, ['Passed', 'Failed', 'Absent'], true)) {
+                                        $doneLabel = $localStatus;
+                                    } elseif (!empty($examOutcome[(int)$student['id']])) {
+                                        $doneLabel = $examOutcome[(int)$student['id']];
+                                    } elseif ($localStatus === 'Appeared') {
+                                        $doneLabel = 'Exam done';
+                                    }
+                                    $doneClass = $doneLabel === 'Passed' ? 'pass' : ($doneLabel === 'Failed' ? 'fail' : ($doneLabel === 'Absent' ? 'absent' : 'done'));
                                     $fullName = $student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name'];
                                 ?>
                                 <tr>
                                     <td>
-                                        <?php if ($canGenerate): ?>
+                                        <?php if ($canGenerate && !$ticketReady && $doneLabel === ''): ?>
                                             <input type="checkbox" class="ht-row-check" value="<?= (int)$student['id'] ?>" onchange="updateHtBulkBtn()">
                                         <?php endif; ?>
                                     </td>
@@ -539,8 +602,21 @@ try {
                                         <?php endif; ?>
                                     </td>
                                     <td class="ht-action-cell">
-                                        <div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap">
-                                        <?php if ($canGenerate): ?>
+                                        <div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+                                        <?php if ($doneLabel !== ''): ?>
+                                            <a class="ht-result-pill <?= $doneClass ?>" href="student_marks.php"><?= htmlspecialchars($doneLabel) ?></a>
+                                            <?php if ($ticketReady): ?>
+                                                <button type="button" class="ht-link-btn" onclick="renderAndPrintHallTicket(<?= (int)$student['id'] ?>)">Reprint</button>
+                                            <?php endif; ?>
+                                        <?php elseif ($ticketReady && $canGenerate): ?>
+                                            <button type="button" onclick="renderAndPrintHallTicket(<?= (int)$student['id'] ?>)" class="ht-btn-reprint" title="Print the hall ticket again">
+                                                Reprint
+                                            </button>
+                                            <button type="button" class="ht-link-btn" onclick="generateHallTicket(<?= (int)$student['id'] ?>)">Reschedule</button>
+                                            <button onclick="sendHallTicketWhatsApp(<?= $student['id'] ?>)" class="ht-btn-wa-notify" title="Send hall ticket details via WhatsApp">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                            </button>
+                                        <?php elseif ($canGenerate): ?>
                                             <button onclick="generateHallTicket(<?= $student['id'] ?>)" class="ht-btn-generate">
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                                                 Generate
@@ -1918,6 +1994,48 @@ body { font-family: var(--font); }
     width: 16px;
     height: 16px;
 }
+
+.ht-btn-reprint {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .55rem 1rem;
+    border-radius: 10px;
+    font-size: .8rem;
+    font-weight: 800;
+    color: #1d4ed8;
+    background: #eff6ff;
+    border: 1.5px solid #bfdbfe;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+}
+.ht-btn-reprint:hover { background: #dbeafe; }
+.ht-link-btn {
+    border: none;
+    background: none;
+    color: #64748b;
+    font-size: .72rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: underline;
+    padding: 0;
+}
+.ht-result-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: .4rem .75rem;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.ht-result-pill.pass { background: #d1fae5; color: #065f46; }
+.ht-result-pill.fail { background: #fee2e2; color: #991b1b; }
+.ht-result-pill.absent { background: #f1f5f9; color: #475569; }
+.ht-result-pill.done { background: #e0e7ff; color: #3730a3; }
 
 .ht-btn-wa-notify {
     width: 38px;
