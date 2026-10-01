@@ -270,13 +270,40 @@ if ($embed !== '') {
         }
         $sampleCode = trim((string)($atc['atc_code'] ?? '202600002'));
         $sampleDate = date('d F Y, l');
+        $sampleRows = [];
+        if ($atcId > 0) {
+            try {
+                $sr = $pdo->prepare("SELECT roll_no, registration_id, photo FROM admissions WHERE atc_id = ? AND status = 'Active' ORDER BY roll_no ASC, registration_id ASC LIMIT 6");
+                $sr->execute([$atcId]);
+                foreach ($sr->fetchAll(PDO::FETCH_ASSOC) ?: [] as $student) {
+                    $roll = trim((string)($student['roll_no'] ?? ''));
+                    if ($roll === '') {
+                        $roll = trim((string)($student['registration_id'] ?? ''));
+                    }
+                    if ($roll === '') {
+                        continue;
+                    }
+                    $photo = '';
+                    $rel = ltrim(str_replace('\\', '/', (string)($student['photo'] ?? '')), '/');
+                    if ($rel !== '' && is_file(__DIR__ . '/../' . $rel)) {
+                        $photo = '../' . $rel;
+                    }
+                    $sampleRows[] = ['roll' => $roll, 'photo' => $photo, 'institute' => $sampleAtcName];
+                }
+            } catch (Exception $e) {
+                $sampleRows = [];
+            }
+        }
+        if (!$sampleRows) {
+            $sampleRows = attendanceSheetSampleRows($sampleAtcName);
+        }
         $autoPrint = isset($_GET['print']) && $_GET['print'] === '1';
         $inIframe = isset($_GET['iframe']) && $_GET['iframe'] === '1';
         renderAttendanceSheetDocument([
             'date_label' => $sampleDate,
             'institute' => $sampleAtcName,
             'code' => $sampleCode,
-            'rows' => attendanceSheetSampleRows($sampleAtcName),
+            'rows' => $sampleRows,
             'print' => $autoPrint,
             'toolbar' => !$inIframe && !$autoPrint,
         ]);

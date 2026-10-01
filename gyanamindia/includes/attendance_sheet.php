@@ -41,19 +41,19 @@ function renderAttendanceSheetDocument(array $opts): void
     .as-toolbar button, .as-toolbar a { height: 36px; padding: 0 .9rem; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; font: 700 13px/36px Arial, sans-serif; text-decoration: none; color: #111; cursor: pointer; }
     .as-toolbar .primary { background: #1e3a8a; border-color: #1e3a8a; color: #fff; }
     .as-hint { margin: 0 auto 0 0; font: 500 12px/1.4 Arial, sans-serif; color: #4b5563; }
-    .as-page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 12mm 12mm 14mm; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
+    .as-page { width: min(210mm, calc(100% - 24px)); min-height: 0; margin: 16px auto; background: #fff; padding: 12mm; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
     .as-head { text-align: center; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 10px; }
     .as-brand { font-size: 13px; letter-spacing: .08em; font-weight: 700; }
     .as-title { font-size: 20px; font-weight: 700; margin: 2px 0 6px; letter-spacing: .04em; }
     .as-meta { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
     .as-meta td { padding: 2px 0; }
     .as-meta .k { width: 110px; font-weight: 700; }
-    table.as-grid { width: 100%; border-collapse: collapse; }
+    table.as-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
     table.as-grid th, table.as-grid td { border: 1px solid #111; vertical-align: middle; }
     table.as-grid th { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; padding: 6px 8px; background: #f3f4f6; }
-    table.as-grid td { padding: 6px 8px; font-size: 13px; }
-    td.roll { width: 22%; font-weight: 700; font-family: "Courier New", monospace; font-size: 14px; }
-    td.photo { width: 18%; text-align: center; }
+    table.as-grid td { padding: 6px 8px; font-size: 14px; }
+    td.roll { width: 24%; font-weight: 700; font-family: Arial, Helvetica, sans-serif; font-size: 15px; text-align: center; white-space: nowrap; letter-spacing: 0; }
+    td.photo { width: 16%; text-align: center; }
     td.photo img, .as-nophoto { width: 72px; height: 90px; object-fit: cover; border: 1px solid #111; display: inline-block; background: #f9fafb; }
     .as-nophoto { line-height: 90px; font: 11px Arial, sans-serif; color: #6b7280; }
     td.inst { width: 28%; }
@@ -65,6 +65,7 @@ function renderAttendanceSheetDocument(array $opts): void
         body { background: #fff; }
         .as-toolbar { display: none !important; }
         .as-page { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
+        td.roll { white-space: nowrap; }
         table.as-grid tr { break-inside: avoid; page-break-inside: avoid; }
         table.as-grid thead { display: table-header-group; }
     }
