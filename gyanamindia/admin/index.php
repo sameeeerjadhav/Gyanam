@@ -97,6 +97,44 @@ function fetchTopPerformingAtcs(PDO $pdo, string $centerType = '', string $perio
     }
 }
 
+/**
+ * Bucket a paid student's course into IT, Abacus, or Vedic Maths.
+ * Course name wins (Junior Abacus stays Abacus). A combined centre type
+ * with no name clue is split later so the rupee is not dropped.
+ */
+function adminDashboardShareStream(?string $courseType, ?string $courseName): string
+{
+    $name = mb_strtolower(trim((string)$courseName));
+    $type = mb_strtolower(trim((string)$courseType));
+    if ($name !== '') {
+        if (str_contains($name, 'vedic')) {
+            return 'vedic';
+        }
+        if (str_contains($name, 'abacus')) {
+            return 'abacus';
+        }
+    }
+    $vedic = str_contains($type, 'vedic');
+    $abacus = str_contains($type, 'abacus');
+    $it = str_contains($type, 'typing') || (bool)preg_match('/(?<![a-z])it(?![a-z])/', $type);
+    if ($vedic && !$abacus && !$it) {
+        return 'vedic';
+    }
+    if ($abacus && !$vedic && !$it) {
+        return 'abacus';
+    }
+    if ($it && !$vedic && !$abacus) {
+        return 'it';
+    }
+    if ($abacus && $vedic && !$it) {
+        return 'split_abacus_vedic';
+    }
+    if ($abacus || $vedic || $it) {
+        return 'split_all';
+    }
+    return 'it';
+}
+
 // AJAX: filtered top ATCs
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'top_atcs') {
     header('Content-Type: application/json; charset=utf-8');
@@ -420,6 +458,9 @@ $revenueStats    = [
     'today_share' => 0,
     'txn_count' => 0,
     'atc_paid_count' => 0,
+    'share_it' => 0,
+    'share_abacus' => 0,
+    'share_vedic' => 0,
 ];
 $dlcRevenue      = [];
 $dispatchStats   = ['total_dispatches'=>0,'created'=>0,'sent_to_dlc'=>0,'forwarded_to_atc'=>0,'delivered'=>0,'total_items'=>0];
@@ -430,7 +471,7 @@ $recentSharePayments = [];
 $chartAtcTypes   = [];
 $chartDlcBars    = [];
 
-$_rcKey = 'admin_dash_reports_share_v2';
+$_rcKey = 'admin_dash_reports_share_v3';
 $_rcAt  = 'admin_dash_reports_share_at';
 if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_rcAt]) < 90) {
     $cached = $_SESSION[$_rcKey];
@@ -461,6 +502,83 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         $revenueStats['atc_paid_count']  = (int)($row['atc_paid_count'] ?? 0);
         // Admin "revenue" = share received (HO income), not ATC fee earnings
         $revenueStats['total_revenue']   = $revenueStats['total_collected'];
+
+        // Split received share by the course of each student on completed payments.
+        $shareStreams = ['it' => 0.0, 'abacus' => 0.0, 'vedic' => 0.0];
+        $jsonRows = $pdo->query("SELECT student_ids FROM share_payments WHERE status = 'Completed'")->fetchAll(PDO::FETCH_COLUMN);
+        $idSet = [];
+        foreach ($jsonRows as $json) {
+            $ids = json_decode((string)$json, true);
+            if (!is_array($ids)) {
+                continue;
+            }
+            foreach ($ids as $id) {
+                $id = (int)$id;
+                if ($id > 0) {
+                    $idSet[$id] = true;
+                }
+            }
+        }
+        if ($idSet) {
+            $sharePack = buildHoShareAmountMap($pdo, null);
+            $map = $sharePack['map'];
+            $defaultShare = (float)$sharePack['default'];
+            foreach (array_chunk(array_keys($idSet), 400) as $chunk) {
+                $ph = implode(',', array_fill(0, count($chunk), '?'));
+                $st = $pdo->prepare("
+                    SELECT a.id, a.course, a.material_type, a.ho_share_snapshot,
+                           (SELECT c.course_type FROM courses c
+                             WHERE c.course_name = a.course
+                             ORDER BY c.id ASC LIMIT 1) AS course_type
+                    FROM admissions a
+                    WHERE a.id IN ($ph)
+                ");
+                $st->execute($chunk);
+                foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $snap = (float)($row['ho_share_snapshot'] ?? 0);
+                    $amt = resolveAdmissionHoShareAmount(
+                        (string)($row['course'] ?? ''),
+                        $map,
+                        $defaultShare,
+                        $snap > 0 ? $snap : null,
+                        $row['material_type'] ?? null
+                    );
+                    if ($amt <= 0) {
+                        continue;
+                    }
+                    $bucket = adminDashboardShareStream($row['course_type'] ?? '', $row['course'] ?? '');
+                    if ($bucket === 'split_abacus_vedic') {
+                        $shareStreams['abacus'] += $amt / 2;
+                        $shareStreams['vedic'] += $amt / 2;
+                    } elseif ($bucket === 'split_all') {
+                        $shareStreams['it'] += $amt / 3;
+                        $shareStreams['abacus'] += $amt / 3;
+                        $shareStreams['vedic'] += $amt / 3;
+                    } else {
+                        $shareStreams[$bucket] += $amt;
+                    }
+                }
+            }
+        }
+        $attributed = $shareStreams['it'] + $shareStreams['abacus'] + $shareStreams['vedic'];
+        $collected = (float)$revenueStats['total_collected'];
+        if ($attributed > 0 && $collected > 0) {
+            $scale = $collected / $attributed;
+            foreach (['it', 'abacus', 'vedic'] as $key) {
+                $shareStreams[$key] = (int)round($shareStreams[$key] * $scale);
+            }
+            $drift = (int)round($collected) - ($shareStreams['it'] + $shareStreams['abacus'] + $shareStreams['vedic']);
+            $target = 'it';
+            foreach (['abacus', 'vedic'] as $key) {
+                if ($shareStreams[$key] > $shareStreams[$target]) {
+                    $target = $key;
+                }
+            }
+            $shareStreams[$target] += $drift;
+        }
+        $revenueStats['share_it'] = $shareStreams['it'];
+        $revenueStats['share_abacus'] = $shareStreams['abacus'];
+        $revenueStats['share_vedic'] = $shareStreams['vedic'];
     } catch (Exception $e) {}
 
     try {
@@ -1159,6 +1277,15 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         display:inline-flex; padding:.15rem .5rem; border-radius:999px; font-size:.68rem;
         font-weight:800; background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe;
     }
+    .cc-share-bar {
+        display:flex; height:8px; border-radius:99px; overflow:hidden;
+        background:#f3f4f6; margin:.15rem 0 .35rem; gap:2px;
+    }
+    .cc-share-bar span { display:block; height:100%; min-width:0; }
+    .cc-share-dot {
+        display:inline-block; width:8px; height:8px; border-radius:50%;
+        margin-right:.4rem; vertical-align:middle;
+    }
     </style>
 </head>
 <body>
@@ -1419,8 +1546,25 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         <h3>Share Revenue</h3>
                         <a class="cc-link" href="share_payments.php">Show All</a>
                     </div>
+                    <?php
+                    $shareIt = (float)($revenueStats['share_it'] ?? 0);
+                    $shareAbacus = (float)($revenueStats['share_abacus'] ?? 0);
+                    $shareVedic = (float)($revenueStats['share_vedic'] ?? 0);
+                    $sharePartSum = $shareIt + $shareAbacus + $shareVedic;
+                    $sharePct = static function (float $part) use ($sharePartSum): float {
+                        return $sharePartSum > 0 ? ($part / $sharePartSum) * 100 : 0;
+                    };
+                    ?>
                     <div class="cc-metric-label">HO share received</div>
                     <div class="cc-metric-value green">₹ <?= number_format((float)$revenueStats['total_collected'], 0) ?></div>
+                    <div class="cc-share-bar" aria-hidden="true">
+                        <span style="width:<?= number_format($sharePct($shareIt), 2, '.', '') ?>%;background:#2563eb"></span>
+                        <span style="width:<?= number_format($sharePct($shareAbacus), 2, '.', '') ?>%;background:#7c3aed"></span>
+                        <span style="width:<?= number_format($sharePct($shareVedic), 2, '.', '') ?>%;background:#d97706"></span>
+                    </div>
+                    <div class="cc-kv"><span class="k"><span class="cc-share-dot" style="background:#2563eb"></span>IT</span><span class="v blue">₹ <?= number_format($shareIt, 0) ?></span></div>
+                    <div class="cc-kv"><span class="k"><span class="cc-share-dot" style="background:#7c3aed"></span>Abacus</span><span class="v" style="color:#7c3aed">₹ <?= number_format($shareAbacus, 0) ?></span></div>
+                    <div class="cc-kv"><span class="k"><span class="cc-share-dot" style="background:#d97706"></span>Vedic Maths</span><span class="v orange">₹ <?= number_format($shareVedic, 0) ?></span></div>
                 </div>
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
