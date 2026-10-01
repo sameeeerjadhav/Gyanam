@@ -53,8 +53,8 @@ function renderAttendanceSheetDocument(array $opts): void
     .as-hint { margin: 0 auto 0 0; font: 500 12px/1.4 Arial, sans-serif; color: #4b5563; }
     .as-page { width: 210mm; height: 297mm; margin: 16px auto; background: #fff; padding: 12mm; box-shadow: 0 8px 28px rgba(0,0,0,.12); display: flex; flex-direction: column; overflow: hidden; }
     .as-head { text-align: center; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 10px; }
-    .as-brand { font-size: 13px; font-weight: 700; }
-    .as-title { font-size: 20px; font-weight: 700; margin: 2px 0 6px; }
+    .as-brand { font-size: 22px; font-weight: 700; line-height: 1.25; }
+    .as-title { font-size: 15px; font-weight: 700; margin: 4px 0 6px; }
     .as-meta { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
     .as-meta td { padding: 2px 0; }
     .as-meta .k { width: 110px; font-weight: 700; }
