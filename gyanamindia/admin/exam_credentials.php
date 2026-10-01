@@ -173,6 +173,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     .btn-search { padding: .7rem 1.25rem; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r-md); font-size: .875rem; font-weight: 600; font-family: var(--font); color: var(--text-2); cursor: pointer; transition: all .18s; }
     .btn-search:hover { border-color: var(--indigo); color: var(--indigo); background: var(--indigo-soft); }
     .table-wrap { background: var(--surface); border-radius: var(--r-xl); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden; }
+    .users-pager { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin-top: .85rem; }
+    .users-pager[hidden] { display: none; }
+    .users-pager-info { font-size: .8rem; font-weight: 600; color: var(--text-3); }
+    .users-pager-info strong { color: var(--text); font-weight: 800; }
+    .users-pager-controls { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+    .users-pager-btn { min-width: 34px; height: 34px; padding: 0 .65rem; border: 1.5px solid var(--border); border-radius: var(--r-md); background: var(--surface); color: var(--text-2); font-family: var(--font); font-size: .8rem; font-weight: 700; cursor: pointer; }
+    .users-pager-btn:hover:not(:disabled) { border-color: var(--indigo); color: var(--indigo); background: var(--indigo-soft); }
+    .users-pager-btn.active { background: var(--indigo); border-color: var(--indigo); color: #fff; }
+    .users-pager-btn:disabled { opacity: .45; cursor: default; }
     .data-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
     .data-table thead { background: var(--surface-raised); }
     .data-table thead th { padding: 1rem 1.25rem; text-align: left; font-size: .72rem; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border); white-space: nowrap; }
@@ -315,6 +324,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 </tbody>
             </table>
         </div>
+        <div class="users-pager" id="users-pager" hidden></div>
 
         </div><!-- /.page-content -->
     </main>
@@ -372,6 +382,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 <script>
 let allUsers = [];
+let userPage = 1;
+let userFilterKey = '';
+const USER_PAGE_SIZE = 10;
 
 async function loadUsers() {
     const form = new FormData();
@@ -394,6 +407,11 @@ async function loadUsers() {
 function renderTable() {
     const search = document.getElementById('search-input').value.toLowerCase();
     const roleF = document.getElementById('role-filter').value;
+    const filterKey = search + '|' + roleF;
+    if (filterKey !== userFilterKey) {
+        userPage = 1;
+        userFilterKey = filterKey;
+    }
 
     const filtered = allUsers.filter(u => {
         const matchSearch = !search || u.username.toLowerCase().includes(search) || u.name.toLowerCase().includes(search) || (u.centre_id || '').toLowerCase().includes(search);
@@ -403,13 +421,20 @@ function renderTable() {
 
     document.getElementById('toolbar-count').textContent = filtered.length;
     const tbody = document.getElementById('users-tbody');
+    const pages = Math.max(1, Math.ceil(filtered.length / USER_PAGE_SIZE));
+    if (userPage > pages) userPage = pages;
+    if (userPage < 1) userPage = 1;
 
     if (filtered.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="empty-title">No users found</div><div class="empty-sub">Try adjusting your search or filters</div></td></tr>';
+        renderUserPager(0, 1);
         return;
     }
 
-    tbody.innerHTML = filtered.map(u => {
+    const start = (userPage - 1) * USER_PAGE_SIZE;
+    const pageRows = filtered.slice(start, start + USER_PAGE_SIZE);
+
+    tbody.innerHTML = pageRows.map(u => {
         const initial = (u.name || u.username || '?').charAt(0).toUpperCase();
         const roleClass = u.role === 'admin' ? 'role-admin' : u.role === 'atc' ? 'role-atc' : 'role-dlc';
         const roleLabel = u.role.toUpperCase();
@@ -426,6 +451,34 @@ function renderTable() {
             </div></td>
         </tr>`;
     }).join('');
+    renderUserPager(filtered.length, pages);
+}
+
+function renderUserPager(total, pages) {
+    const pager = document.getElementById('users-pager');
+    if (!pager) return;
+    if (total === 0) {
+        pager.hidden = true;
+        pager.innerHTML = '';
+        return;
+    }
+    pager.hidden = false;
+    const from = (userPage - 1) * USER_PAGE_SIZE + 1;
+    const to = Math.min(userPage * USER_PAGE_SIZE, total);
+    let start = Math.max(1, userPage - 2);
+    let end = Math.min(pages, start + 4);
+    start = Math.max(1, end - 4);
+    let buttons = `<button type="button" class="users-pager-btn" ${userPage <= 1 ? 'disabled' : ''} onclick="goUserPage(${userPage - 1})">Prev</button>`;
+    for (let i = start; i <= end; i++) {
+        buttons += `<button type="button" class="users-pager-btn${i === userPage ? ' active' : ''}" onclick="goUserPage(${i})">${i}</button>`;
+    }
+    buttons += `<button type="button" class="users-pager-btn" ${userPage >= pages ? 'disabled' : ''} onclick="goUserPage(${userPage + 1})">Next</button>`;
+    pager.innerHTML = `<div class="users-pager-info">Showing <strong>${from}–${to}</strong> of <strong>${total}</strong></div><div class="users-pager-controls">${buttons}</div>`;
+}
+
+function goUserPage(page) {
+    userPage = page;
+    renderTable();
 }
 
 function updateKPIs() {
