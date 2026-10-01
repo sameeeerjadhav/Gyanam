@@ -194,6 +194,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                             <h3>Student Birthdays Today</h3>
                             <span style="margin-left:auto;font-size:.78rem;font-weight:700;color:var(--cc-muted)"><?= count($birthdays) ?></span>
                         </div>
+                        <div class="cc-scroll">
                         <div class="atc-bday-body" style="padding:0">
                             <?php foreach ($birthdays as $b): ?>
                                 <div class="atc-bday-row">
@@ -212,6 +213,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                                 </div>
                             <?php endforeach; ?>
                         </div>
+                        </div>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -229,6 +231,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                         <?php if (empty($recentInquiries)): ?>
                             <div class="cc-empty">No recent enquiries</div>
                         <?php else: ?>
+                            <div class="cc-scroll">
                             <table class="cc-table">
                                 <thead><tr><th>Student Name</th><th>Course</th><th>Enq Date</th></tr></thead>
                                 <tbody>
@@ -241,6 +244,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
+                            </div>
                         <?php endif; ?>
                     </div>
                     <div class="cc-card">
@@ -253,6 +257,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                         <?php if (empty($popularEnquiryCourses)): ?>
                             <div class="cc-empty">No enquiry data</div>
                         <?php else: ?>
+                            <div class="cc-scroll">
                             <table class="cc-table">
                                 <thead><tr><th>Course Name</th><th>Students</th></tr></thead>
                                 <tbody>
@@ -264,6 +269,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
+                            </div>
                         <?php endif; ?>
                     </div>
                     <div class="cc-card">
@@ -276,6 +282,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                         <?php if (empty($popularCourses)): ?>
                             <div class="cc-empty">No admissions yet</div>
                         <?php else: ?>
+                            <div class="cc-scroll">
                             <table class="cc-table">
                                 <thead><tr><th>Course Name</th><th>Students</th></tr></thead>
                                 <tbody>
@@ -287,6 +294,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -303,6 +311,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <?php if (empty($recentExamsDash)): ?>
                         <div class="cc-empty">No exam records yet</div>
                     <?php else: ?>
+                        <div class="cc-scroll">
                         <table class="cc-table">
                             <thead>
                                 <tr>
@@ -325,6 +334,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                             <?php endforeach; ?>
                             </tbody>
                         </table>
+                        </div>
                     <?php endif; ?>
                 </div>
 
@@ -419,6 +429,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <?php if (empty($recentPayments)): ?>
                         <div class="cc-empty">No fee payments yet</div>
                     <?php else: ?>
+                        <div class="cc-scroll">
                         <table class="cc-table">
                             <thead>
                                 <tr>
@@ -447,6 +458,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                             <?php endforeach; ?>
                             </tbody>
                         </table>
+                        </div>
                     <?php endif; ?>
                 </div>
 
@@ -463,6 +475,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                         <?php if (empty($upcomingDueFees)): ?>
                             <div class="cc-empty">All fees cleared</div>
                         <?php else: ?>
+                            <div class="cc-scroll">
                             <table class="cc-table">
                                 <thead><tr><th>Student</th><th>Pending</th></tr></thead>
                                 <tbody>
@@ -477,6 +490,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
+                            </div>
                         <?php endif; ?>
                     </div>
                     <div class="cc-card">
@@ -490,6 +504,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                         <?php if (empty($pendingApprovals)): ?>
                             <div class="cc-empty">All caught up</div>
                         <?php else: ?>
+                            <div class="cc-scroll">
                             <table class="cc-table">
                                 <thead><tr><th>Student</th><th>Change</th></tr></thead>
                                 <tbody>
@@ -501,6 +516,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
+                            </div>
                         <?php endif; ?>
                     </div>
                     <div class="cc-card cc-card-pad">

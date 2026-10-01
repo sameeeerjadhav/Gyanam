@@ -234,6 +234,24 @@
 .cc-table tr:last-child td { border-bottom: none; }
 .cc-table .name { font-weight: 700; }
 .cc-table .muted { color: var(--cc-muted); font-size: .78rem; }
+
+/* Keep list cards a fixed height; extra rows scroll inside the card. */
+.cc-scroll {
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.cc-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.cc-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+.cc-scroll .cc-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+}
 .cc-empty {
   text-align: center;
   padding: 1.5rem;

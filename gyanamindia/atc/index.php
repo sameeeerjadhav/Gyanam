@@ -229,7 +229,7 @@ try {
                COALESCE(interested_course, '') AS course_interested,
                created_at, status
         FROM inquiries WHERE atc_id = ?
-        ORDER BY created_at DESC LIMIT 6
+        ORDER BY created_at DESC LIMIT 30
     ");
     $stmt->execute([$atcId]);
     $recentInquiries = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -242,13 +242,13 @@ try {
     $stmt = $pdo->prepare("
         SELECT COALESCE(course_name, course, 'Unknown') as cname, COUNT(*) as cnt
         FROM admissions WHERE atc_id = ?
-        GROUP BY cname ORDER BY cnt DESC LIMIT 5
+        GROUP BY cname ORDER BY cnt DESC LIMIT 30
     ");
     $stmt->execute([$atcId]);
     $popularCourses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
     try {
-        $stmt = $pdo->prepare("SELECT course as cname, COUNT(*) as cnt FROM admissions WHERE atc_id = ? GROUP BY course ORDER BY cnt DESC LIMIT 5");
+        $stmt = $pdo->prepare("SELECT course as cname, COUNT(*) as cnt FROM admissions WHERE atc_id = ? GROUP BY course ORDER BY cnt DESC LIMIT 30");
         $stmt->execute([$atcId]);
         $popularCourses = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Exception $e2) {
@@ -370,16 +370,18 @@ try {
 $pendingApprovals = [];
 $pendingApprovalCount = 0;
 try {
-    $stmt = $pdo->prepare("SELECT cr.id, cr.field_label, cr.new_value, cr.requested_at, CONCAT(a.first_name,' ',a.last_name) AS student_name, a.roll_no FROM change_requests cr JOIN admissions a ON cr.admission_id = a.id WHERE cr.atc_id = ? AND cr.status = 'Pending' ORDER BY cr.requested_at DESC LIMIT 5");
+    $stmt = $pdo->prepare("SELECT cr.id, cr.field_label, cr.new_value, cr.requested_at, CONCAT(a.first_name,' ',a.last_name) AS student_name, a.roll_no FROM change_requests cr JOIN admissions a ON cr.admission_id = a.id WHERE cr.atc_id = ? AND cr.status = 'Pending' ORDER BY cr.requested_at DESC LIMIT 30");
     $stmt->execute([$atcId]);
     $pendingApprovals = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $pendingApprovalCount = count($pendingApprovals);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM change_requests WHERE atc_id = ? AND status = 'Pending'");
+    $stmt->execute([$atcId]);
+    $pendingApprovalCount = (int)$stmt->fetchColumn();
 } catch (Exception $e) {
 }
 
 $upcomingDueFees = [];
 try {
-    $stmt = $pdo->prepare("SELECT id, CONCAT(first_name,' ',COALESCE(middle_name,''),' ',last_name) AS name, course, photo, roll_no, COALESCE(net_payable, fees_total, 0) AS net_payable, COALESCE(fees_paid, 0) AS fees_paid, COALESCE(fees_pending, 0) AS fees_pending FROM admissions WHERE atc_id = ? AND status = 'Active' AND COALESCE(fees_pending, 0) > 0 ORDER BY fees_pending DESC LIMIT 5");
+    $stmt = $pdo->prepare("SELECT id, CONCAT(first_name,' ',COALESCE(middle_name,''),' ',last_name) AS name, course, photo, roll_no, COALESCE(net_payable, fees_total, 0) AS net_payable, COALESCE(fees_paid, 0) AS fees_paid, COALESCE(fees_pending, 0) AS fees_pending FROM admissions WHERE atc_id = ? AND status = 'Active' AND COALESCE(fees_pending, 0) > 0 ORDER BY fees_pending DESC LIMIT 30");
     $stmt->execute([$atcId]);
     $upcomingDueFees = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
@@ -432,20 +434,20 @@ try {
         JOIN admissions a ON a.id = fp.admission_id
         WHERE a.atc_id = ?
         ORDER BY fp.payment_date DESC, fp.id DESC
-        LIMIT 8
+        LIMIT 30
     ");
     $stmt->execute([$atcId]);
     $recentPayments = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 
-$recentExamsDash = array_slice($examStudentsConducted ?: $examStudentsAll, 0, 6);
+$recentExamsDash = array_slice($examStudentsConducted ?: $examStudentsAll, 0, 30);
 
 $popularEnquiryCourses = [];
 try {
     $stmt = $pdo->prepare("
         SELECT COALESCE(NULLIF(TRIM(interested_course),''),'Unknown') AS cname, COUNT(*) AS cnt
         FROM inquiries WHERE atc_id = ?
-        GROUP BY cname ORDER BY cnt DESC LIMIT 6
+        GROUP BY cname ORDER BY cnt DESC LIMIT 30
     ");
     $stmt->execute([$atcId]);
     $popularEnquiryCourses = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -459,7 +461,7 @@ try {
                    COALESCE(interested_course, '') AS course_interested,
                    created_at, status
             FROM inquiries WHERE atc_id = ?
-            ORDER BY created_at DESC LIMIT 6
+            ORDER BY created_at DESC LIMIT 30
         ");
         $stmt->execute([$atcId]);
         $recentInquiries = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -563,7 +565,7 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
-    <link rel="stylesheet" href="../assets/css/atc-dash-cc.css">
+    <link rel="stylesheet" href="../assets/css/atc-dash-cc.css?v=<?= (int)@filemtime(__DIR__ . '/../assets/css/atc-dash-cc.css') ?>">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
     <style>
