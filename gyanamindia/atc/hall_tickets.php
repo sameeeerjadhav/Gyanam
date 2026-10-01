@@ -577,6 +577,7 @@ try {
                                         $doneLabel = 'Exam done';
                                     }
                                     $doneClass = $doneLabel === 'Passed' ? 'pass' : ($doneLabel === 'Failed' ? 'fail' : ($doneLabel === 'Absent' ? 'absent' : 'done'));
+                                    $doneText = ($doneLabel === 'Passed' || $doneLabel === 'Exam done') ? 'Exam Done' : $doneLabel;
                                     $fullName = $student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name'];
                                 ?>
                                 <tr>
@@ -605,7 +606,7 @@ try {
                                     <td class="ht-action-cell">
                                         <div class="ht-actions">
                                         <?php if ($doneLabel !== ''): ?>
-                                            <a class="ht-result-pill <?= $doneClass ?>" href="student_marks.php"><?= htmlspecialchars($doneLabel) ?></a>
+                                            <a class="ht-result-pill <?= $doneClass ?>" href="student_marks.php"><?= htmlspecialchars($doneText) ?></a>
                                             <?php if ($ticketReady): ?>
                                                 <button type="button" class="ht-link-btn" onclick="renderAndPrintHallTicket(<?= (int)$student['id'] ?>)">Reprint</button>
                                             <?php endif; ?>
