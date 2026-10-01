@@ -168,7 +168,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
 
 $videos = $pdo->query("SELECT v.*, (SELECT COUNT(*) FROM video_assignments WHERE video_id=v.id) AS assign_count FROM training_videos v ORDER BY v.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 $assignments = $pdo->query("SELECT va.*, tv.title AS video_title, atc.name AS atc_name FROM video_assignments va JOIN training_videos tv ON tv.id=va.video_id LEFT JOIN atc_centers atc ON atc.id=va.atc_id ORDER BY va.access_end DESC")->fetchAll(PDO::FETCH_ASSOC);
-$atcList = $pdo->query("SELECT id,name FROM atc_centers WHERE status='Active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $atcList = $pdo->query("SELECT id, name, COALESCE(district,'') AS district, COALESCE(center_type,'') AS center_type FROM atc_centers WHERE status='Active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $atcList = $pdo->query("SELECT id, name, '' AS district, '' AS center_type FROM atc_centers WHERE status='Active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+}
+$atcDistricts = [];
+foreach ($atcList as $atcRow) {
+    $districtName = trim((string)($atcRow['district'] ?? ''));
+    if ($districtName !== '') {
+        $atcDistricts[$districtName] = true;
+    }
+}
+$atcDistricts = array_keys($atcDistricts);
+sort($atcDistricts, SORT_NATURAL | SORT_FLAG_CASE);
 $totalV = count($videos); $totalA = count($assignments);
 $activeA = count(array_filter($assignments, fn($a) => $a['access_start'] <= date('Y-m-d') && $a['access_end'] >= date('Y-m-d')));
 
@@ -298,7 +311,19 @@ $serverAllows1gb = ($phpUploadBytes >= $maxVideoBytes && $phpPostBytes >= $maxVi
 .prog-status { font-size:.72rem; font-weight:600; color:var(--text-3); }
 
 /* ── ATC Chips ── */
-.atc-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.4rem; max-height:130px; overflow-y:auto; padding:.4rem 0; }
+.atc-picker-tools { display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; margin-top:.45rem; }
+.atc-picker-tools input, .atc-picker-tools select {
+    width:auto; flex:1 1 150px; min-width:140px; margin:0; padding:.48rem .75rem; font-size:.8rem;
+}
+.atc-picker-tools .tv-mini {
+    margin:0; padding:.48rem .85rem; border-radius:var(--r-md); border:1.5px solid var(--border);
+    background:#fff; color:var(--text-2); font-family:var(--font); font-size:.78rem; font-weight:700; cursor:pointer;
+}
+.atc-picker-tools .tv-mini.primary { background:var(--brand-light); color:var(--brand); border-color:#c7d2fe; }
+.atc-picker-tools .tv-mini:hover { border-color:var(--brand); }
+.atc-pick-meta { margin:.4rem 0 0; font-size:.75rem; font-weight:600; color:var(--text-3); }
+.atc-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.45rem; max-height:220px; overflow-y:auto; padding:.35rem; border:1.5px solid var(--border); border-radius:var(--r-md); background:#fafbfd; }
+.atc-chip.is-hidden { display:none; }
 .atc-chip { display:inline-flex; align-items:center; gap:.3rem; padding:.3rem .7rem; border-radius:var(--r-full);
     font-size:.75rem; font-weight:700; cursor:pointer; border:1.5px solid var(--border); background:#fafbfd;
     color:var(--text-2); transition:all .15s ease; user-select:none; }
@@ -422,10 +447,28 @@ $serverAllows1gb = ($phpUploadBytes >= $maxVideoBytes && $phpPostBytes >= $maxVi
     <label>Description</label><textarea name="description" placeholder="Optional description..."></textarea>
 
     <label>Assign to ATCs <span style="font-weight:400;color:var(--text-4)">(click to select)</span></label>
+    <div class="atc-picker-tools">
+        <input type="search" id="atcSearch" placeholder="Search centre name" oninput="filterAtcChips()" autocomplete="off">
+        <select id="atcType" onchange="filterAtcChips()">
+            <option value="">All types</option>
+            <option value="IT">IT</option>
+            <option value="Abacus">Abacus</option>
+            <option value="Vedic">Vedic Maths</option>
+        </select>
+        <select id="atcDistrict" onchange="filterAtcChips()">
+            <option value="">All districts</option>
+            <?php foreach ($atcDistricts as $districtName): ?>
+            <option value="<?= htmlspecialchars($districtName) ?>"><?= htmlspecialchars($districtName) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <button type="button" class="tv-mini primary" onclick="selectVisibleAtcs()">Select all</button>
+        <button type="button" class="tv-mini" onclick="clearAtcSelection()">Clear</button>
+    </div>
+    <p class="atc-pick-meta" id="atcPickMeta">All ATCs covers every centre. Select all ticks the centres shown below.</p>
     <div class="atc-chips" id="atcChips">
-        <span class="atc-chip all-chip" data-id="all" onclick="toggleChip(this)">🌐 All ATCs</span>
-        <?php foreach($atcList as $a): ?>
-        <span class="atc-chip" data-id="<?=$a['id']?>" onclick="toggleChip(this)"><?=htmlspecialchars($a['name'])?></span>
+        <span class="atc-chip all-chip" data-id="all" onclick="toggleChip(this)">All ATCs</span>
+        <?php foreach ($atcList as $a): ?>
+        <span class="atc-chip" data-id="<?= (int)$a['id'] ?>" data-name="<?= htmlspecialchars(mb_strtolower((string)$a['name'])) ?>" data-district="<?= htmlspecialchars((string)($a['district'] ?? '')) ?>" data-type="<?= htmlspecialchars((string)($a['center_type'] ?? '')) ?>" onclick="toggleChip(this)"><?= htmlspecialchars($a['name']) ?></span>
         <?php endforeach; ?>
     </div>
 
@@ -520,6 +563,50 @@ $serverAllows1gb = ($phpUploadBytes >= $maxVideoBytes && $phpPostBytes >= $maxVi
 function toast(msg,ok=true){const d=document.createElement('div');d.className='tv-toast '+(ok?'ok':'err');
     d.innerHTML='<div class="ti">'+(ok?'✅':'❌')+'</div><span>'+msg+'</span>';document.body.appendChild(d);setTimeout(()=>d.remove(),3500)}
 function toggleType(){const t=document.getElementById('vType').value;document.getElementById('fUpload').style.display=t==='upload'?'block':'none';document.getElementById('fUrl').style.display=t!=='upload'?'block':'none'}
+function atcTypeMatches(centerType, filter){
+    if(!filter) return true;
+    const t=(centerType||'').toLowerCase();
+    if(filter==='Vedic') return t.includes('vedic');
+    if(filter==='Abacus') return t.includes('abacus');
+    if(filter==='IT') return t.includes('typing') || /(^|[^a-z])it([^a-z]|$)/.test(t);
+    return true;
+}
+function filterAtcChips(){
+    const q=(document.getElementById('atcSearch')?.value||'').trim().toLowerCase();
+    const type=document.getElementById('atcType')?.value||'';
+    const district=document.getElementById('atcDistrict')?.value||'';
+    let shown=0;
+    document.querySelectorAll('#atcChips .atc-chip:not(.all-chip)').forEach(chip=>{
+        const ok=(!q || (chip.dataset.name||'').includes(q))
+            && (!district || chip.dataset.district===district)
+            && atcTypeMatches(chip.dataset.type, type);
+        chip.classList.toggle('is-hidden', !ok);
+        if(ok) shown++;
+    });
+    const selected=document.querySelectorAll('#atcChips .atc-chip.selected:not(.all-chip)').length;
+    const allOn=document.querySelector('#atcChips .atc-chip.all-chip')?.classList.contains('selected');
+    const meta=document.getElementById('atcPickMeta');
+    if(meta){
+        meta.textContent=allOn
+            ? 'All ATCs is on — this video goes to every centre.'
+            : ('Showing '+shown+' · '+selected+' selected. Select all ticks the centres shown. All ATCs covers every centre.');
+    }
+}
+function selectVisibleAtcs(){
+    document.querySelector('#atcChips .atc-chip.all-chip')?.classList.remove('selected');
+    let n=0;
+    document.querySelectorAll('#atcChips .atc-chip:not(.all-chip)').forEach(chip=>{
+        if(chip.classList.contains('is-hidden')) return;
+        chip.classList.add('selected');
+        n++;
+    });
+    filterAtcChips();
+    if(!n) toast('No centres match these filters', false);
+}
+function clearAtcSelection(){
+    document.querySelectorAll('#atcChips .atc-chip').forEach(c=>c.classList.remove('selected'));
+    filterAtcChips();
+}
 function toggleChip(el){
     if(el.dataset.id==='all'){
         const wasSelected=el.classList.contains('selected');
@@ -529,7 +616,9 @@ function toggleChip(el){
         document.querySelector('.atc-chip.all-chip')?.classList.remove('selected');
         el.classList.toggle('selected');
     }
+    filterAtcChips();
 }
+filterAtcChips();
 
 // Add video — large file uploads run in a background popup so navigating away is safe
 document.getElementById('addVideoForm').addEventListener('submit', function(e){
