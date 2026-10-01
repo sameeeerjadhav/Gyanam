@@ -12,22 +12,39 @@
     align-items: stretch;
     position: relative;
     overflow: hidden;
-    background: #0f172a;
+    background: #fff;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.login-curve-def {
+    position: absolute;
+    width: 0;
+    height: 0;
 }
 
 /* ---------- Left Panel — 65% brand + education carousel ---------- */
 .login-left {
-    flex: 0 0 65%;
-    width: 65%;
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 68%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    position: relative;
-    padding: 3rem 2.5rem 5.5rem;
+    padding: 3rem 14% 5.5rem 2.5rem;
     overflow: hidden;
     background: #0f172a;
+    z-index: 2;
+    clip-path: url(#loginCurve);
+    -webkit-clip-path: url(#loginCurve);
+    pointer-events: none;
+}
+
+.login-left .edu-foot,
+.login-left .edu-dot {
+    pointer-events: auto;
 }
 
 .edu-carousel {
@@ -214,18 +231,19 @@
 
 /* ---------- Right Panel — Login form ---------- */
 .login-right {
-    flex: 0 0 35%;
-    width: 35%;
+    flex: none;
+    width: 42%;
+    margin-left: auto;
     min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 2.25rem 1.75rem;
+    padding: 2.25rem 1.5rem 2.25rem 11%;
     background: #fff;
     position: relative;
-    z-index: 2;
-    box-shadow: -20px 0 60px rgba(0,0,0,0.15);
+    z-index: 1;
+    box-shadow: none;
 }
 
 /* Decorative top accent on the form side */
@@ -651,10 +669,15 @@
     }
 
     .login-left {
+        position: relative;
         flex: none;
         width: 100%;
+        height: auto;
         min-height: 42vh;
         padding: 2.5rem 2rem 4.5rem;
+        clip-path: none;
+        -webkit-clip-path: none;
+        pointer-events: auto;
     }
 
     .brand-logo img {
@@ -673,6 +696,7 @@
         flex: none;
         width: 100%;
         min-width: unset;
+        margin-left: 0;
         padding: 2rem 2rem 3rem;
         border-radius: 24px 24px 0 0;
         margin-top: -1rem;

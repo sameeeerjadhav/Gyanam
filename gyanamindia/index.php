@@ -36,6 +36,13 @@ $csrfToken = generateCSRFToken();
 <body>
 
 <div class="login-wrapper">
+    <svg class="login-curve-def" aria-hidden="true" width="0" height="0">
+        <defs>
+            <clipPath id="loginCurve" clipPathUnits="objectBoundingBox">
+                <path d="M0,0 H0.84 C1.04,0.2 1.04,0.8 0.84,1 H0 Z"/>
+            </clipPath>
+        </defs>
+    </svg>
 
     <!-- ── Left Panel: Brand Showcase ── -->
     <div class="login-left">
