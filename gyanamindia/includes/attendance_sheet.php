@@ -1,0 +1,132 @@
+<?php
+/**
+ * Printable exam-day attendance sheet.
+ * Columns: Roll No, Photo, Institute, Signature.
+ */
+
+function attendanceSheetSampleRows(string $institute): array
+{
+    $rolls = ['6IIT28265', '6IIT28266', 'GYANAM6', '6AB28401', '6VM11022'];
+    $rows = [];
+    foreach ($rolls as $roll) {
+        $rows[] = [
+            'roll' => $roll,
+            'photo' => '',
+            'institute' => $institute,
+        ];
+    }
+    return $rows;
+}
+
+function renderAttendanceSheetDocument(array $opts): void
+{
+    $dateLabel = (string)($opts['date_label'] ?? '');
+    $institute = (string)($opts['institute'] ?? '');
+    $code = (string)($opts['code'] ?? '');
+    $rows = is_array($opts['rows'] ?? null) ? $opts['rows'] : [];
+    $autoPrint = !empty($opts['print']);
+    $showToolbar = !empty($opts['toolbar']);
+    $count = count($rows);
+    header('Content-Type: text/html; charset=utf-8');
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Attendance Sheet — <?= htmlspecialchars($dateLabel) ?></title>
+<style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e7eb; color: #111; font-family: "Times New Roman", Times, serif; }
+    .as-toolbar { position: sticky; top: 0; z-index: 2; display: flex; gap: .6rem; align-items: center; justify-content: flex-end; padding: .7rem 1rem; background: #fff; border-bottom: 1px solid #e5e7eb; }
+    .as-toolbar button, .as-toolbar a { height: 36px; padding: 0 .9rem; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; font: 700 13px/36px Arial, sans-serif; text-decoration: none; color: #111; cursor: pointer; }
+    .as-toolbar .primary { background: #1e3a8a; border-color: #1e3a8a; color: #fff; }
+    .as-hint { margin: 0 auto 0 0; font: 500 12px/1.4 Arial, sans-serif; color: #4b5563; }
+    .as-page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 12mm 12mm 14mm; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
+    .as-head { text-align: center; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 10px; }
+    .as-brand { font-size: 13px; letter-spacing: .08em; font-weight: 700; }
+    .as-title { font-size: 20px; font-weight: 700; margin: 2px 0 6px; letter-spacing: .04em; }
+    .as-meta { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
+    .as-meta td { padding: 2px 0; }
+    .as-meta .k { width: 110px; font-weight: 700; }
+    table.as-grid { width: 100%; border-collapse: collapse; }
+    table.as-grid th, table.as-grid td { border: 1px solid #111; vertical-align: middle; }
+    table.as-grid th { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; padding: 6px 8px; background: #f3f4f6; }
+    table.as-grid td { padding: 6px 8px; font-size: 13px; }
+    td.roll { width: 22%; font-weight: 700; font-family: "Courier New", monospace; font-size: 14px; }
+    td.photo { width: 18%; text-align: center; }
+    td.photo img, .as-nophoto { width: 72px; height: 90px; object-fit: cover; border: 1px solid #111; display: inline-block; background: #f9fafb; }
+    .as-nophoto { line-height: 90px; font: 11px Arial, sans-serif; color: #6b7280; }
+    td.inst { width: 28%; }
+    td.sign { width: 32%; height: 108px; }
+    .as-foot { display: flex; justify-content: space-between; margin-top: 18px; font-size: 13px; }
+    .as-signline { margin-top: 36px; border-top: 1px solid #111; width: 180px; padding-top: 4px; text-align: center; }
+    .as-empty { padding: 28px 8px; text-align: center; font-size: 14px; }
+    @media print {
+        body { background: #fff; }
+        .as-toolbar { display: none !important; }
+        .as-page { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
+        table.as-grid tr { break-inside: avoid; page-break-inside: avoid; }
+        table.as-grid thead { display: table-header-group; }
+    }
+</style>
+</head>
+<body>
+<?php if ($showToolbar): ?>
+<div class="as-toolbar">
+    <p class="as-hint">In the print dialog choose <b>Save as PDF</b> and turn off headers and footers.</p>
+    <button type="button" onclick="window.close()">Close</button>
+    <button type="button" class="primary" onclick="window.print()">Download PDF</button>
+</div>
+<?php endif; ?>
+<div class="as-page">
+    <div class="as-head">
+        <div class="as-brand">GYANAM INDIA EDUCATIONAL SERVICES</div>
+        <div class="as-title">EXAMINATION ATTENDANCE SHEET</div>
+    </div>
+    <table class="as-meta">
+        <tr><td class="k">Date</td><td><?= htmlspecialchars($dateLabel) ?></td></tr>
+        <tr><td class="k">Institute</td><td><?= htmlspecialchars($institute !== '' ? $institute : '—') ?><?= $code !== '' ? ' (' . htmlspecialchars($code) . ')' : '' ?></td></tr>
+        <tr><td class="k">Candidates</td><td><?= (int)$count ?></td></tr>
+    </table>
+    <table class="as-grid">
+        <thead>
+            <tr>
+                <th>Roll No</th>
+                <th>Photo</th>
+                <th>Institute</th>
+                <th>Sign</th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php if ($count === 0): ?>
+            <tr><td colspan="4" class="as-empty">No students are scheduled on this date.</td></tr>
+        <?php else: ?>
+            <?php foreach ($rows as $row): ?>
+            <tr>
+                <td class="roll"><?= htmlspecialchars((string)($row['roll'] ?? '—')) ?></td>
+                <td class="photo">
+                    <?php if (!empty($row['photo'])): ?>
+                        <img src="<?= htmlspecialchars((string)$row['photo']) ?>" alt="">
+                    <?php else: ?>
+                        <span class="as-nophoto">Photo</span>
+                    <?php endif; ?>
+                </td>
+                <td class="inst"><?= htmlspecialchars((string)($row['institute'] ?? $institute)) ?></td>
+                <td class="sign"></td>
+            </tr>
+            <?php endforeach; ?>
+        <?php endif; ?>
+        </tbody>
+    </table>
+    <div class="as-foot">
+        <div>Total present: ________ &nbsp;&nbsp; Total absent: ________</div>
+        <div class="as-signline">Invigilator signature</div>
+    </div>
+</div>
+<?php if ($autoPrint): ?>
+<script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 400); });</script>
+<?php endif; ?>
+</body>
+</html>
+    <?php
+}

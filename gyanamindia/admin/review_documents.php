@@ -262,6 +262,27 @@ if ($embed !== '') {
         exit;
     }
 
+    if ($embed === 'attendance_sheet') {
+        require_once __DIR__ . '/../includes/attendance_sheet.php';
+        $sampleAtcName = trim((string)($atc['name'] ?? ''));
+        if ($sampleAtcName === '') {
+            $sampleAtcName = 'Sample Training Centre';
+        }
+        $sampleCode = trim((string)($atc['atc_code'] ?? '202600002'));
+        $sampleDate = date('d F Y, l');
+        $autoPrint = isset($_GET['print']) && $_GET['print'] === '1';
+        $inIframe = isset($_GET['iframe']) && $_GET['iframe'] === '1';
+        renderAttendanceSheetDocument([
+            'date_label' => $sampleDate,
+            'institute' => $sampleAtcName,
+            'code' => $sampleCode,
+            'rows' => attendanceSheetSampleRows($sampleAtcName),
+            'print' => $autoPrint,
+            'toolbar' => !$inIframe && !$autoPrint,
+        ]);
+        exit;
+    }
+
     http_response_code(404);
     echo 'Preview not available — select a valid ATC and student.';
     exit;
@@ -508,6 +529,16 @@ foreach ($authVariants as $v) {
 }
 
 $docSections['hall_tickets']['items'][] = [
+    'name'        => 'Exam Attendance Sheet',
+    'desc'        => 'One page for a chosen exam day: roll number, photo, institute, and a blank signature column. ATC generates it from students scheduled that day.',
+    'live'        => 'atc/attendance_sheet.php',
+    'preview_url' => 'review_documents.php?embed=attendance_sheet&iframe=1' . ($selAtcId ? '&atc_id=' . $selAtcId : ''),
+    'open_url'    => 'review_documents.php?embed=attendance_sheet&view=1' . ($selAtcId ? '&atc_id=' . $selAtcId : ''),
+    'print_url'   => 'review_documents.php?embed=attendance_sheet&print=1' . ($selAtcId ? '&atc_id=' . $selAtcId : ''),
+    'preview_note'=> 'Sample rows so the table layout is visible. Live sheets use that ATC’s scheduled students.',
+    'code'        => 'atc/attendance_sheet.php',
+];
+$docSections['hall_tickets']['items'][] = [
     'name'        => 'Examination Hall Ticket',
     'desc'        => 'Generated per student on ATC Hall Tickets (requires share paid + photo).',
     'live'        => 'atc/hall_tickets.php',
@@ -716,6 +747,7 @@ $pageTitle = 'Review Documents (TEMP)';
             <h3>Quick answers</h3>
             <div class="rv-card" style="padding:1rem 1.15rem">
                 <p style="font-size:.86rem;line-height:1.6;margin:0;color:#374151">
+                    <b>Attendance sheet?</b> ATC portal → <b>Attendance Sheet</b> (<code>atc/attendance_sheet.php</code>). Pick the exam date, then download the PDF.<br>
                     <b>Hall ticket?</b> Yes — ATC portal → <b>Hall Tickets</b> (<code>atc/hall_tickets.php</code>). Requires HO share paid + student photo.<br>
                     <b>Course completion PDF?</b> IT courses → GIIT template; Abacus/Vedic → Gyanam Abacus. Admin → Course Certificates or ATC → Completion Certificates.<br>
                     <b>Auth PDFs?</b> Admin → Auth Certificates (GIIT IT + Gyanam Abacus by center type).<br>
