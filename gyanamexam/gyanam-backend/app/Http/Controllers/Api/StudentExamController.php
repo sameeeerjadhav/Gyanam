@@ -50,11 +50,8 @@ class StudentExamController extends Controller
                 'exam_configs.proctoring_settings', 'exam_configs.is_global_practice',
                 'exam_configs.question_bank_id',
             ])
-            // Explicit ATC/admin assign always visible; course-matched scheduled exams always visible
+            // Only the demo and main paper for this student's registered course
             ->filter(function ($exam) use ($student) {
-                if (!empty($exam->pivot->assigned_by_user_id)) {
-                    return true;
-                }
                 return ExamCourseAssignmentService::coursesMatch($student->course, $exam->subject);
             })
             ->values();
@@ -180,10 +177,7 @@ class StudentExamController extends Controller
             ->withPivot(['max_attempts', 'assigned_by_user_id'])
             ->first()?->pivot;
 
-        $explicitlyAssigned = !empty($pivot?->assigned_by_user_id);
-
-        // Course gate for auto-attached exams; ATC/admin assign always allowed
-        if (!$explicitlyAssigned && !ExamCourseAssignmentService::coursesMatch($student->course ?? '', $exam->subject)) {
+        if (!ExamCourseAssignmentService::coursesMatch($student->course ?? '', $exam->subject)) {
             abort(403, 'This exam is not available for your registered course.');
         }
 
@@ -654,6 +648,9 @@ class StudentExamController extends Controller
 
         $student = $request->user();
         $exam    = ExamConfig::findOrFail($examId);
+        if (!ExamCourseAssignmentService::coursesMatch($student->course ?? '', $exam->subject)) {
+            abort(403, 'This exam is not available for your registered course.');
+        }
         $clientSubmissionId = $request->input('client_submission_id');
 
         // Idempotent replay

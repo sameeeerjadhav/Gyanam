@@ -62,6 +62,7 @@ class StudentController extends Controller
         $status = $isNew ? 201 : 200;
 
         $examIds = $data['exam_ids'] ?? $data['exams'] ?? [];
+        $examIds = $this->examIdsForStudentCourse($student, $examIds);
         if (!empty($examIds)) {
             $student->exams()->syncWithoutDetaching($examIds);
         }
@@ -103,7 +104,7 @@ class StudentController extends Controller
         // Accept either 'exam_ids' or 'exams' for flexibility
         $examIds = $request->input('exam_ids', $request->input('exams'));
         if ($examIds !== null) {
-            $student->exams()->sync($examIds);
+            $student->exams()->sync($this->examIdsForStudentCourse($student, (array) $examIds));
         }
 
         if (!empty($student->fresh()->course)) {
@@ -111,6 +112,19 @@ class StudentController extends Controller
         }
 
         return response()->json($student->load('exams'));
+    }
+
+    /** Keep only demo/main exams whose subject is this student's registered course. */
+    private function examIdsForStudentCourse(Student $student, array $examIds): array
+    {
+        $kept = [];
+        foreach ($examIds as $examId) {
+            $exam = ExamConfig::find($examId);
+            if ($exam && ExamCourseAssignmentService::coursesMatch($student->course, $exam->subject)) {
+                $kept[] = (int) $examId;
+            }
+        }
+        return $kept;
     }
 
     public function destroy($id)

@@ -127,9 +127,6 @@ class AuthController extends Controller
                 'exam_configs.proctored',
             ])
             ->filter(function ($e) use ($student) {
-                if (!empty($e->pivot->assigned_by_user_id)) {
-                    return true;
-                }
                 return \App\Services\ExamCourseAssignmentService::coursesMatch($student->course, $e->subject);
             })
             ->values();

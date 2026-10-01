@@ -82,6 +82,9 @@ class ExamAssignmentController extends Controller
         }
 
         $exam = ExamConfig::findOrFail($data['exam_id']);
+        if (!\App\Services\ExamCourseAssignmentService::coursesMatch($student->course, $exam->subject)) {
+            abort(422, 'This exam is not for the course this student is registered for.');
+        }
         if (!$user->isAdmin() && !\App\Support\PortalAtcCentres::centreAllowsSubject($user->centre_id, $exam->subject)) {
             abort(422, 'This exam is not for a course active at your centre.');
         }
@@ -131,6 +134,9 @@ class ExamAssignmentController extends Controller
 
             // Scope check per student
             if ($user->centre_id && $student->centre_name !== $user->centre_id) {
+                continue;
+            }
+            if (!\App\Services\ExamCourseAssignmentService::coursesMatch($student->course, $exam->subject)) {
                 continue;
             }
 
