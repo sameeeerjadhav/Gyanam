@@ -194,6 +194,13 @@ try {
                dcr.reviewed_at, dcr.admission_id
         FROM duplicate_cert_requests dcr
         WHERE dcr.atc_id = ? AND dcr.status = 'Approved'
+          AND NOT EXISTS (
+              SELECT 1 FROM dispatch_items di
+              WHERE di.admission_id = dcr.admission_id
+                AND di.item_type = 'Certificate'
+                AND di.status = 'Dispatched'
+                AND di.item_detail LIKE CONCAT('Duplicate #', dcr.id, ':%')
+          )
         ORDER BY dcr.reviewed_at DESC
     ");
     $dcStmt->execute([$atcId]);

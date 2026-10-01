@@ -114,6 +114,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     } else {
                         $pendingCount++;
                     }
+
+                    $dupId = (int)($item['dup_request_id'] ?? 0);
+                    if ($dupId > 0 && $itemStatus === 'Dispatched') {
+                        try {
+                            $pdo->prepare("
+                                UPDATE duplicate_cert_requests
+                                SET status = 'Approved',
+                                    reviewed_at = COALESCE(reviewed_at, NOW()),
+                                    reviewed_by = COALESCE(reviewed_by, ?),
+                                    admin_note = TRIM(CONCAT(COALESCE(admin_note, ''), CASE WHEN admin_note IS NULL OR admin_note = '' THEN '' ELSE '\n' END, ?))
+                                WHERE id = ? AND atc_id = ? AND status IN ('Pending', 'Approved')
+                            ")->execute([
+                                $_SESSION['user_id'] ?? null,
+                                'Dispatched on ' . $dispId,
+                                $dupId,
+                                $atcId,
+                            ]);
+                        } catch (Exception $e) { /* non-fatal */ }
+                    }
                 }
 
                 // Insert into material_dispatch_students ONLY for students with ALL items dispatched
@@ -519,7 +538,7 @@ try {
                 <div style="padding:1rem 1.25rem;border-bottom:1.5px solid var(--border);background:var(--surface-2);display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
                     <div>
                         <div style="font-weight:800;font-size:.95rem;color:var(--text)">ATC Material Requirements</div>
-                        <div style="font-size:.78rem;color:var(--text-3);margin-top:.2rem">Pending kit quantities from With Material students (course mapping + stock).</div>
+                        <div style="font-size:.78rem;color:var(--text-3);margin-top:.2rem">Pending kit quantities from With Material students, plus duplicate certificates the ATC has requested.</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:.55rem;flex-wrap:wrap">
                         <span style="background:#fff7ed;color:#9a3412;padding:.2rem .65rem;border-radius:999px;font-size:.72rem;font-weight:800"><?= count($atcMaterialReport) ?> ATC<?= count($atcMaterialReport)===1?'':'s' ?> pending</span>
@@ -968,10 +987,17 @@ function renderStudentMaterials(totals) {
                 stockLabel = `Low: ${m.stock}`;
             }
             
-            if (!m.inventory_item_id) {
+            if (!m.inventory_item_id && !m.printable) {
                 stockClass = 'out';
                 stockLabel = 'No inventory match';
                 checked = '';
+            }
+            if (m.printable) {
+                checked = 'checked';
+                if (!(m.inventory_item_id && m.stock > 0)) {
+                    stockClass = 'available';
+                    stockLabel = 'Print & dispatch';
+                }
             }
             
             html += `<div class="mat-item">
@@ -1008,7 +1034,7 @@ function selectAvailableOnly() {
         const si = parseInt(cb.dataset.si);
         const mi = parseInt(cb.dataset.mi);
         const m = studentData[si].materials[mi];
-        cb.checked = (m.inventory_item_id && m.stock > 0) || m.status === 'pending_dispatch';
+        cb.checked = m.printable || (m.inventory_item_id && m.stock > 0) || m.status === 'pending_dispatch';
     });
     // Update student checkboxes
     document.querySelectorAll('.stu-cb').forEach(cb => {
@@ -1034,7 +1060,7 @@ function updateSummary() {
         totalSelected++;
         studentsSelected.add(si);
         
-        if (m.inventory_item_id && m.stock > 0) {
+        if (m.printable || (m.inventory_item_id && m.stock > 0)) {
             willDispatch++;
         } else {
             willPending++;
@@ -1074,14 +1100,14 @@ async function createDispatch() {
         const s = studentData[si];
         const m = s.materials[mi];
         
-        if (m.inventory_item_id && m.stock > 0) {
-            // Has stock — will be dispatched
+        if (m.printable || (m.inventory_item_id && m.stock > 0)) {
             dispatchItems.push({
                 admission_id: s.id,
                 type: m.type,
                 detail: m.detail,
-                inventory_item_id: m.inventory_item_id,
-                action: 'dispatch'
+                inventory_item_id: (m.inventory_item_id && m.stock > 0) ? m.inventory_item_id : null,
+                action: 'dispatch',
+                dup_request_id: m.dup_request_id || null
             });
         } else {
             // No stock or no inventory match — SKIP (stays in pending pool)

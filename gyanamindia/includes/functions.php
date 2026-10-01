@@ -5577,6 +5577,105 @@ function collectPendingAtcMaterials(PDO $pdo, int $atcId): array {
         $totals[$tid]['qty']++;
     }
 
+    // Duplicate certificate requests must show as a certificate still to dispatch.
+    $dupRows = [];
+    try {
+        ensureDuplicateCertTable($pdo);
+        $dq = $pdo->prepare("
+            SELECT dcr.id, dcr.admission_id, dcr.student_name, dcr.roll_no, dcr.course,
+                   dcr.cert_type, dcr.reason,
+                   a.registration_id, a.admission_date
+            FROM duplicate_cert_requests dcr
+            LEFT JOIN admissions a ON a.id = dcr.admission_id
+            WHERE dcr.atc_id = ? AND dcr.status IN ('Pending', 'Approved')
+            ORDER BY dcr.requested_at ASC
+        ");
+        $dq->execute([$atcId]);
+        $dupRows = $dq->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Exception $e) {
+        $dupRows = [];
+    }
+
+    if (!empty($dupRows)) {
+        $dupAdmIds = array_values(array_unique(array_map(static fn($r) => (int)$r['admission_id'], $dupRows)));
+        try {
+            $ph = implode(',', array_fill(0, count($dupAdmIds), '?'));
+            $diStmt = $pdo->prepare("
+                SELECT admission_id, item_type, item_detail, status
+                FROM dispatch_items
+                WHERE admission_id IN ($ph)
+                  AND item_type = 'Certificate'
+                  AND item_detail LIKE 'Duplicate #%'
+            ");
+            $diStmt->execute($dupAdmIds);
+            foreach ($diStmt->fetchAll(PDO::FETCH_ASSOC) as $di) {
+                $dispatchedMap[$di['admission_id'] . '_' . $di['item_type'] . '_' . $di['item_detail']] = $di['status'];
+            }
+        } catch (Exception $e) {}
+
+        foreach ($dupRows as $dup) {
+            $reqId = (int)$dup['id'];
+            $detail = 'Duplicate #' . $reqId . ': ' . $dup['cert_type'] . ' — ' . $dup['reason'];
+            $admId = (int)$dup['admission_id'];
+            $certKey = $admId . '_Certificate_' . $detail;
+            if (($dispatchedMap[$certKey] ?? null) === 'Dispatched') {
+                continue;
+            }
+
+            $matched = null;
+            $matchedStock = 0;
+            $needle = stripos((string)$dup['cert_type'], 'Exam') !== false ? 'Exam' : 'Course Completion';
+            foreach ($invItemsLegacy as $inv) {
+                if (($inv['category'] ?? '') === 'Certificates' && stripos((string)$inv['item_name'], $needle) !== false) {
+                    $matched = $inv;
+                    $matchedStock = (int)$inv['current_stock'];
+                    break;
+                }
+            }
+            $useInv = ($matched && $matchedStock > 0) ? $matched : null;
+            $already = $dispatchedMap[$certKey] ?? null;
+            $certMaterial = [
+                'type' => 'Certificate',
+                'detail' => $detail,
+                'inventory_item_id' => $useInv ? (int)$useInv['id'] : null,
+                'inventory_item_name' => $detail,
+                'stock' => $useInv ? $matchedStock : 0,
+                'status' => $already === 'Pending' ? 'pending_dispatch' : 'available',
+                'pending_dispatch_id' => $already === 'Pending',
+                'reason' => 'duplicate_request',
+                'printable' => true,
+                'dup_request_id' => $reqId,
+            ];
+
+            if (isset($resultById[$admId])) {
+                $result[$resultById[$admId]]['materials'][] = $certMaterial;
+            } else {
+                $resultById[$admId] = count($result);
+                $result[] = [
+                    'id' => $admId,
+                    'student_name' => $dup['student_name'],
+                    'roll_no' => $dup['roll_no'],
+                    'registration_id' => $dup['registration_id'] ?? '',
+                    'course' => $dup['course'],
+                    'admission_date' => $dup['admission_date'] ?? '',
+                    'materials' => [$certMaterial],
+                ];
+            }
+
+            $tid = 'dup:' . $reqId;
+            if (!isset($totals[$tid])) {
+                $totals[$tid] = [
+                    'inventory_item_id' => $certMaterial['inventory_item_id'],
+                    'item_name' => $detail,
+                    'category' => 'Certificate',
+                    'qty' => 0,
+                    'stock' => (int)$certMaterial['stock'],
+                ];
+            }
+            $totals[$tid]['qty']++;
+        }
+    }
+
     $totalsList = array_values($totals);
     usort($totalsList, fn($a, $b) => strcasecmp($a['item_name'], $b['item_name']));
 
