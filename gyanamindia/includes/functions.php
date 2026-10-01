@@ -5634,11 +5634,20 @@ function collectPendingAtcMaterials(PDO $pdo, int $atcId): array {
             }
             $useInv = ($matched && $matchedStock > 0) ? $matched : null;
             $already = $dispatchedMap[$certKey] ?? null;
+            $shortType = stripos((string)$dup['cert_type'], 'Exam') !== false ? 'Exam certificate' : 'Completion certificate';
+            $who = trim((string)$dup['student_name']);
+            if (function_exists('mb_strlen') && mb_strlen($who) > 28) {
+                $who = mb_substr($who, 0, 26) . '…';
+            }
+            $display = 'Duplicate certificate · ' . $who;
+            $sub = $shortType . ' · ' . $dup['reason'];
             $certMaterial = [
                 'type' => 'Certificate',
                 'detail' => $detail,
+                'display' => $display,
+                'sub' => $sub,
                 'inventory_item_id' => $useInv ? (int)$useInv['id'] : null,
-                'inventory_item_name' => $detail,
+                'inventory_item_name' => $display,
                 'stock' => $useInv ? $matchedStock : 0,
                 'status' => $already === 'Pending' ? 'pending_dispatch' : 'available',
                 'pending_dispatch_id' => $already === 'Pending',
@@ -5666,8 +5675,9 @@ function collectPendingAtcMaterials(PDO $pdo, int $atcId): array {
             if (!isset($totals[$tid])) {
                 $totals[$tid] = [
                     'inventory_item_id' => $certMaterial['inventory_item_id'],
-                    'item_name' => $detail,
+                    'item_name' => $display . ' · ' . $sub,
                     'category' => 'Certificate',
+                    'kind' => 'duplicate',
                     'qty' => 0,
                     'stock' => (int)$certMaterial['stock'],
                 ];

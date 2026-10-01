@@ -430,8 +430,12 @@ try {
     .items-pill { padding: .2rem .55rem; border-radius: 6px; font-size: .7rem; font-weight: 700; }
     .items-pill.green { background: var(--emerald-soft); color: var(--emerald-dark); }
     .items-pill.amber { background: var(--amber-soft); color: var(--amber-dark); }
-    .req-chip { display:inline-flex; align-items:center; gap:.35rem; padding:.28rem .65rem; border-radius:8px; font-size:.75rem; font-weight:700; border:1px solid var(--border); background:#f8fafc; }
+    .req-chip { display:inline-flex; align-items:center; gap:.35rem; padding:.28rem .65rem; border-radius:8px; font-size:.75rem; font-weight:700; border:1px solid var(--border); background:#f8fafc; color:var(--text); max-width:100%; }
     .req-chip .qty { font-family: var(--mono); font-weight:800; color: var(--brand); }
+    .req-chip.dup { background:#eef2ff; border-color:#c7d2fe; color:#3730a3; }
+    .req-chip.dup .qty { color:#4f46e5; }
+    .mat-item.dup { background:#f5f3ff; border-color:#ddd6fe; }
+    .mat-sub { display:block; margin-top:.12rem; font-size:.72rem; font-weight:600; color:#6d28d9; }
     .atc-req-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
     .atc-totals { margin:.65rem 0 0; display:flex; flex-wrap:wrap; gap:.45rem; padding:.75rem .85rem; border:1.5px dashed var(--border); border-radius:12px; background:var(--surface-2); }
     /* Modal */
@@ -573,7 +577,7 @@ try {
                                 <td>
                                     <div class="items-pills">
                                         <?php foreach ($ar['items'] as $it): ?>
-                                            <span class="req-chip" title="<?= htmlspecialchars($it['category']) ?> · stock <?= (int)$it['stock'] ?>">
+                                            <span class="req-chip<?= (($it['kind'] ?? '') === 'duplicate') ? ' dup' : '' ?>" title="<?= htmlspecialchars($it['category']) ?><?= (int)$it['stock'] > 0 ? ' · stock ' . (int)$it['stock'] : '' ?>">
                                                 <span class="qty"><?= (int)$it['qty'] ?>×</span>
                                                 <?= htmlspecialchars($it['item_name']) ?>
                                             </span>
@@ -900,6 +904,12 @@ function openCreateModalForAtc(atcId) {
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+function escHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+}
+
 function materialIcon(type) {
     if (type === 'T-Shirt') return '👕';
     if (type === 'Certificate') return '📜';
@@ -1000,11 +1010,14 @@ function renderStudentMaterials(totals) {
                 }
             }
             
-            html += `<div class="mat-item">
+            const isDup = m.reason === 'duplicate_request';
+            const title = escHtml(m.display || (m.type + ' — ' + m.detail));
+            const sub = m.sub ? `<span class="mat-sub">${escHtml(m.sub)}</span>` : '';
+            html += `<div class="mat-item${isDup ? ' dup' : ''}">
                 <input type="checkbox" class="mat-cb" data-si="${si}" data-mi="${mi}" ${checked} onchange="updateSummary()">
                 <span class="mat-icon">${icon}</span>
-                <span class="mat-label">${m.type} — ${m.detail}</span>
-                <span class="mat-stock ${stockClass}">${stockLabel}</span>
+                <span class="mat-label">${title}${sub}</span>
+                <span class="mat-stock ${stockClass}">${escHtml(stockLabel)}</span>
             </div>`;
         });
         
