@@ -30,7 +30,7 @@ $csrfToken = generateCSRFToken();
     <title>Login — Gyanam India</title>
     <!-- deploy-probe: 2026-09-20-v3.0.1 -->
     <link rel="stylesheet" href="assets/css/global.css">
-    <link rel="stylesheet" href="assets/css/login.css">
+    <link rel="stylesheet" href="assets/css/login.css?v=<?= (int)@filemtime(__DIR__ . '/assets/css/login.css') ?>">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
 </head>
 <body>
@@ -39,10 +39,13 @@ $csrfToken = generateCSRFToken();
 
     <!-- ── Left Panel: Brand Showcase ── -->
     <div class="login-left">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-        <div class="grid-bg"></div>
+        <div class="edu-carousel" aria-hidden="true">
+            <div class="edu-slide is-on"><img src="assets/login/edu-abacus.jpg" alt=""></div>
+            <div class="edu-slide"><img src="assets/login/edu-vedic.jpg" alt=""></div>
+            <div class="edu-slide"><img src="assets/login/edu-reading.jpg" alt=""></div>
+            <div class="edu-slide"><img src="assets/login/edu-computers.jpg" alt=""></div>
+        </div>
+        <div class="edu-shade"></div>
 
         <div class="brand-logo">
             <img src="assets/logo.png" alt="Gyanam India">
@@ -71,6 +74,16 @@ $csrfToken = generateCSRFToken();
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                 </div>
                 Real-time student & fee tracking
+            </div>
+        </div>
+
+        <div class="edu-foot">
+            <div class="edu-caption" id="eduCaption">Abacus</div>
+            <div class="edu-dots" role="tablist" aria-label="Education programs">
+                <button type="button" class="edu-dot is-on" data-label="Abacus" aria-label="Abacus"></button>
+                <button type="button" class="edu-dot" data-label="Vedic Maths" aria-label="Vedic Maths"></button>
+                <button type="button" class="edu-dot" data-label="Phonics" aria-label="Phonics"></button>
+                <button type="button" class="edu-dot" data-label="IT Learning" aria-label="IT Learning"></button>
             </div>
         </div>
     </div>
@@ -196,6 +209,6 @@ $csrfToken = generateCSRFToken();
 
 </div>
 
-<script src="assets/js/login.js"></script>
+<script src="assets/js/login.js?v=<?= (int)@filemtime(__DIR__ . '/assets/js/login.js') ?>"></script>
 </body>
 </html>

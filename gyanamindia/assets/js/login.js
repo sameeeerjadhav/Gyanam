@@ -114,6 +114,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
     }
 
+    /* ---- Education carousel on the left panel ---- */
+    const slides = document.querySelectorAll('.edu-slide');
+    const dots = document.querySelectorAll('.edu-dot');
+    const caption = document.getElementById('eduCaption');
+    if (slides.length) {
+        let current = 0;
+        let timer = null;
+        const show = (index) => {
+            current = (index + slides.length) % slides.length;
+            slides.forEach((slide, i) => slide.classList.toggle('is-on', i === current));
+            dots.forEach((dot, i) => {
+                const on = i === current;
+                dot.classList.toggle('is-on', on);
+                if (on) dot.setAttribute('aria-current', 'true');
+                else dot.removeAttribute('aria-current');
+            });
+            if (caption && dots[current]) caption.textContent = dots[current].dataset.label || '';
+        };
+        const start = () => {
+            clearInterval(timer);
+            timer = setInterval(() => show(current + 1), 5500);
+        };
+        dots.forEach((dot, i) => {
+            dot.addEventListener('click', () => {
+                show(i);
+                start();
+            });
+        });
+        start();
+    }
+
     /* ---- Input focus effects ---- */
     document.querySelectorAll('.form-group input').forEach(input => {
         input.addEventListener('focus', () => {
