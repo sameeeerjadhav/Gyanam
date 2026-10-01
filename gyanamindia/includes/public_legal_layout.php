@@ -25,14 +25,14 @@ if ($base === '' || $base === '.') {
 }
 
 $nav = [
-    ['href' => 'about-us.php', 'label' => 'About Us'],
-    ['href' => 'pricing.php', 'label' => 'Pricing'],
-    ['href' => 'privacy-policy.php', 'label' => 'Privacy Policy'],
-    ['href' => 'terms-and-conditions.php', 'label' => 'Terms'],
-    ['href' => 'refund-policy.php', 'label' => 'Refunds'],
-    ['href' => 'contact-us.php', 'label' => 'Contact'],
+    ['href' => 'about-us', 'label' => 'About Us'],
+    ['href' => 'pricing', 'label' => 'Pricing'],
+    ['href' => 'privacy-policy', 'label' => 'Privacy Policy'],
+    ['href' => 'terms-and-conditions', 'label' => 'Terms'],
+    ['href' => 'refund-policy', 'label' => 'Refunds'],
+    ['href' => 'contact-us', 'label' => 'Contact'],
 ];
-$current = basename($_SERVER['SCRIPT_NAME'] ?? '');
+$current = basename($_SERVER['SCRIPT_NAME'] ?? '', '.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -170,7 +170,7 @@ $current = basename($_SERVER['SCRIPT_NAME'] ?? '');
 <body>
     <header class="top">
         <div class="top-inner">
-            <a class="brand" href="<?= htmlspecialchars(($base ? $base . '/' : '') . 'index.php') ?>">
+            <a class="brand" href="<?= htmlspecialchars($base === '' ? '/' : $base . '/') ?>">
                 <img src="<?= htmlspecialchars(($base ? $base . '/' : '') . 'assets/logo.png') ?>" alt="Gyanam India">
                 <div>
                     <strong>Gyanam India Educational Services</strong>
@@ -192,7 +192,7 @@ $current = basename($_SERVER['SCRIPT_NAME'] ?? '');
             <h1><?= htmlspecialchars($pageHeading) ?></h1>
             <p class="updated">Last updated: <?= htmlspecialchars($pageUpdated) ?></p>
             <?= $pageBody ?>
-            <a class="cta" href="index.php">← Back to Login Portal</a>
+            <a class="cta" href="<?= htmlspecialchars($base === '' ? '/' : $base . '/') ?>">← Back to Login Portal</a>
         </article>
     </main>
 

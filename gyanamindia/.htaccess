@@ -6,8 +6,8 @@ RewriteEngine On
 # RewriteCond %{HTTPS} off
 # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-# Prevent directory listing
-Options -Indexes
+# Prevent directory listing. MultiViews would fight the extensionless rewrite below.
+Options -Indexes -MultiViews
 
 # Set default charset
 AddDefaultCharset UTF-8
@@ -42,6 +42,27 @@ AddDefaultCharset UTF-8
 # Protect cron directory from web access
 <IfModule mod_rewrite.c>
     RewriteRule ^cron/ - [F,L]
+</IfModule>
+
+# Extensionless pages: /about-us serves about-us.php.
+# A browser GET of about-us.php is sent to /about-us. POST stays on the .php
+# file so logins, form submits, and the Razorpay webhook are unchanged.
+<IfModule mod_rewrite.c>
+    RewriteCond %{REQUEST_METHOD} =GET
+    RewriteCond %{ENV:REDIRECT_STATUS} ^$
+    RewriteCond %{THE_REQUEST} \s/+(.*/)?index\.php[\s?] [NC]
+    RewriteRule ^(.*/)?index\.php$ /$1 [R=301,L]
+
+    RewriteCond %{REQUEST_METHOD} =GET
+    RewriteCond %{ENV:REDIRECT_STATUS} ^$
+    RewriteCond %{REQUEST_URI} !^/(assets|uploads|config|includes|cron|webhooks)/ [NC]
+    RewriteCond %{THE_REQUEST} \s/+(.+?)\.php[\s?] [NC]
+    RewriteRule ^ /%1 [R=301,L]
+
+    RewriteCond %{REQUEST_URI} !^/(assets|uploads|config|includes|cron|webhooks)/ [NC]
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{DOCUMENT_ROOT}/$1.php -f
+    RewriteRule ^(.+?)/?$ $1.php [L]
 </IfModule>
 
 # Cache static assets
