@@ -100,6 +100,92 @@ try {
 } catch (Exception $e) {
 }
 
+function examScheduleStatusIsDone(string $status): bool
+{
+    return in_array($status, ['Passed', 'Failed', 'Absent', 'Appeared'], true);
+}
+
+/** Admission ids whose exam is finished locally or on the exam portal. */
+function examScheduleDoneIds(PDO $pdo, int $atcId, array $students): array
+{
+    $done = [];
+    $now = time();
+    foreach ($students as $s) {
+        if (examScheduleStatusIsDone((string)($s['exam_status'] ?? ''))) {
+            $done[(int)$s['id']] = true;
+            continue;
+        }
+        $examDate = trim((string)($s['exam_date'] ?? ''));
+        if ($examDate === '') {
+            continue;
+        }
+        $examTime = trim((string)($s['exam_time'] ?? ''));
+        if ($examTime === '') {
+            $examTime = '23:59:59';
+        }
+        $when = strtotime($examDate . ' ' . $examTime);
+        if ($when !== false && $when < $now) {
+            $done[(int)$s['id']] = true;
+        }
+    }
+    if (!function_exists('examIntegrationReady') || !examIntegrationReady() || !function_exists('fetchAllExamResultsComplete')) {
+        return $done;
+    }
+    $byReg = [];
+    foreach ($students as $s) {
+        $reg = strtoupper(trim((string)($s['registration_id'] ?? '')));
+        if ($reg === '') {
+            $reg = strtoupper(trim((string)($s['roll_no'] ?? '')));
+        }
+        if ($reg !== '') {
+            $byReg[$reg] = (int)$s['id'];
+        }
+    }
+    if ($byReg === []) {
+        return $done;
+    }
+    try {
+        $atc = $pdo->prepare('SELECT atc_code, name FROM atc_centers WHERE id = ? LIMIT 1');
+        $atc->execute([$atcId]);
+        $centre = $atc->fetch(PDO::FETCH_ASSOC) ?: [];
+        $atcCode = trim((string)($centre['atc_code'] ?? ''));
+        $atcName = trim((string)($centre['name'] ?? ''));
+        $res = fetchAllExamResultsComplete();
+        $subs = (!empty($res['success']) && !empty($res['data']['submissions']) && is_array($res['data']['submissions']))
+            ? $res['data']['submissions'] : [];
+        foreach ($subs as $sub) {
+            if (!is_array($sub) || (function_exists('examSubmissionIsDemo') && examSubmissionIsDemo($sub))) {
+                continue;
+            }
+            $centreName = trim((string)($sub['centre_name'] ?? ''));
+            if ($centreName !== '' && strcasecmp($centreName, $atcCode) !== 0 && strcasecmp($centreName, $atcName) !== 0) {
+                continue;
+            }
+            $ident = strtoupper(trim((string)($sub['student']['identifier'] ?? ($sub['identifier'] ?? ''))));
+            if ($ident !== '' && isset($byReg[$ident])) {
+                $done[$byReg[$ident]] = true;
+            }
+        }
+    } catch (Throwable $e) {
+    }
+    return $done;
+}
+
+function examScheduleDoneIdSet(PDO $pdo, int $atcId, array $admIds): array
+{
+    $admIds = array_values(array_filter(array_map('intval', $admIds)));
+    if ($admIds === []) {
+        return [];
+    }
+    $ph = implode(',', array_fill(0, count($admIds), '?'));
+    $st = $pdo->prepare("SELECT a.id, a.registration_id, a.roll_no, es.exam_date, es.exam_time, COALESCE(es.exam_status, '') AS exam_status
+                         FROM admissions a
+                         LEFT JOIN exam_schedules es ON es.admission_id = a.id AND es.atc_id = a.atc_id
+                         WHERE a.atc_id = ? AND a.id IN ($ph)");
+    $st->execute(array_merge([$atcId], $admIds));
+    return examScheduleDoneIds($pdo, $atcId, $st->fetchAll(PDO::FETCH_ASSOC) ?: []);
+}
+
 // ── AJAX Handlers ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
@@ -125,6 +211,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $admRow = $chk->fetch(PDO::FETCH_ASSOC);
                 if (!$admRow) {
                     echo json_encode(['success' => false, 'message' => 'Student not found.']);
+                    exit;
+                }
+                if (!empty(examScheduleDoneIdSet($pdo, (int)$atcId, [$admId]))) {
+                    echo json_encode(['success' => false, 'message' => 'Exam is done. This schedule cannot be edited.']);
                     exit;
                 }
                 // Upsert
@@ -177,6 +267,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $admId = intval($_POST['admission_id'] ?? 0);
                 $attempts = max(1, min(10, intval($_POST['allowed_attempts'] ?? 1)));
                 if (!$admId) { echo json_encode(['success' => false, 'message' => 'Missing student.']); exit; }
+                if (!empty(examScheduleDoneIdSet($pdo, (int)$atcId, [$admId]))) {
+                    echo json_encode(['success' => false, 'message' => 'Exam is done. This schedule cannot be edited.']);
+                    exit;
+                }
                 $ex = $pdo->prepare("SELECT id FROM exam_schedules WHERE admission_id = ? AND atc_id = ?");
                 $ex->execute([$admId, $atcId]);
                 if ($row = $ex->fetch()) {
@@ -200,6 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     echo json_encode(['success' => false, 'message' => 'Select students and date.']);
                     exit;
                 }
+                $doneIds = examScheduleDoneIdSet($pdo, (int)$atcId, $ids);
                 $count = 0;
                 $syncIds = []; // collect registration IDs for portal sync
                 $atcCodeStmt = $pdo->prepare("SELECT atc_code FROM atc_centers WHERE id = ?");
@@ -209,6 +304,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     : ((stripos($slot, 'evening') !== false || stripos($slot, 'slot3') !== false) ? 'SLOT3' : 'SLOT1');
                 foreach ($ids as $admId) {
                     $admId = intval($admId);
+                    if (!empty($doneIds[$admId])) {
+                        continue;
+                    }
                     $chk = $pdo->prepare("SELECT id, registration_id, first_name, middle_name, last_name, course, photo FROM admissions WHERE id = ? AND atc_id = ?");
                     $chk->execute([$admId, $atcId]);
                     $admRow = $chk->fetch(PDO::FETCH_ASSOC);
@@ -266,7 +364,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         }
                     } catch (Exception $e) { /* silently fail sync */ }
                 }
-                echo json_encode(['success' => true, 'message' => "Scheduled $count student(s)."]);
+                $skipped = count($doneIds);
+                $message = "Scheduled $count student(s).";
+                if ($skipped > 0) {
+                    $message .= " $skipped already finished and were left unchanged.";
+                }
+                echo json_encode(['success' => true, 'message' => $message]);
                 exit;
 
             case 'bulk_slot':
@@ -276,9 +379,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     echo json_encode(['success' => false, 'message' => 'Select students and slot.']);
                     exit;
                 }
+                $doneIds = examScheduleDoneIdSet($pdo, (int)$atcId, $ids);
                 $count = 0;
                 foreach ($ids as $admId) {
                     $admId = intval($admId);
+                    if (!empty($doneIds[$admId])) {
+                        continue;
+                    }
                     $pdo->prepare("UPDATE exam_schedules SET exam_slot = ? WHERE admission_id = ? AND atc_id = ?")
                         ->execute([$slot, $admId, $atcId]);
                     $count += $pdo->prepare("SELECT ROW_COUNT()")->execute() ? 1 : 0;
@@ -293,9 +400,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     echo json_encode(['success' => false, 'message' => 'Select students and time.']);
                     exit;
                 }
+                $doneIds = examScheduleDoneIdSet($pdo, (int)$atcId, $ids);
                 $count = 0;
                 foreach ($ids as $admId) {
                     $admId = intval($admId);
+                    if (!empty($doneIds[$admId])) {
+                        continue;
+                    }
                     $pdo->prepare("UPDATE exam_schedules SET exam_time = ? WHERE admission_id = ? AND atc_id = ?")
                         ->execute([$time, $admId, $atcId]);
                     $count++;
@@ -305,6 +416,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             case 'remove_schedule':
                 $admId = intval($_POST['admission_id'] ?? 0);
+                if (!empty(examScheduleDoneIdSet($pdo, (int)$atcId, [$admId]))) {
+                    echo json_encode(['success' => false, 'message' => 'Exam is done. This schedule cannot be edited.']);
+                    exit;
+                }
                 $pdo->prepare("DELETE FROM exam_schedules WHERE admission_id = ? AND atc_id = ?")->execute([$admId, $atcId]);
                 echo json_encode(['success' => true, 'message' => 'Schedule removed.']);
                 exit;
@@ -372,6 +487,7 @@ $kpiScheduled = count(array_filter($eligibleStudents, fn($s) => !empty($s['exam_
 $kpiUnscheduled = $kpiTotal - $kpiScheduled;
 $kpiPassed = count(array_filter($eligibleStudents, fn($s) => ($s['exam_status'] ?? '') === 'Passed'));
 $kpiFailed = count(array_filter($eligibleStudents, fn($s) => ($s['exam_status'] ?? '') === 'Failed'));
+$examDoneIds = examScheduleDoneIds($pdo, (int)$atcId, $eligibleStudents);
 
 // Apply status filter in PHP (since LEFT JOIN makes null = unscheduled)
 $allStudents = $eligibleStudents;
@@ -799,6 +915,19 @@ try {
         .es-badge-failed { background: var(--es-red-lt); color: #991b1b; border: 1px solid #fecaca }
         .es-badge-absent { background: var(--es-amber-lt); color: #92400e; border: 1px solid #fde68a }
         .es-badge-unscheduled { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb }
+        .es-exam-done {
+            display: inline-flex;
+            align-items: center;
+            padding: .38rem .75rem;
+            border-radius: 999px;
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+            font-size: .68rem;
+            font-weight: 800;
+            letter-spacing: .04em;
+            white-space: nowrap;
+        }
 
         /* Action buttons */
         .es-btn {
@@ -1373,6 +1502,7 @@ try {
                                         $initial = strtoupper(substr($stu['first_name'], 0, 1));
                                         $isScheduled = !empty($stu['exam_date']);
                                         $status = $stu['exam_status'] ?? '';
+                                        $examDone = !empty($examDoneIds[(int)$stu['id']]);
 
                                         if (!$status && !$isScheduled)
                                             $statusClass = 'unscheduled';
@@ -1390,8 +1520,8 @@ try {
                                         <tr data-id="<?= $stu['id'] ?>"
                                             data-course="<?= htmlspecialchars(strtolower($stu['course'] ?? '')) ?>"
                                             data-search="<?= htmlspecialchars(strtolower($fullName . ' ' . $stu['roll_no'] . ' ' . $stu['registration_id'])) ?>">
-                                            <td><input type="checkbox" class="es-cb stu-cb" value="<?= $stu['id'] ?>"
-                                                    onchange="updateBulkBar()"></td>
+                                            <td><?php if (!$examDone): ?><input type="checkbox" class="es-cb stu-cb" value="<?= $stu['id'] ?>"
+                                                    onchange="updateBulkBar()"><?php endif; ?></td>
                                             <td style="color:var(--text-secondary);font-size:.78rem"><?= $i + 1 ?></td>
                                             <td>
                                                 <div class="es-stu-cell">
@@ -1442,11 +1572,13 @@ try {
                                                         style="display:inline-flex;align-items:center;gap:.25rem;padding:.25rem .7rem;border-radius:999px;font-size:.72rem;font-weight:800;background:<?= $sb ?>;color:<?= $sc ?>;border:1px solid <?= $sbr ?>"><?= htmlspecialchars($slotVal) ?></span><?php else: ?><span
                                                         style="color:#94a3b8">—</span><?php endif; ?></td>
                                             <td style="text-align:center">
-                                                <?php if ($isScheduled): ?>
+                                                <?php if ($isScheduled && !$examDone): ?>
                                                 <div style="display:inline-flex;align-items:center;gap:.3rem">
                                                     <input type="number" min="1" max="10" value="<?= intval($stu['allowed_attempts']) ?>" style="width:52px;padding:.25rem .4rem;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.8rem;font-weight:700;text-align:center;font-family:inherit;outline:none;transition:border-color .2s" onfocus="this.style.borderColor='#4f46e5'" onblur="this.style.borderColor='#e2e8f0'" onchange="updateAttempts(<?= $stu['id'] ?>, this.value, this)" title="Allowed Attempts">
                                                     <span style="font-size:.68rem;color:#94a3b8">att.</span>
                                                 </div>
+                                                <?php elseif ($isScheduled): ?>
+                                                    <span style="font-weight:700"><?= intval($stu['allowed_attempts']) ?></span>
                                                 <?php else: ?><span style="color:#94a3b8">—</span><?php endif; ?>
                                             </td>
                                             <td>
@@ -1455,6 +1587,9 @@ try {
                                                 </span>
                                             </td>
                                             <td>
+                                                <?php if ($examDone): ?>
+                                                    <span class="es-exam-done">EXAM DONE</span>
+                                                <?php else: ?>
                                                 <div style="display:flex;gap:.3rem">
                                                     <button class="es-btn"
                                                         onclick="openScheduleModal(<?= $stu['id'] ?>, '<?= htmlspecialchars(addslashes($fullName)) ?>', '<?= htmlspecialchars(addslashes($stu['exam_date'] ?? '')) ?>', '<?= htmlspecialchars(addslashes($stu['exam_time'] ?? '10:00')) ?>', '<?= htmlspecialchars(addslashes($stu['exam_slot'] ?? 'Morning')) ?>', '<?= htmlspecialchars(addslashes($stu['exam_hall'] ?? '')) ?>', <?= intval($stu['exam_portal_id'] ?? 0) ?>, <?= intval($stu['allowed_attempts'] ?? 1) ?>)"
@@ -1488,6 +1623,7 @@ try {
                                                         <?php endif; ?>
                                                     <?php endif; ?>
                                                 </div>
+                                                <?php endif; ?>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
