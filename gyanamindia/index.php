@@ -93,11 +93,12 @@ $csrfToken = generateCSRFToken();
         <div class="form-container">
 
             <div class="form-header">
-                <h2>Welcome Back 👋</h2>
-                <p>Sign in to your account to continue</p>
+                <p class="form-kicker">Secure portal</p>
+                <h2>Sign in</h2>
+                <p>Choose your account type, then enter your details.</p>
             </div>
 
-            <!-- Role Selector -->
+            <p class="role-label">Account type</p>
             <div class="role-selector">
                 <button type="button" class="role-btn" data-role="Admin">
                     <span class="role-icon">
@@ -155,29 +156,35 @@ $csrfToken = generateCSRFToken();
                 <?php endif; ?>
 
                 <div class="form-group">
-                    <input type="text" id="username" name="username" placeholder="Username" required autocomplete="username">
-                    <span class="input-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                            <circle cx="12" cy="7" r="4"/>
-                        </svg>
-                    </span>
+                    <label for="username">Username</label>
+                    <div class="field">
+                        <input type="text" id="username" name="username" placeholder="Enter username" required autocomplete="username">
+                        <span class="input-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                        </span>
+                    </div>
                 </div>
 
                 <div class="form-group">
-                    <input type="password" id="password" name="password" placeholder="Password" required autocomplete="current-password">
-                    <span class="input-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                        </svg>
-                    </span>
-                    <button type="button" class="toggle-password" id="togglePassword" aria-label="Toggle password visibility">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                            <circle cx="12" cy="12" r="3"/>
-                        </svg>
-                    </button>
+                    <label for="password">Password</label>
+                    <div class="field">
+                        <input type="password" id="password" name="password" placeholder="Enter password" required autocomplete="current-password">
+                        <span class="input-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                        </span>
+                        <button type="button" class="toggle-password" id="togglePassword" aria-label="Toggle password visibility">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="form-extras">
@@ -194,15 +201,15 @@ $csrfToken = generateCSRFToken();
             </form>
 
             <div class="login-footer">
-                &copy; <?= date('Y') ?> Gyanam India Educational Services
-                <div style="margin-top:.55rem;display:flex;flex-wrap:wrap;gap:.35rem .75rem;justify-content:center;font-size:.72rem;line-height:1.4">
-                    <a href="about-us" style="color:inherit;opacity:.85">About</a>
-                    <a href="pricing" style="color:inherit;opacity:.85">Pricing</a>
-                    <a href="privacy-policy" style="color:inherit;opacity:.85">Privacy</a>
-                    <a href="terms-and-conditions" style="color:inherit;opacity:.85">Terms</a>
-                    <a href="refund-policy" style="color:inherit;opacity:.85">Refunds</a>
-                    <a href="contact-us" style="color:inherit;opacity:.85">Contact</a>
-                </div>
+                <p>&copy; <?= date('Y') ?> Gyanam India Educational Services</p>
+                <nav class="login-legal" aria-label="Policies">
+                    <a href="about-us">About</a>
+                    <a href="pricing">Pricing</a>
+                    <a href="privacy-policy">Privacy</a>
+                    <a href="terms-and-conditions">Terms</a>
+                    <a href="refund-policy">Refunds</a>
+                    <a href="contact-us">Contact</a>
+                </nav>
             </div>
         </div>
     </div>
