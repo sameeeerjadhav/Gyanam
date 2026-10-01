@@ -1929,6 +1929,10 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
                             cornerRadius: 10,
                             padding: 10,
                             callbacks: {
+                                title: (items) => {
+                                    const i = items[0] ? items[0].dataIndex : 0;
+                                    return String((CHART.barFullLabels[i] || '')).trim();
+                                },
                                 label: (c) => ' ₹' + Number(c.parsed.y || 0).toLocaleString('en-IN') + ' · click to open',
                             },
                         },
@@ -1943,7 +1947,30 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
                             grid: { color: '#f1f5f9', drawBorder: false },
                         },
                         x: {
-                            ticks: { font: { size: 10, weight: 700 }, maxRotation: 35, minRotation: 0 },
+                            ticks: {
+                                font: { size: 11, weight: 700 },
+                                maxRotation: 0,
+                                minRotation: 0,
+                                autoSkip: false,
+                                callback: function (value) {
+                                    const label = String(this.getLabelForValue(value) || '').trim();
+                                    const max = 22;
+                                    const words = label.split(/\s+/);
+                                    const lines = [];
+                                    let line = '';
+                                    words.forEach((word) => {
+                                        const next = line ? line + ' ' + word : word;
+                                        if (next.length > max && line) {
+                                            lines.push(line);
+                                            line = word;
+                                        } else {
+                                            line = next;
+                                        }
+                                    });
+                                    if (line) lines.push(line);
+                                    return lines.length ? lines : label;
+                                },
+                            },
                             grid: { display: false },
                         },
                     },

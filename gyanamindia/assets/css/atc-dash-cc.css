@@ -346,6 +346,7 @@
   flex: 1;
 }
 .cc-analytics-canvas.tall { height: 280px; }
+.cc-analytics-canvas.fees { height: 340px; }
 .cc-analytics-empty {
   display: flex;
   flex-direction: column;

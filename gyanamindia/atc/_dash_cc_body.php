@@ -355,8 +355,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     $pieMode = 'course';
                 }
                 $barLabels = array_map(static function ($r) {
-                    $n = (string)($r['label'] ?? 'Course');
-                    return mb_strlen($n) > 18 ? (mb_substr($n, 0, 16) . '…') : $n;
+                    return (string)($r['label'] ?? 'Course');
                 }, $chartByCourse);
                 $barData = array_map(static function ($r) {
                     return round((float)($r['collected'] ?? 0), 0);
@@ -385,7 +384,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                         <h3>Fees by Course</h3>
                         <div class="cc-analytics-sub">Collected fees (active students) by course</div>
                         <?php if (!empty($barData) && array_sum($barData) > 0): ?>
-                        <div class="cc-analytics-canvas"><canvas id="atcBarChart"></canvas></div>
+                        <div class="cc-analytics-canvas fees"><canvas id="atcBarChart"></canvas></div>
                         <?php else: ?>
                         <div class="cc-analytics-empty">
                             <strong>No fee collections yet</strong>
