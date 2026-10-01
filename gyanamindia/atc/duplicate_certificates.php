@@ -139,34 +139,48 @@ try {
 .dc-title { font-size:1.2rem;font-weight:800;color:var(--text-primary); }
 .dc-subtitle { font-size:.82rem;color:var(--text-secondary);margin-top:.15rem; }
 
+.dc-note { display:flex; align-items:flex-start; gap:.75rem; background:#eef2ff; border:1px solid #c7d2fe; color:#312e81; border-radius:14px; padding:.85rem 1rem; margin-bottom:1rem; font-size:.84rem; font-weight:600; line-height:1.45; }
+.dc-note strong { font-weight:800; }
+
 /* ── Stats ── */
-.dc-stats { display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1rem;margin-bottom:1.5rem; }
-.dc-stat { background:#fff;border:1.5px solid var(--border-color);border-radius:14px;padding:1rem 1.25rem;display:flex;align-items:center;gap:.8rem; }
-.dc-stat-icon { width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+.dc-stats { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem;margin-bottom:1rem; }
+.dc-stat { background:#fff;border:1px solid #e8eef5;border-radius:16px;padding:1rem 1.05rem 1rem 1.15rem;display:flex;align-items:center;gap:.85rem;box-shadow:0 8px 20px rgba(15,23,42,.04);position:relative;overflow:hidden; }
+.dc-stat::before { content:''; position:absolute; left:0; top:0; bottom:0; width:5px; }
+.dc-stat.total::before { background:#4f46e5; }
+.dc-stat.wait::before { background:#f59e0b; }
+.dc-stat.ok::before { background:#10b981; }
+.dc-stat.no::before { background:#ef4444; }
+.dc-stat-icon { width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
 .dc-stat-icon svg { width:18px;height:18px; }
-.dc-stat-icon.violet { background:var(--dc-violet-lt);color:var(--dc-violet); }
-.dc-stat-icon.amber { background:var(--dc-amber-lt);color:var(--dc-amber); }
-.dc-stat-icon.green { background:var(--dc-green-lt);color:var(--dc-green); }
-.dc-stat-icon.red { background:var(--dc-red-lt);color:var(--dc-red); }
-.dc-stat-val { font-size:1.5rem;font-weight:900;color:var(--text-primary);line-height:1; }
-.dc-stat-lbl { font-size:.72rem;color:var(--text-secondary);font-weight:600;margin-top:.2rem; }
+.dc-stat-icon.violet { background:#eef2ff;color:#4f46e5; }
+.dc-stat-icon.amber { background:#fffbeb;color:#d97706; }
+.dc-stat-icon.green { background:#ecfdf5;color:#059669; }
+.dc-stat-icon.red { background:#fef2f2;color:#dc2626; }
+.dc-stat-val { font-size:1.65rem;font-weight:800;color:#0f172a;line-height:1;letter-spacing:-.03em; }
+.dc-stat-lbl { font-size:.72rem;color:#64748b;font-weight:700;margin-top:.25rem;text-transform:uppercase;letter-spacing:.04em; }
 
 /* ── Tabs ── */
-.dc-tabs { display:flex;gap:.5rem;margin-bottom:1.25rem;border-bottom:2px solid var(--border-color);padding-bottom:0; }
-.dc-tab { padding:.65rem 1.2rem;font-size:.85rem;font-weight:700;color:var(--text-secondary);border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;border-radius:6px 6px 0 0;transition:all .18s;font-family:inherit; }
-.dc-tab:hover { color:var(--dc-violet);background:var(--dc-violet-lt); }
-.dc-tab.active { color:var(--dc-violet);border-bottom-color:var(--dc-violet); }
+.dc-switch { display:inline-flex; gap:.25rem; padding:.3rem; background:#fff; border:1px solid #e8eef5; border-radius:14px; margin-bottom:1rem; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+.dc-tab { padding:.55rem 1rem;font-size:.84rem;font-weight:800;color:#64748b;border:none;background:transparent;cursor:pointer;border-radius:10px;font-family:inherit;display:inline-flex;align-items:center;gap:.4rem; }
+.dc-tab:hover { color:#312e81; background:#f8fafc; }
+.dc-tab.active { color:#fff; background:#4f46e5; box-shadow:0 6px 14px rgba(79,70,229,.28); }
+.dc-tab .dc-pill { background:#f59e0b; color:#fff; border-radius:999px; font-size:.65rem; font-weight:800; padding:.08rem .42rem; }
+.dc-tab.active .dc-pill { background:#fff; color:#4f46e5; }
 
 /* ── Search bar ── */
-.dc-search { display:flex;gap:.6rem;align-items:center;margin-bottom:1rem; }
-.dc-search input { flex:1;padding:.65rem 1rem;border:1.5px solid var(--border-color);border-radius:10px;font-size:.9rem;font-family:inherit;outline:none;transition:border-color .18s; }
-.dc-search input:focus { border-color:var(--dc-violet); }
-.dc-search-btn { padding:.65rem 1.1rem;background:var(--dc-violet);color:#fff;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:.4rem; }
+.dc-search { display:flex;gap:.55rem;align-items:center;margin-bottom:1rem; }
+.dc-search input { flex:1;padding:.75rem 1rem;border:1px solid #e2e8f0;border-radius:12px;font-size:.9rem;font-family:inherit;outline:none;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.03); }
+.dc-search input:focus { border-color:#818cf8; box-shadow:0 0 0 4px rgba(99,102,241,.12); }
+.dc-search-btn { padding:.75rem 1.15rem;background:#4f46e5;color:#fff;border:none;border-radius:12px;font-size:.85rem;font-weight:800;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:.4rem; }
 .dc-search-btn svg { width:16px;height:16px; }
+@media (max-width: 800px) { .dc-stats { grid-template-columns:1fr 1fr; } }
 
 /* ── Student table ── */
-.dc-card { background:#fff;border:1.5px solid var(--border-color);border-radius:14px;overflow:hidden;margin-bottom:1.5rem; }
-.dc-card-head { display:flex;align-items:center;gap:.75rem;padding:.9rem 1.25rem;background:#fafbfc;border-bottom:1px solid var(--border-color); }
+.dc-card { background:#fff;border:1px solid #e8eef5;border-radius:16px;overflow:hidden;margin-bottom:1.5rem;box-shadow:0 10px 24px rgba(15,23,42,.04); }
+.dc-card-head { display:flex;align-items:center;gap:.75rem;padding:1rem 1.15rem;background:linear-gradient(180deg,#f8fafc,#fff);border-bottom:1px solid #eef2f7; }
+.stu-person { display:flex; align-items:center; gap:.7rem; min-width:0; }
+.stu-av { width:36px; height:36px; border-radius:11px; display:grid; place-items:center; font-size:.82rem; font-weight:800; color:#3730a3; background:#eef2ff; flex-shrink:0; }
+.course-cell { font-size:.8rem; color:#334155; max-width:220px; line-height:1.35; }
 .dc-card-head-icon { width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--dc-violet),var(--dc-violet-dk));display:flex;align-items:center;justify-content:center;flex-shrink:0; }
 .dc-card-head-icon svg { width:16px;height:16px;stroke:#fff; }
 .dc-card-head-title { font-weight:800;font-size:.92rem;color:var(--text-primary); }
@@ -271,26 +285,31 @@ try {
         $statApproved = count(array_filter($myRequests, fn($r) => $r['status'] === 'Approved'));
         $statRejected = count(array_filter($myRequests, fn($r) => $r['status'] === 'Rejected'));
         ?>
+        <div class="dc-note">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;flex-shrink:0;margin-top:.1rem"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <div>Ask Head Office for a replacement certificate. Once you submit, it shows on their dispatch list so they can print it and send it to this centre. Track the reply under <strong>My requests</strong>.</div>
+        </div>
+
         <div class="dc-stats">
-            <div class="dc-stat">
+            <div class="dc-stat total">
                 <div class="dc-stat-icon violet">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 </div>
                 <div><div class="dc-stat-val"><?= $statTotal ?></div><div class="dc-stat-lbl">Total Requests</div></div>
             </div>
-            <div class="dc-stat">
+            <div class="dc-stat wait">
                 <div class="dc-stat-icon amber">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
                 <div><div class="dc-stat-val"><?= $statPending ?></div><div class="dc-stat-lbl">Pending</div></div>
             </div>
-            <div class="dc-stat">
+            <div class="dc-stat ok">
                 <div class="dc-stat-icon green">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
                 <div><div class="dc-stat-val"><?= $statApproved ?></div><div class="dc-stat-lbl">Approved</div></div>
             </div>
-            <div class="dc-stat">
+            <div class="dc-stat no">
                 <div class="dc-stat-icon red">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </div>
@@ -299,14 +318,12 @@ try {
         </div>
 
         <!-- Tabs -->
-        <div class="dc-tabs">
-            <button class="dc-tab active" id="tabStudents" onclick="switchTab('students')">
-                👥 Students — Submit Request
-            </button>
+        <div class="dc-switch">
+            <button class="dc-tab active" id="tabStudents" onclick="switchTab('students')">Students</button>
             <button class="dc-tab" id="tabHistory" onclick="switchTab('history')">
-                📋 My Requests
+                My requests
                 <?php if ($statPending > 0): ?>
-                <span style="margin-left:.4rem;background:#f59e0b;color:#fff;border-radius:999px;font-size:.65rem;font-weight:800;padding:.1rem .45rem;"><?= $statPending ?></span>
+                <span class="dc-pill"><?= $statPending ?></span>
                 <?php endif; ?>
             </button>
         </div>
@@ -354,15 +371,23 @@ try {
                                 </div>
                             </td></tr>
                         <?php else: ?>
-                            <?php foreach ($students as $i => $stu): ?>
+                            <?php foreach ($students as $i => $stu):
+                                $stuName = trim($stu['full_name']);
+                                $stuInitial = mb_strtoupper(mb_substr($stuName, 0, 1));
+                            ?>
                             <tr>
                                 <td style="color:var(--text-secondary);font-size:.8rem;"><?= $i + 1 ?></td>
                                 <td>
-                                    <div class="student-name"><?= htmlspecialchars(trim($stu['full_name'])) ?></div>
-                                    <div class="student-meta">Reg: <?= htmlspecialchars($stu['registration_id']) ?></div>
+                                    <div class="stu-person">
+                                        <div class="stu-av"><?= htmlspecialchars($stuInitial) ?></div>
+                                        <div>
+                                            <div class="student-name"><?= htmlspecialchars($stuName) ?></div>
+                                            <div class="student-meta">Reg <?= htmlspecialchars($stu['registration_id']) ?></div>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td><span class="roll-badge"><?= htmlspecialchars($stu['roll_no'] ?? '—') ?></span></td>
-                                <td style="font-size:.82rem;max-width:160px;"><?= htmlspecialchars($stu['course'] ?? '—') ?></td>
+                                <td class="course-cell"><?= htmlspecialchars($stu['course'] ?? '—') ?></td>
                                 <td style="font-size:.82rem;"><?= htmlspecialchars($stu['mobile'] ?? '—') ?></td>
                                 <td>
                                     <span class="status-badge <?= strtolower($stu['status']) === 'active' ? 'approved' : 'pending' ?>">
@@ -374,7 +399,7 @@ try {
                                     <button class="btn-request <?= $stu['pending_reqs'] > 0 ? 'has-pending' : '' ?>"
                                         onclick="openRequestModal(<?= $stu['id'] ?>, '<?= htmlspecialchars(addslashes(trim($stu['full_name']))) ?>', '<?= htmlspecialchars(addslashes($stu['roll_no'] ?? '')) ?>', '<?= htmlspecialchars(addslashes($stu['course'] ?? '')) ?>')">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-                                        <?= $stu['pending_reqs'] > 0 ? 'Request (Pending)' : 'Request' ?>
+                                        <?= $stu['pending_reqs'] > 0 ? 'Pending with HO' : 'Request duplicate' ?>
                                     </button>
                                 </td>
                             </tr>
