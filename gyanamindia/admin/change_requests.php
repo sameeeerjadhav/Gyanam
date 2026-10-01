@@ -128,7 +128,7 @@ foreach (['Pending', 'Approved', 'Rejected'] as $s) {
 <link rel="stylesheet" href="../assets/css/dashboard.css">
 <link rel="stylesheet" href="../assets/css/management.css">
 <link rel="stylesheet" href="../assets/css/notifications.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔄</text></svg>">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%234f46e5%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M21%2012a9%209%200%201%201-2.6-6.3L21%208%27%2F%3E%3Cpath%20d%3D%27M21%203v5h-5%27%2F%3E%3C%2Fsvg%3E">
 <style>
 .cr-badge { display:inline-flex; align-items:center; gap:.3rem; padding:.25rem .65rem; border-radius:99px; font-size:.75rem; font-weight:700; }
 .cr-badge.pending  { background:#fef3c7; color:#92400e; }
