@@ -135,6 +135,80 @@ function adminDashboardShareStream(?string $courseType, ?string $courseName): st
     return 'it';
 }
 
+/** Add an amount into the IT / Abacus / Vedic buckets. */
+function adminDashboardAccumulateStream(array &$streams, string $bucket, float $amount): void
+{
+    if ($amount == 0.0) {
+        return;
+    }
+    if ($bucket === 'split_abacus_vedic') {
+        $streams['abacus'] += $amount / 2;
+        $streams['vedic'] += $amount / 2;
+        return;
+    }
+    if ($bucket === 'split_all') {
+        $streams['it'] += $amount / 3;
+        $streams['abacus'] += $amount / 3;
+        $streams['vedic'] += $amount / 3;
+        return;
+    }
+    if (!isset($streams[$bucket])) {
+        $bucket = 'it';
+    }
+    $streams[$bucket] += $amount;
+}
+
+/** Scale three buckets so they add up to the headline total. */
+function adminDashboardRoundStreams(array $streams, float $target): array
+{
+    $out = ['it' => 0, 'abacus' => 0, 'vedic' => 0];
+    $attributed = (float)($streams['it'] ?? 0) + (float)($streams['abacus'] ?? 0) + (float)($streams['vedic'] ?? 0);
+    if ($attributed <= 0 || $target <= 0) {
+        return $out;
+    }
+    $scale = $target / $attributed;
+    foreach (['it', 'abacus', 'vedic'] as $key) {
+        $out[$key] = (int)round(((float)($streams[$key] ?? 0)) * $scale);
+    }
+    $drift = (int)round($target) - ($out['it'] + $out['abacus'] + $out['vedic']);
+    $pick = 'it';
+    foreach (['abacus', 'vedic'] as $key) {
+        if ($out[$key] > $out[$pick]) {
+            $pick = $key;
+        }
+    }
+    $out[$pick] += $drift;
+    return $out;
+}
+
+/** Bar and three rows used on Share Revenue, Today's Share, and Admissions. */
+function adminDashboardStreamSplit(float $it, float $abacus, float $vedic, bool $money = true): void
+{
+    $sum = $it + $abacus + $vedic;
+    $pct = static function (float $part) use ($sum): string {
+        $n = $sum > 0 ? ($part / $sum) * 100 : 0;
+        return number_format($n, 2, '.', '');
+    };
+    $fmt = static function (float $n) use ($money): string {
+        $text = number_format($n, 0);
+        return $money ? ('₹ ' . $text) : $text;
+    };
+    echo '<div class="cc-share-bar" aria-hidden="true">';
+    echo '<span style="width:' . $pct($it) . '%;background:#2563eb"></span>';
+    echo '<span style="width:' . $pct($abacus) . '%;background:#7c3aed"></span>';
+    echo '<span style="width:' . $pct($vedic) . '%;background:#d97706"></span>';
+    echo '</div>';
+    $rows = [
+        ['IT', $it, '#2563eb', ' class="v blue"', ''],
+        ['Abacus', $abacus, '#7c3aed', ' class="v"', ' style="color:#7c3aed"'],
+        ['Vedic Maths', $vedic, '#d97706', ' class="v orange"', ''],
+    ];
+    foreach ($rows as [$label, $val, $color, $class, $style]) {
+        echo '<div class="cc-kv"><span class="k"><span class="cc-share-dot" style="background:' . $color . '"></span>'
+            . $label . '</span><span' . $class . $style . '>' . $fmt($val) . '</span></div>';
+    }
+}
+
 // AJAX: filtered top ATCs
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'top_atcs') {
     header('Content-Type: application/json; charset=utf-8');
@@ -148,15 +222,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'top_a
 // Birthday push notifications: use cron/birthday_notifications.php (not every dashboard load)
 
 // ── Stats (session-cached 60s) ────────────────────────────────────────────────
-$dashCacheKey = 'admin_dash_stats_v1';
+$dashCacheKey = 'admin_dash_stats_v2';
 $dashCacheAt  = 'admin_dash_stats_at';
 $useDashCache = isset($_SESSION[$dashCacheKey], $_SESSION[$dashCacheAt])
     && (time() - (int)$_SESSION[$dashCacheAt]) < 60;
+
+$admIt = $admAbacus = $admVedic = 0;
 
 if ($useDashCache) {
     extract($_SESSION[$dashCacheKey], EXTR_OVERWRITE);
 } else {
 $totalUsers = $totalDLC = $totalATC = $totalInquiries = $totalAdmissions = 0;
+$admIt = $admAbacus = $admVedic = 0;
 $pendingExam = 0;
 
 try { $totalUsers      = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn(); }            catch (Exception $e) {}
@@ -166,6 +243,35 @@ try { $totalInquiries  = $pdo->query("SELECT COUNT(*) FROM inquiries")->fetchCol
 try { $totalAdmissions = $pdo->query("SELECT COUNT(*) FROM admissions")->fetchColumn(); }      catch (Exception $e) {}
 
 try {
+    $admStreams = ['it' => 0.0, 'abacus' => 0.0, 'vedic' => 0.0];
+    $courseTypes = [];
+    foreach ($pdo->query("SELECT course_name, course_type FROM courses ORDER BY id ASC") as $courseRow) {
+        $key = mb_strtolower(trim((string)($courseRow['course_name'] ?? '')));
+        if ($key !== '' && !isset($courseTypes[$key])) {
+            $courseTypes[$key] = (string)($courseRow['course_type'] ?? '');
+        }
+    }
+    $admRows = $pdo->query("
+        SELECT course, COUNT(*) AS c
+        FROM admissions
+        GROUP BY course
+    ")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($admRows as $admRow) {
+        $courseName = (string)($admRow['course'] ?? '');
+        $typeKey = mb_strtolower(trim($courseName));
+        adminDashboardAccumulateStream(
+            $admStreams,
+            adminDashboardShareStream($courseTypes[$typeKey] ?? '', $courseName),
+            (float)($admRow['c'] ?? 0)
+        );
+    }
+    $admRounded = adminDashboardRoundStreams($admStreams, (float)$totalAdmissions);
+    $admIt = $admRounded['it'];
+    $admAbacus = $admRounded['abacus'];
+    $admVedic = $admRounded['vedic'];
+} catch (Exception $e) {}
+
+try {
     $pendingExam = $pdo->query("
         SELECT COUNT(*) FROM admissions
         WHERE status = 'Active'
@@ -173,7 +279,7 @@ try {
     ")->fetchColumn();
 } catch (Exception $e) {}
 
-$_SESSION[$dashCacheKey] = compact('totalUsers', 'totalDLC', 'totalATC', 'totalInquiries', 'totalAdmissions', 'pendingExam');
+$_SESSION[$dashCacheKey] = compact('totalUsers', 'totalDLC', 'totalATC', 'totalInquiries', 'totalAdmissions', 'admIt', 'admAbacus', 'admVedic', 'pendingExam');
 $_SESSION[$dashCacheAt] = time();
 }
 
@@ -461,6 +567,9 @@ $revenueStats    = [
     'share_it' => 0,
     'share_abacus' => 0,
     'share_vedic' => 0,
+    'today_it' => 0,
+    'today_abacus' => 0,
+    'today_vedic' => 0,
 ];
 $dlcRevenue      = [];
 $dispatchStats   = ['total_dispatches'=>0,'created'=>0,'sent_to_dlc'=>0,'forwarded_to_atc'=>0,'delivered'=>0,'total_items'=>0];
@@ -471,7 +580,7 @@ $recentSharePayments = [];
 $chartAtcTypes   = [];
 $chartDlcBars    = [];
 
-$_rcKey = 'admin_dash_reports_share_v3';
+$_rcKey = 'admin_dash_reports_share_v4';
 $_rcAt  = 'admin_dash_reports_share_at';
 if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_rcAt]) < 90) {
     $cached = $_SESSION[$_rcKey];
@@ -503,19 +612,30 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         // Admin "revenue" = share received (HO income), not ATC fee earnings
         $revenueStats['total_revenue']   = $revenueStats['total_collected'];
 
-        // Split received share by the course of each student on completed payments.
+        // Split received share, and today's share, by each paid student's course.
         $shareStreams = ['it' => 0.0, 'abacus' => 0.0, 'vedic' => 0.0];
-        $jsonRows = $pdo->query("SELECT student_ids FROM share_payments WHERE status = 'Completed'")->fetchAll(PDO::FETCH_COLUMN);
+        $todayStreams = ['it' => 0.0, 'abacus' => 0.0, 'vedic' => 0.0];
+        $payRows = $pdo->query("
+            SELECT student_ids, (DATE(created_at) = CURDATE()) AS is_today
+            FROM share_payments
+            WHERE status = 'Completed'
+        ")->fetchAll(PDO::FETCH_ASSOC);
         $idSet = [];
-        foreach ($jsonRows as $json) {
-            $ids = json_decode((string)$json, true);
+        $todayIdSet = [];
+        foreach ($payRows as $payRow) {
+            $ids = json_decode((string)($payRow['student_ids'] ?? ''), true);
             if (!is_array($ids)) {
                 continue;
             }
+            $isToday = !empty($payRow['is_today']);
             foreach ($ids as $id) {
                 $id = (int)$id;
-                if ($id > 0) {
-                    $idSet[$id] = true;
+                if ($id <= 0) {
+                    continue;
+                }
+                $idSet[$id] = true;
+                if ($isToday) {
+                    $todayIdSet[$id] = true;
                 }
             }
         }
@@ -547,38 +667,22 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         continue;
                     }
                     $bucket = adminDashboardShareStream($row['course_type'] ?? '', $row['course'] ?? '');
-                    if ($bucket === 'split_abacus_vedic') {
-                        $shareStreams['abacus'] += $amt / 2;
-                        $shareStreams['vedic'] += $amt / 2;
-                    } elseif ($bucket === 'split_all') {
-                        $shareStreams['it'] += $amt / 3;
-                        $shareStreams['abacus'] += $amt / 3;
-                        $shareStreams['vedic'] += $amt / 3;
-                    } else {
-                        $shareStreams[$bucket] += $amt;
+                    $aid = (int)$row['id'];
+                    adminDashboardAccumulateStream($shareStreams, $bucket, $amt);
+                    if (isset($todayIdSet[$aid])) {
+                        adminDashboardAccumulateStream($todayStreams, $bucket, $amt);
                     }
                 }
             }
         }
-        $attributed = $shareStreams['it'] + $shareStreams['abacus'] + $shareStreams['vedic'];
-        $collected = (float)$revenueStats['total_collected'];
-        if ($attributed > 0 && $collected > 0) {
-            $scale = $collected / $attributed;
-            foreach (['it', 'abacus', 'vedic'] as $key) {
-                $shareStreams[$key] = (int)round($shareStreams[$key] * $scale);
-            }
-            $drift = (int)round($collected) - ($shareStreams['it'] + $shareStreams['abacus'] + $shareStreams['vedic']);
-            $target = 'it';
-            foreach (['abacus', 'vedic'] as $key) {
-                if ($shareStreams[$key] > $shareStreams[$target]) {
-                    $target = $key;
-                }
-            }
-            $shareStreams[$target] += $drift;
-        }
-        $revenueStats['share_it'] = $shareStreams['it'];
-        $revenueStats['share_abacus'] = $shareStreams['abacus'];
-        $revenueStats['share_vedic'] = $shareStreams['vedic'];
+        $shareRounded = adminDashboardRoundStreams($shareStreams, (float)$revenueStats['total_collected']);
+        $todayRounded = adminDashboardRoundStreams($todayStreams, (float)$revenueStats['today_share']);
+        $revenueStats['share_it'] = $shareRounded['it'];
+        $revenueStats['share_abacus'] = $shareRounded['abacus'];
+        $revenueStats['share_vedic'] = $shareRounded['vedic'];
+        $revenueStats['today_it'] = $todayRounded['it'];
+        $revenueStats['today_abacus'] = $todayRounded['abacus'];
+        $revenueStats['today_vedic'] = $todayRounded['vedic'];
     } catch (Exception $e) {}
 
     try {
@@ -1459,6 +1563,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                     </div>
                     <div class="cc-metric-value green"><?= (int)$totalAdmissions ?></div>
                     <div class="cc-metric-label">Total student admissions</div>
+                    <?php adminDashboardStreamSplit((float)$admIt, (float)$admAbacus, (float)$admVedic, false); ?>
                 </div>
                 <div class="cc-card cc-card-pad clickable" onclick="openDetailModal('reported')" title="Reported students">
                     <div class="cc-card-head">
@@ -1546,25 +1651,13 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                         <h3>Share Revenue</h3>
                         <a class="cc-link" href="share_payments.php">Show All</a>
                     </div>
-                    <?php
-                    $shareIt = (float)($revenueStats['share_it'] ?? 0);
-                    $shareAbacus = (float)($revenueStats['share_abacus'] ?? 0);
-                    $shareVedic = (float)($revenueStats['share_vedic'] ?? 0);
-                    $sharePartSum = $shareIt + $shareAbacus + $shareVedic;
-                    $sharePct = static function (float $part) use ($sharePartSum): float {
-                        return $sharePartSum > 0 ? ($part / $sharePartSum) * 100 : 0;
-                    };
-                    ?>
                     <div class="cc-metric-label">HO share received</div>
                     <div class="cc-metric-value green">₹ <?= number_format((float)$revenueStats['total_collected'], 0) ?></div>
-                    <div class="cc-share-bar" aria-hidden="true">
-                        <span style="width:<?= number_format($sharePct($shareIt), 2, '.', '') ?>%;background:#2563eb"></span>
-                        <span style="width:<?= number_format($sharePct($shareAbacus), 2, '.', '') ?>%;background:#7c3aed"></span>
-                        <span style="width:<?= number_format($sharePct($shareVedic), 2, '.', '') ?>%;background:#d97706"></span>
-                    </div>
-                    <div class="cc-kv"><span class="k"><span class="cc-share-dot" style="background:#2563eb"></span>IT</span><span class="v blue">₹ <?= number_format($shareIt, 0) ?></span></div>
-                    <div class="cc-kv"><span class="k"><span class="cc-share-dot" style="background:#7c3aed"></span>Abacus</span><span class="v" style="color:#7c3aed">₹ <?= number_format($shareAbacus, 0) ?></span></div>
-                    <div class="cc-kv"><span class="k"><span class="cc-share-dot" style="background:#d97706"></span>Vedic Maths</span><span class="v orange">₹ <?= number_format($shareVedic, 0) ?></span></div>
+                    <?php adminDashboardStreamSplit(
+                        (float)($revenueStats['share_it'] ?? 0),
+                        (float)($revenueStats['share_abacus'] ?? 0),
+                        (float)($revenueStats['share_vedic'] ?? 0)
+                    ); ?>
                 </div>
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
@@ -1585,6 +1678,11 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                     </div>
                     <div class="cc-metric-label">Completed today</div>
                     <div class="cc-metric-value blue">₹ <?= number_format((float)($revenueStats['today_share'] ?? 0), 0) ?></div>
+                    <?php adminDashboardStreamSplit(
+                        (float)($revenueStats['today_it'] ?? 0),
+                        (float)($revenueStats['today_abacus'] ?? 0),
+                        (float)($revenueStats['today_vedic'] ?? 0)
+                    ); ?>
                 </div>
                 <div class="cc-card cc-card-pad">
                     <div class="cc-card-head">
