@@ -566,8 +566,7 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
     <link rel="stylesheet" href="../assets/css/atc-dash-cc.css?v=<?= (int)@filemtime(__DIR__ . '/../assets/css/atc-dash-cc.css') ?>">
-    <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Crect x='6' y='6' width='8' height='8' rx='2' fill='%23fff'/%3E%3Crect x='18' y='6' width='8' height='8' rx='2' fill='%23c7d2fe'/%3E%3Crect x='6' y='18' width='8' height='8' rx='2' fill='%23c7d2fe'/%3E%3Crect x='18' y='18' width='8' height='8' rx='2' fill='%23fff'/%3E%3C/svg%3E">
     <style>
         /* ── Section Headers ── */
         .dash-section-label {
