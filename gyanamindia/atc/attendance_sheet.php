@@ -108,7 +108,7 @@ $sheetUrl = 'attendance_sheet.php?sheet=1&date=' . rawurlencode($date);
         .as-bar button, .as-bar a.btn { height: 40px; padding: 0 1rem; border-radius: 9px; border: none; background: #1e3a8a; color: #fff; font-weight: 800; font-size: .82rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
         .as-bar a.ghost { background: #fff; color: #1e3a8a; border: 1.5px solid #c7d2fe; }
         .as-note { font-size: .82rem; color: #64748b; margin: 0 0 1rem; }
-        .as-frame { width: 100%; height: calc(100vh - 220px); min-height: 640px; border: 1.5px solid #e5e7eb; border-radius: 14px; background: #f3f4f6; }
+        .as-frame { width: 100%; height: 1220px; border: 1.5px solid #e5e7eb; border-radius: 14px; background: #e5e7eb; }
     </style>
 </head>
 <body>
