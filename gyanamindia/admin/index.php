@@ -181,6 +181,42 @@ function adminDashboardRoundStreams(array $streams, float $target): array
     return $out;
 }
 
+/** course name → course type, first row wins. */
+function adminDashboardCourseTypeMap(PDO $pdo): array
+{
+    $courseTypes = [];
+    try {
+        foreach ($pdo->query('SELECT course_name, course_type FROM courses ORDER BY id ASC') as $courseRow) {
+            $key = mb_strtolower(trim((string)($courseRow['course_name'] ?? '')));
+            if ($key !== '' && !isset($courseTypes[$key])) {
+                $courseTypes[$key] = (string)($courseRow['course_type'] ?? '');
+            }
+        }
+    } catch (Exception $e) {}
+    return $courseTypes;
+}
+
+/**
+ * Turn course/count rows into IT, Abacus, and Vedic Maths totals that add up to $target.
+ *
+ * @param list<array{course?:string,c?:int|float|string}> $rows
+ * @return array{it:int,abacus:int,vedic:int}
+ */
+function adminDashboardStreamsForCourses(array $rows, array $courseTypes, float $target): array
+{
+    $streams = ['it' => 0.0, 'abacus' => 0.0, 'vedic' => 0.0];
+    foreach ($rows as $row) {
+        $courseName = (string)($row['course'] ?? '');
+        $typeKey = mb_strtolower(trim($courseName));
+        adminDashboardAccumulateStream(
+            $streams,
+            adminDashboardShareStream($courseTypes[$typeKey] ?? '', $courseName),
+            (float)($row['c'] ?? 0)
+        );
+    }
+    return adminDashboardRoundStreams($streams, $target);
+}
+
 /** Bar and three rows used on Share Revenue, Today's Share, and Admissions. */
 function adminDashboardStreamSplit(float $it, float $abacus, float $vedic, bool $money = true): void
 {
@@ -222,18 +258,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'top_a
 // Birthday push notifications: use cron/birthday_notifications.php (not every dashboard load)
 
 // ── Stats (session-cached 60s) ────────────────────────────────────────────────
-$dashCacheKey = 'admin_dash_stats_v2';
+$dashCacheKey = 'admin_dash_stats_v3';
 $dashCacheAt  = 'admin_dash_stats_at';
 $useDashCache = isset($_SESSION[$dashCacheKey], $_SESSION[$dashCacheAt])
     && (time() - (int)$_SESSION[$dashCacheAt]) < 60;
 
 $admIt = $admAbacus = $admVedic = 0;
+$inqIt = $inqAbacus = $inqVedic = 0;
 
 if ($useDashCache) {
     extract($_SESSION[$dashCacheKey], EXTR_OVERWRITE);
 } else {
 $totalUsers = $totalDLC = $totalATC = $totalInquiries = $totalAdmissions = 0;
 $admIt = $admAbacus = $admVedic = 0;
+$inqIt = $inqAbacus = $inqVedic = 0;
 $pendingExam = 0;
 
 try { $totalUsers      = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn(); }            catch (Exception $e) {}
@@ -243,32 +281,26 @@ try { $totalInquiries  = $pdo->query("SELECT COUNT(*) FROM inquiries")->fetchCol
 try { $totalAdmissions = $pdo->query("SELECT COUNT(*) FROM admissions")->fetchColumn(); }      catch (Exception $e) {}
 
 try {
-    $admStreams = ['it' => 0.0, 'abacus' => 0.0, 'vedic' => 0.0];
-    $courseTypes = [];
-    foreach ($pdo->query("SELECT course_name, course_type FROM courses ORDER BY id ASC") as $courseRow) {
-        $key = mb_strtolower(trim((string)($courseRow['course_name'] ?? '')));
-        if ($key !== '' && !isset($courseTypes[$key])) {
-            $courseTypes[$key] = (string)($courseRow['course_type'] ?? '');
-        }
-    }
+    $courseTypes = adminDashboardCourseTypeMap($pdo);
     $admRows = $pdo->query("
         SELECT course, COUNT(*) AS c
         FROM admissions
         GROUP BY course
     ")->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($admRows as $admRow) {
-        $courseName = (string)($admRow['course'] ?? '');
-        $typeKey = mb_strtolower(trim($courseName));
-        adminDashboardAccumulateStream(
-            $admStreams,
-            adminDashboardShareStream($courseTypes[$typeKey] ?? '', $courseName),
-            (float)($admRow['c'] ?? 0)
-        );
-    }
-    $admRounded = adminDashboardRoundStreams($admStreams, (float)$totalAdmissions);
+    $admRounded = adminDashboardStreamsForCourses($admRows, $courseTypes, (float)$totalAdmissions);
     $admIt = $admRounded['it'];
     $admAbacus = $admRounded['abacus'];
     $admVedic = $admRounded['vedic'];
+
+    $inqRows = $pdo->query("
+        SELECT interested_course AS course, COUNT(*) AS c
+        FROM inquiries
+        GROUP BY interested_course
+    ")->fetchAll(PDO::FETCH_ASSOC);
+    $inqRounded = adminDashboardStreamsForCourses($inqRows, $courseTypes, (float)$totalInquiries);
+    $inqIt = $inqRounded['it'];
+    $inqAbacus = $inqRounded['abacus'];
+    $inqVedic = $inqRounded['vedic'];
 } catch (Exception $e) {}
 
 try {
@@ -279,7 +311,7 @@ try {
     ")->fetchColumn();
 } catch (Exception $e) {}
 
-$_SESSION[$dashCacheKey] = compact('totalUsers', 'totalDLC', 'totalATC', 'totalInquiries', 'totalAdmissions', 'admIt', 'admAbacus', 'admVedic', 'pendingExam');
+$_SESSION[$dashCacheKey] = compact('totalUsers', 'totalDLC', 'totalATC', 'totalInquiries', 'totalAdmissions', 'admIt', 'admAbacus', 'admVedic', 'inqIt', 'inqAbacus', 'inqVedic', 'pendingExam');
 $_SESSION[$dashCacheAt] = time();
 }
 
@@ -393,7 +425,10 @@ try {
 
 // ── L3: Reporting stats ───────────────────────────────────────────────────────
 $reportedStudents = $pendingReporting = 0;
+$repIt = $repAbacus = $repVedic = 0;
+$pendIt = $pendAbacus = $pendVedic = 0;
 $reportedList = $pendingList = [];
+$pipelineCourseTypes = adminDashboardCourseTypeMap($pdo);
 
 try {
     // Reported = share has been paid (ho_share_paid = 1 or share_payment_date is set)
@@ -408,8 +443,21 @@ try {
         ORDER BY a.first_name ASC
         LIMIT 100
     ");
-    $reportedList     = $rStmt->fetchAll(PDO::FETCH_ASSOC);
-    $reportedStudents = count($reportedList);
+    $reportedList = $rStmt->fetchAll(PDO::FETCH_ASSOC);
+    $repRows = $pdo->query("
+        SELECT course, COUNT(*) AS c
+        FROM admissions
+        WHERE status = 'Active' AND ho_share_paid = 1
+        GROUP BY course
+    ")->fetchAll(PDO::FETCH_ASSOC);
+    $reportedStudents = 0;
+    foreach ($repRows as $repRow) {
+        $reportedStudents += (int)($repRow['c'] ?? 0);
+    }
+    $repSplit = adminDashboardStreamsForCourses($repRows, $pipelineCourseTypes, (float)$reportedStudents);
+    $repIt = $repSplit['it'];
+    $repAbacus = $repSplit['abacus'];
+    $repVedic = $repSplit['vedic'];
 } catch (Exception $e) {
     // Try alternative column names
     try {
@@ -425,8 +473,24 @@ try {
               )
             ORDER BY a.first_name ASC LIMIT 100
         ");
-        $reportedList     = $rStmt->fetchAll(PDO::FETCH_ASSOC);
-        $reportedStudents = count($reportedList);
+        $reportedList = $rStmt->fetchAll(PDO::FETCH_ASSOC);
+        $repRows = $pdo->query("
+            SELECT a.course AS course, COUNT(*) AS c
+            FROM admissions a
+            WHERE a.status = 'Active'
+              AND EXISTS (
+                  SELECT 1 FROM share_payments sp WHERE sp.admission_id = a.id
+              )
+            GROUP BY a.course
+        ")->fetchAll(PDO::FETCH_ASSOC);
+        $reportedStudents = 0;
+        foreach ($repRows as $repRow) {
+            $reportedStudents += (int)($repRow['c'] ?? 0);
+        }
+        $repSplit = adminDashboardStreamsForCourses($repRows, $pipelineCourseTypes, (float)$reportedStudents);
+        $repIt = $repSplit['it'];
+        $repAbacus = $repSplit['abacus'];
+        $repVedic = $repSplit['vedic'];
     } catch (Exception $e2) {}
 }
 
@@ -442,8 +506,22 @@ try {
         ORDER BY atc.name ASC, a.first_name ASC
         LIMIT 100
     ");
-    $pendingList      = $pStmt->fetchAll(PDO::FETCH_ASSOC);
-    $pendingReporting = count($pendingList);
+    $pendingList = $pStmt->fetchAll(PDO::FETCH_ASSOC);
+    $pendRows = $pdo->query("
+        SELECT course, COUNT(*) AS c
+        FROM admissions
+        WHERE status = 'Active'
+          AND (ho_share_paid = 0 OR ho_share_paid IS NULL)
+        GROUP BY course
+    ")->fetchAll(PDO::FETCH_ASSOC);
+    $pendingReporting = 0;
+    foreach ($pendRows as $pendRow) {
+        $pendingReporting += (int)($pendRow['c'] ?? 0);
+    }
+    $pendSplit = adminDashboardStreamsForCourses($pendRows, $pipelineCourseTypes, (float)$pendingReporting);
+    $pendIt = $pendSplit['it'];
+    $pendAbacus = $pendSplit['abacus'];
+    $pendVedic = $pendSplit['vedic'];
 } catch (Exception $e) {
     try {
         $pStmt = $pdo->query("
@@ -458,8 +536,24 @@ try {
               )
             ORDER BY atc.name ASC, a.first_name ASC LIMIT 100
         ");
-        $pendingList      = $pStmt->fetchAll(PDO::FETCH_ASSOC);
-        $pendingReporting = count($pendingList);
+        $pendingList = $pStmt->fetchAll(PDO::FETCH_ASSOC);
+        $pendRows = $pdo->query("
+            SELECT a.course AS course, COUNT(*) AS c
+            FROM admissions a
+            WHERE a.status = 'Active'
+              AND NOT EXISTS (
+                  SELECT 1 FROM share_payments sp WHERE sp.admission_id = a.id
+              )
+            GROUP BY a.course
+        ")->fetchAll(PDO::FETCH_ASSOC);
+        $pendingReporting = 0;
+        foreach ($pendRows as $pendRow) {
+            $pendingReporting += (int)($pendRow['c'] ?? 0);
+        }
+        $pendSplit = adminDashboardStreamsForCourses($pendRows, $pipelineCourseTypes, (float)$pendingReporting);
+        $pendIt = $pendSplit['it'];
+        $pendAbacus = $pendSplit['abacus'];
+        $pendVedic = $pendSplit['vedic'];
     } catch (Exception $e2) {}
 }
 
@@ -1555,6 +1649,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                     </div>
                     <div class="cc-metric-value blue"><?= (int)$totalInquiries ?></div>
                     <div class="cc-metric-label">All centre inquiries</div>
+                    <?php adminDashboardStreamSplit((float)$inqIt, (float)$inqAbacus, (float)$inqVedic, false); ?>
                 </div>
                 <div class="cc-card cc-card-pad clickable" onclick="openDetailModal('admissions')" title="View admissions">
                     <div class="cc-card-head">
@@ -1572,6 +1667,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                     </div>
                     <div class="cc-metric-value green"><?= (int)$reportedStudents ?></div>
                     <div class="cc-kv"><span class="k">Share paid to HO</span><span class="v green">Yes</span></div>
+                    <?php adminDashboardStreamSplit((float)$repIt, (float)$repAbacus, (float)$repVedic, false); ?>
                 </div>
                 <div class="cc-card cc-card-pad clickable" onclick="openDetailModal('pending_report')" title="Pending reports">
                     <div class="cc-card-head">
@@ -1580,6 +1676,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
                     </div>
                     <div class="cc-metric-value orange"><?= (int)$pendingReporting ?></div>
                     <div class="cc-kv"><span class="k">Share not yet paid</span><span class="v orange">Open</span></div>
+                    <?php adminDashboardStreamSplit((float)$pendIt, (float)$pendAbacus, (float)$pendVedic, false); ?>
                 </div>
             </div>
 
