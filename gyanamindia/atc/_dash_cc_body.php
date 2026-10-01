@@ -86,10 +86,9 @@ $todayFeeTotal = $todayCash + $todayOnline;
                         <div class="cc-card-head">
                             <?= cc_png('icon-today-share.png', 'xl', "Today's fees") ?>
                             <h3>Today's Fee Summary</h3>
-                            <input type="date" id="todayDatePicker" value="<?= date('Y-m-d') ?>"
-                                style="margin-left:auto;font-size:.7rem;font-weight:700;border:1px solid var(--cc-border);border-radius:8px;background:#f8fafc;padding:.2rem .35rem;outline:none;font-family:inherit"
-                                onclick="event.stopPropagation()" onchange="applyTodayFilter(event)">
                         </div>
+                        <input type="date" id="todayDatePicker" class="cc-date-field" value="<?= date('Y-m-d') ?>"
+                            onclick="event.stopPropagation()" onchange="applyTodayFilter(event)">
                         <div class="cc-metric-label">Collected today</div>
                         <div class="cc-metric-value blue" id="todayCollValue">₹ <?= number_format($todayFeeTotal, 0) ?></div>
                         <div class="cc-kv"><span class="k">Cash</span><span class="v green">₹ <?= number_format($todayCash, 0) ?></span></div>

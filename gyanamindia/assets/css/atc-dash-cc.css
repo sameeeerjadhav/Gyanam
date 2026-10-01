@@ -66,6 +66,27 @@
 }
 .cc-card-head .cc-link:hover { text-decoration: underline; }
 
+#todayCollCard .cc-card-head { margin-bottom: .45rem; }
+.cc-date-field {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 .75rem;
+  font-size: .84rem;
+  font-weight: 700;
+  color: var(--cc-text);
+  border: 1px solid var(--cc-border);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: .42rem .55rem;
+  font-family: inherit;
+}
+.cc-date-field::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 1;
+}
+
 /* Pictorial logos — large, no circle/tile, sit directly on the card */
 .cc-ico {
   width: auto;
