@@ -105,14 +105,101 @@ function examScheduleStatusIsDone(string $status): bool
     return in_array($status, ['Passed', 'Failed', 'Absent', 'Appeared'], true);
 }
 
-/** Admission ids whose exam is finished locally or on the exam portal. */
-function examScheduleDoneIds(PDO $pdo, int $atcId, array $students): array
+function examScheduleResultLabel(array $sub): string
 {
-    $done = [];
-    $now = time();
+    $raw = strtolower(trim((string)($sub['result'] ?? ($sub['status'] ?? ''))));
+    if ($raw === 'pass' || $raw === 'passed') {
+        return 'Passed';
+    }
+    if ($raw === 'fail' || $raw === 'failed') {
+        return 'Failed';
+    }
+    if ($raw === 'absent') {
+        return 'Absent';
+    }
+    $score = (float)($sub['score'] ?? 0);
+    $passing = (float)($sub['passing_score'] ?? 60);
+    if ($raw !== '' || $score > 0) {
+        return $score >= $passing ? 'Passed' : 'Failed';
+    }
+    return 'Appeared';
+}
+
+/** Portal result for each admission: Passed, Failed, Absent, or Appeared. */
+function examSchedulePortalOutcomes(PDO $pdo, int $atcId, array $students): array
+{
+    $outcomes = [];
+    if (!function_exists('examIntegrationReady') || !examIntegrationReady() || !function_exists('fetchAllExamResultsComplete')) {
+        return $outcomes;
+    }
+    $byReg = [];
     foreach ($students as $s) {
-        if (examScheduleStatusIsDone((string)($s['exam_status'] ?? ''))) {
-            $done[(int)$s['id']] = true;
+        foreach (['registration_id', 'roll_no'] as $field) {
+            $reg = strtoupper(trim((string)($s[$field] ?? '')));
+            if ($reg !== '') {
+                $byReg[$reg] = (int)$s['id'];
+            }
+        }
+    }
+    if ($byReg === []) {
+        return $outcomes;
+    }
+    try {
+        $res = fetchAllExamResultsComplete();
+        $subs = (!empty($res['success']) && !empty($res['data']['submissions']) && is_array($res['data']['submissions']))
+            ? $res['data']['submissions'] : [];
+        foreach ($subs as $sub) {
+            if (!is_array($sub) || (function_exists('examSubmissionIsDemo') && examSubmissionIsDemo($sub))) {
+                continue;
+            }
+            $ident = strtoupper(trim((string)($sub['student']['identifier'] ?? ($sub['identifier'] ?? ''))));
+            if ($ident === '' || !isset($byReg[$ident])) {
+                continue;
+            }
+            $admId = $byReg[$ident];
+            $label = examScheduleResultLabel($sub);
+            if (($outcomes[$admId] ?? '') === 'Passed') {
+                continue;
+            }
+            $outcomes[$admId] = $label;
+        }
+    } catch (Throwable $e) {
+    }
+    return $outcomes;
+}
+
+/**
+ * Write Passed/Failed from the exam portal onto the schedule and return finished admission ids.
+ *
+ * @param array<int, array<string, mixed>> $students
+ * @return array{0: array<int, array<string, mixed>>, 1: array<int, true>}
+ */
+function examScheduleApplyResults(PDO $pdo, int $atcId, array $students): array
+{
+    $outcomes = examSchedulePortalOutcomes($pdo, $atcId, $students);
+    $now = time();
+    $done = [];
+    foreach ($students as &$s) {
+        $id = (int)$s['id'];
+        $label = $outcomes[$id] ?? '';
+        $current = (string)($s['exam_status'] ?? '');
+        if (in_array($label, ['Passed', 'Failed', 'Absent'], true) && $current !== $label && !($current === 'Passed' && $label !== 'Passed')) {
+            try {
+                $upd = $pdo->prepare("UPDATE exam_schedules SET exam_status = ? WHERE admission_id = ? AND atc_id = ?");
+                $upd->execute([$label, $id, $atcId]);
+                if ($upd->rowCount() > 0) {
+                    $s['exam_status'] = $label;
+                } elseif ($current === '' || $current === 'Scheduled' || $current === 'Appeared') {
+                    $s['exam_status'] = $label;
+                }
+            } catch (Throwable $e) {
+                if ($current === '' || $current === 'Scheduled' || $current === 'Appeared') {
+                    $s['exam_status'] = $label;
+                }
+            }
+        }
+        if (examScheduleStatusIsDone((string)($s['exam_status'] ?? '')) || $label !== '') {
+            $done[$id] = true;
             continue;
         }
         $examDate = trim((string)($s['exam_date'] ?? ''));
@@ -125,49 +212,17 @@ function examScheduleDoneIds(PDO $pdo, int $atcId, array $students): array
         }
         $when = strtotime($examDate . ' ' . $examTime);
         if ($when !== false && $when < $now) {
-            $done[(int)$s['id']] = true;
+            $done[$id] = true;
         }
     }
-    if (!function_exists('examIntegrationReady') || !examIntegrationReady() || !function_exists('fetchAllExamResultsComplete')) {
-        return $done;
-    }
-    $byReg = [];
-    foreach ($students as $s) {
-        $reg = strtoupper(trim((string)($s['registration_id'] ?? '')));
-        if ($reg === '') {
-            $reg = strtoupper(trim((string)($s['roll_no'] ?? '')));
-        }
-        if ($reg !== '') {
-            $byReg[$reg] = (int)$s['id'];
-        }
-    }
-    if ($byReg === []) {
-        return $done;
-    }
-    try {
-        $atc = $pdo->prepare('SELECT atc_code, name FROM atc_centers WHERE id = ? LIMIT 1');
-        $atc->execute([$atcId]);
-        $centre = $atc->fetch(PDO::FETCH_ASSOC) ?: [];
-        $atcCode = trim((string)($centre['atc_code'] ?? ''));
-        $atcName = trim((string)($centre['name'] ?? ''));
-        $res = fetchAllExamResultsComplete();
-        $subs = (!empty($res['success']) && !empty($res['data']['submissions']) && is_array($res['data']['submissions']))
-            ? $res['data']['submissions'] : [];
-        foreach ($subs as $sub) {
-            if (!is_array($sub) || (function_exists('examSubmissionIsDemo') && examSubmissionIsDemo($sub))) {
-                continue;
-            }
-            $centreName = trim((string)($sub['centre_name'] ?? ''));
-            if ($centreName !== '' && strcasecmp($centreName, $atcCode) !== 0 && strcasecmp($centreName, $atcName) !== 0) {
-                continue;
-            }
-            $ident = strtoupper(trim((string)($sub['student']['identifier'] ?? ($sub['identifier'] ?? ''))));
-            if ($ident !== '' && isset($byReg[$ident])) {
-                $done[$byReg[$ident]] = true;
-            }
-        }
-    } catch (Throwable $e) {
-    }
+    unset($s);
+    return [$students, $done];
+}
+
+/** Admission ids whose exam is finished locally or on the exam portal. */
+function examScheduleDoneIds(PDO $pdo, int $atcId, array $students): array
+{
+    [, $done] = examScheduleApplyResults($pdo, $atcId, $students);
     return $done;
 }
 
@@ -485,6 +540,7 @@ unset($s);
 
 $eligibleStudents = array_values(array_filter($allStudents, fn($s) => $s['share_paid']));
 $sharePaidEligibleCount = count($eligibleStudents);
+[$eligibleStudents, $examDoneIds] = examScheduleApplyResults($pdo, (int)$atcId, $eligibleStudents);
 
 // KPIs — use the same eligible pool as the table (share-paid students only)
 $kpiTotal = $sharePaidEligibleCount;
@@ -492,7 +548,6 @@ $kpiScheduled = count(array_filter($eligibleStudents, fn($s) => !empty($s['exam_
 $kpiUnscheduled = $kpiTotal - $kpiScheduled;
 $kpiPassed = count(array_filter($eligibleStudents, fn($s) => ($s['exam_status'] ?? '') === 'Passed'));
 $kpiFailed = count(array_filter($eligibleStudents, fn($s) => ($s['exam_status'] ?? '') === 'Failed'));
-$examDoneIds = examScheduleDoneIds($pdo, (int)$atcId, $eligibleStudents);
 
 // Apply status filter in PHP (since LEFT JOIN makes null = unscheduled)
 $allStudents = $eligibleStudents;
