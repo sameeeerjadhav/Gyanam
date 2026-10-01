@@ -3266,6 +3266,28 @@ function issueCertificateRecord(PDO $pdo, array $data): array
         trim((string)($data['source'] ?? 'exam')) ?: 'exam',
     ]);
 
+    if (trim((string)($data['source'] ?? '')) === 'manual' && empty($data['preview'])) {
+        $scheduleAtcId = (int)($data['issued_by_atc_id'] ?? 0);
+        $scheduleAdmissionId = (int)($data['admission_id'] ?? 0);
+        if ($scheduleAtcId <= 0 && $scheduleAdmissionId > 0) {
+            try {
+                $atcLookup = $pdo->prepare('SELECT atc_id FROM admissions WHERE id = ? LIMIT 1');
+                $atcLookup->execute([$scheduleAdmissionId]);
+                $scheduleAtcId = (int)($atcLookup->fetchColumn() ?: 0);
+            } catch (Exception $e) {
+                $scheduleAtcId = 0;
+            }
+        }
+        recordManualCertificateExamStatus(
+            $pdo,
+            $scheduleAdmissionId,
+            $scheduleAtcId,
+            (int)($data['score'] ?? 0),
+            $issueDate,
+            trim((string)($data['course'] ?? ''))
+        );
+    }
+
     $verifyUrl = rtrim(certificatePublicBaseUrl(), '/') . '/verify_certificate.php?t=' . urlencode($token);
     return [
         'token' => $token,
@@ -3548,6 +3570,8 @@ function recordManualCertificateExamStatus(
     $status = ($score >= 40 && courseExamGradeFromScore($score) !== 'Fail') ? 'Passed' : 'Failed';
     $examDate = trim($examDate) !== '' ? $examDate : date('Y-m-d');
     $courseName = trim($courseName);
+    $examTime = '10:00:00';
+    $examSlot = 'Morning';
     try {
         $pdo->exec("CREATE TABLE IF NOT EXISTS exam_schedules (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -3567,26 +3591,73 @@ function recordManualCertificateExamStatus(
             INDEX idx_atc_id (atc_id),
             INDEX idx_admission_id (admission_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        $ex = $pdo->prepare('SELECT id, exam_status FROM exam_schedules WHERE admission_id = ? AND atc_id = ? ORDER BY id DESC LIMIT 1');
+        $ex = $pdo->prepare('SELECT id, exam_status, exam_date, exam_time, exam_slot, exam_name FROM exam_schedules WHERE admission_id = ? AND atc_id = ? ORDER BY id DESC LIMIT 1');
         $ex->execute([$admissionId, $atcId]);
         $row = $ex->fetch(PDO::FETCH_ASSOC);
         if ($row && ($row['exam_status'] ?? '') === 'Passed' && $status === 'Failed') {
             return;
         }
         if ($row) {
-            $pdo->prepare("UPDATE exam_schedules SET exam_status = ?, exam_date = COALESCE(exam_date, ?), exam_name = COALESCE(NULLIF(exam_name, ''), ?) WHERE id = ?")
-                ->execute([$status, $examDate, $courseName !== '' ? $courseName : null, (int)$row['id']]);
+            $date = trim((string)($row['exam_date'] ?? ''));
+            if ($date === '' || $date === '0000-00-00') {
+                $date = $examDate;
+            }
+            $time = trim((string)($row['exam_time'] ?? ''));
+            if ($time === '' || $time === '00:00:00') {
+                $time = $examTime;
+            }
+            $slot = trim((string)($row['exam_slot'] ?? ''));
+            if (!in_array($slot, ['Morning', 'Afternoon', 'Evening'], true)) {
+                $slot = $examSlot;
+            }
+            $name = trim((string)($row['exam_name'] ?? ''));
+            if ($name === '') {
+                $name = $courseName;
+            }
+            $pdo->prepare('UPDATE exam_schedules SET exam_status = ?, exam_date = ?, exam_time = ?, exam_slot = ?, exam_name = ? WHERE id = ?')
+                ->execute([$status, $date, $time, $slot, $name !== '' ? $name : null, (int)$row['id']]);
             return;
         }
-        $pdo->prepare('INSERT INTO exam_schedules (admission_id, atc_id, exam_date, exam_name, exam_status, notes) VALUES (?,?,?,?,?,?)')
+        $pdo->prepare('INSERT INTO exam_schedules (admission_id, atc_id, exam_date, exam_time, exam_slot, exam_name, exam_status, notes) VALUES (?,?,?,?,?,?,?,?)')
             ->execute([
                 $admissionId,
                 $atcId,
                 $examDate,
+                $examTime,
+                $examSlot,
                 $courseName !== '' ? $courseName : null,
                 $status,
                 'Recorded from manual certificate',
             ]);
+    } catch (Exception $e) {
+    }
+}
+
+/**
+ * Fill exam date, time, and slot for students who already have a manual certificate.
+ */
+function syncManualCertificateExamSchedules(PDO $pdo, int $atcId): void
+{
+    if ($atcId <= 0) {
+        return;
+    }
+    try {
+        ensureIssuedCertificatesTable($pdo);
+        $st = $pdo->prepare("SELECT ic.admission_id, ic.score, ic.issue_date, ic.course
+                             FROM issued_certificates ic
+                             INNER JOIN admissions a ON a.id = ic.admission_id
+                             WHERE ic.source = 'manual' AND a.atc_id = ?");
+        $st->execute([$atcId]);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+            recordManualCertificateExamStatus(
+                $pdo,
+                (int)$row['admission_id'],
+                $atcId,
+                (int)$row['score'],
+                (string)$row['issue_date'],
+                (string)$row['course']
+            );
+        }
     } catch (Exception $e) {
     }
 }

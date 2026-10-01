@@ -152,6 +152,10 @@ if ($issueTs === false) {
     $issueTs = time();
 }
 $dateOfIssue = date('d/m/Y', $issueTs);
+$examDate = date('Y-m-d', $issueTs);
+if (!$preview) {
+    recordManualCertificateExamStatus($pdo, $admissionId, $studentAtcId, $score, $examDate, $courseName);
+}
 
 if ($duration === '') {
     $duration = '3 months';
@@ -228,6 +232,7 @@ try {
             'admission_id' => $admissionId > 0 ? $admissionId : null,
             'issued_by_atc_id' => $studentAtcId ?: null,
             'source' => 'manual',
+            'preview' => $preview,
         ]);
         embedCertificateVerifyQr($pdf, $issued['verify_url'], $L['qr_x'], $L['qr_y'], $L['qr_size']);
     } catch (Throwable $qrE) {

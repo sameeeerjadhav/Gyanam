@@ -195,7 +195,9 @@ if ($grade === 'Fail') {
     die('<b>Error:</b> Certificate cannot be issued — score is below passing grade.');
 }
 
-recordManualCertificateExamStatus($pdo, $admissionId, $studentAtcId, $score, $examDate, $courseName);
+if (!$preview) {
+    recordManualCertificateExamStatus($pdo, $admissionId, $studentAtcId, $score, $examDate, $courseName);
+}
 
 $durationLine = 'The course duration is ' . $duration;
 $gradeLine = courseCertificateGradeLine($grade);
@@ -265,6 +267,7 @@ try {
             'admission_id' => $admissionId,
             'issued_by_atc_id' => $studentAtcId ?: null,
             'source' => 'manual',
+            'preview' => $preview,
         ]);
         embedCertificateVerifyQr($pdfCert, $issued['verify_url'], $L['qr_x'], $L['qr_y'], $L['qr_size']);
     } catch (Throwable $qrE) {

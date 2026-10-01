@@ -430,6 +430,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
+// Students with a generated manual certificate get a filled schedule and Exam Done.
+if (function_exists('syncManualCertificateExamSchedules')) {
+    syncManualCertificateExamSchedules($pdo, (int)$atcId);
+}
+
 // ── Fetch all active students with their exam schedule status ─────────────────
 $courseFilter = trim($_GET['course'] ?? 'all');
 $statusFilter = trim($_GET['status'] ?? 'all');
