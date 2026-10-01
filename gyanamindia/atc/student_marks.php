@@ -76,6 +76,7 @@ $integrationReady = function_exists('examIntegrationReady') && examIntegrationRe
 
 // ── Map ATC admissions (for internals + IT students without results yet) ─────
 $admByReg = []; // registration_id => admission row
+$ownIds = [];   // uppercased registration or roll => canonical key for this ATC only
 $admIds = [];
 try {
     $st = $pdo->prepare("
@@ -89,20 +90,44 @@ try {
     $st->execute([$atcId]);
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $a) {
         $reg = trim((string)($a['registration_id'] ?? ''));
-        if ($reg === '') {
-            $reg = trim((string)($a['roll_no'] ?? ''));
-        }
-        if ($reg === '') {
+        $roll = trim((string)($a['roll_no'] ?? ''));
+        $canon = $reg !== '' ? $reg : $roll;
+        if ($canon === '') {
             continue;
         }
-        $a['login_id'] = $reg;
+        $a['login_id'] = $canon;
         $a['is_it'] = isGiitItCourse($a['course_type'] ?? null, $a['course'] ?? null);
-        $admByReg[$reg] = $a;
+        $admByReg[$canon] = $a;
         $admIds[] = (int)$a['id'];
+        $ownIds[strtoupper($canon)] = $canon;
+        if ($reg !== '') {
+            $ownIds[strtoupper($reg)] = $canon;
+        }
+        if ($roll !== '') {
+            $ownIds[strtoupper($roll)] = $canon;
+        }
     }
 } catch (Exception $e) {
     $admByReg = [];
+    $ownIds = [];
 }
+
+$smBelongsToAtc = static function (array $row) use ($ownIds): ?string {
+    $identifier = trim((string)($row['identifier'] ?? ''));
+    if ($identifier === '' && !empty($row['student']['identifier'])) {
+        $identifier = trim((string)$row['student']['identifier']);
+    }
+    if ($identifier === '') {
+        $identifier = trim((string)($row['registration_id'] ?? ''));
+    }
+    if ($identifier === '') {
+        $identifier = trim((string)($row['roll_no'] ?? ''));
+    }
+    if ($identifier === '' || $identifier === '—') {
+        return null;
+    }
+    return $ownIds[strtoupper($identifier)] ?? null;
+};
 $marksMap = getAdmissionAtcMarksMap($pdo, $admIds);
 
 // ── Fetch marks from Exam Portal API ─────────────────────────────────────────
@@ -112,7 +137,13 @@ $passIndex = [];
 if ($integrationReady) {
     $res = fetchAllExamResultsComplete();
     if ($res['success']) {
-        $examResults = $res['data']['submissions'] ?? [];
+        $rawResults = $res['data']['submissions'] ?? [];
+        foreach ($rawResults as $row) {
+            if (!is_array($row) || $smBelongsToAtc($row) === null) {
+                continue;
+            }
+            $examResults[] = $row;
+        }
         if (function_exists('buildExamPassIndex')) {
             $passIndex = buildExamPassIndex($examResults);
         }
@@ -129,9 +160,9 @@ try {
                                 a.roll_no, a.registration_id, a.course, a.photo, a.mobile
                          FROM exam_schedules es
                          JOIN admissions a ON a.id = es.admission_id
-                         WHERE es.atc_id = ?
+                         WHERE es.atc_id = ? AND a.atc_id = ? AND a.status = 'Active'
                          ORDER BY es.exam_date DESC");
-    $ls->execute([$atcId]);
+    $ls->execute([$atcId, $atcId]);
     $localStatuses = $ls->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 
@@ -158,12 +189,9 @@ $smResultLabel = static function ($result, $score, $passing): string {
 // From API. Identifier lives on the nested student, not the submission itself.
 if (!empty($examResults)) {
     foreach ($examResults as $r) {
-        $identifier = trim((string)($r['identifier'] ?? ''));
-        if ($identifier === '' && !empty($r['student']['identifier'])) {
-            $identifier = trim((string)$r['student']['identifier']);
-        }
-        if ($identifier === '') {
-            $identifier = trim((string)($r['registration_id'] ?? ''));
+        $identifier = $smBelongsToAtc($r);
+        if ($identifier === null) {
+            continue;
         }
         $examTitle = (string)($r['exam_title'] ?? $r['title'] ?? ($r['exam']['title'] ?? '—'));
         $course = trim((string)($r['subject'] ?? $r['course'] ?? ''));
@@ -175,7 +203,7 @@ if (!empty($examResults)) {
         }
         $flatResults[] = [
             'student_name'   => $r['student_name'] ?? $r['name'] ?? ($r['student']['name'] ?? '—'),
-            'identifier'     => $identifier !== '' ? $identifier : '—',
+            'identifier'     => $identifier,
             'course'         => $course,
             'exam_title'     => $examTitle,
             'exam_date'      => $r['completed_at'] ?? $r['exam_date'] ?? $r['submitted_at'] ?? '—',
@@ -191,14 +219,15 @@ if (!empty($examResults)) {
 
 // From local (only if not already in API results)
 foreach ($localStatuses as $l) {
+    $localCanon = $smBelongsToAtc($l);
     $alreadyFromApi = false;
     foreach ($flatResults as $fr) {
-        if ($fr['identifier'] === $l['registration_id']) { $alreadyFromApi = true; break; }
+        if ($localCanon !== null && $fr['identifier'] === $localCanon) { $alreadyFromApi = true; break; }
     }
-    if (!$alreadyFromApi && in_array($l['exam_status'], ['Passed', 'Failed'])) {
+    if (!$alreadyFromApi && $localCanon !== null && in_array($l['exam_status'], ['Passed', 'Failed'])) {
         $flatResults[] = [
             'student_name'   => $l['student_name'],
-            'identifier'     => $l['registration_id'],
+            'identifier'     => $localCanon,
             'course'         => $l['course'],
             'exam_title'     => $l['course'] . ' Final Exam',
             'exam_date'      => $l['exam_date'],
@@ -345,6 +374,16 @@ foreach ($grouped as $key => &$g) {
     $g['exam_from_manual'] = !$pass && $manualExam !== null;
     $g['it_total'] = !empty($composed['complete']) ? ($composed['total'] ?? null) : null;
     $g['it_grade'] = !empty($composed['complete']) ? ($composed['grade'] ?? '') : '';
+    if ($adm) {
+        $admName = trim(
+            ($adm['first_name'] ?? '') . ' ' .
+            (!empty($adm['middle_name']) ? $adm['middle_name'] . ' ' : '') .
+            ($adm['last_name'] ?? '')
+        );
+        if ($admName !== '') {
+            $g['student_name'] = $admName;
+        }
+    }
     if ($adm && !empty($adm['photo'])) {
         $g['photo'] = $adm['photo'];
     }
@@ -402,6 +441,13 @@ foreach ($admByReg as $reg => $adm) {
         'it_total' => !empty($composed['complete']) ? ($composed['total'] ?? null) : null,
         'it_grade' => !empty($composed['complete']) ? ($composed['grade'] ?? '') : '',
     ];
+}
+
+// Drop anyone who is not an active admission of this ATC.
+foreach (array_keys($grouped) as $key) {
+    if (!isset($admByReg[$key])) {
+        unset($grouped[$key]);
+    }
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────────
