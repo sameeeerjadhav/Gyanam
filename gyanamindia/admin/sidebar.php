@@ -213,10 +213,6 @@ if (empty($GLOBALS['_gyanam_sora_injected'])) {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                 <span>Training Videos</span>
             </a>
-            <a href="birthdays.php" class="nav-link <?= $currentPage === 'birthdays.php' ? 'active' : '' ?>" data-tooltip="Birthday Management">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                <span>Birthdays</span>
-            </a>
         </div>
 
     </nav>
