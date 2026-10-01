@@ -221,110 +221,97 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 1.75rem 1.35rem;
-    background: #f4f6f8;
+    padding: 2.25rem 1.75rem;
+    background: #fff;
     position: relative;
     z-index: 2;
-    border-left: 1px solid rgba(15, 23, 42, 0.06);
-    overflow-y: auto;
+    box-shadow: -20px 0 60px rgba(0,0,0,0.15);
+}
+
+/* Decorative top accent on the form side */
+.login-right::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #6366f1, #3b82f6, #10b981);
 }
 
 .form-container {
     width: 100%;
-    max-width: 400px;
-    background: #fff;
-    border: 1px solid #e7eaef;
-    border-radius: 16px;
-    padding: 1.6rem 1.35rem 1.15rem;
-    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.05);
+    max-width: 420px;
 }
 
-.form-kicker {
-    margin: 0 0 0.35rem;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #6366f1;
-}
-
+/* Welcome heading */
 .form-header {
-    margin-bottom: 1.25rem;
+    margin-bottom: 2rem;
+    animation: fadeUp 0.6s ease 0.1s both;
 }
 
 .form-header h2 {
-    font-size: 1.45rem;
-    font-weight: 700;
+    font-size: 1.6rem;
+    font-weight: 800;
     color: #0f172a;
-    margin: 0 0 0.3rem;
-    letter-spacing: -0.02em;
+    margin-bottom: 0.35rem;
 }
 
 .form-header p {
-    margin: 0;
-    font-size: 0.84rem;
+    font-size: 0.9rem;
     color: #64748b;
     font-weight: 500;
-    line-height: 1.45;
-}
-
-.role-label {
-    margin: 0 0 0.45rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: #94a3b8;
 }
 
 /* ---------- Role Selector ---------- */
 .role-selector {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.45rem;
-    margin-bottom: 1.15rem;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.65rem;
+    margin-bottom: 1.75rem;
+    animation: fadeUp 0.6s ease 0.2s both;
 }
 
 .role-btn {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    gap: 0.55rem;
-    padding: 0.55rem 0.65rem;
-    border: 1px solid #e6e8ee;
-    border-radius: 10px;
+    gap: 0.5rem;
+    padding: 1rem 0.5rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 14px;
     background: #fff;
     cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #334155;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #64748b;
     position: relative;
+    overflow: hidden;
+    letter-spacing: 0.02em;
     font-family: inherit;
-    text-align: left;
-    line-height: 1.2;
+    text-transform: uppercase;
 }
 
 .role-btn:hover {
-    border-color: #c7d2fe;
-    background: #fafbff;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
 }
 
+/* Role icons */
 .role-btn .role-icon {
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: all 0.3s ease;
 }
 
 .role-btn .role-icon svg {
-    width: 16px;
-    height: 16px;
+    width: 22px;
+    height: 22px;
 }
 
 /* Head Office — Indigo */
@@ -335,8 +322,9 @@
 .role-btn:nth-child(1).active {
     border-color: #818cf8;
     color: #4338ca;
-    background: #eef2ff;
-    box-shadow: none;
+    background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+    box-shadow: 0 8px 24px rgba(99,102,241,0.15);
+    transform: translateY(-3px);
 }
 .role-btn:nth-child(1).active .role-icon {
     background: linear-gradient(135deg, #6366f1, #4338ca);
@@ -352,8 +340,9 @@
 .role-btn:nth-child(2).active {
     border-color: #fbbf24;
     color: #b45309;
-    background: #fffbeb;
-    box-shadow: none;
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    box-shadow: 0 8px 24px rgba(245,158,11,0.15);
+    transform: translateY(-3px);
 }
 .role-btn:nth-child(2).active .role-icon {
     background: linear-gradient(135deg, #f59e0b, #d97706);
@@ -369,8 +358,9 @@
 .role-btn:nth-child(3).active {
     border-color: #34d399;
     color: #047857;
-    background: #ecfdf5;
-    box-shadow: none;
+    background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+    box-shadow: 0 8px 24px rgba(16,185,129,0.15);
+    transform: translateY(-3px);
 }
 .role-btn:nth-child(3).active .role-icon {
     background: linear-gradient(135deg, #10b981, #059669);
@@ -386,14 +376,29 @@
 .role-btn:nth-child(4).active {
     border-color: #c084fc;
     color: #7e22ce;
-    background: #faf5ff;
-    box-shadow: none;
+    background: linear-gradient(135deg, #faf5ff, #f3e8ff);
+    box-shadow: 0 8px 24px rgba(147,51,234,0.15);
+    transform: translateY(-3px);
 }
 .role-btn:nth-child(4).active .role-icon {
     background: linear-gradient(135deg, #a855f7, #7c3aed);
     color: #fff;
     box-shadow: 0 4px 12px rgba(147,51,234,0.35);
 }
+
+/* Active indicator */
+.role-btn.active::after {
+    content: '✓';
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    font-size: 0.6rem;
+    font-weight: 900;
+}
+.role-btn:nth-child(1).active::after { color: #6366f1; }
+.role-btn:nth-child(2).active::after { color: #f59e0b; }
+.role-btn:nth-child(3).active::after { color: #10b981; }
+.role-btn:nth-child(4).active::after { color: #a855f7; }
 
 .role-btn span:last-child {
     position: relative;
@@ -404,33 +409,25 @@
 .login-form {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: 1.1rem;
+    animation: fadeUp 0.6s ease 0.35s both;
 }
 
-.form-group label {
-    display: block;
-    margin-bottom: 0.32rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #334155;
-}
-
-.field {
+.form-group {
     position: relative;
 }
 
 .form-group input {
     width: 100%;
-    height: 44px;
-    padding: 0 2.5rem 0 2.45rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    font-size: 0.9rem;
+    padding: 0.9rem 1rem 0.9rem 3rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 0.95rem;
     font-family: inherit;
     font-weight: 500;
     color: #0f172a;
-    background: #fff;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    background: #f8fafc;
+    transition: all 0.25s ease;
     outline: none;
     box-sizing: border-box;
 }
@@ -442,7 +439,7 @@
 
 .form-group input:focus {
     border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
     background: #fff;
 }
 
@@ -451,15 +448,14 @@
     font-weight: 400;
 }
 
-.field .input-icon {
+.form-group .input-icon {
     position: absolute;
-    left: 0.8rem;
+    left: 1rem;
     top: 50%;
     transform: translateY(-50%);
     color: #94a3b8;
-    transition: color 0.15s ease;
+    transition: all 0.25s ease;
     pointer-events: none;
-    display: flex;
 }
 
 .form-group .input-icon svg {
@@ -471,9 +467,9 @@
     color: #6366f1;
 }
 
-.field .toggle-password {
+.form-group .toggle-password {
     position: absolute;
-    right: 0.65rem;
+    right: 1rem;
     top: 50%;
     transform: translateY(-50%);
     background: none;
@@ -524,30 +520,52 @@
 /* ---------- Submit Button ---------- */
 .btn-login {
     width: 100%;
-    height: 44px;
-    padding: 0 1rem;
+    padding: 0.95rem;
     border: none;
-    border-radius: 10px;
-    background: #4f46e5;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #4338ca 100%);
+    background-size: 200% auto;
     color: #fff;
-    font-size: 0.92rem;
+    font-size: 1rem;
     font-weight: 700;
     font-family: inherit;
     cursor: pointer;
     position: relative;
     overflow: hidden;
-    transition: background 0.15s ease;
-    box-shadow: none;
-    letter-spacing: 0.01em;
-    margin-top: 0.25rem;
+    transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow:
+        0 4px 15px rgba(99, 102, 241, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    letter-spacing: 0.02em;
+    margin-top: 0.5rem;
 }
 
 .btn-login:hover {
-    background: #4338ca;
+    transform: translateY(-2px);
+    box-shadow:
+        0 8px 25px rgba(99, 102, 241, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    background-position: right center;
 }
 
 .btn-login:active {
-    background: #3730a3;
+    transform: translateY(0);
+}
+
+/* Shimmer */
+.btn-login::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    transition: left 0.5s ease;
+}
+
+.btn-login:hover::after {
+    left: 100%;
 }
 
 /* Ripple */
@@ -619,33 +637,11 @@
 /* ---------- Footer ---------- */
 .login-footer {
     text-align: center;
-    margin-top: 1.1rem;
-    padding-top: 0.9rem;
-    border-top: 1px solid #f1f5f9;
-    font-size: 0.72rem;
+    margin-top: 2rem;
+    font-size: 0.78rem;
     color: #94a3b8;
     font-weight: 500;
-}
-
-.login-footer p {
-    margin: 0;
-}
-
-.login-legal {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.15rem 0.7rem;
-    margin-top: 0.45rem;
-}
-
-.login-legal a {
-    color: #64748b;
-    text-decoration: none;
-}
-
-.login-legal a:hover {
-    color: #4f46e5;
+    animation: fadeUp 0.6s ease 0.5s both;
 }
 
 /* ---------- Responsive ---------- */
@@ -677,10 +673,10 @@
         flex: none;
         width: 100%;
         min-width: unset;
-        padding: 1.25rem 1rem 2rem;
-        border-left: none;
-        margin-top: -1.25rem;
-        border-radius: 20px 20px 0 0;
+        padding: 2rem 2rem 3rem;
+        border-radius: 24px 24px 0 0;
+        margin-top: -1rem;
+        box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
     }
 }
 
@@ -715,7 +711,17 @@
     }
 
     .role-btn {
-        padding: 0.55rem 0.6rem;
-        font-size: 0.75rem;
+        padding: 0.75rem 0.35rem;
+        font-size: 0.65rem;
+    }
+
+    .role-btn .role-icon {
+        width: 38px;
+        height: 38px;
+    }
+
+    .role-btn .role-icon svg {
+        width: 18px;
+        height: 18px;
     }
 }
