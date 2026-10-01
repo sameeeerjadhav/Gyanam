@@ -98,6 +98,12 @@ function renderAttendanceSheetDocument(array $opts): void
     <table class="as-meta">
         <tr><td class="k">Date</td><td><?= htmlspecialchars(attendanceSheetTitle($dateLabel)) ?></td></tr>
         <tr><td class="k">Institute</td><td><?= htmlspecialchars($institute !== '' ? attendanceSheetTitle($institute) : '—') ?><?= $code !== '' ? ' (' . htmlspecialchars($code) . ')' : '' ?></td></tr>
+        <?php if (!empty($opts['course_label'])): ?>
+        <tr><td class="k">Course</td><td><?= htmlspecialchars(attendanceSheetTitle((string)$opts['course_label'])) ?></td></tr>
+        <?php endif; ?>
+        <?php if (!empty($opts['slot_label'])): ?>
+        <tr><td class="k">Slot</td><td><?= htmlspecialchars(attendanceSheetTitle((string)$opts['slot_label'])) ?></td></tr>
+        <?php endif; ?>
         <tr><td class="k">Candidates</td><td><?= (int)$count ?></td></tr>
     </table>
     <table class="as-grid">
