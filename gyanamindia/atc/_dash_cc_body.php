@@ -100,7 +100,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                 <div class="cc-grid cc-grid-4">
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_png('icon-books.png', 'xl', 'Courses') ?>
+                            <?= cc_png('icon-book-stack.png', 'xl', 'Courses') ?>
                             <h3>Courses</h3>
                         </div>
                         <div class="cc-kv"><span class="k">Total</span><span class="v"><?= (int)$totalCourses ?></span></div>
@@ -125,7 +125,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                     <div class="cc-card cc-card-pad">
                         <div class="cc-card-head">
-                            <?= cc_png('icon-books.png', 'xl', 'Course notes') ?>
+                            <?= cc_png('icon-open-book.png', 'xl', 'Course notes') ?>
                             <h3>Course Notes</h3>
                         </div>
                         <?php if (!empty($popularCourses)): ?>
@@ -274,7 +274,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     <div class="cc-card">
                         <div class="cc-card-pad" style="padding-bottom:.35rem">
                             <div class="cc-card-head" style="margin-bottom:.35rem">
-                                <?= cc_png('icon-books.png', 'xl', 'Popular admission courses') ?>
+                                <?= cc_png('icon-book-stack.png', 'xl', 'Popular admission courses') ?>
                             <h3>Popular Courses for Admission</h3>
                             </div>
                         </div>

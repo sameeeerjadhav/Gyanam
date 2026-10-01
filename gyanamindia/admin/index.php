@@ -1399,7 +1399,7 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
             <div class="cc-grid cc-grid-4">
                 <a class="cc-card cc-card-pad" href="dispatches.php?view=pending" style="text-decoration:none;color:inherit">
                     <div class="cc-card-head">
-                        <?= cc_png('icon-books.png', 'xl', 'Course material') ?>
+                        <?= cc_png('icon-open-book.png', 'xl', 'Course material') ?>
                         <h3>Course Material Pending</h3>
                     </div>
                     <div class="cc-metric-value red"><?= (int)$courseMaterialPending ?></div>
