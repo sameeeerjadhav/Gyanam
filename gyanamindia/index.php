@@ -104,8 +104,8 @@ $csrfToken = generateCSRFToken();
                 <p>Sign in to your account to continue</p>
             </div>
 
-            <!-- Role Selector -->
-            <div class="role-selector">
+            <p class="role-kicker">Sign in as</p>
+            <div class="role-selector" role="group" aria-label="Sign in as">
                 <button type="button" class="role-btn" data-role="Admin">
                     <span class="role-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -113,7 +113,7 @@ $csrfToken = generateCSRFToken();
                             <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
                         </svg>
                     </span>
-                    <span>Head Office</span>
+                    <span class="role-label">Head Office</span>
                 </button>
                 <button type="button" class="role-btn" data-role="DLC Office">
                     <span class="role-icon">
@@ -124,7 +124,7 @@ $csrfToken = generateCSRFToken();
                             <path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/>
                         </svg>
                     </span>
-                    <span>DLC Login</span>
+                    <span class="role-label">DLC Login</span>
                 </button>
                 <button type="button" class="role-btn" data-role="ATC CENTER">
                     <span class="role-icon">
@@ -133,7 +133,7 @@ $csrfToken = generateCSRFToken();
                             <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/>
                         </svg>
                     </span>
-                    <span>ATC Login</span>
+                    <span class="role-label">ATC Login</span>
                 </button>
                 <button type="button" class="role-btn" data-role="Training">
                     <span class="role-icon">
@@ -141,7 +141,7 @@ $csrfToken = generateCSRFToken();
                             <polygon points="5 3 19 12 5 21 5 3"/>
                         </svg>
                     </span>
-                    <span>Training</span>
+                    <span class="role-label">Training</span>
                 </button>
             </div>
 
