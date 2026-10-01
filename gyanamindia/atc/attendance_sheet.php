@@ -38,11 +38,10 @@ if (!in_array($slotFilter, $allowedSlots, true)) {
 $courses = [];
 $dates = [];
 try {
-    $cs = $pdo->prepare("SELECT DISTINCT a.course
-                         FROM admissions a
-                         JOIN exam_schedules es ON es.admission_id = a.id AND es.atc_id = a.atc_id
-                         WHERE a.atc_id = ? AND a.status = 'Active' AND es.exam_date IS NOT NULL AND a.course <> ''
-                         ORDER BY a.course ASC");
+    $cs = $pdo->prepare("SELECT DISTINCT course
+                         FROM admissions
+                         WHERE atc_id = ? AND status = 'Active' AND course <> ''
+                         ORDER BY course ASC");
     $cs->execute([$atcId]);
     $courses = $cs->fetchAll(PDO::FETCH_COLUMN) ?: [];
 } catch (Exception $e) {
@@ -83,7 +82,29 @@ if ($date === '') {
     $date = date('Y-m-d');
 }
 
+$buildRows = static function (array $students, string $institute): array {
+    $rows = [];
+    foreach ($students as $student) {
+        $roll = trim((string)($student['roll_no'] ?? ''));
+        if ($roll === '') {
+            $roll = trim((string)($student['registration_id'] ?? ''));
+        }
+        $photo = '';
+        $rel = trim((string)($student['photo'] ?? ''));
+        if ($rel !== '' && is_file(__DIR__ . '/../' . $rel)) {
+            $photo = '../' . $rel;
+        }
+        $rows[] = [
+            'roll' => $roll !== '' ? $roll : '—',
+            'photo' => $photo,
+            'institute' => $institute,
+        ];
+    }
+    return $rows;
+};
+
 $rows = [];
+$sheetNotice = '';
 try {
     $sql = "SELECT a.roll_no, a.registration_id, a.photo
             FROM exam_schedules es
@@ -101,24 +122,34 @@ try {
     $sql .= " ORDER BY a.roll_no ASC, a.registration_id ASC";
     $q = $pdo->prepare($sql);
     $q->execute($params);
-    foreach ($q->fetchAll(PDO::FETCH_ASSOC) ?: [] as $student) {
-        $roll = trim((string)($student['roll_no'] ?? ''));
-        if ($roll === '') {
-            $roll = trim((string)($student['registration_id'] ?? ''));
-        }
-        $photo = '';
-        $rel = trim((string)($student['photo'] ?? ''));
-        if ($rel !== '' && is_file(__DIR__ . '/../' . $rel)) {
-            $photo = '../' . $rel;
-        }
-        $rows[] = [
-            'roll' => $roll !== '' ? $roll : '—',
-            'photo' => $photo,
-            'institute' => $institute,
-        ];
-    }
+    $rows = $buildRows($q->fetchAll(PDO::FETCH_ASSOC) ?: [], $institute);
 } catch (Exception $e) {
     $rows = [];
+}
+
+if ($rows === []) {
+    try {
+        $sql = "SELECT roll_no, registration_id, photo
+                FROM admissions
+                WHERE atc_id = ? AND status = 'Active'";
+        $params = [$atcId];
+        if ($courseFilter !== 'all') {
+            $sql .= " AND course = ?";
+            $params[] = $courseFilter;
+        }
+        $sql .= " ORDER BY roll_no ASC, registration_id ASC";
+        $q = $pdo->prepare($sql);
+        $q->execute($params);
+        $rows = $buildRows($q->fetchAll(PDO::FETCH_ASSOC) ?: [], $institute);
+        if ($rows !== []) {
+            $sheetNotice = 'No exam is scheduled for this day. Showing every active student of this centre.';
+        }
+    } catch (Exception $e) {
+        $rows = [];
+    }
+}
+if ($rows === []) {
+    $sheetNotice = 'No students are on record for this day. Blank rows are ready to fill in by hand.';
 }
 
 $dateLabel = date('d F Y, l', strtotime($date));
@@ -130,6 +161,7 @@ if ($sheetMode) {
         'code' => $code,
         'course_label' => $courseFilter !== 'all' ? $courseFilter : '',
         'slot_label' => $slotFilter !== 'all' ? $slotFilter : '',
+        'notice' => $sheetNotice,
         'rows' => $rows,
         'print' => isset($_GET['print']) && $_GET['print'] === '1',
         'toolbar' => !(isset($_GET['iframe']) && $_GET['iframe'] === '1'),
@@ -162,8 +194,13 @@ $sheetUrl = 'attendance_sheet?' . $sheetQuery;
         .as-bar input, .as-bar select { height: 40px; min-width: 180px; border: 1.5px solid #e5e7eb; border-radius: 9px; padding: 0 .75rem; font-family: inherit; font-size: .88rem; background: #fff; color: #111827; }
         .as-bar button, .as-bar a.btn { height: 40px; padding: 0 1rem; border-radius: 9px; border: none; background: #1e3a8a; color: #fff; font-weight: 800; font-size: .82rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
         .as-bar a.ghost { background: #fff; color: #1e3a8a; border: 1.5px solid #c7d2fe; }
-        .as-note { font-size: .82rem; color: #64748b; margin: 0 0 1rem; }
-        .as-frame { width: 100%; height: 1220px; border: 1.5px solid #e5e7eb; border-radius: 14px; background: #e5e7eb; }
+        .as-note { font-size: .82rem; color: #334155; margin: 0 0 1rem; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: .7rem .9rem; }
+        .as-preview { border-radius: 14px; overflow: auto; }
+        .as-preview .as-page,
+        .as-preview .as-page * { font-family: "Times New Roman", Times, serif !important; }
+        .as-preview td.roll, .as-preview .as-nophoto { font-family: Arial, Helvetica, sans-serif !important; }
+        .as-preview .as-page { margin: 16px auto; }
+        <?= attendanceSheetCss() ?>
     </style>
 </head>
 <body>
@@ -225,8 +262,18 @@ $sheetUrl = 'attendance_sheet?' . $sheetQuery;
                 <a class="btn" href="<?= htmlspecialchars($sheetUrl . '&print=1') ?>" target="_blank" rel="noopener">Download PDF</a>
                 <a class="btn ghost" href="<?= htmlspecialchars($sheetUrl) ?>" target="_blank" rel="noopener">Open Sheet</a>
             </form>
-            <p class="as-note"><?= count($rows) ?> student<?= count($rows) === 1 ? '' : 's' ?> on <?= htmlspecialchars($dateLabel) ?><?= $courseFilter !== 'all' ? ' · ' . htmlspecialchars($courseFilter) : '' ?><?= $slotFilter !== 'all' ? ' · ' . htmlspecialchars($slotFilter) : '' ?>.</p>
-            <iframe class="as-frame" title="Attendance sheet preview" src="<?= htmlspecialchars($sheetUrl . '&iframe=1') ?>"></iframe>
+            <p class="as-note"><?= $sheetNotice !== '' ? htmlspecialchars($sheetNotice) : (count($rows) . ' student' . (count($rows) === 1 ? '' : 's') . ' scheduled on ' . htmlspecialchars($dateLabel) . '.') ?></p>
+            <div class="as-sheet as-preview">
+                <?php renderAttendanceSheetPages([
+                    'date_label' => $dateLabel,
+                    'institute' => $institute,
+                    'code' => $code,
+                    'course_label' => $courseFilter !== 'all' ? $courseFilter : '',
+                    'slot_label' => $slotFilter !== 'all' ? $slotFilter : '',
+                    'notice' => $sheetNotice,
+                    'rows' => $rows,
+                ]); ?>
+            </div>
         </div>
     </main>
 </div>

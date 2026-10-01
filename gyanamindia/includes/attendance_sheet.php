@@ -27,31 +27,17 @@ function attendanceSheetSampleRows(string $institute): array
     return $rows;
 }
 
-function renderAttendanceSheetDocument(array $opts): void
+function attendanceSheetCss(): string
 {
-    $dateLabel = (string)($opts['date_label'] ?? '');
-    $institute = (string)($opts['institute'] ?? '');
-    $code = (string)($opts['code'] ?? '');
-    $rows = is_array($opts['rows'] ?? null) ? $opts['rows'] : [];
-    $autoPrint = !empty($opts['print']);
-    $showToolbar = !empty($opts['toolbar']);
-    $count = count($rows);
-    header('Content-Type: text/html; charset=utf-8');
-    ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Attendance Sheet — <?= htmlspecialchars($dateLabel) ?></title>
-<style>
+    return <<<'CSS'
     @page { size: A4 portrait; margin: 0; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #e5e7eb; color: #111; font-family: "Times New Roman", Times, serif; }
+    .as-sheet, .as-sheet * { box-sizing: border-box; }
+    .as-sheet { margin: 0; background: #e5e7eb; color: #111; font-family: "Times New Roman", Times, serif; }
     .as-toolbar { position: sticky; top: 0; z-index: 2; display: flex; gap: .6rem; align-items: center; justify-content: flex-end; padding: .7rem 1rem; background: #fff; border-bottom: 1px solid #e5e7eb; }
     .as-toolbar button, .as-toolbar a { height: 36px; padding: 0 .9rem; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; font: 700 13px/36px Arial, sans-serif; text-decoration: none; color: #111; cursor: pointer; }
     .as-toolbar .primary { background: #1e3a8a; border-color: #1e3a8a; color: #fff; }
     .as-hint { margin: 0 auto 0 0; font: 500 12px/1.4 Arial, sans-serif; color: #4b5563; }
-    .as-page { width: 210mm; height: 297mm; margin: 16px auto; background: #fff; padding: 12mm; box-shadow: 0 8px 28px rgba(0,0,0,.12); display: flex; flex-direction: column; overflow: hidden; }
+    .as-page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 12mm; box-shadow: 0 8px 28px rgba(0,0,0,.12); display: flex; flex-direction: column; }
     .as-head { text-align: center; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 10px; }
     .as-brand { font-size: 22px; font-weight: 700; line-height: 1.25; }
     .as-title { font-size: 15px; font-weight: 700; margin: 4px 0 6px; }
@@ -70,26 +56,40 @@ function renderAttendanceSheetDocument(array $opts): void
     td.sign { width: 32%; height: 108px; }
     .as-foot { display: flex; justify-content: space-between; margin-top: auto; padding-top: 18px; font-size: 13px; }
     .as-signline { margin-top: 36px; border-top: 1px solid #111; width: 180px; padding-top: 4px; text-align: center; }
-    .as-empty { padding: 28px 8px; text-align: center; font-size: 14px; }
+    .as-empty { padding: 18px 8px; text-align: center; font-size: 14px; }
+    .as-blank-roll { border-bottom: 1px solid #111; height: 22px; margin: 0 8px; }
     @media print {
-        body { background: #fff; }
+        .as-sheet { background: #fff; }
         .as-toolbar { display: none !important; }
-        .as-page { width: 210mm; height: 297mm; margin: 0; box-shadow: none; page-break-after: always; }
+        .as-page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; page-break-after: always; }
         .as-page:last-child { page-break-after: auto; }
         td.roll { white-space: nowrap; }
         table.as-grid tr { break-inside: avoid; page-break-inside: avoid; }
         table.as-grid thead { display: table-header-group; }
     }
-</style>
-</head>
-<body>
-<?php if ($showToolbar): ?>
-<div class="as-toolbar">
-    <p class="as-hint">In the print dialog choose <b>Save as PDF</b> and turn off headers and footers.</p>
-    <button type="button" onclick="window.close()">Close</button>
-    <button type="button" class="primary" onclick="window.print()">Download PDF</button>
-</div>
-<?php endif; ?>
+CSS;
+}
+
+function renderAttendanceSheetPages(array $opts): void
+{
+    $dateLabel = (string)($opts['date_label'] ?? '');
+    $institute = (string)($opts['institute'] ?? '');
+    $code = (string)($opts['code'] ?? '');
+    $rows = is_array($opts['rows'] ?? null) ? $opts['rows'] : [];
+    $notice = trim((string)($opts['notice'] ?? ''));
+    $count = count($rows);
+    $blank = $count === 0;
+    if ($blank) {
+        for ($i = 0; $i < 6; $i++) {
+            $rows[] = [
+                'roll' => '',
+                'photo' => '',
+                'institute' => $institute,
+                'blank' => true,
+            ];
+        }
+    }
+    ?>
 <div class="as-page">
     <div class="as-head">
         <div class="as-brand"><?= htmlspecialchars(attendanceSheetTitle('Gyanam India Educational Services')) ?></div>
@@ -98,13 +98,12 @@ function renderAttendanceSheetDocument(array $opts): void
     <table class="as-meta">
         <tr><td class="k">Date</td><td><?= htmlspecialchars(attendanceSheetTitle($dateLabel)) ?></td></tr>
         <tr><td class="k">Institute</td><td><?= htmlspecialchars($institute !== '' ? attendanceSheetTitle($institute) : '—') ?><?= $code !== '' ? ' (' . htmlspecialchars($code) . ')' : '' ?></td></tr>
-        <?php if (!empty($opts['course_label'])): ?>
-        <tr><td class="k">Course</td><td><?= htmlspecialchars(attendanceSheetTitle((string)$opts['course_label'])) ?></td></tr>
+        <tr><td class="k">Course</td><td><?= htmlspecialchars(attendanceSheetTitle((string)($opts['course_label'] ?? '') !== '' ? (string)$opts['course_label'] : 'All Courses')) ?></td></tr>
+        <tr><td class="k">Slot</td><td><?= htmlspecialchars(attendanceSheetTitle((string)($opts['slot_label'] ?? '') !== '' ? (string)$opts['slot_label'] : 'All Slots')) ?></td></tr>
+        <tr><td class="k">Candidates</td><td><?= $blank ? 'None Scheduled' : (int)$count ?></td></tr>
+        <?php if ($notice !== ''): ?>
+        <tr><td class="k">Note</td><td><?= htmlspecialchars($notice) ?></td></tr>
         <?php endif; ?>
-        <?php if (!empty($opts['slot_label'])): ?>
-        <tr><td class="k">Slot</td><td><?= htmlspecialchars(attendanceSheetTitle((string)$opts['slot_label'])) ?></td></tr>
-        <?php endif; ?>
-        <tr><td class="k">Candidates</td><td><?= (int)$count ?></td></tr>
     </table>
     <table class="as-grid">
         <thead>
@@ -116,12 +115,9 @@ function renderAttendanceSheetDocument(array $opts): void
             </tr>
         </thead>
         <tbody>
-        <?php if ($count === 0): ?>
-            <tr><td colspan="4" class="as-empty">No students are scheduled on this date.</td></tr>
-        <?php else: ?>
-            <?php foreach ($rows as $row): ?>
+        <?php foreach ($rows as $row): ?>
             <tr>
-                <td class="roll"><?= htmlspecialchars((string)($row['roll'] ?? '—')) ?></td>
+                <td class="roll"><?php if (!empty($row['blank'])): ?><div class="as-blank-roll"></div><?php else: ?><?= htmlspecialchars((string)($row['roll'] ?? '—')) ?><?php endif; ?></td>
                 <td class="photo">
                     <?php if (!empty($row['photo'])): ?>
                         <img src="<?= htmlspecialchars((string)$row['photo']) ?>" alt="">
@@ -132,8 +128,7 @@ function renderAttendanceSheetDocument(array $opts): void
                 <td class="inst"><?= htmlspecialchars(attendanceSheetTitle((string)($row['institute'] ?? $institute))) ?></td>
                 <td class="sign"></td>
             </tr>
-            <?php endforeach; ?>
-        <?php endif; ?>
+        <?php endforeach; ?>
         </tbody>
     </table>
     <div class="as-foot">
@@ -141,6 +136,34 @@ function renderAttendanceSheetDocument(array $opts): void
         <div class="as-signline">Invigilator Signature</div>
     </div>
 </div>
+    <?php
+}
+
+function renderAttendanceSheetDocument(array $opts): void
+{
+    $dateLabel = (string)($opts['date_label'] ?? '');
+    $autoPrint = !empty($opts['print']);
+    $showToolbar = !empty($opts['toolbar']);
+    header('Content-Type: text/html; charset=utf-8');
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Attendance Sheet — <?= htmlspecialchars($dateLabel) ?></title>
+<style>
+<?= attendanceSheetCss() ?>
+</style>
+</head>
+<body class="as-sheet">
+<?php if ($showToolbar): ?>
+<div class="as-toolbar">
+    <p class="as-hint">In the print dialog choose <b>Save as PDF</b> and turn off headers and footers.</p>
+    <button type="button" onclick="window.close()">Close</button>
+    <button type="button" class="primary" onclick="window.print()">Download PDF</button>
+</div>
+<?php endif; ?>
+<?php renderAttendanceSheetPages($opts); ?>
 <?php if ($autoPrint): ?>
 <script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 400); });</script>
 <?php endif; ?>
