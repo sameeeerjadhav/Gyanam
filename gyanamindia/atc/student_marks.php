@@ -802,7 +802,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                 <div class="sm-card-head-title">IT Results &amp; Marks</div>
                 <div class="sm-card-head-count"><?= $totalStudents ?> student(s)</div>
             </div>
-            <div style="overflow-x:auto">
+            <div style="overflow-x:auto" id="smScroll">
             <table class="sm-table" id="smTable">
                 <thead><tr>
                     <th style="width:30px"></th>
@@ -1013,6 +1013,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
 </div>
 
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/list-pager.js"></script>
 <script>
 function saveInternalMarks(e, admissionId) {
     e.preventDefault();
@@ -1068,23 +1069,23 @@ function toggleSub(id, masterRow) {
     icon.textContent = isOpen ? '▸' : '▾';
 }
 
-// ── Search (instant refine on current page) ─────────────────────────────────
+const smPager = initListPager({
+    rows: '#smTable tbody tr.sm-master',
+    mount: '#smScroll',
+    label: 'students',
+    companion: function (row) {
+        const icon = row.querySelector('.sm-expand-icon');
+        const subId = icon && icon.id ? icon.id.replace('icon_', '') : '';
+        return subId ? document.getElementById(subId) : null;
+    },
+    match: function (row) {
+        const q = (document.getElementById('smSearch')?.value || '').toLowerCase().trim();
+        return !q || (row.dataset.search || '').includes(q);
+    }
+});
 const smSearchEl = document.getElementById('smSearch');
 if (smSearchEl) {
-    smSearchEl.addEventListener('input', function() {
-        const q = this.value.toLowerCase().trim();
-        document.querySelectorAll('#smTable tbody tr.sm-master').forEach(r => {
-            const match = !q || (r.dataset.search || '').includes(q);
-            r.style.display = match ? '' : 'none';
-            const icon = r.querySelector('.sm-expand-icon');
-            const subId = icon?.id?.replace('icon_', '');
-            if (subId) {
-                const sub = document.getElementById(subId);
-                if (sub && !match) { sub.classList.remove('open'); sub.style.display = 'none'; }
-                else if (sub && match) { sub.style.display = ''; }
-            }
-        });
-    });
+    smSearchEl.addEventListener('input', function () { smPager.refresh(true); });
 }
 </script>
 </body>

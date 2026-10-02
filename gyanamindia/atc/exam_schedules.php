@@ -1513,7 +1513,7 @@ try {
 
                 <!-- Table -->
                 <div class="es-card">
-                    <div style="overflow-x:auto">
+                    <div style="overflow-x:auto" id="esScroll">
                         <table class="es-table" id="esTable">
                             <thead>
                                 <tr>
@@ -1881,13 +1881,24 @@ try {
     <div id="esToastWrap"></div>
 
     <script src="../assets/js/dashboard.js"></script>
+    <script src="../assets/js/list-pager.js"></script>
     <script>
+        const esPager = initListPager({
+            rows: '#esTable tbody tr[data-id]',
+            mount: '#esScroll',
+            label: 'students',
+            match: function (row) {
+                const q = (document.getElementById('esSearch')?.value || '').toLowerCase();
+                return (row.dataset.search || '').includes(q);
+            },
+            onApply: function () {
+                const master = document.getElementById('selectAll');
+                if (master) master.checked = false;
+            }
+        });
         // ── Search ──────────────────────────────────────────────────────────────────
-        document.getElementById('esSearch').addEventListener('input', function () {
-            const q = this.value.toLowerCase();
-            document.querySelectorAll('#esTable tbody tr[data-id]').forEach(r => {
-                r.style.display = (r.dataset.search || '').includes(q) ? '' : 'none';
-            });
+        document.getElementById('esSearch')?.addEventListener('input', function () {
+            esPager.refresh(true);
         });
 
         // ── Select All / Bulk Bar ───────────────────────────────────────────────────

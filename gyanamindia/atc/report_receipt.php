@@ -202,7 +202,7 @@ endif; ?>
             </div>
 
             <div class="tbl-wrap">
-                <table class="rr-table">
+                <table class="rr-table" id="rrTable">
                     <thead>
                         <tr>
                             <th>Receipt No</th>
@@ -295,7 +295,9 @@ endif; ?>
 </div>
 
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/list-pager.js"></script>
 <script>
+initListPager({ rows: '#rrTable tbody tr', mount: '.tbl-wrap', label: 'receipts' });
 function showModal(rcptNo, jsonStr) {
     document.getElementById('modalTitle').textContent = 'Receipt ' + rcptNo;
     var students = JSON.parse(jsonStr);

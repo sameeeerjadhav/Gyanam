@@ -188,7 +188,7 @@ foreach ($students as $s) {
                 <?php if (empty($rows)): ?>
                     <div style="padding:2rem 1rem;color:#64748b;font-weight:600">No typing students found for this centre.</div>
                 <?php else: ?>
-                <div style="overflow-x:auto">
+                <div style="overflow-x:auto" id="tmScroll">
                 <table class="tm-table" id="tmTable">
                     <thead>
                         <tr>
@@ -244,12 +244,19 @@ foreach ($students as $s) {
     </main>
 </div>
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/list-pager.js"></script>
 <script>
+const tmPager = initListPager({
+    rows: '#tmTable tbody tr',
+    mount: '#tmScroll',
+    label: 'students',
+    match: function (row) {
+        const q = (document.getElementById('tmSearch')?.value || '').trim().toLowerCase();
+        return !q || (row.dataset.search || '').indexOf(q) !== -1;
+    }
+});
 document.getElementById('tmSearch')?.addEventListener('input', function () {
-    const q = this.value.trim().toLowerCase();
-    document.querySelectorAll('#tmTable tbody tr').forEach(function (row) {
-        row.style.display = !q || (row.dataset.search || '').indexOf(q) !== -1 ? '' : 'none';
-    });
+    tmPager.refresh(true);
 });
 </script>
 </body>

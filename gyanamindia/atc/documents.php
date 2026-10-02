@@ -437,7 +437,7 @@ $tabMeta = [
 
             <div class="table-card">
                 <?php if ($type === 'documents'): ?>
-                <table class="data-table documents-table">
+                <table class="data-table documents-table" id="dlTable">
                     <thead>
                         <tr>
                             <th style="width:80px">SR NO</th>
@@ -481,7 +481,7 @@ $tabMeta = [
                 </table>
 
                 <?php elseif ($type === 'banners'): ?>
-                <table class="data-table documents-table">
+                <table class="data-table documents-table" id="dlTable">
                     <thead>
                         <tr>
                             <th style="width:80px">SR NO</th>
@@ -531,7 +531,7 @@ $tabMeta = [
                 </table>
 
                 <?php else: ?>
-                <table class="data-table documents-table">
+                <table class="data-table documents-table" id="dlTable">
                     <thead>
                         <tr>
                             <th style="width:80px">SR NO</th>
@@ -583,5 +583,13 @@ $tabMeta = [
     </main>
 </div>
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/list-pager.js"></script>
+<script>
+initListPager({
+    rows: '#dlTable tbody tr',
+    mount: '#dlTable',
+    label: 'files'
+});
+</script>
 </body>
 </html>

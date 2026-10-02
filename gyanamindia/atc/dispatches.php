@@ -334,8 +334,8 @@ $kpiPending = count($pendingStudents) + count($approvedDupCerts);
                     Students Awaiting Dispatch
                     <span class="pending-pill"><?= count($pendingStudents) ?> pending</span>
                 </div>
-                <div style="overflow-x:auto">
-                <table class="tbl">
+                <div style="overflow-x:auto" id="dpPendingScroll">
+                <table class="tbl" id="dpPendingTable">
                     <thead><tr>
                         <th>#</th>
                         <th>Student</th>
@@ -392,8 +392,8 @@ $kpiPending = count($pendingStudents) + count($approvedDupCerts);
                 <div style="padding:.75rem 1.25rem;font-size:.8rem;color:#4f46e5;background:#eef2ff;border-bottom:1px solid #c7d2fe;">
                     📌 These duplicate certificate requests have been <strong>approved by Head Office</strong> and the certificates are expected to be dispatched to your center soon.
                 </div>
-                <div style="overflow-x:auto">
-                <table class="tbl">
+                <div style="overflow-x:auto" id="dpDupScroll">
+                <table class="tbl" id="dpDupTable">
                     <thead><tr>
                         <th>#</th>
                         <th>Student</th>
@@ -438,8 +438,8 @@ $kpiPending = count($pendingStudents) + count($approvedDupCerts);
                 <?php if (empty($dispatches)): ?>
                     <div class="empty-state">No dispatches received yet. Head Office will dispatch materials here.</div>
                 <?php else: ?>
-                <div style="overflow-x:auto">
-                <table class="tbl">
+                <div style="overflow-x:auto" id="dpHistoryScroll">
+                <table class="tbl" id="dpHistoryTable">
                     <thead><tr>
                         <th>Dispatch ID</th><th>Students</th><th>Postal Service</th><th>Tracking ID</th><th>Dispatch Date</th><th>Status</th><th>Actions</th>
                     </tr></thead>
@@ -539,6 +539,12 @@ $kpiPending = count($pendingStudents) + count($approvedDupCerts);
 </div>
 
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/list-pager.js"></script>
+<script>
+initListPager({ rows: '#dpPendingTable tbody tr', mount: '#dpPendingScroll', label: 'students' });
+initListPager({ rows: '#dpDupTable tbody tr', mount: '#dpDupScroll', label: 'certificates' });
+initListPager({ rows: '#dpHistoryTable tbody tr', mount: '#dpHistoryScroll', label: 'dispatches' });
+</script>
 <script>
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 

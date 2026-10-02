@@ -890,6 +890,7 @@ foreach ($allStudents as $s):
 </div>
 
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/list-pager.js"></script>
 <script>
 let currentStudent = null;
 
@@ -1065,16 +1066,20 @@ function loadStudentPaymentHistory(studentId) {
         });
 }
 
-/* Student list filter */
-function filterStdList() {
-    const q = document.getElementById('stdListSearch').value.toLowerCase().trim();
-    document.querySelectorAll('#stdListTbody tr').forEach(tr => {
-        const name = tr.dataset.name || '';
-        const roll = tr.dataset.roll || '';
+/* Student list filter + pagination */
+const feePager = initListPager({
+    rows: '#stdListTbody tr',
+    mount: '.std-list-wrap',
+    label: 'students',
+    match: function (tr) {
+        const q = (document.getElementById('stdListSearch').value || '').toLowerCase().trim();
         const statusOk = !window._stdFilter || window._stdFilter === 'all' || tr.dataset.status === window._stdFilter;
-        const textOk   = !q || name.includes(q) || roll.includes(q);
-        tr.style.display = (statusOk && textOk) ? '' : 'none';
-    });
+        const textOk = !q || (tr.dataset.name || '').includes(q) || (tr.dataset.roll || '').includes(q);
+        return statusOk && textOk;
+    }
+});
+function filterStdList() {
+    feePager.refresh(true);
 }
 function setStdFilter(f, btn) {
     window._stdFilter = f;

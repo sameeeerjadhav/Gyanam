@@ -538,7 +538,7 @@ try {
             </div>
 
             <div class="ht-table-wrapper">
-                <table class="ht-table">
+                <table class="ht-table" id="htTable">
                     <thead>
                         <tr>
                             <th style="width:42px">
@@ -879,10 +879,20 @@ try {
 </div>
 
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/list-pager.js"></script>
 <script>
 const atcDetails = <?= json_encode($atcDetails) ?>;
 const students = <?= json_encode($students) ?>;
 const examAssignments = <?= json_encode($examAssignments) ?>;
+initListPager({
+    rows: '#htTable tbody tr',
+    mount: '.ht-table-wrapper',
+    label: 'students',
+    onApply: function () {
+        const master = document.getElementById('htSelectAll');
+        if (master) master.checked = false;
+    }
+});
 
 function studentLoginId(student) {
     return String(student.registration_id || student.roll_no || '').trim();
@@ -893,7 +903,10 @@ function getSelectedHtIds() {
 }
 
 function toggleHtSelectAll(master) {
-    document.querySelectorAll('.ht-row-check').forEach(cb => { cb.checked = !!master.checked; });
+    document.querySelectorAll('.ht-row-check').forEach(cb => {
+        if (cb.closest('tr').style.display === 'none') return;
+        cb.checked = !!master.checked;
+    });
     updateHtBulkBtn();
 }
 
@@ -913,7 +926,7 @@ function updateHtBulkBtn() {
     }
     const master = document.getElementById('htSelectAll');
     if (master) {
-        const all = document.querySelectorAll('.ht-row-check');
+        const all = Array.from(document.querySelectorAll('.ht-row-check')).filter(cb => cb.closest('tr').style.display !== 'none');
         master.checked = all.length > 0 && Array.from(all).every(c => c.checked);
     }
 }

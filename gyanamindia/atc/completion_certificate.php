@@ -397,17 +397,23 @@ a.btn-generate { text-decoration:none; }
 </div><!-- /dashboard-layout -->
 
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/list-pager.js"></script>
 <script>
-document.getElementById('ccSearch').addEventListener('input', function() {
-    const q    = this.value.toLowerCase();
-    const rows = document.querySelectorAll('#ccTable tbody tr');
-    let vis = 0;
-    rows.forEach(r => {
-        const match = r.textContent.toLowerCase().includes(q);
-        r.style.display = match ? '' : 'none';
-        if (match) vis++;
-    });
-    document.getElementById('visCount').textContent = vis + ' shown';
+const ccPager = initListPager({
+    rows: '#ccTable tbody tr',
+    mount: '.cc-table-wrap',
+    label: 'students',
+    match: function (row) {
+        const q = (document.getElementById('ccSearch')?.value || '').toLowerCase();
+        return row.textContent.toLowerCase().includes(q);
+    },
+    onApply: function (total) {
+        const badge = document.getElementById('visCount');
+        if (badge) badge.textContent = total + ' shown';
+    }
+});
+document.getElementById('ccSearch').addEventListener('input', function () {
+    ccPager.refresh(true);
 });
 </script>
 </body>

@@ -82,7 +82,7 @@ $unreadCount = getUnreadNotificationCount($pdo, $userId, $role);
                     <p>No notifications yet.</p>
                 </div>
             <?php else: ?>
-                <div class="notif-list">
+                <div class="notif-list" id="notifList">
                     <?php foreach ($notifications as $n): ?>
                         <a href="?read=<?= $n['id'] ?>" class="notif-item <?= !$n['is_read'] ? 'unread' : '' ?>" style="text-decoration:none;color:inherit;">
                             <div class="notif-icon <?= $n['target_type'] === 'All' ? 'broadcast' : '' ?>">
@@ -111,5 +111,9 @@ $unreadCount = getUnreadNotificationCount($pdo, $userId, $role);
     </main>
 </div>
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/list-pager.js"></script>
+<script>
+initListPager({ rows: '#notifList .notif-item', mount: '#notifList', label: 'notifications' });
+</script>
 </body>
 </html>

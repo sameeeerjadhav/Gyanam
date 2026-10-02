@@ -349,8 +349,8 @@ try {
                     <div class="dc-card-head-title">All Students</div>
                     <div class="dc-card-head-count"><?= count($students) ?> found</div>
                 </div>
-                <div style="overflow-x:auto;">
-                    <table class="dc-table">
+                <div style="overflow-x:auto;" id="dcStudentsScroll">
+                    <table class="dc-table" id="dcStudentsTable">
                         <thead>
                             <tr>
                                 <th>#</th>
@@ -421,8 +421,8 @@ try {
                     <div class="dc-card-head-title">My Requests History</div>
                     <div class="dc-card-head-count"><?= count($myRequests) ?> total</div>
                 </div>
-                <div style="overflow-x:auto;">
-                    <table class="dc-table">
+                <div style="overflow-x:auto;" id="dcRequestsScroll">
+                    <table class="dc-table" id="dcRequestsTable">
                         <thead>
                             <tr>
                                 <th>#</th>
@@ -546,6 +546,11 @@ try {
 <div id="dcToastWrap"></div>
 
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/list-pager.js"></script>
+<script>
+initListPager({ rows: '#dcStudentsTable tbody tr', mount: '#dcStudentsScroll', label: 'students' });
+initListPager({ rows: '#dcRequestsTable tbody tr', mount: '#dcRequestsScroll', label: 'requests' });
+</script>
 <script>
 let currentAdmissionId = null;
 

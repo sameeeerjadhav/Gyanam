@@ -565,30 +565,37 @@ $atcDetails = $stmt->fetch(PDO::FETCH_ASSOC);
     </main>
 </div>
 
+<script src="../assets/js/list-pager.js"></script>
 <script>
 const courseShareAmounts = <?= json_encode($courseShareAmounts) ?>;
 const transactionFee = <?= $transactionFee ?>;
 const atcDetails = <?= json_encode($atcDetails) ?>;
+const sharePager = initListPager({
+    rows: '#studentsTable tbody tr',
+    mount: '#studentsTable',
+    label: 'students',
+    match: function (row) {
+        const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
+        return row.textContent.toLowerCase().includes(q);
+    },
+    onApply: function () {
+        const master = document.getElementById('selectAll');
+        if (master) master.checked = false;
+    }
+});
 
 let selectedStudents = [];
 
 // Search functionality
-document.getElementById('searchInput').addEventListener('input', function(e) {
-    const searchTerm = e.target.value.toLowerCase();
-    const rows = document.querySelectorAll('#studentsTable tbody tr');
-    
-    rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(searchTerm) ? '' : 'none';
-    });
+document.getElementById('searchInput').addEventListener('input', function () {
+    sharePager.refresh(true);
 });
 
 // Toggle select all
 function toggleSelectAll() {
     const selectAll = document.getElementById('selectAll');
-    const checkboxes = document.querySelectorAll('.student-checkbox');
-    
-    checkboxes.forEach(checkbox => {
+    document.querySelectorAll('.student-checkbox').forEach(checkbox => {
+        if (checkbox.closest('tr').style.display === 'none') return;
         checkbox.checked = selectAll.checked;
     });
     
