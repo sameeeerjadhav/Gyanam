@@ -99,6 +99,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 // ── Fetch courses for this ATC's center type ──────────────────────────────────
 $searchTerm  = trim($_GET['search'] ?? '');
 $typeFilter  = $_GET['type'] ?? 'all';   // 'all' | 'active' | 'inactive'
+if (!in_array($typeFilter, ['all', 'active', 'inactive'], true)) {
+    $typeFilter = 'all';
+}
 
 [$visSql, $visParams] = courseVisibilitySql($centerType, 'c.course_type', (int)$atcId, $pdo);
 
@@ -158,19 +161,73 @@ foreach ($courses as &$c) {
 }
 unset($c);
 
-// Filter by type if requested
-$filteredCourses = $courses;
-if ($typeFilter === 'active') {
-    $filteredCourses = array_values(array_filter($courses, fn($c) => $c['atc_active']));
-} elseif ($typeFilter === 'inactive') {
-    $filteredCourses = array_values(array_filter($courses, fn($c) => !$c['atc_active']));
-} else {
-    $filteredCourses = array_values($courses);
+$streamOrder = ['Abacus' => 0, 'Vedic Maths' => 1, 'IT' => 2];
+$streamOptions = [];
+$durationOptions = [];
+foreach ($courses as $c) {
+    $streamName = trim((string)($c['course_type'] ?? ''));
+    if ($streamName !== '') {
+        $streamOptions[$streamName] = true;
+    }
+    $durationName = trim((string)($c['duration'] ?? ''));
+    if ($durationName !== '') {
+        $durationOptions[$durationName] = true;
+    }
+}
+$streamOptions = array_keys($streamOptions);
+usort($streamOptions, static function ($a, $b) use ($streamOrder) {
+    return ($streamOrder[$a] ?? 9) <=> ($streamOrder[$b] ?? 9) ?: strcasecmp($a, $b);
+});
+$durationOptions = array_keys($durationOptions);
+natcasesort($durationOptions);
+$durationOptions = array_values($durationOptions);
+
+$streamFilter = trim((string)($_GET['stream'] ?? 'all'));
+if (!in_array($streamFilter, $streamOptions, true)) {
+    $streamFilter = 'all';
+}
+$durationFilter = trim((string)($_GET['duration'] ?? 'all'));
+if (!in_array($durationFilter, $durationOptions, true)) {
+    $durationFilter = 'all';
 }
 
-$totalCount    = count($courses);
-$activeCount   = count(array_filter($courses, fn($c) => $c['atc_active']));
+$scopedCourses = array_values(array_filter($courses, static function ($c) use ($streamFilter, $durationFilter) {
+    if ($streamFilter !== 'all' && (string)$c['course_type'] !== $streamFilter) {
+        return false;
+    }
+    if ($durationFilter !== 'all' && trim((string)($c['duration'] ?? '')) !== $durationFilter) {
+        return false;
+    }
+    return true;
+}));
+
+$filteredCourses = $scopedCourses;
+if ($typeFilter === 'active') {
+    $filteredCourses = array_values(array_filter($scopedCourses, fn($c) => $c['atc_active']));
+} elseif ($typeFilter === 'inactive') {
+    $filteredCourses = array_values(array_filter($scopedCourses, fn($c) => !$c['atc_active']));
+}
+
+$totalCount    = count($scopedCourses);
+$activeCount   = count(array_filter($scopedCourses, fn($c) => $c['atc_active']));
 $inactiveCount = $totalCount - $activeCount;
+$filtersOn = $searchTerm !== '' || $streamFilter !== 'all' || $durationFilter !== 'all' || $typeFilter !== 'all';
+
+$courseFilterHref = static function (array $overrides = []) use ($typeFilter, $streamFilter, $durationFilter, $searchTerm): string {
+    $q = array_merge([
+        'type' => $typeFilter,
+        'stream' => $streamFilter,
+        'duration' => $durationFilter,
+        'search' => $searchTerm,
+    ], $overrides);
+    foreach ($q as $key => $value) {
+        if ($value === '' || $value === 'all' || $value === null) {
+            unset($q[$key]);
+        }
+    }
+    $qs = http_build_query($q);
+    return $qs !== '' ? '?' . $qs : '?';
+};
 
 // Paginate filtered list
 $pagerParams = paginationParams(25);
@@ -182,7 +239,6 @@ $typeColors = [
     'Vedic Maths' => ['bg' => '#fdf4ff', 'text' => '#9333ea', 'border' => '#e9d5ff'],
     'IT'          => ['bg' => '#f0fdf4', 'text' => '#16a34a', 'border' => '#bbf7d0'],
 ];
-$qsSearch = $searchTerm !== '' ? '&search=' . urlencode($searchTerm) : '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -341,6 +397,53 @@ $qsSearch = $searchTerm !== '' ? '&search=' . urlencode($searchTerm) : '';
         .no-courses-tip svg { width: 48px; height: 48px; stroke: #c7d2fe; margin: 0 auto 1rem; display:block; }
         .no-courses-tip h4 { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); margin-bottom:.4rem; }
         .no-courses-tip p  { font-size: .875rem; color: var(--text-muted); }
+
+        .course-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .65rem;
+            align-items: center;
+            margin: -.35rem 0 1.25rem;
+            background: #fff;
+            border: 1.5px solid var(--border-color);
+            border-radius: 12px;
+            padding: .75rem .9rem;
+        }
+        .course-filters select,
+        .course-filters .cf-search {
+            height: 38px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 9px;
+            padding: 0 .75rem;
+            font-weight: 700;
+            font-family: inherit;
+            font-size: .84rem;
+            color: #1f2937;
+            background: #fff;
+        }
+        .course-filters select { min-width: 150px; }
+        .course-filters .cf-search {
+            min-width: 220px;
+            margin-left: auto;
+        }
+        .course-filters .cf-clear {
+            height: 38px;
+            display: inline-flex;
+            align-items: center;
+            padding: 0 .85rem;
+            border-radius: 9px;
+            border: 1.5px solid #e2e8f0;
+            color: #475569;
+            font-size: .82rem;
+            font-weight: 800;
+            text-decoration: none;
+            background: #f8fafc;
+        }
+        .course-filters .cf-clear:hover { border-color: #c7d2fe; color: #3730a3; background: #eef2ff; }
+        @media (max-width: 800px) {
+            .course-filters .cf-search { margin-left: 0; width: 100%; }
+            .course-filters select { flex: 1 1 140px; }
+        }
     </style>
 </head>
 <body>
@@ -379,7 +482,7 @@ $qsSearch = $searchTerm !== '' ? '&search=' . urlencode($searchTerm) : '';
 
             <!-- Stats -->
             <div class="fee-stats">
-                <a href="?type=all<?= $qsSearch ?>" class="fee-stat s-all <?= $typeFilter==='all'?'active-tab':'' ?>" style="cursor:pointer;text-decoration:none">
+                <a href="<?= htmlspecialchars($courseFilterHref(['type' => 'all'])) ?>" class="fee-stat s-all <?= $typeFilter==='all'?'active-tab':'' ?>" style="cursor:pointer;text-decoration:none">
                     <div class="fee-stat-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
                     </div>
@@ -388,7 +491,7 @@ $qsSearch = $searchTerm !== '' ? '&search=' . urlencode($searchTerm) : '';
                         <div class="fee-stat-lbl">Total Courses</div>
                     </div>
                 </a>
-                <a href="?type=active<?= $qsSearch ?>" class="fee-stat s-active <?= $typeFilter==='active'?'active-tab':'' ?>" style="cursor:pointer;text-decoration:none">
+                <a href="<?= htmlspecialchars($courseFilterHref(['type' => 'active'])) ?>" class="fee-stat s-active <?= $typeFilter==='active'?'active-tab':'' ?>" style="cursor:pointer;text-decoration:none">
                     <div class="fee-stat-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                     </div>
@@ -397,7 +500,7 @@ $qsSearch = $searchTerm !== '' ? '&search=' . urlencode($searchTerm) : '';
                         <div class="fee-stat-lbl">Active (Fee Set)</div>
                     </div>
                 </a>
-                <a href="?type=inactive<?= $qsSearch ?>" class="fee-stat s-inactive <?= $typeFilter==='inactive'?'active-tab':'' ?>" style="cursor:pointer;text-decoration:none">
+                <a href="<?= htmlspecialchars($courseFilterHref(['type' => 'inactive'])) ?>" class="fee-stat s-inactive <?= $typeFilter==='inactive'?'active-tab':'' ?>" style="cursor:pointer;text-decoration:none">
                     <div class="fee-stat-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                     </div>
@@ -407,15 +510,31 @@ $qsSearch = $searchTerm !== '' ? '&search=' . urlencode($searchTerm) : '';
                     </div>
                 </a>
 
-                <!-- Search -->
-                <div style="margin-left:auto; display:flex; align-items:center;">
-                    <form method="GET" id="courseSearchForm" class="search-bar" style="display:flex;align-items:center">
-                        <input type="hidden" name="type" value="<?= htmlspecialchars($typeFilter) ?>">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                        <input type="search" name="search" id="searchInput" placeholder="Search courses…" value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off" aria-label="Search courses">
-                    </form>
-                </div>
             </div>
+
+            <form method="GET" id="courseSearchForm" class="course-filters">
+                <select name="stream" id="streamFilter" aria-label="Course type">
+                    <option value="all">All types</option>
+                    <?php foreach ($streamOptions as $streamName): ?>
+                        <option value="<?= htmlspecialchars($streamName) ?>" <?= $streamFilter === $streamName ? 'selected' : '' ?>><?= htmlspecialchars($streamName) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select name="duration" id="durationFilter" aria-label="Duration">
+                    <option value="all">All durations</option>
+                    <?php foreach ($durationOptions as $durationName): ?>
+                        <option value="<?= htmlspecialchars($durationName) ?>" <?= $durationFilter === $durationName ? 'selected' : '' ?>><?= htmlspecialchars($durationName) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select name="type" id="statusFilter" aria-label="Status">
+                    <option value="all" <?= $typeFilter === 'all' ? 'selected' : '' ?>>All statuses</option>
+                    <option value="active" <?= $typeFilter === 'active' ? 'selected' : '' ?>>Active</option>
+                    <option value="inactive" <?= $typeFilter === 'inactive' ? 'selected' : '' ?>>Not active</option>
+                </select>
+                <input type="search" class="cf-search" name="search" id="searchInput" placeholder="Search courses…" value="<?= htmlspecialchars($searchTerm) ?>" autocomplete="off" aria-label="Search courses">
+                <?php if ($filtersOn): ?>
+                    <a class="cf-clear" href="courses.php">Clear</a>
+                <?php endif; ?>
+            </form>
 
             <!-- Table -->
             <div class="table-card">
@@ -439,7 +558,7 @@ $qsSearch = $searchTerm !== '' ? '&search=' . urlencode($searchTerm) : '';
                             <div class="no-courses-tip">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
                                 <h4>No courses found</h4>
-                                <p>No courses match your centre type (<strong><?= htmlspecialchars($centerType ?: 'Not Set') ?></strong>). Contact Head Office to add matching courses.</p>
+                                <p><?php if ($filtersOn): ?>No courses match these filters.<?php else: ?>No courses match your centre type (<strong><?= htmlspecialchars($centerType ?: 'Not Set') ?></strong>). Contact Head Office to add matching courses.<?php endif; ?></p>
                             </div>
                         </td></tr>
                     <?php else: ?>
@@ -552,7 +671,8 @@ GyanamLiveFilter({
     input: '#searchInput',
     searchParam: 'search',
     debounceMs: 400,
-    keepParams: ['type'],
+    keepParams: ['type', 'stream', 'duration'],
+    reloadSelects: ['#streamFilter', '#durationFilter', '#statusFilter'],
 });
 
 // ── Fee change handler ────────────────────────────────────────────────────────
