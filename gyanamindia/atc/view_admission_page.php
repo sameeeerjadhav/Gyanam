@@ -488,6 +488,12 @@ try {
             <div class="conv-section-body" style="text-align:center;color:var(--text-muted);padding:2rem 1rem;">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:36px;height:36px;opacity:.35;margin-bottom:.5rem;display:block;margin-left:auto;margin-right:auto;"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                 No fee payments recorded for this student yet.
+                <div style="margin-top:.9rem;">
+                    <a href="collect_fees.php?id=<?= (int)$admId ?>" class="inq-btn inq-btn-primary" style="display:inline-flex;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:16px;height:16px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Collect Fees
+                    </a>
+                </div>
             </div>
             <?php else: ?>
             <div style="overflow-x:auto;">
