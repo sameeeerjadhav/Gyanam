@@ -113,20 +113,29 @@ foreach ($students as $s) {
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
     <style>
-        .tm-note { background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:12px;padding:.85rem 1rem;font-size:.88rem;font-weight:600;margin-bottom:1.15rem;line-height:1.45 }
+        .tm-note { background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:12px;padding:.85rem 1rem;font-size:.84rem;font-weight:600;margin-bottom:1rem;line-height:1.45 }
         .tm-ok { background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:10px;padding:.7rem 1rem;margin-bottom:1rem;font-weight:700 }
         .tm-err { background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:10px;padding:.7rem 1rem;margin-bottom:1rem;font-weight:700 }
-        .tm-card { background:#fff;border:1.5px solid var(--border-color);border-radius:14px;padding:1.1rem 1.2rem;margin-bottom:1rem }
-        .tm-card h3 { margin:0 0 .35rem;font-size:1rem;font-weight:800 }
-        .tm-meta { font-size:.78rem;color:#64748b;font-weight:600;margin-bottom:.85rem }
-        .tm-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.65rem }
-        .tm-field label { display:block;font-size:.72rem;font-weight:700;color:#475569;margin-bottom:.25rem }
-        .tm-field input { width:100%;height:38px;border:1.5px solid #e2e8f0;border-radius:8px;padding:0 .6rem;font-weight:700 }
-        .tm-actions { display:flex;align-items:center;gap:.75rem;margin-top:.9rem;flex-wrap:wrap }
-        .tm-btn { height:38px;padding:0 1rem;border:none;border-radius:8px;background:#059669;color:#fff;font-weight:800;cursor:pointer }
-        .badge { display:inline-block;padding:.2rem .55rem;border-radius:999px;font-size:.72rem;font-weight:800 }
+        .tm-kpi { display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem }
+        .tm-kpi div { background:#fff;border:1px solid #e6eaf3;border-radius:14px;padding:.9rem 1rem }
+        .tm-kpi strong { display:block;font-size:1.45rem;font-weight:800;color:#111827 }
+        .tm-kpi span { font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#64748b }
+        .tm-card { background:#fff;border:1px solid #e6eaf3;border-radius:14px;overflow:hidden }
+        .tm-head { display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.85rem 1rem;border-bottom:1px solid #eef1fd }
+        .tm-head h3 { margin:0;font-size:.95rem;font-weight:800 }
+        .tm-search { height:36px;border:1.5px solid #e2e8f0;border-radius:8px;padding:0 .7rem;font-weight:600;min-width:220px }
+        .tm-table { width:100%;border-collapse:collapse;font-size:.8rem }
+        .tm-table th { text-align:left;font-size:.68rem;letter-spacing:.03em;text-transform:uppercase;color:#64748b;padding:.65rem .5rem;background:#f8fafc;white-space:nowrap }
+        .tm-table td { padding:.55rem .5rem;border-top:1px solid #f1f5f9;vertical-align:middle }
+        .tm-name { font-weight:800;color:#111827 }
+        .tm-sub { font-size:.72rem;color:#64748b;font-weight:600 }
+        .tm-table input[type=number] { width:64px;height:32px;border:1.5px solid #e2e8f0;border-radius:8px;padding:0 .35rem;font-weight:700;text-align:center }
+        .tm-btn { height:32px;padding:0 .75rem;border:none;border-radius:8px;background:#059669;color:#fff;font-weight:800;cursor:pointer }
+        .tm-total { font-weight:800;color:#111827 }
+        .badge { display:inline-block;padding:.15rem .45rem;border-radius:999px;font-size:.68rem;font-weight:800 }
         .badge-ok { background:#d1fae5;color:#065f46 }
         .badge-wait { background:#fef3c7;color:#92400e }
+        @media (max-width:900px) { .tm-kpi { grid-template-columns:1fr } }
     </style>
 </head>
 <body>
@@ -140,7 +149,7 @@ foreach ($students as $s) {
                 </button>
                 <div class="header-greeting">
                     <h2>Typing Marks</h2>
-                    <p>Enter Statement of Marks particulars (same for all typing courses)</p>
+                    <p>Statement of Marks particulars — total 100</p>
                 </div>
             </div>
             <div class="header-right">
@@ -149,57 +158,99 @@ foreach ($students as $s) {
             </div>
         </header>
         <div class="page-content">
+            <?php
+            $tmSaved = 0;
+            foreach ($rows as $r) {
+                if (!empty($r['complete'])) {
+                    $tmSaved++;
+                }
+            }
+            $tmPending = count($rows) - $tmSaved;
+            ?>
+            <div class="tm-kpi">
+                <div><strong><?= count($rows) ?></strong><span>Typing students</span></div>
+                <div><strong><?= $tmSaved ?></strong><span>Marks saved</span></div>
+                <div><strong><?= $tmPending ?></strong><span>Marks pending</span></div>
+            </div>
             <div class="tm-note">
-                Fill all six particulars for each typing student. Max marks:
-                Speed 20 · Data Entry 30 · E-Mail 5 · Letter 15 · Statement 10 · Basics 20 (total 100).
-                Certificate / marksheet printouts are issued by Admin only.
+                Typing courses only. Six particulars, same maximums for every typing course:
+                Speed 20 · Data Entry 30 · E-Mail 5 · Letter 15 · Statement 10 · Computer Basics 20.
+                Total is out of 100. Certificate printouts stay with Admin.
             </div>
             <?php if ($flashOk !== ''): ?><div class="tm-ok"><?= htmlspecialchars($flashOk) ?></div><?php endif; ?>
             <?php if ($flashErr !== ''): ?><div class="tm-err"><?= htmlspecialchars($flashErr) ?></div><?php endif; ?>
 
-            <?php if (empty($rows)): ?>
-                <div class="tm-card" style="color:#64748b;font-weight:600">No typing students found for this ATC.</div>
-            <?php else: ?>
-                <?php foreach ($rows as $r):
-                    $parts = typingMarksheetParticulars((int)$r['wpm'], (int)$r['kph']);
-                ?>
-                <div class="tm-card">
-                    <h3><?= htmlspecialchars($r['name']) ?></h3>
-                    <div class="tm-meta">
-                        <?= htmlspecialchars($r['reg_id'] ?: ('#' . $r['id'])) ?>
-                        · <?= htmlspecialchars($r['course']) ?>
-                        <?php if ($r['complete']): ?>
-                            · <span class="badge badge-ok">Saved · <?= (int)$r['total'] ?> (<?= htmlspecialchars($r['grade']) ?>)</span>
-                        <?php else: ?>
-                            · <span class="badge badge-wait">Not saved</span>
-                        <?php endif; ?>
-                    </div>
-                    <form method="post">
-                        <input type="hidden" name="save_typing_marks" value="1">
-                        <input type="hidden" name="admission_id" value="<?= (int)$r['id'] ?>">
-                        <div class="tm-grid">
+            <div class="tm-card">
+                <div class="tm-head">
+                    <h3>Typing Statement of Marks</h3>
+                    <input type="search" class="tm-search" id="tmSearch" placeholder="Search name or reg ID" autocomplete="off">
+                </div>
+                <?php if (empty($rows)): ?>
+                    <div style="padding:2rem 1rem;color:#64748b;font-weight:600">No typing students found for this centre.</div>
+                <?php else: ?>
+                <div style="overflow-x:auto">
+                <table class="tm-table" id="tmTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Student</th>
+                            <th>Speed /20</th>
+                            <th>Data Entry /30</th>
+                            <th>E-Mail /5</th>
+                            <th>Letter /15</th>
+                            <th>Statement /10</th>
+                            <th>Basics /20</th>
+                            <th>Total</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($rows as $i => $r):
+                        $parts = typingMarksheetParticulars((int)$r['wpm'], (int)$r['kph']);
+                    ?>
+                        <tr data-search="<?= htmlspecialchars(mb_strtolower($r['name'] . ' ' . $r['reg_id'] . ' ' . $r['course'])) ?>">
+                            <td><?= $i + 1 ?></td>
+                            <td>
+                                <div class="tm-name"><?= htmlspecialchars($r['name']) ?></div>
+                                <div class="tm-sub"><?= htmlspecialchars($r['reg_id'] ?: ('#' . $r['id'])) ?> · <?= htmlspecialchars($r['course']) ?></div>
+                            </td>
                             <?php foreach ($parts as $p):
                                 $key = (string)$p['key'];
                                 $val = $r['by_key'][$key] ?? '';
                             ?>
-                            <div class="tm-field">
-                                <label><?= htmlspecialchars((string)$p['label']) ?> (max <?= (int)$p['max'] ?>)</label>
-                                <input type="number" name="marks[<?= htmlspecialchars($key) ?>]"
+                            <td>
+                                <input form="tm-<?= (int)$r['id'] ?>" type="number" name="marks[<?= htmlspecialchars($key) ?>]"
                                        min="0" max="<?= (int)$p['max'] ?>" required
+                                       title="<?= htmlspecialchars((string)$p['label']) ?> (max <?= (int)$p['max'] ?>)"
                                        value="<?= $val !== '' ? (int)$val : '' ?>">
-                            </div>
+                            </td>
                             <?php endforeach; ?>
-                        </div>
-                        <div class="tm-actions">
-                            <button type="submit" class="tm-btn">Save marks</button>
-                        </div>
-                    </form>
+                            <td class="tm-total"><?= $r['complete'] ? ((int)$r['total'] . ' · ' . htmlspecialchars((string)$r['grade'])) : '—' ?></td>
+                            <td>
+                                <form id="tm-<?= (int)$r['id'] ?>" method="post">
+                                    <input type="hidden" name="save_typing_marks" value="1">
+                                    <input type="hidden" name="admission_id" value="<?= (int)$r['id'] ?>">
+                                    <button type="submit" class="tm-btn">Save</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
                 </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
+                <?php endif; ?>
+            </div>
         </div>
     </main>
 </div>
 <script src="../assets/js/dashboard.js"></script>
+<script>
+document.getElementById('tmSearch')?.addEventListener('input', function () {
+    const q = this.value.trim().toLowerCase();
+    document.querySelectorAll('#tmTable tbody tr').forEach(function (row) {
+        row.style.display = !q || (row.dataset.search || '').indexOf(q) !== -1 ? '' : 'none';
+    });
+});
+</script>
 </body>
 </html>

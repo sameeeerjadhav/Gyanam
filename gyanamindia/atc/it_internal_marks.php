@@ -1,6 +1,6 @@
 <?php
 /**
- * Legacy page — internals now live on Student Marks.
+ * Legacy page — IT internals now live on IT Marks.
  */
 header('Location: student_marks.php', true, 302);
 exit;

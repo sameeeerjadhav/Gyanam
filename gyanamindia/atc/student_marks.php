@@ -1,8 +1,7 @@
 <?php
 /**
- * Gyanam Portal — ATC: Student Marks & Results
- * Groups results by student — one row per student with expandable exam history.
- * Fetches from Exam Portal API + local exam_schedules.
+ * ATC IT Marks — Exam /40 + Internal /60 for GIIT IT courses only.
+ * Typing and Abacus students are on their own pages.
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -96,7 +95,10 @@ try {
             continue;
         }
         $a['login_id'] = $canon;
-        $a['is_it'] = isGiitItCourse($a['course_type'] ?? null, $a['course'] ?? null);
+        if (!isGiitItCourse($a['course_type'] ?? null, $a['course'] ?? null)) {
+            continue;
+        }
+        $a['is_it'] = true;
         $admByReg[$canon] = $a;
         $admIds[] = (int)$a['id'];
         $ownIds[strtoupper($canon)] = $canon;
@@ -454,15 +456,13 @@ foreach (array_keys($grouped) as $key) {
 $courseFilter = trim($_GET['course'] ?? 'all');
 $resultFilter = strtolower(trim($_GET['result'] ?? 'all')); // all|passed|failed|none
 $marksFilter  = strtolower(trim($_GET['marks'] ?? 'all'));  // all|complete|missing
-$typeFilter   = strtolower(trim($_GET['type'] ?? 'all'));   // all|it|other
+$typeFilter   = 'it';
 $searchFilter = trim($_GET['q'] ?? '');
 
 $allowedResults = ['all', 'passed', 'failed', 'none'];
 $allowedMarks   = ['all', 'complete', 'missing'];
-$allowedTypes   = ['all', 'it', 'other'];
 if (!in_array($resultFilter, $allowedResults, true)) $resultFilter = 'all';
 if (!in_array($marksFilter, $allowedMarks, true)) $marksFilter = 'all';
-if (!in_array($typeFilter, $allowedTypes, true)) $typeFilter = 'all';
 
 $allCourses = array_values(array_unique(array_filter(array_column($grouped, 'course'))));
 sort($allCourses);
@@ -479,11 +479,7 @@ $basePool = $grouped;
 if ($courseFilter !== 'all') {
     $basePool = array_filter($basePool, fn($g) => ($g['course'] ?? '') === $courseFilter);
 }
-if ($typeFilter === 'it') {
-    $basePool = array_filter($basePool, fn($g) => !empty($g['is_it']));
-} elseif ($typeFilter === 'other') {
-    $basePool = array_filter($basePool, fn($g) => empty($g['is_it']));
-}
+$basePool = array_filter($basePool, fn($g) => !empty($g['is_it']));
 if ($searchFilter !== '') {
     $q = mb_strtolower($searchFilter);
     $basePool = array_filter($basePool, static function ($g) use ($q) {
@@ -565,7 +561,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Student Marks — ATC Login | Gyanam India</title>
+<title>IT Marks — ATC Login | Gyanam India</title>
 <?php include __DIR__ . '/../includes/head_fonts.php'; ?>
 <link rel="stylesheet" href="../assets/css/global.css">
 <link rel="stylesheet" href="../assets/css/dashboard.css">
@@ -710,8 +706,8 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
             <div class="header-greeting">
-                <h2>Student Marks</h2>
-                <p>Exam results & IT marks (Exam /40 + Internal /60)</p>
+                <h2>IT Marks</h2>
+                <p>Exam /40 + Internal /60. Total = Exam + Internal.</p>
             </div>
         </div>
         <div class="header-right">
@@ -747,8 +743,8 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
         </div>
 
         <div class="sm-banner">
-            For <strong>IT courses</strong>: enter <strong>Exam /40</strong> + <strong>Internal /60</strong> here (or they appear after Admin Manual Certificate).
-            Total = Exam + Internal. Non-IT rows show "—" for these fields.
+            IT courses only. Enter <strong>Exam /40</strong> and <strong>Internal /60</strong>.
+            Total = Exam + Internal. Typing marks are on the Typing Marks page.
         </div>
 
         <?php if ($fetchError): ?>
@@ -764,11 +760,6 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                     <option value="<?= htmlspecialchars($c) ?>" <?= $courseFilter===$c?'selected':'' ?>><?= htmlspecialchars($c) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <select class="sm-filter" name="type" onchange="this.form.submit()" style="max-width:140px">
-                    <option value="all" <?= $typeFilter==='all'?'selected':'' ?>>All types</option>
-                    <option value="it" <?= $typeFilter==='it'?'selected':'' ?>>IT only</option>
-                    <option value="other" <?= $typeFilter==='other'?'selected':'' ?>>Non-IT</option>
-                </select>
                 <select class="sm-filter" name="marks" onchange="this.form.submit()" style="max-width:170px">
                     <option value="all" <?= $marksFilter==='all'?'selected':'' ?>>All marks</option>
                     <option value="complete" <?= $marksFilter==='complete'?'selected':'' ?>>Marks complete</option>
@@ -777,7 +768,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                 <input type="hidden" name="result" value="<?= htmlspecialchars($resultFilter) ?>">
                 <input type="text" class="sm-search" name="q" id="smSearch" value="<?= htmlspecialchars($searchFilter) ?>" placeholder="Search by name, reg ID…" autocomplete="off">
                 <button type="submit" class="sm-filter" style="cursor:pointer;background:var(--sm-brand);color:#fff;border-color:var(--sm-brand)">Search</button>
-                <?php if ($courseFilter !== 'all' || $resultFilter !== 'all' || $marksFilter !== 'all' || $typeFilter !== 'all' || $searchFilter !== ''): ?>
+                <?php if ($courseFilter !== 'all' || $resultFilter !== 'all' || $marksFilter !== 'all' || $searchFilter !== ''): ?>
                 <a class="sm-clear" href="student_marks.php">Clear</a>
                 <?php endif; ?>
             </div>
@@ -798,7 +789,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                 <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
             <h4>No students found</h4>
-            <p>IT students will appear here for internal marks once admitted. Exam results appear when the Exam Portal is connected or schedules are updated.</p>
+            <p>IT students appear here for Exam /40 and Internal /60. Typing students are on Typing Marks.</p>
         </div>
         <?php else: ?>
 
@@ -808,7 +799,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                 <div class="sm-card-head-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                 </div>
-                <div class="sm-card-head-title">Student Results & Marks</div>
+                <div class="sm-card-head-title">IT Results &amp; Marks</div>
                 <div class="sm-card-head-count"><?= $totalStudents ?> student(s)</div>
             </div>
             <div style="overflow-x:auto">
