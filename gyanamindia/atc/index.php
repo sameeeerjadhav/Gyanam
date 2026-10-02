@@ -291,13 +291,27 @@ try {
 } catch (Exception $e) {
 }
 
-$birthdays = [];
+$studentBirthdays = [];
+$atcCentreName = '';
 try {
-    $stmt = $pdo->prepare("SELECT CONCAT(first_name,' ',COALESCE(middle_name,''),' ',last_name) as name, dob, course, IFNULL(mobile,'') as mobile FROM admissions WHERE atc_id = ? AND status='Active' AND MONTH(dob)=MONTH(CURDATE()) AND DAY(dob)=DAY(CURDATE()) ORDER BY first_name ASC");
+    $nameStmt = $pdo->prepare('SELECT name FROM atc_centers WHERE id = ?');
+    $nameStmt->execute([$atcId]);
+    $atcCentreName = trim((string)$nameStmt->fetchColumn());
+} catch (Exception $e) {}
+try {
+    $stmt = $pdo->prepare("
+        SELECT TRIM(CONCAT(first_name, ' ', COALESCE(middle_name, ''), ' ', last_name)) AS name,
+               course,
+               IFNULL(mobile, '') AS mobile,
+               MONTH(dob) AS b_month,
+               DAY(dob) AS b_day
+        FROM admissions
+        WHERE atc_id = ? AND status = 'Active' AND dob IS NOT NULL
+        ORDER BY MONTH(dob), DAY(dob), first_name
+    ");
     $stmt->execute([$atcId]);
-    $birthdays = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
-}
+    $studentBirthdays = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {}
 
 $tickerNotifs = [];
 try {
@@ -1689,6 +1703,74 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
         .dash-widget-link:hover {
             text-decoration: underline
         }
+
+        .atc-stu-cal {
+            display: grid;
+            grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+            gap: .75rem;
+            margin-bottom: 1rem;
+            align-items: stretch;
+        }
+        .atc-stu-cal-card, .atc-stu-cal-list {
+            background: #fff;
+            border: 1px solid #e6eaf3;
+            border-radius: 14px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.04);
+            overflow: hidden;
+        }
+        .atc-stu-cal-card { padding: .7rem .75rem .6rem; }
+        .atc-cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: .35rem; }
+        .atc-cal-nav h3 { margin: 0; font-size: .85rem; font-weight: 800; color: #111827; }
+        .atc-cal-nav button {
+            width: 28px; height: 28px; border-radius: 50%; border: 1px solid #e5e7eb; background: #fff;
+            color: #64748b; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+        }
+        .atc-cal-nav button:hover { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
+        .atc-cal-nav svg { width: 14px; height: 14px; }
+        .atc-cal-weekdays, .atc-cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+        .atc-cal-weekdays span { text-align: center; font-size: .62rem; font-weight: 700; color: #94a3b8; padding: .15rem 0; }
+        .atc-cal-day {
+            position: relative; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+            font-size: .72rem; font-weight: 700; color: #334155; border: 1px solid transparent;
+        }
+        .atc-cal-day.empty { visibility: hidden; }
+        .atc-cal-day.has-bday { cursor: pointer; }
+        .atc-cal-day.has-bday:hover { background: #fdf2f8; }
+        .atc-cal-day.is-today { background: #4f46e5; color: #fff; }
+        .atc-cal-day.is-holiday:not(.is-today) { background: #f5f3ff; color: #5b21b6; border-color: #ddd6fe; }
+        .atc-cal-day.is-selected:not(.is-today) { outline: 1.5px solid #4f46e5; }
+        .atc-cal-dot { position: absolute; bottom: 3px; width: 4px; height: 4px; border-radius: 50%; background: #ec4899; }
+        .atc-cal-day.is-today .atc-cal-dot { background: #fda4af; }
+        .atc-cal-legend { display: flex; flex-wrap: wrap; gap: .35rem .7rem; margin-top: .4rem; padding-top: .4rem; border-top: 1px solid #f1f5f9; font-size: .62rem; font-weight: 700; color: #64748b; }
+        .atc-cal-legend span { display: inline-flex; align-items: center; gap: .3rem; }
+        .atc-lg { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+        .atc-lg.holiday { border: 1.5px solid #c4b5fd; background: #f5f3ff; }
+        .atc-lg.today { background: #4f46e5; }
+        .atc-lg.bday { width: 6px; height: 6px; border-radius: 50%; background: #ec4899; }
+        .atc-stu-cal-head {
+            display: flex; align-items: center; gap: .4rem; padding: .7rem .85rem; border-bottom: 1px solid #f1f5f9;
+            font-weight: 800; font-size: .82rem; color: #111827;
+        }
+        .atc-stu-cal-body { max-height: 280px; overflow-y: auto; }
+        .atc-bday-row { display: flex; align-items: center; gap: .65rem; padding: .55rem .85rem; border-bottom: 1px solid #f3f4f6; }
+        .atc-bday-row:last-child { border-bottom: none; }
+        .atc-bday-avatar {
+            width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff;
+            display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 800;
+        }
+        .atc-bday-name { font-weight: 700; font-size: .82rem; color: #111827; }
+        .atc-bday-meta { font-size: .7rem; color: #6b7280; margin-top: .1rem; }
+        .atc-wish-btn {
+            margin-left: auto; display: inline-flex; align-items: center; padding: .35rem .7rem;
+            border-radius: 999px; border: none; background: #25d366; color: #fff;
+            font-size: .72rem; font-weight: 700; cursor: pointer; font-family: inherit; flex-shrink: 0;
+        }
+        .atc-wish-missing { margin-left: auto; font-size: .68rem; font-weight: 700; color: #9ca3af; }
+        .atc-bday-empty { padding: 1.5rem .85rem; text-align: center; color: #94a3b8; font-size: .8rem; font-weight: 600; }
+        @media (max-width: 800px) {
+            .atc-stu-cal { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 
@@ -2301,10 +2383,146 @@ $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInqui
 
         // ── Birthday Wish ─────────────────────────────────────────────────────────────
         function sendAtcBdayWish(name, mobile) {
-            const msg = encodeURIComponent('Dear ' + name + ',\n\nWarm Birthday Greetings from the entire Gyanam India family!\n\nOn this special occasion, we extend our heartfelt wishes to you. May this new year of your life bring you great health, abundant happiness, and continued success in everything you pursue.\n\nWe are grateful to have you as a valued part of the Gyanam India community. May your day be as wonderful as the joy you bring to everyone around you.\n\nWith warm regards,\nTeam Gyanam India');
-            const num = mobile.replace(/\D/g, '');
-            window.open('https://wa.me/91' + num + '?text=' + msg, '_blank');
+            const centre = <?= json_encode($atcCentreName !== '' ? $atcCentreName : 'Gyanam India', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            const msg = encodeURIComponent(
+                'Dear ' + name + ',\n\nHappy Birthday!\n\nWarm wishes from ' + centre + '. May this year bring you good health, happiness, and success in your studies.\n\nWith regards,\n' + centre + '\nGyanam India'
+            );
+            let num = String(mobile || '').replace(/\D/g, '');
+            if (num.length === 11 && num.charAt(0) === '0') num = num.slice(1);
+            if (num.length === 10) num = '91' + num;
+            if (!num) return;
+            window.open('https://wa.me/' + num + '?text=' + msg, '_blank');
         }
+
+        (function initAtcStudentCalendar() {
+            const daysEl = document.getElementById('atcCalDays');
+            const titleEl = document.getElementById('atcCalTitle');
+            const listEl = document.getElementById('atcCalList');
+            const listTitle = document.getElementById('atcCalListTitle');
+            if (!daysEl || !titleEl || !listEl) return;
+
+            const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            const raw = <?= json_encode(array_map(static function ($r) {
+                return [
+                    'name' => trim((string)($r['name'] ?? '')),
+                    'course' => (string)($r['course'] ?? ''),
+                    'mobile' => (string)($r['mobile'] ?? ''),
+                    'month' => (int)($r['b_month'] ?? 0),
+                    'day' => (int)($r['b_day'] ?? 0),
+                ];
+            }, $studentBirthdays), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            const holidays = {
+                '1-26': 'Republic Day',
+                '8-15': 'Independence Day',
+                '10-2': 'Gandhi Jayanti',
+                '1-1': 'New Year',
+                '5-1': 'Labour Day'
+            };
+            const byKey = {};
+            raw.forEach(b => {
+                if (!b.month || !b.day) return;
+                const k = b.month + '-' + b.day;
+                (byKey[k] || (byKey[k] = [])).push(b);
+            });
+
+            const now = new Date();
+            let viewY = now.getFullYear();
+            let viewM = now.getMonth();
+            let selectedDay = null;
+
+            function esc(s) {
+                return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            }
+
+            function renderList(monthIdx, dayFilter) {
+                const monthNum = monthIdx + 1;
+                const items = [];
+                Object.keys(byKey).forEach(k => {
+                    const parts = k.split('-').map(Number);
+                    if (parts[0] !== monthNum) return;
+                    if (dayFilter && parts[1] !== dayFilter) return;
+                    byKey[k].forEach(b => items.push(Object.assign({}, b, { day: parts[1] })));
+                });
+                items.sort((a, b) => a.day - b.day || a.name.localeCompare(b.name));
+                listTitle.textContent = dayFilter
+                    ? ('Birthdays — ' + dayFilter + ' ' + MONTHS[monthIdx])
+                    : ('Birthdays — ' + MONTHS[monthIdx]);
+                if (!items.length) {
+                    listEl.innerHTML = '<div class="atc-bday-empty">No student birthdays this ' + (dayFilter ? 'day' : 'month') + '.</div>';
+                    return;
+                }
+                const todayM = now.getMonth();
+                const todayD = now.getDate();
+                listEl.innerHTML = items.map(b => {
+                    const init = esc((b.name || '?').trim().charAt(0).toUpperCase());
+                    const when = b.day + ' ' + MONTHS[monthIdx].slice(0, 3);
+                    const today = (monthIdx === todayM && b.day === todayD && viewY === now.getFullYear()) ? ' · Today' : '';
+                    const course = b.course ? esc(b.course) + ' · ' : '';
+                    const wish = b.mobile
+                        ? `<button type="button" class="atc-wish-btn" data-name="${esc(b.name)}" data-mobile="${esc(b.mobile)}">Wish</button>`
+                        : '<span class="atc-wish-missing">No mobile</span>';
+                    return `<div class="atc-bday-row">
+                        <div class="atc-bday-avatar">${init}</div>
+                        <div style="min-width:0;flex:1">
+                            <div class="atc-bday-name">${esc(b.name)}</div>
+                            <div class="atc-bday-meta">${course}${when}${today}</div>
+                        </div>
+                        ${wish}
+                    </div>`;
+                }).join('');
+            }
+
+            function render() {
+                titleEl.textContent = MONTHS[viewM] + ' ' + viewY;
+                const first = new Date(viewY, viewM, 1);
+                let startPad = first.getDay() - 1;
+                if (startPad < 0) startPad = 6;
+                const dim = new Date(viewY, viewM + 1, 0).getDate();
+                let html = '';
+                for (let i = 0; i < startPad; i++) html += '<div class="atc-cal-day empty"></div>';
+                for (let d = 1; d <= dim; d++) {
+                    const key = (viewM + 1) + '-' + d;
+                    const hasBday = !!(byKey[key] && byKey[key].length);
+                    const isHoliday = !!holidays[key];
+                    const isToday = viewY === now.getFullYear() && viewM === now.getMonth() && d === now.getDate();
+                    const cls = ['atc-cal-day'];
+                    if (hasBday) cls.push('has-bday');
+                    if (isToday) cls.push('is-today');
+                    if (isHoliday) cls.push('is-holiday');
+                    if (selectedDay === d) cls.push('is-selected');
+                    const title = [isHoliday ? holidays[key] : '', hasBday ? (byKey[key].length + ' birthday(s)') : ''].filter(Boolean).join(' · ');
+                    html += `<div class="${cls.join(' ')}" data-day="${d}" title="${esc(title)}"><span>${d}</span>${hasBday ? '<span class="atc-cal-dot"></span>' : ''}</div>`;
+                }
+                daysEl.innerHTML = html;
+                daysEl.querySelectorAll('.atc-cal-day.has-bday').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const day = Number(el.dataset.day);
+                        selectedDay = selectedDay === day ? null : day;
+                        render();
+                    });
+                });
+                renderList(viewM, selectedDay);
+            }
+
+            document.getElementById('atcCalPrev')?.addEventListener('click', () => {
+                selectedDay = null;
+                viewM -= 1;
+                if (viewM < 0) { viewM = 11; viewY -= 1; }
+                render();
+            });
+            document.getElementById('atcCalNext')?.addEventListener('click', () => {
+                selectedDay = null;
+                viewM += 1;
+                if (viewM > 11) { viewM = 0; viewY += 1; }
+                render();
+            });
+            listEl.addEventListener('click', (e) => {
+                const btn = e.target.closest('.atc-wish-btn');
+                if (!btn) return;
+                sendAtcBdayWish(btn.dataset.name || '', btn.dataset.mobile || '');
+            });
+            render();
+        })();
     </script>
 </body>
 

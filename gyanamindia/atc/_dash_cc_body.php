@@ -185,37 +185,32 @@ $todayFeeTotal = $todayCash + $todayOnline;
                     </div>
                 </div>
 
-                <?php if (!empty($birthdays)): ?>
-                <div class="cc-card" style="margin-bottom:1rem">
-                    <div class="cc-card-pad">
-                        <div class="cc-card-head">
-                            <?= cc_ico('cake', 'xl') ?>
-                            <h3>Student Birthdays Today</h3>
-                            <span style="margin-left:auto;font-size:.78rem;font-weight:700;color:var(--cc-muted)"><?= count($birthdays) ?></span>
+                <div class="atc-stu-cal">
+                    <div class="atc-stu-cal-card">
+                        <div class="atc-cal-nav">
+                            <button type="button" id="atcCalPrev" aria-label="Previous month">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                            </button>
+                            <h3 id="atcCalTitle">—</h3>
+                            <button type="button" id="atcCalNext" aria-label="Next month">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                            </button>
                         </div>
-                        <div class="cc-scroll">
-                        <div class="atc-bday-body" style="padding:0">
-                            <?php foreach ($birthdays as $b): ?>
-                                <div class="atc-bday-row">
-                                    <div class="atc-bday-avatar"><?= mb_strtoupper(mb_substr(trim($b['name']), 0, 1)) ?></div>
-                                    <div style="flex:1;min-width:0">
-                                        <div class="atc-bday-name"><?= htmlspecialchars(trim($b['name'])) ?></div>
-                                        <div class="atc-bday-meta"><?= htmlspecialchars($b['course'] ?? '') ?></div>
-                                    </div>
-                                    <?php if (!empty($b['mobile'])): ?>
-                                        <button
-                                            onclick="sendAtcBdayWish('<?= addslashes(htmlspecialchars(trim($b['name']))) ?>', '<?= htmlspecialchars($b['mobile']) ?>')"
-                                            style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .85rem;border-radius:999px;border:none;background:#25d366;color:#fff;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0">
-                                            Send Wish
-                                        </button>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
+                        <div class="atc-cal-weekdays"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+                        <div class="atc-cal-days" id="atcCalDays"></div>
+                        <div class="atc-cal-legend">
+                            <span><i class="atc-lg holiday"></i> Holiday</span>
+                            <span><i class="atc-lg today"></i> Today</span>
+                            <span><i class="atc-lg bday"></i> Birthday</span>
                         </div>
                     </div>
+                    <div class="atc-stu-cal-list">
+                        <div class="atc-stu-cal-head">
+                            <span id="atcCalListTitle">Student birthdays</span>
+                        </div>
+                        <div class="atc-stu-cal-body" id="atcCalList"></div>
+                    </div>
                 </div>
-                <?php endif; ?>
 
                 <!-- Row 4: Tables — enquiries & popular courses -->
                 <div class="cc-grid cc-grid-4">
