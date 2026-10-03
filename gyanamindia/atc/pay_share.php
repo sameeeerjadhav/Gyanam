@@ -92,9 +92,63 @@ if (empty($courseShareAmounts)) {
 
 $transactionFee = 15; // Fixed transaction fee
 
-function resolveCourseShareAmount($courseName, $normalizedShareMap, $defaultShareAmount, $snapshot = null, $materialType = null)
+function payShareCourseTokens(string $name): array
 {
-    // If a snapshot exists (recorded at admission time), always use it — immune to HO updates
+    $codes = [];
+    if (preg_match_all('/\(([^)]+)\)/u', $name, $matches)) {
+        foreach ($matches[1] as $inner) {
+            $inner = mb_strtolower(trim((string)$inner));
+            if ($inner !== '') {
+                $codes[] = $inner;
+            }
+        }
+    }
+    if (preg_match('/^([A-Za-z0-9+\-]{2,16})\s*\(/u', $name, $lead)) {
+        $codes[] = mb_strtolower($lead[1]);
+    }
+    $bare = mb_strtolower(trim((string)preg_replace('/\([^)]*\)/u', ' ', $name)));
+    $bare = trim((string)preg_replace('/\s+/', ' ', $bare));
+    if ($bare !== '') {
+        $codes[] = $bare;
+    }
+    return array_values(array_unique($codes));
+}
+
+function payShareCoursesMatch(string $admissionCourse, string $catalogCourse): bool
+{
+    $a = payShareCourseTokens($admissionCourse);
+    $b = payShareCourseTokens($catalogCourse);
+    if ($a === [] || $b === []) {
+        return false;
+    }
+    return count(array_intersect($a, $b)) > 0;
+}
+
+/**
+ * Live course share — the same figure shown on the rate card.
+ * Admission course titles often differ in order ("CCCP (…)" vs "… (CCCP)"),
+ * so match on the course code and the name, not only an exact string.
+ */
+function payShareLiveAmount(string $courseName, array $courseShareAmounts, array $normalizedShareMap): float
+{
+    $key = mb_strtolower(trim($courseName));
+    if ($key !== '' && array_key_exists($key, $normalizedShareMap)) {
+        return (float)$normalizedShareMap[$key];
+    }
+    foreach ($courseShareAmounts as $name => $amount) {
+        if (payShareCoursesMatch($courseName, (string)$name)) {
+            return (float)$amount;
+        }
+    }
+    return 0.0;
+}
+
+function resolveCourseShareAmount($courseName, $normalizedShareMap, $defaultShareAmount, $snapshot = null, $materialType = null, $courseShareAmounts = [])
+{
+    $live = payShareLiveAmount((string)$courseName, $courseShareAmounts, $normalizedShareMap);
+    if ($live > 0) {
+        return $live;
+    }
     if ($snapshot !== null && $snapshot > 0) {
         return (float)$snapshot;
     }
@@ -105,7 +159,6 @@ function resolveCourseShareAmount($courseName, $normalizedShareMap, $defaultShar
             return (float)$normalizedShareMap[$matKey];
         }
     }
-    // Fallback to live rate for older records without a snapshot
     if ($key !== '' && array_key_exists($key, $normalizedShareMap)) {
         return (float)$normalizedShareMap[$key];
     }
@@ -208,7 +261,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $normalizedShareMap,
                         $defaultShareAmount,
                         $snap,
-                        $student['material_type'] ?? null
+                        $student['material_type'] ?? null,
+                        $courseShareAmounts
                     );
                     $totalShareAmount += $shareAmount;
                     
@@ -524,7 +578,8 @@ $atcDetails = $stmt->fetch(PDO::FETCH_ASSOC);
                         $normalizedShareMap,
                         $defaultShareAmount,
                         $snapshot,
-                        $student['material_type'] ?? null
+                        $student['material_type'] ?? null,
+                        $courseShareAmounts
                     );
                     $sharePaid = $student['share_paid'];
                 ?>
