@@ -82,31 +82,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $partitions = [];
 $grand = 0.0;
-foreach ($streams as $name => $meta) {
-    $where = 'stream = ?';
-    $params = [$name];
-    if ($month !== 'all') {
-        $where .= ' AND DATE_FORMAT(expense_date, "%Y-%m") = ?';
-        $params[] = $month;
-    }
-    $countSt = $pdo->prepare("SELECT COUNT(*), COALESCE(SUM(amount), 0) FROM ho_expenses WHERE $where");
-    $countSt->execute($params);
-    [$count, $sum] = $countSt->fetch(PDO::FETCH_NUM);
-    $count = (int)$count;
-    $sum = (float)$sum;
-    $grand += $sum;
+$loadError = '';
+try {
+    foreach ($streams as $name => $meta) {
+        $where = 'stream = ?';
+        $params = [$name];
+        if ($month !== 'all') {
+            $monthStart = $month . '-01';
+            $monthEnd = date('Y-m-d', strtotime($monthStart . ' +1 month'));
+            $where .= ' AND expense_date >= ? AND expense_date < ?';
+            $params[] = $monthStart;
+            $params[] = $monthEnd;
+        }
+        $countSt = $pdo->prepare("SELECT COUNT(*), COALESCE(SUM(amount), 0) FROM ho_expenses WHERE $where");
+        $countSt->execute($params);
+        $countRow = $countSt->fetch(PDO::FETCH_NUM);
+        $count = (int)($countRow[0] ?? 0);
+        $sum = (float)($countRow[1] ?? 0);
+        $grand += $sum;
 
-    $pagerParams = paginationParams(12, 100, $meta['slug'] . '_page');
-    $pager = paginationMeta($count, $pagerParams);
-    $listSt = $pdo->prepare("SELECT * FROM ho_expenses WHERE $where ORDER BY expense_date DESC, id DESC LIMIT {$pager['per_page']} OFFSET {$pager['offset']}");
-    $listSt->execute($params);
-    $partitions[$name] = [
-        'meta' => $meta,
-        'rows' => $listSt->fetchAll(PDO::FETCH_ASSOC) ?: [],
-        'count' => $count,
-        'sum' => $sum,
-        'pager' => $pager,
-    ];
+        $pagerParams = paginationParams(12, 100, $meta['slug'] . '_page');
+        $pager = paginationMeta($count, $pagerParams);
+        $perPage = (int)$pager['per_page'];
+        $offset = (int)$pager['offset'];
+        $listSt = $pdo->prepare("SELECT * FROM ho_expenses WHERE $where ORDER BY expense_date DESC, id DESC LIMIT {$perPage} OFFSET {$offset}");
+        $listSt->execute($params);
+        $partitions[$name] = [
+            'meta' => $meta,
+            'rows' => $listSt->fetchAll(PDO::FETCH_ASSOC) ?: [],
+            'count' => $count,
+            'sum' => $sum,
+            'pager' => $pager,
+        ];
+    }
+} catch (Throwable $e) {
+    error_log('[ho_expenses] ' . $e->getMessage());
+    $loadError = 'Expenses could not be loaded. ' . $e->getMessage();
+    $partitions = [];
+    $grand = 0.0;
 }
 ?>
 <!DOCTYPE html>
@@ -165,6 +178,9 @@ foreach ($streams as $name => $meta) {
             </div>
         </header>
         <div class="page-content">
+            <?php if ($loadError !== ''): ?>
+                <div class="ex-err"><?= htmlspecialchars($loadError) ?></div>
+            <?php endif; ?>
             <?php if (isset($_GET['err'])): ?>
                 <div class="ex-err">Enter a particular, a date, and an amount greater than zero.</div>
             <?php endif; ?>
