@@ -6,11 +6,15 @@
 
 function attendanceSheetTitle(string $text): string
 {
-    $text = preg_replace('/\s+/u', ' ', trim($text)) ?? '';
+    $collapsed = preg_replace('/\s+/u', ' ', trim($text));
+    $text = is_string($collapsed) ? $collapsed : trim($text);
     if ($text === '' || $text === '—') {
         return $text;
     }
-    return mb_convert_case(mb_strtolower($text, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
+    if (function_exists('mb_convert_case') && function_exists('mb_strtolower')) {
+        return mb_convert_case(mb_strtolower($text, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
+    }
+    return ucwords(strtolower($text));
 }
 
 function attendanceSheetSampleRows(string $institute): array

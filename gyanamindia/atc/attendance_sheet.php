@@ -219,8 +219,8 @@ $sheetUrl = 'attendance_sheet?' . $sheetQuery;
                 </div>
             </div>
             <div class="header-right">
-                <?php include __DIR__ . '/../includes/notification_bell.php'; ?>
-                <?php include __DIR__ . '/../includes/profile_dropdown.php'; ?>
+                <?php try { include __DIR__ . '/../includes/notification_bell.php'; } catch (Throwable $e) {} ?>
+                <?php try { include __DIR__ . '/../includes/profile_dropdown.php'; } catch (Throwable $e) {} ?>
             </div>
         </header>
         <div class="as-wrap">

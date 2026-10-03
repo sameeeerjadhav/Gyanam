@@ -3,14 +3,19 @@
  * Notification Bell Icon — Header Partial
  * Include after auth.php, functions.php, and notifications.php
  */
-$_notifPdo = getDBConnection();
-$_notifUserId = getUserId();
-$_notifRole = getUserRole();
-$_notifDlcId = $_SESSION['dlc_id'] ?? null;
-$_notifAtcId = $_SESSION['atc_id'] ?? null;
+$_unreadCount = 0;
+$_notifRole = (string)(getUserRole() ?? '');
 try {
-    $_unreadCount = getUnreadNotificationCount($_notifPdo, $_notifUserId, $_notifRole, $_notifDlcId, $_notifAtcId);
-} catch (Exception $e) {
+    if (function_exists('getUnreadNotificationCount')) {
+        $_notifPdo = getDBConnection();
+        $_notifUserId = (int)(getUserId() ?? 0);
+        $_notifDlcId = isset($_SESSION['dlc_id']) ? (int)$_SESSION['dlc_id'] : null;
+        $_notifAtcId = isset($_SESSION['atc_id']) ? (int)$_SESSION['atc_id'] : null;
+        if ($_notifUserId > 0 && $_notifRole !== '') {
+            $_unreadCount = getUnreadNotificationCount($_notifPdo, $_notifUserId, $_notifRole, $_notifDlcId, $_notifAtcId);
+        }
+    }
+} catch (Throwable $e) {
     $_unreadCount = 0;
 }
 
