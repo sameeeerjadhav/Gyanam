@@ -82,17 +82,6 @@ function renderAttendanceSheetPages(array $opts): void
     $rows = is_array($opts['rows'] ?? null) ? $opts['rows'] : [];
     $notice = trim((string)($opts['notice'] ?? ''));
     $count = count($rows);
-    $blank = $count === 0;
-    if ($blank) {
-        for ($i = 0; $i < 6; $i++) {
-            $rows[] = [
-                'roll' => '',
-                'photo' => '',
-                'institute' => $institute,
-                'blank' => true,
-            ];
-        }
-    }
     ?>
 <div class="as-page">
     <div class="as-head">
@@ -104,7 +93,7 @@ function renderAttendanceSheetPages(array $opts): void
         <tr><td class="k">Institute</td><td><?= htmlspecialchars($institute !== '' ? attendanceSheetTitle($institute) : '—') ?><?= $code !== '' ? ' (' . htmlspecialchars($code) . ')' : '' ?></td></tr>
         <tr><td class="k">Course</td><td><?= htmlspecialchars(attendanceSheetTitle((string)($opts['course_label'] ?? '') !== '' ? (string)$opts['course_label'] : 'All Courses')) ?></td></tr>
         <tr><td class="k">Slot</td><td><?= htmlspecialchars(attendanceSheetTitle((string)($opts['slot_label'] ?? '') !== '' ? (string)$opts['slot_label'] : 'All Slots')) ?></td></tr>
-        <tr><td class="k">Candidates</td><td><?= $blank ? 'None Scheduled' : (int)$count ?></td></tr>
+        <tr><td class="k">Candidates</td><td><?= $count === 0 ? 'None' : (int)$count ?></td></tr>
         <?php if ($notice !== ''): ?>
         <tr><td class="k">Note</td><td><?= htmlspecialchars($notice) ?></td></tr>
         <?php endif; ?>
@@ -119,9 +108,12 @@ function renderAttendanceSheetPages(array $opts): void
             </tr>
         </thead>
         <tbody>
+        <?php if ($rows === []): ?>
+            <tr><td colspan="4" class="as-empty"><?= htmlspecialchars($notice !== '' ? $notice : 'No students for this day.') ?></td></tr>
+        <?php endif; ?>
         <?php foreach ($rows as $row): ?>
             <tr>
-                <td class="roll"><?php if (!empty($row['blank'])): ?><div class="as-blank-roll"></div><?php else: ?><?= htmlspecialchars((string)($row['roll'] ?? '—')) ?><?php endif; ?></td>
+                <td class="roll"><?= htmlspecialchars((string)($row['roll'] ?? '—')) ?></td>
                 <td class="photo">
                     <?php if (!empty($row['photo'])): ?>
                         <img src="<?= htmlspecialchars((string)$row['photo']) ?>" alt="">

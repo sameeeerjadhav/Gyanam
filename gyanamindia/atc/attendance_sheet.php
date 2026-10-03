@@ -129,28 +129,16 @@ try {
 }
 
 if ($rows === []) {
-    try {
-        $sql = "SELECT roll_no, registration_id, photo
-                FROM admissions
-                WHERE atc_id = ? AND status = 'Active'";
-        $params = [$atcId];
-        if ($courseFilter !== 'all') {
-            $sql .= " AND course = ?";
-            $params[] = $courseFilter;
+    $dayHasExam = false;
+    foreach ($dates as $d) {
+        if ((string)($d['exam_date'] ?? '') === $date) {
+            $dayHasExam = true;
+            break;
         }
-        $sql .= " ORDER BY roll_no ASC, registration_id ASC";
-        $q = $pdo->prepare($sql);
-        $q->execute($params);
-        $rows = $buildRows($q->fetchAll(PDO::FETCH_ASSOC) ?: [], $institute);
-        if ($rows !== []) {
-            $sheetNotice = 'No exam is scheduled for this day. Showing every active student of this centre.';
-        }
-    } catch (Exception $e) {
-        $rows = [];
     }
-}
-if ($rows === []) {
-    $sheetNotice = 'No students are on record for this day. Blank rows are ready to fill in by hand.';
+    $sheetNotice = $dayHasExam
+        ? 'No students match the selected course and slot.'
+        : 'No exam is scheduled for this day.';
 }
 
 $dateLabel = date('d F Y, l', strtotime($date));
