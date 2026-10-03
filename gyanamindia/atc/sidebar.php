@@ -139,6 +139,10 @@ if ($_sidebarInitials === '') {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 <span>Students</span>
             </a>
+            <a href="pay_share.php" class="nav-link <?= $currentPage === 'pay_share.php' ? 'active' : '' ?>" data-tooltip="Report to GYANAM">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                <span>Report to GYANAM</span>
+            </a>
         </div>
         <div class="nav-section">
             <div class="nav-section-title">Fees</div>
@@ -202,13 +206,6 @@ if ($_sidebarInitials === '') {
             <a href="dispatches.php" class="nav-link <?= $currentPage === 'dispatches.php' ? 'active' : '' ?>" data-tooltip="Dispatches">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/><path d="M3 21h18"/></svg>
                 <span>Dispatches</span>
-            </a>
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-title">Payments</div>
-            <a href="pay_share.php" class="nav-link <?= $currentPage === 'pay_share.php' ? 'active' : '' ?>" data-tooltip="Report to GYANAM">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                <span>Report to GYANAM</span>
             </a>
         </div>
         <div class="nav-section">
