@@ -34,6 +34,23 @@ try {
 } catch (Exception $e) {
     error_log('[atc_expenses] ' . $e->getMessage());
 }
+try {
+    $have = [];
+    foreach ($pdo->query('SHOW COLUMNS FROM atc_expenses') as $col) {
+        $have[(string)$col['Field']] = true;
+    }
+    foreach ([
+        'category' => 'VARCHAR(64) NULL',
+        'paid_to' => 'VARCHAR(255) NULL',
+        'reference_no' => 'VARCHAR(80) NULL',
+    ] as $column => $definition) {
+        if (!isset($have[$column])) {
+            $pdo->exec("ALTER TABLE atc_expenses ADD COLUMN {$column} {$definition}");
+        }
+    }
+} catch (Exception $e) {
+    error_log('[atc_expenses] ' . $e->getMessage());
+}
 
 $streams = [
     'IT' => ['slug' => 'it', 'color' => '#2563eb', 'soft' => '#eff6ff', 'border' => '#bfdbfe'],
@@ -42,6 +59,22 @@ $streams = [
     'Centre' => ['slug' => 'centre', 'color' => '#475569', 'soft' => '#f8fafc', 'border' => '#e2e8f0'],
 ];
 $modes = ['Cash', 'UPI', 'Bank Transfer', 'Cheque'];
+$heads = [
+    'Salary & Wages',
+    'Rent',
+    'Electricity',
+    'Internet & Phone',
+    'Stationery',
+    'Printing',
+    'Marketing',
+    'Travel',
+    'Software & Subscriptions',
+    'Repairs & Maintenance',
+    'Training Material',
+    'Professional Fees',
+    'Bank Charges',
+    'Miscellaneous',
+];
 
 $month = trim((string)($_GET['month'] ?? date('Y-m')));
 if ($month !== 'all' && !preg_match('/^\d{4}-\d{2}$/', $month)) {
@@ -58,20 +91,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $atcId > 0) {
 
     if ($action === 'add') {
         $stream = (string)($_POST['stream'] ?? '');
+        $category = trim((string)($_POST['category'] ?? ''));
         $title = trim((string)($_POST['title'] ?? ''));
+        $paidTo = trim((string)($_POST['paid_to'] ?? ''));
         $date = trim((string)($_POST['expense_date'] ?? ''));
         $amount = round((float)($_POST['amount'] ?? 0), 2);
         $mode = (string)($_POST['payment_mode'] ?? 'Cash');
+        $reference = trim((string)($_POST['reference_no'] ?? ''));
         $notes = trim((string)($_POST['notes'] ?? ''));
-        if (!isset($streams[$stream]) || $title === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $amount <= 0) {
+        if (!isset($streams[$stream]) || !in_array($category, $heads, true) || $title === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $amount <= 0) {
             header('Location: expenses.php?month=' . urlencode($backMonth) . '&err=1');
             exit;
         }
         if (!in_array($mode, $modes, true)) {
             $mode = 'Cash';
         }
-        $pdo->prepare('INSERT INTO atc_expenses (atc_id, stream, expense_date, title, amount, payment_mode, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-            ->execute([$atcId, $stream, $date, $title, $amount, $mode, $notes !== '' ? $notes : null, getUserId()]);
+        $pdo->prepare('INSERT INTO atc_expenses (atc_id, stream, category, expense_date, title, paid_to, amount, payment_mode, reference_no, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            ->execute([
+                $atcId,
+                $stream,
+                $category,
+                $date,
+                $title,
+                $paidTo !== '' ? $paidTo : null,
+                $amount,
+                $mode,
+                $reference !== '' ? $reference : null,
+                $notes !== '' ? $notes : null,
+                getUserId(),
+            ]);
         $anchor = '#' . $streams[$stream]['slug'];
     } elseif ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
@@ -171,7 +219,8 @@ $periodLabel = $month === 'all' ? 'All time' : date('F Y', strtotime($month . '-
         .ex-field { display:flex; flex-direction:column; gap:.28rem; min-width:0 }
         .ex-cap { font-size:.68rem; font-weight:700; color:#64748b }
         .ex-span { grid-column:1 / -1 }
-        .ex-form input, .ex-form select { height:38px; border:1.5px solid #e2e8f0; border-radius:9px; padding:0 .65rem; font-weight:600; width:100%; box-sizing:border-box; background:#fff; color:#111827 }
+        .ex-form input, .ex-form select { height:38px; border:1.5px solid #e2e8f0; border-radius:9px; padding:0 .65rem; font-weight:600; width:100%; box-sizing:border-box; background-color:#fff; color:#111827 }
+        .ex-form select { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%2364748b' stroke-width='1.6' stroke-linecap='round' d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right .7rem center; padding-right:1.8rem }
         .ex-form input:focus, .ex-form select:focus, .ex-bar input:focus { outline:none; border-color:#a5b4fc; box-shadow:0 0 0 3px rgba(99,102,241,.12) }
         .ex-amt { display:flex; align-items:center; height:38px; border:1.5px solid #e2e8f0; border-radius:9px; background:#fff; overflow:hidden }
         .ex-amt:focus-within { border-color:#a5b4fc; box-shadow:0 0 0 3px rgba(99,102,241,.12) }
@@ -219,7 +268,7 @@ $periodLabel = $month === 'all' ? 'All time' : date('F Y', strtotime($month . '-
                 <div class="ex-err"><?= htmlspecialchars($loadError) ?></div>
             <?php endif; ?>
             <?php if (isset($_GET['err'])): ?>
-                <div class="ex-err">Enter a particular, a date, and an amount greater than zero.</div>
+                <div class="ex-err">Choose an expense head, then enter the particular, date, and an amount greater than zero.</div>
             <?php endif; ?>
             <form method="get" class="ex-bar">
                 <div class="ex-bar-left">
@@ -236,7 +285,6 @@ $periodLabel = $month === 'all' ? 'All time' : date('F Y', strtotime($month . '-
             <div class="ex-grid">
                 <?php foreach ($partitions as $name => $part):
                     $meta = $part['meta'];
-                    $particularHint = $name === 'Centre' ? 'Rent, salary, electricity' : 'What was this for?';
                 ?>
                 <section class="ex-card" id="<?= htmlspecialchars($meta['slug']) ?>" style="--ex:<?= $meta['color'] ?>;--ex-soft:<?= $meta['soft'] ?>;--ex-line:<?= $meta['border'] ?>">
                     <div class="ex-head">
@@ -251,8 +299,25 @@ $periodLabel = $month === 'all' ? 'All time' : date('F Y', strtotime($month . '-
                         <input type="hidden" name="stream" value="<?= htmlspecialchars($name) ?>">
                         <input type="hidden" name="month" value="<?= htmlspecialchars($month) ?>">
                         <label class="ex-field">
+                            <span class="ex-cap">Expense head</span>
+                            <select name="category" required>
+                                <option value="" selected disabled>Select head</option>
+                                <?php foreach ($heads as $head): ?>
+                                    <option value="<?= htmlspecialchars($head) ?>"><?= htmlspecialchars($head) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <label class="ex-field">
                             <span class="ex-cap">Date</span>
                             <input type="date" name="expense_date" required value="<?= date('Y-m-d') ?>">
+                        </label>
+                        <label class="ex-field ex-span">
+                            <span class="ex-cap">Particular</span>
+                            <input type="text" name="title" required maxlength="255" placeholder="Short description of this expense">
+                        </label>
+                        <label class="ex-field">
+                            <span class="ex-cap">Paid to</span>
+                            <input type="text" name="paid_to" maxlength="255" placeholder="Vendor or person">
                         </label>
                         <label class="ex-field">
                             <span class="ex-cap">Amount</span>
@@ -261,12 +326,8 @@ $periodLabel = $month === 'all' ? 'All time' : date('F Y', strtotime($month . '-
                                 <input type="number" name="amount" required min="0.01" step="0.01" placeholder="0.00" inputmode="decimal">
                             </span>
                         </label>
-                        <label class="ex-field ex-span">
-                            <span class="ex-cap">Particular</span>
-                            <input type="text" name="title" required maxlength="255" placeholder="<?= htmlspecialchars($particularHint) ?>">
-                        </label>
                         <label class="ex-field">
-                            <span class="ex-cap">Mode</span>
+                            <span class="ex-cap">Payment mode</span>
                             <select name="payment_mode">
                                 <?php foreach ($modes as $mode): ?>
                                     <option value="<?= htmlspecialchars($mode) ?>"><?= htmlspecialchars($mode) ?></option>
@@ -274,6 +335,10 @@ $periodLabel = $month === 'all' ? 'All time' : date('F Y', strtotime($month . '-
                             </select>
                         </label>
                         <label class="ex-field">
+                            <span class="ex-cap">Reference</span>
+                            <input type="text" name="reference_no" maxlength="80" placeholder="UTR or cheque no.">
+                        </label>
+                        <label class="ex-field ex-span">
                             <span class="ex-cap">Note</span>
                             <input type="text" name="notes" maxlength="500" placeholder="Optional">
                         </label>
@@ -298,7 +363,15 @@ $periodLabel = $month === 'all' ? 'All time' : date('F Y', strtotime($month . '-
                                     <td><?= date('d M Y', strtotime($row['expense_date'])) ?><div class="ex-note"><?= htmlspecialchars($row['payment_mode']) ?></div></td>
                                     <td>
                                         <div class="ex-title"><?= htmlspecialchars($row['title']) ?></div>
-                                        <?php if (!empty($row['notes'])): ?><div class="ex-note"><?= htmlspecialchars($row['notes']) ?></div><?php endif; ?>
+                                        <?php
+                                            $metaBits = array_filter([
+                                                trim((string)($row['category'] ?? '')),
+                                                trim((string)($row['paid_to'] ?? '')) !== '' ? 'Paid to ' . trim((string)$row['paid_to']) : '',
+                                                trim((string)($row['reference_no'] ?? '')),
+                                                trim((string)($row['notes'] ?? '')),
+                                            ]);
+                                        ?>
+                                        <?php if ($metaBits): ?><div class="ex-note"><?= htmlspecialchars(implode(' · ', $metaBits)) ?></div><?php endif; ?>
                                     </td>
                                     <td class="num"><?= exMoney((float)$row['amount']) ?></td>
                                     <td>
