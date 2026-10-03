@@ -154,6 +154,10 @@ if ($_sidebarInitials === '') {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                 <span>Fees Management</span>
             </a>
+            <a href="expenses.php" class="nav-link <?= $currentPage === 'expenses.php' ? 'active' : '' ?>" data-tooltip="Expenses">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
+                <span>Expenses</span>
+            </a>
         </div>
         <div class="nav-section">
             <div class="nav-section-title">Exams</div>
