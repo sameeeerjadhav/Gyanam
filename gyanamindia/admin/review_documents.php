@@ -66,6 +66,8 @@ if ($embed !== '') {
         ?>
 <!DOCTYPE html>
 <html lang="en"><head>
+<?php include __DIR__ . '/../includes/favicon.php'; ?>
+
 <meta charset="UTF-8">
 <title>Hall Ticket — <?= htmlspecialchars($fullName) ?></title>
 <link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">

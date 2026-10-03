@@ -119,7 +119,7 @@ foreach ($streams as $name => $meta) {
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%234f46e5%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M4%202v20l2-1%202%201%202-1%202%201%202-1%202%201%202-1%202%201V2l-2%201-2-1-2%201-2-1-2%201-2-1-2%201-2-1z%27%2F%3E%3Cpath%20d%3D%27M8%207h8M8%2011h8M8%2015h5%27%2F%3E%3C%2Fsvg%3E">
+    
     <style>
         .ex-month { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:1rem }
         .ex-month input, .ex-month a { height:38px; border:1.5px solid #e2e8f0; border-radius:9px; padding:0 .75rem; font-weight:700; font-family:inherit; background:#fff; color:#1f2937; text-decoration:none; display:inline-flex; align-items:center }

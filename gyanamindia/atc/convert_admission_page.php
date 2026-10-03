@@ -106,7 +106,7 @@ $fullName = trim(
 <link rel="stylesheet" href="../assets/css/dashboard.css">
 <link rel="stylesheet" href="../assets/css/management.css">
 <link rel="stylesheet" href="../assets/css/inquiries.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%234f46e5%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27m22%2010-10-5L2%2010l10%205%2010-5z%27%2F%3E%3Cpath%20d%3D%27M6%2012v5c0%201%202.7%203%206%203s6-2%206-3v-5%27%2F%3E%3C%2Fsvg%3E">
+
 <style>
 /* ── Convert Page Extra Styles ── */
 .cvt-page-topbar {

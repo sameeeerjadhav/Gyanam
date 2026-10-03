@@ -64,7 +64,7 @@ unset($v);
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2'%3E%3Ccircle cx='12' cy='8' r='5'/%3E%3Cpath d='M8.5 13.5 7 22l5-2 5 2-1.5-8.5'/%3E%3C/svg%3E">
+    
     <style>
         .ac-page { display: flex; flex-direction: column; gap: 1.15rem; }
         .ac-summary {

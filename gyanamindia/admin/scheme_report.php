@@ -70,6 +70,8 @@ $totalEntries    = count($reportRows);
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?php include __DIR__ . '/../includes/favicon.php'; ?>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scheme Report — Head Office | Gyanam India</title>
@@ -82,7 +84,7 @@ $totalEntries    = count($reportRows);
     <link rel="stylesheet" href="../assets/css/notifications.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234361ee' stroke-width='2'%3E%3Cline x1='18' y1='20' x2='18' y2='10'/%3E%3Cline x1='12' y1='20' x2='12' y2='4'/%3E%3Cline x1='6' y1='20' x2='6' y2='14'/%3E%3C/svg%3E">
+    
     <style>
     :root {
         --font: 'Sora', sans-serif;

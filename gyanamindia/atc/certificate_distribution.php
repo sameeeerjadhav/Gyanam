@@ -219,7 +219,7 @@ sort($courseOptions);
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%234f46e5%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Ccircle%20cx%3D%2712%27%20cy%3D%278%27%20r%3D%276%27%2F%3E%3Cpath%20d%3D%27M15.5%2013.5%2017%2022l-5-3-5%203%201.5-8.5%27%2F%3E%3C%2Fsvg%3E">
+    
     <style>
         .cd-note { background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; border-radius:12px; padding:.85rem 1rem; font-size:.84rem; font-weight:600; margin-bottom:1rem; line-height:1.45 }
         .cd-kpi { display:grid; grid-template-columns:repeat(3,1fr); gap:.75rem; margin-bottom:1rem }

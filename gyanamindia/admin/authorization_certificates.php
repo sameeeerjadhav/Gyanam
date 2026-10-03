@@ -94,7 +94,7 @@ function acCenterTypeLabel(?string $centerType): string {
 <?php if (file_exists(__DIR__.'/../assets/css/notifications.css')): ?>
 <link rel="stylesheet" href="../assets/css/notifications.css">
 <?php endif; ?>
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%234f46e5%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Ccircle%20cx%3D%2712%27%20cy%3D%278%27%20r%3D%275%27%2F%3E%3Cpath%20d%3D%27m8.5%2013.5-1.5%208.5%205-2%205%202-1.5-8.5%27%2F%3E%3C%2Fsvg%3E">
+
 <style>
 :root {
     --gold:#c9a84c;--gold-lt:#fdfaf4;--gold-border:#e8d5a3;

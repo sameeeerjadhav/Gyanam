@@ -10,6 +10,8 @@ http_response_code(403);
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?php include __DIR__ . '/../includes/favicon.php'; ?>
+
     <meta charset="UTF-8">
     <title>Manual Certificate unavailable</title>
     <style>

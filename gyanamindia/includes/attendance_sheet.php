@@ -149,6 +149,8 @@ function renderAttendanceSheetDocument(array $opts): void
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?php include __DIR__ . '/../includes/favicon.php'; ?>
+
 <meta charset="UTF-8">
 <title>Attendance Sheet — <?= htmlspecialchars($dateLabel) ?></title>
 <style>

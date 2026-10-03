@@ -191,6 +191,8 @@ uksort($sizeBreakdown, function($a, $b) use ($sizeOrder) {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?php include __DIR__ . '/../includes/favicon.php'; ?>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sock & Stationery Stock — Admin | Gyanam India</title>
@@ -201,7 +203,7 @@ uksort($sizeBreakdown, function($a, $b) use ($sizeOrder) {
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%234f46e5%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M20.4%205.6%2016%203l-4%203-4-3-4.4%202.6L5%2010l3%201.2V21h8V11.2L19%2010z%27%2F%3E%3C%2Fsvg%3E">
+    
     
     <style>
         /* ===== CSS VARIABLES ===== */

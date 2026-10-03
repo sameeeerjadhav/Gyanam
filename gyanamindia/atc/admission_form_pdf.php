@@ -162,6 +162,8 @@ $occupation = strtolower($admission['occupation'] ?? $admission['present_activit
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?php include __DIR__ . '/../includes/favicon.php'; ?>
+
 <meta charset="UTF-8">
 <title>Admission Form — <?= e($admission['roll_no'] ?? $admissionId) ?></title>
 <style>

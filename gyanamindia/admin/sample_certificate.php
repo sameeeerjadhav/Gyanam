@@ -148,7 +148,7 @@ foreach ($students as $s) {
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/management.css">
     <link rel="stylesheet" href="../assets/css/notifications.css">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%234f46e5%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M14%202H6a2%202%200%200%200-2%202v16a2%202%200%200%200%202%202h12a2%202%200%200%200%202-2V8z%27%2F%3E%3Cpath%20d%3D%27M14%202v6h6M8%2013h8M8%2017h5%27%2F%3E%3C%2Fsvg%3E">
+    
     <style>
         .sample-wrap { max-width: 820px; }
         .sample-note {

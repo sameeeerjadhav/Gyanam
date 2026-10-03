@@ -117,6 +117,8 @@ try {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?php include __DIR__ . '/../includes/favicon.php'; ?>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bank Details — DLC | Gyanam India</title>
@@ -125,7 +127,7 @@ try {
 <link rel="stylesheet" href="../assets/css/dashboard.css">
 <link rel="stylesheet" href="../assets/css/management.css">
 <link rel="stylesheet" href="../assets/css/notifications.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%234f46e5%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27m3%2010%209-7%209%207%27%2F%3E%3Cpath%20d%3D%27M5%2010v8M9%2010v8M15%2010v8M19%2010v8M3%2018h18M2%2021h20%27%2F%3E%3C%2Fsvg%3E">
+
 <style>
 :root{
   --ind:#4f6ef7;--ind-dk:#3a57e8;--ind-soft:#eef1fe;
