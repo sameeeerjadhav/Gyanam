@@ -252,6 +252,32 @@ try {
     $loadError = 'Expenses could not be loaded. ' . $e->getMessage();
 }
 
+if (($_GET['export'] ?? '') === 'csv' && $loadError === '' && isset($where, $params)) {
+    $exportSt = $pdo->prepare("SELECT expense_date, stream, category, title, paid_to, payment_mode, reference_no, notes, amount FROM ho_expenses WHERE {$where} ORDER BY expense_date DESC, id DESC LIMIT 10000");
+    $exportSt->execute($params);
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="expenses-' . $month . '.csv"');
+    header('Cache-Control: no-store');
+    echo "\xEF\xBB\xBF";
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['Date', 'Stream', 'Head', 'Particular', 'Paid to', 'Payment mode', 'Reference', 'Note', 'Amount']);
+    while ($csvRow = $exportSt->fetch(PDO::FETCH_ASSOC)) {
+        fputcsv($out, [
+            substr((string)$csvRow['expense_date'], 0, 10),
+            (string)$csvRow['stream'],
+            (string)($csvRow['category'] ?? ''),
+            (string)$csvRow['title'],
+            (string)($csvRow['paid_to'] ?? ''),
+            (string)($csvRow['payment_mode'] ?? ''),
+            (string)($csvRow['reference_no'] ?? ''),
+            (string)($csvRow['notes'] ?? ''),
+            number_format((float)$csvRow['amount'], 2, '.', ''),
+        ]);
+    }
+    fclose($out);
+    exit;
+}
+
 $editRow = null;
 $editId = (int)($_GET['edit'] ?? 0);
 if ($editId > 0) {
@@ -307,6 +333,9 @@ if (!function_exists('exMoney')) {
         .ex-panel-head { display:flex; justify-content:space-between; align-items:center; gap:.75rem; padding:.85rem 1rem; border-bottom:1px solid #eef2f7 }
         .ex-panel-head h3 { margin:0; font-size:.95rem; font-weight:800 }
         .ex-panel-head span { font-size:.78rem; font-weight:700; color:#64748b }
+        .ex-panel-meta { display:flex; align-items:center; gap:.85rem; }
+        .ex-export { font-size:.78rem; font-weight:800; color:#1d4ed8; text-decoration:none; white-space:nowrap; }
+        .ex-export:hover { text-decoration:underline; }
         .ex-table { width:100%; border-collapse:collapse; font-size:.8rem }
         .ex-table th { text-align:left; font-size:.66rem; letter-spacing:.04em; text-transform:uppercase; color:#64748b; padding:.65rem .85rem; background:#f8fafc }
         .ex-table td { padding:.7rem .85rem; border-top:1px solid #f1f5f9; vertical-align:middle }
@@ -452,7 +481,12 @@ if (!function_exists('exMoney')) {
             <section class="ex-panel">
                 <div class="ex-panel-head">
                     <h3>Expenses</h3>
-                    <span><?= (int)$filteredCount ?> record<?= $filteredCount === 1 ? '' : 's' ?> &middot; <?= exMoney($filteredSum) ?></span>
+                    <div class="ex-panel-meta">
+                        <span><?= (int)$filteredCount ?> record<?= $filteredCount === 1 ? '' : 's' ?> &middot; <?= exMoney($filteredSum) ?></span>
+                        <?php if ($loadError === ''): ?>
+                            <a class="ex-export" href="<?= htmlspecialchars($expenseReturnUrl(['export' => 'csv'])) ?>">Export CSV</a>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <?php if ($rows === []): ?>
                     <div class="ex-empty">No expenses match these filters.</div>
