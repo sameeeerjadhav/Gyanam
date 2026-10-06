@@ -141,6 +141,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $atcId > 0) {
         if (!in_array($mode, $modes, true)) {
             $mode = 'Cash';
         }
+        if ($mode !== 'Cash' && $reference === '') {
+            header('Location: ' . $expenseReturnUrl(['err' => 'ref']));
+            exit;
+        }
         $pdo->prepare('INSERT INTO atc_expenses (atc_id, stream, category, expense_date, title, paid_to, amount, payment_mode, reference_no, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
             ->execute([
                 $atcId,
@@ -172,6 +176,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $atcId > 0) {
         }
         if (!in_array($mode, $modes, true)) {
             $mode = 'Cash';
+        }
+        if ($mode !== 'Cash' && $reference === '') {
+            header('Location: ' . $expenseReturnUrl(['err' => 'ref', 'edit' => (string)$id]));
+            exit;
         }
         $pdo->prepare('UPDATE atc_expenses SET stream = ?, category = ?, expense_date = ?, title = ?, paid_to = ?, amount = ?, payment_mode = ?, reference_no = ?, notes = ? WHERE id = ? AND atc_id = ?')
             ->execute([
@@ -427,7 +435,9 @@ if (!function_exists('exMoney')) {
             <?php if ($loadError !== ''): ?>
                 <div class="ex-err"><?= htmlspecialchars($loadError) ?></div>
             <?php endif; ?>
-            <?php if (isset($_GET['err'])): ?>
+            <?php if (($_GET['err'] ?? '') === 'ref'): ?>
+                <div class="ex-err">Enter the UTR or cheque number. Cash can be saved without one.</div>
+            <?php elseif (isset($_GET['err'])): ?>
                 <div class="ex-err">Choose a stream and an expense head, then enter the particular, date, and an amount greater than zero.</div>
             <?php endif; ?>
 
@@ -631,7 +641,7 @@ if (!function_exists('exMoney')) {
                     </label>
                     <label class="ex-field">
                         <span class="ex-cap">Payment mode</span>
-                        <select name="payment_mode">
+                        <select name="payment_mode" onchange="syncExpenseReference(this.form)">
                             <?php foreach ($modes as $mode): ?>
                                 <option value="<?= htmlspecialchars($mode) ?>" <?= (($editRow ? (string)($editRow['payment_mode'] ?? 'Cash') : 'Cash') === $mode) ? 'selected' : '' ?>><?= htmlspecialchars($mode) ?></option>
                             <?php endforeach; ?>
@@ -655,6 +665,11 @@ if (!function_exists('exMoney')) {
     </div>
 </div>
 <script>
+function syncExpenseReference(form) {
+    var needs = form.payment_mode.value !== 'Cash';
+    form.reference_no.required = needs;
+    form.reference_no.placeholder = needs ? 'UTR or cheque no. required' : 'UTR or cheque no.';
+}
 function openExpenseModal(row) {
     var form = document.querySelector('#exModal form');
     var action = form.querySelector('[name="action"]');
@@ -672,8 +687,10 @@ function openExpenseModal(row) {
     form.payment_mode.value = row ? (row.payment_mode || 'Cash') : 'Cash';
     form.reference_no.value = row ? (row.reference_no || '') : '';
     form.notes.value = row ? (row.notes || '') : '';
+    syncExpenseReference(form);
     document.getElementById('exModal').classList.add('active');
 }
+syncExpenseReference(document.querySelector('#exModal form'));
 </script>
 <script src="../assets/js/dashboard.js"></script>
 </body>
