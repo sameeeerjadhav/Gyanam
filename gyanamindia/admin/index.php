@@ -320,6 +320,13 @@ $expiringATCs = [];
 // Keep pendingExam as int for templates
 $pendingExam = (int)$pendingExam;
 
+// Heavy blocks below are shared for 60 seconds so every admin open does not repeat them.
+$_heavy = portalCacheGet('admin_dash_heavy_v1', 60);
+if (is_array($_heavy)) {
+    extract($_heavy, EXTR_OVERWRITE);
+    goto admin_dash_render;
+}
+
 // Dashboard banners for admin overview (All / Admin / ATC / DLC — HO sees active banners)
 $activeBanners = [];
 try {
@@ -357,7 +364,8 @@ try {
 try {
     $todayDispatches = (int)$pdo->query("
         SELECT COUNT(*) FROM material_dispatches
-        WHERE DATE(COALESCE(dispatch_date, created_at)) = CURDATE()
+        WHERE (dispatch_date >= CURDATE() AND dispatch_date < CURDATE() + INTERVAL 1 DAY)
+           OR (dispatch_date IS NULL AND created_at >= CURDATE() AND created_at < CURDATE() + INTERVAL 1 DAY)
     ")->fetchColumn();
 } catch (Exception $e) {}
 try {
@@ -367,16 +375,22 @@ try {
 } catch (Exception $e) {}
 try {
     $courseMaterialPending = (int)$pdo->query("
-        SELECT COUNT(*) FROM admissions
-        WHERE material_type = 'With Material' AND status = 'Active'
-          AND id NOT IN (SELECT DISTINCT admission_id FROM material_dispatch_students WHERE admission_id IS NOT NULL)
+        SELECT COUNT(*) FROM admissions a
+        WHERE a.material_type = 'With Material' AND a.status = 'Active'
+          AND NOT EXISTS (
+              SELECT 1 FROM material_dispatch_students m
+              WHERE m.admission_id = a.id
+          )
     ")->fetchColumn();
 } catch (Exception $e) {
     try {
         $courseMaterialPending = (int)$pdo->query("
-            SELECT COUNT(*) FROM admissions
-            WHERE material_type = 'With Material' AND status = 'Active'
-              AND id NOT IN (SELECT DISTINCT admission_id FROM material_dispatch_students)
+            SELECT COUNT(*) FROM admissions a
+            WHERE a.material_type = 'With Material' AND a.status = 'Active'
+              AND NOT EXISTS (
+                  SELECT 1 FROM material_dispatch_students m
+                  WHERE m.admission_id = a.id
+              )
         ")->fetchColumn();
     } catch (Exception $e2) {}
 }
@@ -628,15 +642,6 @@ try {
     }
 } catch (Exception $e) {}
 
-// Optional fixed holidays (month-day) for calendar legend markers
-$calendarHolidays = [
-    '1-26' => 'Republic Day',
-    '8-15' => 'Independence Day',
-    '10-2' => 'Gandhi Jayanti',
-    '1-1'  => 'New Year',
-    '5-1'  => 'Labour Day',
-];
-
 // ── Expiring ATCs ─────────────────────────────────────────────────────────────
 try {
     $expiringATCs = $pdo->query("
@@ -674,10 +679,9 @@ $recentSharePayments = [];
 $chartAtcTypes   = [];
 $chartDlcBars    = [];
 
-$_rcKey = 'admin_dash_reports_share_v4';
-$_rcAt  = 'admin_dash_reports_share_at';
-if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_rcAt]) < 90) {
-    $cached = $_SESSION[$_rcKey];
+$_rcCached = portalCacheGet('admin_dash_reports_v5', 90);
+if (is_array($_rcCached)) {
+    $cached = $_rcCached;
     $revenueStats      = array_merge($revenueStats, $cached['revenueStats'] ?? []);
     $dlcRevenue        = $cached['dlcRevenue'] ?? [];
     $dispatchStats     = $cached['dispatchStats'] ?? $dispatchStats;
@@ -891,12 +895,34 @@ if (isset($_SESSION[$_rcKey], $_SESSION[$_rcAt]) && (time() - (int)$_SESSION[$_r
         ];
     }
 
-    $_SESSION[$_rcKey] = compact(
+    portalCacheSet('admin_dash_reports_v5', compact(
         'revenueStats', 'dlcRevenue', 'dispatchStats', 'materialBreakdown',
         'topATCs', 'monthlyTrend', 'recentSharePayments', 'chartAtcTypes', 'chartDlcBars'
-    );
-    $_SESSION[$_rcAt]  = time();
+    ));
 }
+
+portalCacheSet('admin_dash_heavy_v1', compact(
+    'activeBanners',
+    'certifiedStudents', 'certPrintPending', 'todayDispatches', 'pendingDispatches', 'courseMaterialPending',
+    'pendingExamList', 'pendingExam',
+    'reportedStudents', 'pendingReporting', 'repIt', 'repAbacus', 'repVedic', 'pendIt', 'pendAbacus', 'pendVedic',
+    'reportedList', 'pendingList',
+    'admissionsList', 'inquiriesList',
+    'calendarBirthdays',
+    'expiringATCs',
+    'revenueStats', 'dlcRevenue', 'dispatchStats', 'materialBreakdown', 'topATCs', 'monthlyTrend',
+    'recentSharePayments', 'chartAtcTypes', 'chartDlcBars'
+));
+admin_dash_render:
+
+// Optional fixed holidays (month-day) for calendar legend markers
+$calendarHolidays = [
+    '1-26' => 'Republic Day',
+    '8-15' => 'Independence Day',
+    '10-2' => 'Gandhi Jayanti',
+    '1-1'  => 'New Year',
+    '5-1'  => 'Labour Day',
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">

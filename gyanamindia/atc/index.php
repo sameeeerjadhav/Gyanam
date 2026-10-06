@@ -70,6 +70,12 @@ $greeting = getGreeting();
 $atcId = $_SESSION['atc_id'] ?? null;
 try { ensurePerformanceIndexes($pdo); } catch (Exception $e) {}
 
+$_atcDash = portalCacheGet('atc_dash_v1_' . (int)$atcId, 60);
+if (is_array($_atcDash)) {
+    extract($_atcDash, EXTR_OVERWRITE);
+    goto atc_dash_ready;
+}
+
 /* ── EXISTING Stats ────────────────────────────────── */
 $totalInquiries = $totalTelephonic = $totalAdmissions = $convertedInquiries = 0;
 $totalFees = $paidFees = $pendingFees = $collectionPercentage = 0;
@@ -125,7 +131,7 @@ try {
     $stmt = $pdo->prepare("
         SELECT payment_mode, COALESCE(SUM(fp.amount),0) as total
         FROM fee_payments fp JOIN admissions a ON fp.admission_id = a.id
-        WHERE a.atc_id = ? AND DATE(fp.payment_date) = CURDATE()
+        WHERE a.atc_id = ? AND fp.payment_date >= CURDATE() AND fp.payment_date < CURDATE() + INTERVAL 1 DAY
         GROUP BY payment_mode
     ");
     $stmt->execute([$atcId]);
@@ -165,40 +171,45 @@ try {
 $totalExams = $pendingExams = $conductedExams = 0;
 $examStudentsAll = $examStudentsPending = $examStudentsConducted = [];
 try {
-    // Total exams for this ATC
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM exam_schedules WHERE atc_id = ?");
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) AS total_exams,
+               SUM(exam_date >= CURDATE()) AS pending_exams
+        FROM exam_schedules
+        WHERE atc_id = ?
+    ");
     $stmt->execute([$atcId]);
-    $totalExams = (int) $stmt->fetchColumn();
-
-    // Pending = exam_date >= today (future or today)
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM exam_schedules WHERE atc_id = ? AND exam_date >= CURDATE()");
-    $stmt->execute([$atcId]);
-    $pendingExams = (int) $stmt->fetchColumn();
-
-    // Conducted = exam_date < today (past)
+    $examCounts = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $totalExams = (int)($examCounts['total_exams'] ?? 0);
+    $pendingExams = (int)($examCounts['pending_exams'] ?? 0);
     $conductedExams = $totalExams - $pendingExams;
 
-    // Fetch student details for each category (with photo)
-    $examBaseSQL = "
+    $examListSql = "
         SELECT a.id, CONCAT(a.first_name,' ',COALESCE(a.middle_name,''),' ',a.last_name) AS student_name,
                a.course, a.roll_no, a.photo,
-               es.exam_date, es.exam_time, es.exam_hall
+               es.exam_date, es.exam_time, es.exam_hall, '%s' AS bucket
         FROM exam_schedules es
         JOIN admissions a ON a.id = es.admission_id
         WHERE es.atc_id = ?
     ";
-
-    $s1 = $pdo->prepare($examBaseSQL . ' ORDER BY es.exam_date DESC LIMIT 50');
-    $s1->execute([$atcId]);
-    $examStudentsAll = $s1->fetchAll(PDO::FETCH_ASSOC);
-
-    $s2 = $pdo->prepare($examBaseSQL . " AND es.exam_date >= CURDATE() ORDER BY es.exam_date ASC LIMIT 50");
-    $s2->execute([$atcId]);
-    $examStudentsPending = $s2->fetchAll(PDO::FETCH_ASSOC);
-
-    $s3 = $pdo->prepare($examBaseSQL . " AND es.exam_date < CURDATE() ORDER BY es.exam_date DESC LIMIT 50");
-    $s3->execute([$atcId]);
-    $examStudentsConducted = $s3->fetchAll(PDO::FETCH_ASSOC);
+    $examUnion = $pdo->prepare(
+        '(' . sprintf($examListSql, 'all') . ' ORDER BY es.exam_date DESC LIMIT 50)
+         UNION ALL
+         (' . sprintf($examListSql, 'pending') . ' AND es.exam_date >= CURDATE() ORDER BY es.exam_date ASC LIMIT 50)
+         UNION ALL
+         (' . sprintf($examListSql, 'conducted') . ' AND es.exam_date < CURDATE() ORDER BY es.exam_date DESC LIMIT 50)'
+    );
+    $examUnion->execute([$atcId, $atcId, $atcId]);
+    foreach ($examUnion->fetchAll(PDO::FETCH_ASSOC) as $examRow) {
+        $bucket = (string)($examRow['bucket'] ?? '');
+        unset($examRow['bucket']);
+        if ($bucket === 'all') {
+            $examStudentsAll[] = $examRow;
+        } elseif ($bucket === 'pending') {
+            $examStudentsPending[] = $examRow;
+        } elseif ($bucket === 'conducted') {
+            $examStudentsConducted[] = $examRow;
+        }
+    }
 } catch (Exception $e) {
 }
 
@@ -253,42 +264,6 @@ try {
         $popularCourses = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Exception $e2) {
     }
-}
-
-$monthlyLabels = [];
-$monthlyData = [];
-try {
-    $stmt = $pdo->prepare("
-        SELECT DATE_FORMAT(admission_date,'%b %Y') as month,
-               DATE_FORMAT(admission_date,'%Y-%m') as sk, COUNT(*) as cnt
-        FROM admissions WHERE atc_id = ? AND admission_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-        GROUP BY sk, month ORDER BY sk ASC
-    ");
-    $stmt->execute([$atcId]);
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $monthlyLabels[] = $r['month'];
-        $monthlyData[] = (int) $r['cnt'];
-    }
-} catch (Exception $e) {
-}
-
-$revenueLabels = [];
-$revenueData = [];
-try {
-    $stmt = $pdo->prepare("
-        SELECT DATE_FORMAT(fp.payment_date,'%b %Y') as month,
-               DATE_FORMAT(fp.payment_date,'%Y-%m') as sk,
-               COALESCE(SUM(fp.amount),0) as total
-        FROM fee_payments fp JOIN admissions a ON fp.admission_id = a.id
-        WHERE a.atc_id = ? AND fp.payment_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-        GROUP BY sk, month ORDER BY sk ASC
-    ");
-    $stmt->execute([$atcId]);
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $revenueLabels[] = $r['month'];
-        $revenueData[] = (float) $r['total'];
-    }
-} catch (Exception $e) {
 }
 
 $studentBirthdays = [];
@@ -410,10 +385,10 @@ try {
     $todayAdmissions = (int)$stmt->fetchColumn();
 } catch (Exception $e) {}
 try {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM inquiries WHERE atc_id = ? AND DATE(created_at) = CURDATE()");
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM inquiries WHERE atc_id = ? AND created_at >= CURDATE() AND created_at < CURDATE() + INTERVAL 1 DAY");
     $stmt->execute([$atcId]);
     $todayInquiries = (int)$stmt->fetchColumn();
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM telephonic_inquiries WHERE atc_id = ? AND DATE(created_at) = CURDATE()");
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM telephonic_inquiries WHERE atc_id = ? AND created_at >= CURDATE() AND created_at < CURDATE() + INTERVAL 1 DAY");
     $stmt->execute([$atcId]);
     $todayInquiries += (int)$stmt->fetchColumn();
 } catch (Exception $e) {}
@@ -566,6 +541,29 @@ try {
 } catch (Exception $e) {}
 
 $conversionRate = $totalInquiries > 0 ? round(($convertedInquiries / $totalInquiries) * 100, 1) : 0;
+
+portalCacheSet('atc_dash_v1_' . (int)$atcId, compact(
+    'totalInquiries', 'totalTelephonic', 'totalAdmissions', 'convertedInquiries',
+    'totalFees', 'paidFees', 'pendingFees', 'collectionPercentage',
+    'grandTotalCollected', 'todayCash', 'todayOnline',
+    'totalCourses', 'activeCourses',
+    'certsDistributed', 'certsPending',
+    'totalExams', 'pendingExams', 'conductedExams',
+    'examStudentsAll', 'examStudentsPending', 'examStudentsConducted',
+    'totalStudents', 'activeStudents', 'activePaid', 'activeUnpaid',
+    'recentInquiries', 'popularCourses',
+    'monthlyLabels', 'monthlyData', 'revenueLabels', 'revenueData',
+    'monthlyLabels12', 'monthlyData12', 'revenueData12',
+    'studentBirthdays', 'atcCentreName',
+    'tickerNotifs', 'activeBanners',
+    'reportedStudents', 'pendingReportStudents', 'reportedCount', 'pendingReportCount',
+    'recentEnrollments', 'pendingApprovals', 'pendingApprovalCount', 'upcomingDueFees',
+    'todayAdmissions', 'todayInquiries',
+    'openEnquiries', 'certsTotal', 'certsPct',
+    'recentPayments', 'recentExamsDash', 'popularEnquiryCourses',
+    'chartByCourse', 'chartFeeStatus', 'conversionRate'
+));
+atc_dash_ready:
 ?>
 <!DOCTYPE html>
 <html lang="en">

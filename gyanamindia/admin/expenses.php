@@ -11,6 +11,7 @@ requireLogin(['Admin']);
 
 $pdo = getDBConnection();
 
+if (!isSchemaFlagSet('schema_ho_expenses_v2')) {
 try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS ho_expenses (
@@ -43,8 +44,10 @@ try {
             $pdo->exec("ALTER TABLE ho_expenses ADD COLUMN {$column} {$definition}");
         }
     }
+    markSchemaFlag('schema_ho_expenses_v2');
 } catch (Exception $e) {
     error_log('[ho_expenses] ' . $e->getMessage());
+}
 }
 
 $streams = [

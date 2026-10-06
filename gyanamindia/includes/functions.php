@@ -1591,6 +1591,40 @@ function markSchemaFlag(string $name): void {
     @file_put_contents(schemaFlagPath($name), date('c') . "\n");
 }
 
+/** Short shared cache so dashboards do not repeat the same queries for every login. */
+function portalCacheDir(): string {
+    $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'gyanam_portal_cache';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0700, true);
+    }
+    return $dir;
+}
+
+function portalCacheGet(string $key, int $ttlSeconds) {
+    $path = portalCacheDir() . DIRECTORY_SEPARATOR . hash('sha256', $key) . '.json';
+    if (!is_file($path)) {
+        return null;
+    }
+    $raw = @file_get_contents($path);
+    $bucket = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($bucket) || ($bucket['key'] ?? '') !== $key || !array_key_exists('data', $bucket)) {
+        return null;
+    }
+    if ((time() - (int)($bucket['at'] ?? 0)) > $ttlSeconds) {
+        return null;
+    }
+    return $bucket['data'];
+}
+
+function portalCacheSet(string $key, $data): void {
+    $json = json_encode(['at' => time(), 'key' => $key, 'data' => $data]);
+    if ($json === false) {
+        return;
+    }
+    $path = portalCacheDir() . DIRECTORY_SEPARATOR . hash('sha256', $key) . '.json';
+    @file_put_contents($path, $json, LOCK_EX);
+}
+
 /** Allowed franchise payment modes on ATC create/edit. */
 function atcFranchisePaymentModes(): array {
     return ['Cash', 'UPI', 'Cheque', 'Bank Transfer', 'Other'];
@@ -3173,6 +3207,11 @@ function certificatePublicBaseUrl(): string
 
 function ensureIssuedCertificatesTable(PDO $pdo): void
 {
+    static $done = false;
+    if ($done || isSchemaFlagSet('schema_issued_certificates_v1')) {
+        $done = true;
+        return;
+    }
     $pdo->exec("CREATE TABLE IF NOT EXISTS issued_certificates (
         id INT AUTO_INCREMENT PRIMARY KEY,
         verify_token VARCHAR(64) NOT NULL,
@@ -3201,8 +3240,10 @@ function ensureIssuedCertificatesTable(PDO $pdo): void
         if (!$cols) {
             $pdo->exec("ALTER TABLE issued_certificates ADD COLUMN photo_path VARCHAR(255) NULL AFTER brand");
         }
+        markSchemaFlag('schema_issued_certificates_v1');
+        $done = true;
     } catch (Throwable $e) {
-        // ignore
+        // ignore — retry next request
     }
 }
 
@@ -4462,7 +4503,8 @@ function normalizeAnnouncementAudience(?string $audience): string {
  */
 function ensureAnnouncementAtcVisibilitySchema(PDO $pdo): void {
     static $done = false;
-    if ($done) {
+    if ($done || isSchemaFlagSet('schema_announcements_visibility_v1')) {
+        $done = true;
         return;
     }
     $done = true;
@@ -4522,6 +4564,7 @@ function ensureAnnouncementAtcVisibilitySchema(PDO $pdo): void {
                 KEY idx_aav_ann (announcement_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
+        markSchemaFlag('schema_announcements_visibility_v1');
     } catch (Exception $e) {
         error_log('[AnnAtcVis] ' . $e->getMessage());
         // Allow retry on next request if migration partially failed

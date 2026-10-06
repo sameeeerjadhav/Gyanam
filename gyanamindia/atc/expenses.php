@@ -15,6 +15,7 @@ requireLogin(['ATC CENTER']);
 $pdo = getDBConnection();
 $atcId = (int)($_SESSION['atc_id'] ?? 0);
 
+if (!isSchemaFlagSet('schema_atc_expenses_v2')) {
 try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS atc_expenses (
@@ -48,8 +49,10 @@ try {
             $pdo->exec("ALTER TABLE atc_expenses ADD COLUMN {$column} {$definition}");
         }
     }
+    markSchemaFlag('schema_atc_expenses_v2');
 } catch (Exception $e) {
     error_log('[atc_expenses] ' . $e->getMessage());
+}
 }
 
 $streams = [

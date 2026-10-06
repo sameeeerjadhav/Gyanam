@@ -19,18 +19,35 @@
  * @return array  ['success' => bool, 'data' => mixed, 'error' => string|null, 'http_code' => int]
  */
 /**
- * Session cache helper for GET Exam API responses (reduces repeated 15s cURL waits).
+ * Shared file cache for GET Exam API responses.
+ * One copy serves every login, and it does not sit inside the PHP session.
  */
+function examApi_cacheDir(): string
+{
+    $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'gyanam_exam_api';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0700, true);
+    }
+    return $dir;
+}
+
+function examApi_cachePath(string $key): string
+{
+    return examApi_cacheDir() . DIRECTORY_SEPARATOR . hash('sha256', $key) . '.json';
+}
+
 function examApi_cacheGet(string $key, int $ttlSeconds = 90): ?array
 {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
+    $path = examApi_cachePath($key);
+    if (!is_file($path)) {
         return null;
     }
-    $bucket = $_SESSION['exam_api_cache'][$key] ?? null;
-    if (!is_array($bucket) || !isset($bucket['at'], $bucket['data'])) {
+    $raw = @file_get_contents($path);
+    $bucket = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($bucket) || ($bucket['key'] ?? '') !== $key || !is_array($bucket['data'] ?? null)) {
         return null;
     }
-    if ((time() - (int)$bucket['at']) > $ttlSeconds) {
+    if ((time() - (int)($bucket['at'] ?? 0)) > $ttlSeconds) {
         return null;
     }
     return $bucket['data'];
@@ -38,31 +55,49 @@ function examApi_cacheGet(string $key, int $ttlSeconds = 90): ?array
 
 function examApi_cacheSet(string $key, array $payload): void
 {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
+    $dir = examApi_cacheDir();
+    $path = examApi_cachePath($key);
+    $json = json_encode(['at' => time(), 'key' => $key, 'data' => $payload]);
+    if ($json === false) {
         return;
     }
-    if (!isset($_SESSION['exam_api_cache']) || !is_array($_SESSION['exam_api_cache'])) {
-        $_SESSION['exam_api_cache'] = [];
+    @file_put_contents($path, $json, LOCK_EX);
+    $files = glob($dir . DIRECTORY_SEPARATOR . '*.json') ?: [];
+    if (count($files) <= 40) {
+        return;
     }
-    $_SESSION['exam_api_cache'][$key] = ['at' => time(), 'data' => $payload];
-    // Cap cache size to avoid session bloat
-    if (count($_SESSION['exam_api_cache']) > 20) {
-        array_shift($_SESSION['exam_api_cache']);
+    usort($files, static function ($a, $b) {
+        return filemtime($a) <=> filemtime($b);
+    });
+    foreach (array_slice($files, 0, count($files) - 40) as $old) {
+        @unlink($old);
     }
 }
 
 function examApi_cacheForget(string $prefix = ''): void
 {
-    if (session_status() !== PHP_SESSION_ACTIVE || empty($_SESSION['exam_api_cache'])) {
-        return;
+    foreach (glob(examApi_cacheDir() . DIRECTORY_SEPARATOR . '*.json') ?: [] as $file) {
+        $raw = @file_get_contents($file);
+        $bucket = is_string($raw) ? json_decode($raw, true) : null;
+        $key = is_array($bucket) ? (string)($bucket['key'] ?? '') : '';
+        if ($prefix === '' || ($key !== '' && str_starts_with($key, $prefix))) {
+            @unlink($file);
+        }
     }
-    if ($prefix === '') {
-        unset($_SESSION['exam_api_cache']);
-        return;
+}
+
+/** Drop the session lock around a slow exam API call so other tabs can load. */
+function examApi_withoutSessionLock(callable $run)
+{
+    $restore = session_status() === PHP_SESSION_ACTIVE;
+    if ($restore) {
+        session_write_close();
     }
-    foreach (array_keys($_SESSION['exam_api_cache']) as $key) {
-        if (str_starts_with((string)$key, $prefix)) {
-            unset($_SESSION['exam_api_cache'][$key]);
+    try {
+        return $run();
+    } finally {
+        if ($restore && session_status() !== PHP_SESSION_ACTIVE) {
+            @session_start();
         }
     }
 }
@@ -89,8 +124,7 @@ function examApi_request(string $method, string $endpoint, array $data = [], boo
     }
 
     $ch = curl_init();
-
-    curl_setopt_array($ch, [
+    $curlOpts = [
         CURLOPT_URL            => $url,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => $timeout,
@@ -100,32 +134,40 @@ function examApi_request(string $method, string $endpoint, array $data = [], boo
             'Accept: application/json',
             'Authorization: Bearer ' . EXAM_API_TOKEN,
         ],
-    ]);
+        CURLOPT_SSL_VERIFYPEER => true,
+    ];
 
     if ($method === 'POST') {
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        $curlOpts[CURLOPT_POST] = true;
+        $curlOpts[CURLOPT_POSTFIELDS] = json_encode($data);
     } elseif ($method === 'PUT') {
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        $curlOpts[CURLOPT_CUSTOMREQUEST] = 'PUT';
+        $curlOpts[CURLOPT_POSTFIELDS] = json_encode($data);
     } elseif ($method === 'DELETE') {
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
+        $curlOpts[CURLOPT_CUSTOMREQUEST] = 'DELETE';
     }
 
-    // On shared hosting, SSL verification might need the CA bundle
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-
-    $response = curl_exec($ch);
-    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlErr  = curl_error($ch);
-    curl_close($ch);
+    $response = examApi_withoutSessionLock(static function () use ($ch, $curlOpts) {
+        curl_setopt_array($ch, $curlOpts);
+        $body = curl_exec($ch);
+        $meta = [
+            'body' => $body,
+            'http' => (int) curl_getinfo($ch, CURLINFO_HTTP_CODE),
+            'err'  => curl_error($ch),
+        ];
+        curl_close($ch);
+        return $meta;
+    });
+    $httpCode = (int) ($response['http'] ?? 0);
+    $curlErr  = (string) ($response['err'] ?? '');
+    $response = $response['body'] ?? false;
 
     if ($curlErr) {
         error_log("[ExamAPI] cURL error on {$method} {$endpoint}: {$curlErr}");
         return ['success' => false, 'data' => null, 'error' => 'Connection failed: ' . $curlErr, 'http_code' => 0];
     }
 
-    $decoded = json_decode($response, true);
+    $decoded = json_decode(is_string($response) ? $response : '', true);
 
     if ($httpCode >= 200 && $httpCode < 300) {
         $ok = ['success' => true, 'data' => $decoded, 'error' => null, 'http_code' => $httpCode];
@@ -135,6 +177,7 @@ function examApi_request(string $method, string $endpoint, array $data = [], boo
         // Mutating calls invalidate related GET caches
         if (in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
             examApi_cacheForget('GET:');
+            examApi_cacheForget('complete:');
         }
         return $ok;
     }
@@ -310,6 +353,12 @@ function fetchAllExamResultsComplete(int $perPage = 100): array
         return ['success' => false, 'data' => null, 'error' => 'Exam portal not configured', 'http_code' => 0];
     }
 
+    $completeKey = 'complete:' . $perPage;
+    $cachedComplete = examApi_cacheGet($completeKey, 90);
+    if ($cachedComplete !== null) {
+        return $cachedComplete;
+    }
+
     $allSubs = [];
     $stats   = [];
     $page    = 1;
@@ -335,7 +384,7 @@ function fetchAllExamResultsComplete(int $perPage = 100): array
         $page++;
     } while ($page <= $lastPage && $page <= 100);
 
-    return [
+    $complete = [
         'success'   => true,
         'data'      => [
             'submissions' => $allSubs,
@@ -350,6 +399,8 @@ function fetchAllExamResultsComplete(int $perPage = 100): array
         'error'     => null,
         'http_code' => 200,
     ];
+    examApi_cacheSet($completeKey, $complete);
+    return $complete;
 }
 
 /**
