@@ -147,6 +147,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $notes !== '' ? $notes : null,
                 getUserId(),
             ]);
+    } elseif ($action === 'update') {
+        $id = (int)($_POST['id'] ?? 0);
+        $stream = (string)($_POST['stream'] ?? '');
+        $category = trim((string)($_POST['category'] ?? ''));
+        $title = trim((string)($_POST['title'] ?? ''));
+        $paidTo = trim((string)($_POST['paid_to'] ?? ''));
+        $date = trim((string)($_POST['expense_date'] ?? ''));
+        $amount = round((float)($_POST['amount'] ?? 0), 2);
+        $mode = (string)($_POST['payment_mode'] ?? 'Cash');
+        $reference = trim((string)($_POST['reference_no'] ?? ''));
+        $notes = trim((string)($_POST['notes'] ?? ''));
+        if ($id <= 0 || !isset($streams[$stream]) || !in_array($category, $heads, true) || $title === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $amount <= 0) {
+            header('Location: ' . $expenseReturnUrl(['err' => '1', 'edit' => $id > 0 ? (string)$id : '']));
+            exit;
+        }
+        if (!in_array($mode, $modes, true)) {
+            $mode = 'Cash';
+        }
+        $pdo->prepare('UPDATE ho_expenses SET stream = ?, category = ?, expense_date = ?, title = ?, paid_to = ?, amount = ?, payment_mode = ?, reference_no = ?, notes = ? WHERE id = ?')
+            ->execute([
+                $stream,
+                $category,
+                $date,
+                $title,
+                $paidTo !== '' ? $paidTo : null,
+                $amount,
+                $mode,
+                $reference !== '' ? $reference : null,
+                $notes !== '' ? $notes : null,
+                $id,
+            ]);
     } elseif ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
         $stream = (string)($_POST['stream'] ?? '');
@@ -221,6 +252,21 @@ try {
     $loadError = 'Expenses could not be loaded. ' . $e->getMessage();
 }
 
+$editRow = null;
+$editId = (int)($_GET['edit'] ?? 0);
+if ($editId > 0) {
+    try {
+        $editSt = $pdo->prepare('SELECT * FROM ho_expenses WHERE id = ?');
+        $editSt->execute([$editId]);
+        $found = $editSt->fetch(PDO::FETCH_ASSOC);
+        if (is_array($found) && isset($streams[(string)($found['stream'] ?? '')])) {
+            $editRow = $found;
+        }
+    } catch (Throwable $e) {
+        $editRow = null;
+    }
+}
+
 if (!function_exists('exMoney')) {
     function exMoney(float $amount): string
     {
@@ -268,7 +314,11 @@ if (!function_exists('exMoney')) {
         .ex-title { font-weight:800; color:#111827 }
         .ex-note { color:#64748b; font-size:.72rem; font-weight:600; margin-top:.12rem }
         .ex-pill { display:inline-flex; align-items:center; padding:.15rem .5rem; border-radius:999px; font-size:.68rem; font-weight:800; background:var(--ex-soft, #f8fafc); color:var(--ex, #111827) }
-        .ex-del { border:none; background:transparent; color:#b91c1c; border-radius:7px; font-weight:800; font-size:.72rem; padding:.3rem .4rem; cursor:pointer }
+        .ex-actions { display:flex; justify-content:flex-end; gap:.1rem; white-space:nowrap }
+        .ex-edit, .ex-del { border:none; background:transparent; border-radius:7px; font-weight:800; font-size:.72rem; padding:.3rem .4rem; cursor:pointer }
+        .ex-edit { color:#1d4ed8 }
+        .ex-edit:hover { background:#eff6ff }
+        .ex-del { color:#b91c1c }
         .ex-del:hover { background:#fef2f2 }
         .ex-empty { margin:1rem; padding:1.1rem .5rem; text-align:center; color:#94a3b8; font-weight:700; font-size:.84rem; border:1px dashed #e2e8f0; border-radius:10px; background:#fafbfc }
         .ex-panel .pager { margin:.75rem .9rem .9rem }
@@ -397,7 +447,7 @@ if (!function_exists('exMoney')) {
                     <button type="submit" class="ex-cancel">Apply</button>
                     <a class="ex-cancel<?= $month === 'all' ? ' is-on' : '' ?>" style="display:inline-flex;align-items:center;text-decoration:none" href="<?= htmlspecialchars($expenseReturnUrl(['month' => 'all'])) ?>">All months</a>
                 </div>
-                <button type="button" class="ex-add" onclick="document.getElementById('exModal').classList.add('active')">Add expense</button>
+                <button type="button" class="ex-add" onclick="openExpenseModal(null)">Add expense</button>
             </form>
             <section class="ex-panel">
                 <div class="ex-panel-head">
@@ -442,17 +492,31 @@ if (!function_exists('exMoney')) {
                                 <td><?= htmlspecialchars((string)($row['payment_mode'] ?? '')) ?></td>
                                 <td class="num"><?= exMoney((float)$row['amount']) ?></td>
                                 <td>
-                                    <form method="post" onsubmit="return confirm('Remove this expense?')">
-                                        <input type="hidden" name="action" value="delete">
-                                        <input type="hidden" name="id" value="<?= (int)$row['id'] ?>">
-                                        <input type="hidden" name="stream" value="<?= htmlspecialchars($streamName) ?>">
-                                        <input type="hidden" name="month" value="<?= htmlspecialchars($month) ?>">
-                                        <input type="hidden" name="filter_stream" value="<?= htmlspecialchars($streamFilter) ?>">
-                                        <input type="hidden" name="filter_head" value="<?= htmlspecialchars($headFilter) ?>">
-                                        <input type="hidden" name="filter_mode" value="<?= htmlspecialchars($modeFilter) ?>">
-                                        <input type="hidden" name="filter_q" value="<?= htmlspecialchars($search) ?>">
-                                        <button type="submit" class="ex-del">Delete</button>
-                                    </form>
+                                    <div class="ex-actions">
+                                        <button type="button" class="ex-edit" data-expense="<?= htmlspecialchars(json_encode([
+                                            'id' => (int)$row['id'],
+                                            'stream' => (string)$row['stream'],
+                                            'category' => (string)($row['category'] ?? ''),
+                                            'expense_date' => substr((string)$row['expense_date'], 0, 10),
+                                            'title' => (string)$row['title'],
+                                            'paid_to' => (string)($row['paid_to'] ?? ''),
+                                            'amount' => number_format((float)$row['amount'], 2, '.', ''),
+                                            'payment_mode' => (string)($row['payment_mode'] ?? 'Cash'),
+                                            'reference_no' => (string)($row['reference_no'] ?? ''),
+                                            'notes' => (string)($row['notes'] ?? ''),
+                                        ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>" onclick="openExpenseModal(JSON.parse(this.getAttribute('data-expense')))">Edit</button>
+                                        <form method="post" onsubmit="return confirm('Remove this expense?')">
+                                            <input type="hidden" name="action" value="delete">
+                                            <input type="hidden" name="id" value="<?= (int)$row['id'] ?>">
+                                            <input type="hidden" name="stream" value="<?= htmlspecialchars($streamName) ?>">
+                                            <input type="hidden" name="month" value="<?= htmlspecialchars($month) ?>">
+                                            <input type="hidden" name="filter_stream" value="<?= htmlspecialchars($streamFilter) ?>">
+                                            <input type="hidden" name="filter_head" value="<?= htmlspecialchars($headFilter) ?>">
+                                            <input type="hidden" name="filter_mode" value="<?= htmlspecialchars($modeFilter) ?>">
+                                            <input type="hidden" name="filter_q" value="<?= htmlspecialchars($search) ?>">
+                                            <button type="submit" class="ex-del">Delete</button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -466,17 +530,18 @@ if (!function_exists('exMoney')) {
     </main>
 </div>
 
-<div class="modal-overlay<?= isset($_GET['err']) ? ' active' : '' ?>" id="exModal" onclick="if (event.target === this) this.classList.remove('active')">
+<div class="modal-overlay<?= (isset($_GET['err']) || $editRow) ? ' active' : '' ?>" id="exModal" data-today="<?= date('Y-m-d') ?>" onclick="if (event.target === this) this.classList.remove('active')">
     <div class="modal-card" role="dialog" aria-labelledby="exModalTitle">
         <div class="modal-header">
-            <h3 id="exModalTitle">Add expense</h3>
+            <h3 id="exModalTitle"><?= $editRow ? 'Edit expense' : 'Add expense' ?></h3>
             <button type="button" class="modal-close" onclick="document.getElementById('exModal').classList.remove('active')" aria-label="Close">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
         <form method="post">
             <div class="modal-body">
-                <input type="hidden" name="action" value="add">
+                <input type="hidden" name="action" value="<?= $editRow ? 'update' : 'add' ?>">
+                <input type="hidden" name="id" value="<?= $editRow ? (int)$editRow['id'] : '' ?>">
                 <input type="hidden" name="month" value="<?= htmlspecialchars($month) ?>">
                 <input type="hidden" name="filter_stream" value="<?= htmlspecialchars($streamFilter) ?>">
                 <input type="hidden" name="filter_head" value="<?= htmlspecialchars($headFilter) ?>">
@@ -486,65 +551,86 @@ if (!function_exists('exMoney')) {
                     <label class="ex-field">
                         <span class="ex-cap">Stream</span>
                         <select name="stream" required>
-                            <option value="" selected disabled>Select stream</option>
+                            <option value="" <?= $editRow ? '' : 'selected' ?> disabled>Select stream</option>
                             <?php foreach ($streams as $name => $meta): ?>
-                                <option value="<?= htmlspecialchars($name) ?>"><?= htmlspecialchars($name) ?></option>
+                                <option value="<?= htmlspecialchars($name) ?>" <?= $editRow && (string)$editRow['stream'] === $name ? 'selected' : '' ?>><?= htmlspecialchars($name) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </label>
                     <label class="ex-field">
                         <span class="ex-cap">Expense head</span>
                         <select name="category" required>
-                            <option value="" selected disabled>Select head</option>
+                            <option value="" <?= $editRow ? '' : 'selected' ?> disabled>Select head</option>
                             <?php foreach ($heads as $head): ?>
-                                <option value="<?= htmlspecialchars($head) ?>"><?= htmlspecialchars($head) ?></option>
+                                <option value="<?= htmlspecialchars($head) ?>" <?= $editRow && (string)($editRow['category'] ?? '') === $head ? 'selected' : '' ?>><?= htmlspecialchars($head) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </label>
                     <label class="ex-field">
                         <span class="ex-cap">Date</span>
-                        <input type="date" name="expense_date" required value="<?= date('Y-m-d') ?>">
+                        <input type="date" name="expense_date" required value="<?= htmlspecialchars($editRow ? substr((string)$editRow['expense_date'], 0, 10) : date('Y-m-d')) ?>">
                     </label>
                     <label class="ex-field">
                         <span class="ex-cap">Amount</span>
                         <span class="ex-amt">
                             <span class="ex-rs">&#8377;</span>
-                            <input type="number" name="amount" required min="0.01" step="0.01" placeholder="0.00" inputmode="decimal">
+                            <input type="number" name="amount" required min="0.01" step="0.01" placeholder="0.00" inputmode="decimal" value="<?= $editRow ? htmlspecialchars(number_format((float)$editRow['amount'], 2, '.', '')) : '' ?>">
                         </span>
                     </label>
                     <label class="ex-field ex-span">
                         <span class="ex-cap">Particular</span>
-                        <input type="text" name="title" required maxlength="255" placeholder="Short description of this expense">
+                        <input type="text" name="title" required maxlength="255" placeholder="Short description of this expense" value="<?= htmlspecialchars((string)($editRow['title'] ?? '')) ?>">
                     </label>
                     <label class="ex-field">
                         <span class="ex-cap">Paid to</span>
-                        <input type="text" name="paid_to" maxlength="255" placeholder="Vendor or person">
+                        <input type="text" name="paid_to" maxlength="255" placeholder="Vendor or person" value="<?= htmlspecialchars((string)($editRow['paid_to'] ?? '')) ?>">
                     </label>
                     <label class="ex-field">
                         <span class="ex-cap">Payment mode</span>
                         <select name="payment_mode">
                             <?php foreach ($modes as $mode): ?>
-                                <option value="<?= htmlspecialchars($mode) ?>"><?= htmlspecialchars($mode) ?></option>
+                                <option value="<?= htmlspecialchars($mode) ?>" <?= (($editRow ? (string)($editRow['payment_mode'] ?? 'Cash') : 'Cash') === $mode) ? 'selected' : '' ?>><?= htmlspecialchars($mode) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </label>
                     <label class="ex-field">
                         <span class="ex-cap">Reference</span>
-                        <input type="text" name="reference_no" maxlength="80" placeholder="UTR or cheque no.">
+                        <input type="text" name="reference_no" maxlength="80" placeholder="UTR or cheque no." value="<?= htmlspecialchars((string)($editRow['reference_no'] ?? '')) ?>">
                     </label>
                     <label class="ex-field ex-span">
                         <span class="ex-cap">Note</span>
-                        <input type="text" name="notes" maxlength="500" placeholder="Optional">
+                        <input type="text" name="notes" maxlength="500" placeholder="Optional" value="<?= htmlspecialchars((string)($editRow['notes'] ?? '')) ?>">
                     </label>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="ex-cancel" onclick="document.getElementById('exModal').classList.remove('active')">Cancel</button>
-                <button type="submit" class="ex-save">Save expense</button>
+                <button type="submit" class="ex-save"><?= $editRow ? 'Save changes' : 'Save expense' ?></button>
             </div>
         </form>
     </div>
 </div>
+<script>
+function openExpenseModal(row) {
+    var form = document.querySelector('#exModal form');
+    var action = form.querySelector('[name="action"]');
+    var idInput = form.querySelector('[name="id"]');
+    action.value = row ? 'update' : 'add';
+    idInput.value = row ? String(row.id) : '';
+    document.getElementById('exModalTitle').textContent = row ? 'Edit expense' : 'Add expense';
+    form.querySelector('.ex-save').textContent = row ? 'Save changes' : 'Save expense';
+    form.stream.value = row ? (row.stream || '') : '';
+    form.category.value = row ? (row.category || '') : '';
+    form.expense_date.value = row ? (row.expense_date || '') : (document.getElementById('exModal').getAttribute('data-today') || '');
+    form.amount.value = row ? (row.amount || '') : '';
+    form.title.value = row ? (row.title || '') : '';
+    form.paid_to.value = row ? (row.paid_to || '') : '';
+    form.payment_mode.value = row ? (row.payment_mode || 'Cash') : 'Cash';
+    form.reference_no.value = row ? (row.reference_no || '') : '';
+    form.notes.value = row ? (row.notes || '') : '';
+    document.getElementById('exModal').classList.add('active');
+}
+</script>
 <script src="../assets/js/dashboard.js"></script>
 </body>
 </html>
