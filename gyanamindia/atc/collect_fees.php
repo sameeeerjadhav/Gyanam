@@ -28,11 +28,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $paymentMode = $_POST['payment_mode'] ?? null;
             $description = $_POST['description'] ?? null;
             $remarks     = $_POST['remarks'] ?? null;
+            $today       = date('Y-m-d');
+            $collectedOn = trim((string)($_POST['payment_date'] ?? ''));
+            if ($collectedOn === '') {
+                $collectedOn = $today;
+            }
 
             if (!$studentId || $amount <= 0 || !$paymentMode) {
                 echo json_encode(['success' => false, 'message' => 'Invalid input data']);
                 exit;
             }
+            $collectedDt = DateTime::createFromFormat('Y-m-d', $collectedOn);
+            if (!$collectedDt || $collectedDt->format('Y-m-d') !== $collectedOn || $collectedOn > $today) {
+                echo json_encode(['success' => false, 'message' => 'Enter a collection date that is today or earlier']);
+                exit;
+            }
+            $paymentAt = $collectedOn . ' ' . date('H:i:s');
 
             $pdo->beginTransaction();
 
@@ -82,11 +93,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 INSERT INTO fee_payments (
                     admission_id, atc_id, installment_no, receipt_no, amount, payment_mode,
                     transaction_ref, remarks, description, payment_date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([
                 $studentId, $atcId, $installmentNo, $receiptNo, $amount,
-                $paymentMode, $_POST['transaction_ref'] ?? null, $remarks, $description
+                $paymentMode, $_POST['transaction_ref'] ?? null, $remarks, $description, $paymentAt
             ]);
 
             $newPaymentId = $pdo->lastInsertId();
@@ -452,6 +463,12 @@ function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
                                 </select>
                             </div>
                         </div>
+                        <div class="cf-form-row">
+                            <div class="cf-field">
+                                <label class="cf-label">Date of fees collected <span style="color:#ef4444">*</span></label>
+                                <input type="date" class="cf-input" id="collectedDate" value="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d') ?>" required>
+                            </div>
+                        </div>
                         <div class="cf-field">
                             <label class="cf-label">Description / Reference</label>
                             <input type="text" class="cf-input" id="feeDescription" placeholder="e.g. 2nd installment, UPI txn ID..." maxlength="255">
@@ -583,11 +600,13 @@ function collectFees() {
     const amount    = parseFloat(document.getElementById('feeAmount').value) || 0;
     const mode      = document.getElementById('paymentMode').value;
     const desc      = document.getElementById('feeDescription').value.trim();
+    const collected = document.getElementById('collectedDate').value;
     const nextDate  = document.getElementById('nextInstDate').value;
     const nextAmt   = document.getElementById('installmentAmt').value;
 
     if (amount <= 0) { showToast('Please enter a valid amount', 'error'); return; }
     if (!mode)       { showToast('Please select a payment mode', 'error'); return; }
+    if (!collected)  { showToast('Please enter the date of fees collected', 'error'); return; }
 
     const btn = document.getElementById('collectBtn');
     btn.disabled = true;
@@ -599,6 +618,7 @@ function collectFees() {
     fd.append('amount', amount);
     fd.append('payment_mode', mode);
     fd.append('description', desc);
+    fd.append('payment_date', collected);
     fd.append('transaction_ref', nextDate);
     fd.append('remarks', 'Next installment: ' + (nextDate || '—') + (nextAmt ? ', Installment amt: ₹' + nextAmt : ''));
 
