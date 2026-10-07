@@ -427,6 +427,36 @@ foreach ($allAdmissions as $row) {
     $students[] = $row;
 }
 
+$dueRows = [];
+$paidRows = [];
+foreach ($students as $student) {
+    $course = (string)($student['course'] ?? '');
+    $snapshot = isset($student['ho_share_snapshot']) && $student['ho_share_snapshot'] > 0
+        ? (float)$student['ho_share_snapshot'] : null;
+    $student['share_amount'] = resolveCourseShareAmount(
+        $course,
+        $normalizedShareMap,
+        $defaultShareAmount,
+        $snapshot,
+        $student['material_type'] ?? null,
+        $courseShareAmounts
+    );
+    $student['full_name'] = trim(
+        ($student['first_name'] ?? '') . ' '
+        . ((($student['middle_name'] ?? '') !== '') ? $student['middle_name'] . ' ' : '')
+        . ($student['last_name'] ?? '')
+    );
+    if (!empty($student['share_paid'])) {
+        $paidRows[] = $student;
+    } else {
+        $dueRows[] = $student;
+    }
+}
+$dueTotal = 0.0;
+foreach ($dueRows as $dueRow) {
+    $dueTotal += (float)$dueRow['share_amount'];
+}
+
 // Get ATC details
 $stmt = $pdo->prepare("SELECT * FROM atc_centers WHERE id = ?");
 $stmt->execute([$atcId]);
@@ -472,7 +502,7 @@ $atcDetails = $stmt->fetch(PDO::FETCH_ASSOC);
                 </button>
                 <div class="header-greeting">
                     <h2>Pay Share to Admin</h2>
-                    <p>Pay course-wise share for students</p>
+                    <p>Head Office share for active students. Pay only the ones still due.</p>
                 </div>
             </div>
             <div class="header-right">
@@ -482,73 +512,75 @@ $atcDetails = $stmt->fetch(PDO::FETCH_ASSOC);
         </header>
 
         <div class="page-content">
-            
-            <!-- Course Share Rates -->
-            <div class="info-card">
-                <div class="info-card-header">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                    <h3>Course-wise Share Rates</h3>
+
+            <div class="ps-stats">
+                <div class="ps-stat <?= $dueRows ? 'is-due' : 'is-clear' ?>">
+                    <span>Still to pay</span>
+                    <strong><?= count($dueRows) ?></strong>
+                    <em><?= $dueRows ? '₹' . number_format($dueTotal, 0) . ' share' : 'Nothing due right now' ?></em>
                 </div>
-                <div class="share-rates-grid">
-                    <?php foreach ($courseShareAmounts as $course => $amount): ?>
-                        <div class="share-rate-item">
-                            <div class="share-course"><?= $course ?></div>
-                            <div class="share-amount">₹<?= number_format($amount, 0) ?></div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-                <div class="info-note">
-                    <strong>Note:</strong> Additional ₹<?= $transactionFee ?> transaction fee will be charged per payment.
+                <div class="ps-stat">
+                    <span>Already paid</span>
+                    <strong><?= count($paidRows) ?></strong>
+                    <em><?= count($students) ?> active student<?= count($students) === 1 ? '' : 's' ?></em>
                 </div>
             </div>
 
-            <!-- Selected Students Summary -->
+            <?php if (!$dueRows): ?>
+            <div class="ps-clear">
+                <?php if (!$students): ?>
+                    No active students on this centre yet. A new admission will appear here until the Head Office share is paid.
+                <?php else: ?>
+                    Every active student already has the Head Office share paid. A new admission will appear here until that share is paid.
+                <?php endif; ?>
+            </div>
+            <?php else: ?>
+            <div class="page-toolbar">
+                <h3>
+                    Students still to pay
+                    <span class="badge-count"><?= count($dueRows) ?></span>
+                </h3>
+                <div class="search-bar">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <input type="text" id="searchInput" placeholder="Search name, roll no, or course">
+                </div>
+            </div>
+            <p class="ps-hint">Tick the students for this payment. ₹<?= (int)$transactionFee ?> is added once to the payment, not to each student.</p>
+
             <div class="summary-card" id="summaryCard" style="display: none;">
                 <div class="summary-header">
                     <h3>
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                        Selected Students: <span id="selectedCount">0</span>
+                        Selected: <span id="selectedCount">0</span>
                     </h3>
-                    <button class="btn-clear" onclick="clearSelection()">Clear All</button>
+                    <button class="btn-clear" type="button" onclick="clearSelection()">Clear</button>
                 </div>
                 <div class="summary-body">
                     <div class="summary-row">
-                        <span>Total Share Amount:</span>
+                        <span>Share amount</span>
                         <strong id="totalShareAmount">₹0</strong>
                     </div>
                     <div class="summary-row">
-                        <span>Transaction Fee:</span>
-                        <strong>₹<?= $transactionFee ?></strong>
+                        <span>Gateway fee, once</span>
+                        <strong>₹<?= (int)$transactionFee ?></strong>
                     </div>
                     <div class="summary-row total">
-                        <span>Total Payable:</span>
-                        <strong id="totalPayable">₹<?= $transactionFee ?></strong>
+                        <span>To pay</span>
+                        <strong id="totalPayable">₹<?= (int)$transactionFee ?></strong>
                     </div>
                 </div>
-                <button class="btn-pay" onclick="proceedToPayment()">
+                <button class="btn-pay" type="button" onclick="proceedToPayment()">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                    Proceed to Payment
+                    Pay selected share
                 </button>
             </div>
 
-            <!-- Students List -->
-            <div class="page-toolbar">
-                <h3>
-                    Select Students for Payment
-                    <span class="badge-count"><?= count($students) ?></span>
-                </h3>
-                <div class="search-bar">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                    <input type="text" id="searchInput" placeholder="Search students...">
-                </div>
-            </div>
-
             <div class="table-card">
-                <table class="data-table" id="studentsTable">
+                <table class="data-table" id="dueTable">
                     <thead>
                         <tr>
                             <th style="width: 50px;">
-                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" aria-label="Select all students still to pay">
                             </th>
                             <th>Roll No</th>
                             <th>Adm. ID</th>
@@ -559,62 +591,79 @@ $atcDetails = $stmt->fetch(PDO::FETCH_ASSOC);
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if (empty($students)): ?>
-                            <tr>
-                                <td colspan="7" class="table-empty">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                                    <p>No students found.</p>
-                                </td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($students as $student): ?>
-                                <?php 
-                    $course = $student['course'];
-                    // Use snapshot (locked at admission time) if available; else live rate
-                    $snapshot = isset($student['ho_share_snapshot']) && $student['ho_share_snapshot'] > 0
-                        ? (float)$student['ho_share_snapshot'] : null;
-                    $shareAmount = resolveCourseShareAmount(
-                        $course,
-                        $normalizedShareMap,
-                        $defaultShareAmount,
-                        $snapshot,
-                        $student['material_type'] ?? null,
-                        $courseShareAmounts
-                    );
-                    $sharePaid = $student['share_paid'];
-                ?>
-                                <tr data-student-id="<?= $student['id'] ?>" data-share-amount="<?= $shareAmount ?>" data-share-paid="<?= $sharePaid ?>">
-                                    <td>
-                                        <?php if (!$sharePaid): ?>
-                                            <input type="checkbox" class="student-checkbox" value="<?= $student['id'] ?>" onchange="updateSummary()">
-                                        <?php else: ?>
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; color: #10b981;"><polyline points="20 6 9 17 4 12"/></svg>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><strong><?= htmlspecialchars($student['roll_no']) ?></strong></td>
-                                    <td style="font-family:monospace;font-size:.82rem;color:#6b7280">#<?= $student['id'] ?></td>
-                                    <td>
-                                        <div class="cell-name">
-                                            <?= htmlspecialchars($student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name']) ?>
-                                        </div>
-                                    </td>
-                                    <td><?= htmlspecialchars($course) ?></td>
-                                    <td class="fee-amount">₹<?= number_format($shareAmount, 0) ?></td>
-                                    <td>
-                                        <?php if ($sharePaid): ?>
-                                            <span class="cell-badge status-paid">Paid</span>
-                                        <?php else: ?>
-                                            <span class="cell-badge status-pending">Pending</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
+                        <?php foreach ($dueRows as $student): ?>
+                        <tr data-student-id="<?= (int)$student['id'] ?>" data-share-amount="<?= htmlspecialchars((string)$student['share_amount']) ?>">
+                            <td>
+                                <input type="checkbox" class="student-checkbox" value="<?= (int)$student['id'] ?>" onchange="updateSummary()">
+                            </td>
+                            <td><strong><?= htmlspecialchars((string)$student['roll_no']) ?></strong></td>
+                            <td class="ps-id">#<?= (int)$student['id'] ?></td>
+                            <td><div class="cell-name"><?= htmlspecialchars($student['full_name']) ?></div></td>
+                            <td><?= htmlspecialchars((string)$student['course']) ?></td>
+                            <td class="fee-amount">₹<?= number_format((float)$student['share_amount'], 0) ?></td>
+                            <td><span class="cell-badge status-pending">Due</span></td>
+                        </tr>
+                        <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
+            <?php endif; ?>
 
+            <?php if ($paidRows): ?>
+            <div class="page-toolbar ps-paid-head">
+                <h3>
+                    Already paid
+                    <span class="badge-count"><?= count($paidRows) ?></span>
+                </h3>
+                <?php if (!$dueRows): ?>
+                <div class="search-bar">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <input type="text" id="searchInput" placeholder="Search name, roll no, or course">
+                </div>
+                <?php endif; ?>
+            </div>
+            <div class="table-card">
+                <table class="data-table" id="paidTable">
+                    <thead>
+                        <tr>
+                            <th>Roll No</th>
+                            <th>Adm. ID</th>
+                            <th>Student Name</th>
+                            <th>Course</th>
+                            <th>Share Amount</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($paidRows as $student): ?>
+                        <tr>
+                            <td><strong><?= htmlspecialchars((string)$student['roll_no']) ?></strong></td>
+                            <td class="ps-id">#<?= (int)$student['id'] ?></td>
+                            <td><div class="cell-name"><?= htmlspecialchars($student['full_name']) ?></div></td>
+                            <td><?= htmlspecialchars((string)$student['course']) ?></td>
+                            <td class="fee-amount">₹<?= number_format((float)$student['share_amount'], 0) ?></td>
+                            <td><span class="cell-badge status-paid">Paid</span></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
 
+            <div class="ps-rates">
+                <div class="ps-rates-head">
+                    <h3>Share rate by course</h3>
+                    <p>The amount on each row follows this rate. ₹<?= (int)$transactionFee ?> is added once when you pay, not once per student.</p>
+                </div>
+                <div class="ps-rate-list">
+                    <?php foreach ($courseShareAmounts as $course => $amount): ?>
+                    <div class="ps-rate">
+                        <span class="ps-rate-name"><?= htmlspecialchars((string)$course) ?></span>
+                        <span class="ps-rate-amt">₹<?= number_format((float)$amount, 0) ?></span>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
 
         </div>
     </main>
@@ -625,26 +674,36 @@ $atcDetails = $stmt->fetch(PDO::FETCH_ASSOC);
 const courseShareAmounts = <?= json_encode($courseShareAmounts) ?>;
 const transactionFee = <?= $transactionFee ?>;
 const atcDetails = <?= json_encode($atcDetails) ?>;
-const sharePager = initListPager({
-    rows: '#studentsTable tbody tr',
-    mount: '#studentsTable',
+function shareRowMatches(row) {
+    const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
+    return row.textContent.toLowerCase().includes(q);
+}
+const duePager = initListPager({
+    rows: '#dueTable tbody tr',
+    mount: '#dueTable',
     label: 'students',
-    match: function (row) {
-        const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
-        return row.textContent.toLowerCase().includes(q);
-    },
+    match: shareRowMatches,
     onApply: function () {
         const master = document.getElementById('selectAll');
         if (master) master.checked = false;
     }
 });
+const paidPager = initListPager({
+    rows: '#paidTable tbody tr',
+    mount: '#paidTable',
+    label: 'students',
+    match: shareRowMatches
+});
 
 let selectedStudents = [];
 
-// Search functionality
-document.getElementById('searchInput').addEventListener('input', function () {
-    sharePager.refresh(true);
-});
+const searchInput = document.getElementById('searchInput');
+if (searchInput) {
+    searchInput.addEventListener('input', function () {
+        duePager.refresh(true);
+        paidPager.refresh(true);
+    });
+}
 
 // Toggle select all
 function toggleSelectAll() {
@@ -898,64 +957,110 @@ function showToast(message, type = 'success') {
 <script src="../assets/js/dashboard.js"></script>
 
 <style>
-.info-card {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    color: white;
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-}
-
-.info-card-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1.5rem;
-}
-
-.info-card-header svg {
-    width: 24px;
-    height: 24px;
-}
-
-.info-card-header h3 {
-    font-size: 1.2rem;
-    margin: 0;
-}
-
-.share-rates-grid {
+.ps-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 280px));
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
 }
-
-.share-rate-item {
-    background: rgba(255, 255, 255, 0.15);
-    padding: 1rem;
-    border-radius: var(--radius-md);
-    text-align: center;
-    backdrop-filter: blur(10px);
+.ps-stat {
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 0.95rem 1.1rem;
 }
-
-.share-course {
-    font-size: 0.9rem;
-    margin-bottom: 0.5rem;
-    opacity: 0.9;
+.ps-stat span {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6b7280;
 }
-
-.share-amount {
-    font-size: 1.3rem;
+.ps-stat strong {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 1.45rem;
+    line-height: 1.2;
+    color: #111827;
+}
+.ps-stat em {
+    display: block;
+    margin-top: 0.15rem;
+    font-style: normal;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #6b7280;
+}
+.ps-stat.is-due { border-color: #fcd34d; background: #fffbeb; }
+.ps-stat.is-due strong { color: #b45309; }
+.ps-stat.is-clear { border-color: #a7f3d0; background: #ecfdf5; }
+.ps-stat.is-clear strong { color: #047857; }
+.ps-clear {
+    background: #ecfdf5;
+    border: 1.5px solid #a7f3d0;
+    color: #065f46;
+    border-radius: 14px;
+    padding: 0.95rem 1.1rem;
+    margin-bottom: 1.25rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+.ps-hint {
+    margin: -0.6rem 0 1rem;
+    color: #6b7280;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+.ps-paid-head { margin-top: 1.75rem; }
+.ps-id { font-family: ui-monospace, monospace; font-size: 0.82rem; color: #6b7280; }
+.ps-rates {
+    margin-top: 1.75rem;
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 1.1rem 1.15rem 1.15rem;
+}
+.ps-rates-head h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #111827;
+}
+.ps-rates-head p {
+    margin: 0.3rem 0 0.85rem;
+    color: #6b7280;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+.ps-rate-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.55rem;
+}
+.ps-rate {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.7rem 0.85rem;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+}
+.ps-rate-name {
+    font-size: 0.82rem;
     font-weight: 700;
+    color: #1f2937;
+    line-height: 1.35;
 }
-
-.info-note {
-    background: rgba(255, 255, 255, 0.2);
-    padding: 0.75rem 1rem;
-    border-radius: var(--radius-md);
-    font-size: 0.9rem;
-    backdrop-filter: blur(10px);
+.ps-rate-amt {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #3730a3;
+    white-space: nowrap;
 }
 
 .summary-card {
@@ -1086,10 +1191,7 @@ input[type="checkbox"] {
 }
 
 @media (max-width: 768px) {
-    .share-rates-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
+    .ps-stats { grid-template-columns: 1fr; }
     .summary-header {
         flex-direction: column;
         gap: 1rem;
