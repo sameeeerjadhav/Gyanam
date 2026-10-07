@@ -532,7 +532,7 @@ $fullName = trim(
 
                         <!-- T-Shirt Size: only visible for courses with material -->
                         <div class="conv-field" id="tshirtField" style="display:none">
-                            <label>T-Shirt / Uniform Size <span class="req">*</span></label>
+                            <label>T-Shirt / Uniform Size <span class="req" id="tshirtReq">*</span></label>
                             <select class="conv-select" name="uniform_size" id="convert_uniform_size">
                                 <option value="">— Select Size —</option>
                                 <option value="36">36</option>
@@ -572,6 +572,13 @@ $fullName = trim(
 const COURSE_FEES_MAP = <?= json_encode($courseFeesMap, JSON_UNESCAPED_UNICODE) ?>;
 const COURSE_MATERIAL_MAP = <?= json_encode($courseMaterialMap, JSON_UNESCAPED_UNICODE) ?>;
 
+function isVedicOnlyCourse(name, type) {
+    const blob = ((name || '') + ' ' + (type || '')).toLowerCase();
+    const vedic = blob.includes('vedic') || blob.includes('vaidik');
+    const abacus = blob.includes('abacus');
+    return vedic && !abacus;
+}
+
 // ── Master handler when course changes ─────────────────────────────────────
 function onCourseChange() {
     const sel = document.getElementById('convert_course');
@@ -601,9 +608,12 @@ function onCourseChange() {
     const langSel = document.getElementById('convert_material_language');
     if (langSel && language) langSel.value = language;
 
-    // 4️⃣ Show/hide T-shirt field (With Material or Abacus)
+    // 4️⃣ Show/hide T-shirt field (With Material or Abacus). Vedic Maths can leave it blank.
     const showShirt = hasMaterial || (ctype || '').toLowerCase().includes('abacus') || courseName.toLowerCase().includes('abacus');
+    const vedicOnly = isVedicOnlyCourse(courseName, ctype);
     document.getElementById('tshirtField').style.display = showShirt ? '' : 'none';
+    const tshirtReq = document.getElementById('tshirtReq');
+    if (tshirtReq) tshirtReq.style.display = (showShirt && !vedicOnly) ? '' : 'none';
     if (!showShirt) {
         document.getElementById('convert_uniform_size').value = '';
     }
@@ -683,7 +693,10 @@ document.getElementById('convertForm').addEventListener('submit', async function
     const hasMat = selOpt && selOpt.dataset.material === 'With Material';
     if (hasMat) {
         required.push({ id: 'convert_material_language', label: 'Material Language' });
-        required.push({ id: 'convert_uniform_size', label: 'T-Shirt Size' });
+        const ctype = selOpt.dataset.ctype || '';
+        if (!isVedicOnlyCourse(selOpt.value || document.getElementById('convert_course').value, ctype)) {
+            required.push({ id: 'convert_uniform_size', label: 'T-Shirt Size' });
+        }
     }
 
     let missing = [];
