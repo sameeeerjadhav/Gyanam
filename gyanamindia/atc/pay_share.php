@@ -513,6 +513,21 @@ $atcDetails = $stmt->fetch(PDO::FETCH_ASSOC);
 
         <div class="page-content">
 
+            <div class="ps-rates">
+                <div class="ps-rates-head">
+                    <h3>Share rate by course</h3>
+                    <p>The amount on each row follows this rate. ₹<?= (int)$transactionFee ?> is added once when you pay, not once per student.</p>
+                </div>
+                <div class="ps-rate-list">
+                    <?php foreach ($courseShareAmounts as $course => $amount): ?>
+                    <div class="ps-rate">
+                        <span class="ps-rate-name"><?= htmlspecialchars((string)$course) ?></span>
+                        <span class="ps-rate-amt">₹<?= number_format((float)$amount, 0) ?></span>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
             <div class="ps-stats">
                 <div class="ps-stat <?= $dueRows ? 'is-due' : 'is-clear' ?>">
                     <span>Still to pay</span>
@@ -649,21 +664,6 @@ $atcDetails = $stmt->fetch(PDO::FETCH_ASSOC);
                 </table>
             </div>
             <?php endif; ?>
-
-            <div class="ps-rates">
-                <div class="ps-rates-head">
-                    <h3>Share rate by course</h3>
-                    <p>The amount on each row follows this rate. ₹<?= (int)$transactionFee ?> is added once when you pay, not once per student.</p>
-                </div>
-                <div class="ps-rate-list">
-                    <?php foreach ($courseShareAmounts as $course => $amount): ?>
-                    <div class="ps-rate">
-                        <span class="ps-rate-name"><?= htmlspecialchars((string)$course) ?></span>
-                        <span class="ps-rate-amt">₹<?= number_format((float)$amount, 0) ?></span>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
 
         </div>
     </main>
@@ -1016,7 +1016,7 @@ function showToast(message, type = 'success') {
 .ps-paid-head { margin-top: 1.75rem; }
 .ps-id { font-family: ui-monospace, monospace; font-size: 0.82rem; color: #6b7280; }
 .ps-rates {
-    margin-top: 1.75rem;
+    margin-bottom: 1.25rem;
     background: #fff;
     border: 1.5px solid #e5e7eb;
     border-radius: 14px;
