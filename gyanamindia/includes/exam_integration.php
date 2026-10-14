@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Exam Portal Integration â€” Gyanam India
  *
@@ -1017,19 +1017,54 @@ function questionBankPdfBrandPaths(): array
 }
 
 /**
- * Stream a branded tabular question bank PDF (FPDF).
- * Page 1: full GIIT letterhead. Every page: GIIT logo + question table.
+ * HTML-escape question text and keep line breaks. Devanagari is left as UTF-8.
+ */
+function questionBankPdfHtml(string $text): string
+{
+    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = str_replace(["\r\n", "\r"], "\n", $text);
+    return nl2br(htmlspecialchars($text, ENT_QUOTES | ENT_HTML5, 'UTF-8'), false);
+}
+
+/**
+ * English line, then the Marathi line when the bank has one.
+ */
+function questionBankPdfBilingual(?string $english, ?string $marathi): string
+{
+    $english = trim((string)$english);
+    $marathi = trim((string)$marathi);
+    $parts = [];
+    if ($english !== '') {
+        $parts[] = '<div class="en">' . questionBankPdfHtml($english) . '</div>';
+    }
+    if ($marathi !== '' && $marathi !== $english) {
+        $parts[] = '<div class="mr">' . questionBankPdfHtml($marathi) . '</div>';
+    }
+    return $parts !== [] ? implode('', $parts) : '&nbsp;';
+}
+
+/**
+ * @param array<string,mixed> $option
+ */
+function questionBankPdfOptionText(array $option): string
+{
+    $mr = $option['text_mr'] ?? $option['textMr'] ?? $option['mr'] ?? '';
+    return questionBankPdfBilingual((string)($option['text'] ?? ''), is_string($mr) ? $mr : '');
+}
+
+/**
+ * Stream a branded landscape question-bank PDF.
+ * English and Marathi are both printed. Marathi uses a Unicode font with Indic shaping.
  *
  * @param array $export Data from fetchQuestionBankExport()['data']
  */
 function streamQuestionBankPdf(array $export, string $atcCode): void
 {
-    $autoload = __DIR__ . '/../assets/fpdi/fpdi_autoload.php';
-    if (!file_exists($autoload)) {
+    $lib = __DIR__ . '/../lib/qbpdf/autoload.php';
+    if (!is_file($lib)) {
         throw new RuntimeException('PDF library not found');
     }
-    require_once $autoload;
-    require_once __DIR__ . '/QuestionBankBrandedPdf.php';
+    require_once $lib;
 
     $title = (string)($export['title'] ?? 'Question Bank');
     $subject = (string)($export['subject'] ?? '');
@@ -1037,92 +1072,163 @@ function streamQuestionBankPdf(array $export, string $atcCode): void
     $questions = is_array($export['questions'] ?? null) ? $export['questions'] : [];
     $brand = questionBankPdfBrandPaths();
 
-    $pdf = new QuestionBankBrandedPdf('L', 'mm', 'A4');
-    $pdf->letterheadPath = $brand['letterhead'];
-    $pdf->logoPath = $brand['logo'];
-    $pdf->docTitle = $title;
-    $pdf->atcCode = $atcCode;
-    $pdf->subject = $subject;
-    $pdf->includeAnswers = $includeAnswers;
-    $pdf->AliasNbPages();
-    $pdf->SetMargins(10, 10, 10);
-    $pdf->SetAutoPageBreak(true, 14);
-
-    if ($includeAnswers) {
-        $pdf->colWidths = [12, 78, 42, 42, 42, 42, 14];
-    } else {
-        $pdf->colWidths = [12, 84, 44, 44, 44, 44];
+    $hasMarathi = false;
+    foreach ($questions as $q) {
+        if (!is_array($q)) {
+            continue;
+        }
+        $qMr = trim((string)($q['text_mr'] ?? ''));
+        if ($qMr !== '') {
+            $hasMarathi = true;
+            break;
+        }
+        foreach (is_array($q['options'] ?? null) ? $q['options'] : [] as $opt) {
+            if (is_array($opt) && trim((string)($opt['text_mr'] ?? $opt['textMr'] ?? '')) !== '') {
+                $hasMarathi = true;
+                break 2;
+            }
+        }
     }
 
-    $pdf->AddPage();
+    $mpdf = new \Mpdf\Mpdf([
+        'mode' => 'utf-8',
+        'format' => 'A4-L',
+        'default_font' => 'freeserif',
+        'tempDir' => sys_get_temp_dir(),
+        'autoScriptToLang' => false,
+        'autoLangToFont' => false,
+        'useSubstitutions' => false,
+        'backupSubsFont' => ['freeserif'],
+        'maxTTFFilesize' => 8000,
+        'percentSubset' => 0,
+        'margin_left' => 10,
+        'margin_right' => 10,
+        'margin_top' => 16,
+        'margin_bottom' => 14,
+        'margin_header' => 4,
+        'margin_footer' => 4,
+    ]);
+    $mpdf->SetTitle($title);
 
-    $pdf->SetFont('Arial', 'B', 13);
-    $pdf->SetTextColor(197, 32, 38);
-    $pdf->Cell(0, 6, questionBankPdfText($title), 0, 1, 'L');
-    $pdf->SetTextColor(0, 0, 0);
-    $pdf->SetFont('Arial', '', 8);
+    $img = static function (?string $path, string $css): string {
+        if ($path === null || !is_file($path)) {
+            return '';
+        }
+        $src = str_replace('\\', '/', $path);
+        return '<img src="' . htmlspecialchars($src, ENT_QUOTES, 'UTF-8') . '" style="' . $css . '">';
+    };
+
     $metaBits = [];
     if ($subject !== '') {
         $metaBits[] = 'Course: ' . $subject;
     }
     $metaBits[] = 'ATC: ' . $atcCode;
     $metaBits[] = 'Total Questions: ' . count($questions);
+    if ($hasMarathi) {
+        $metaBits[] = 'Languages: English + Marathi';
+    }
     $metaBits[] = 'Generated: ' . date('d M Y H:i');
     $metaBits[] = $includeAnswers ? 'Copy: ATC staff (with answers)' : 'Copy: Practice (no answers)';
-    $pdf->SetTextColor(70, 70, 70);
-    $pdf->MultiCell(0, 4, questionBankPdfText(implode('   |   ', $metaBits)), 0, 'L');
-    $pdf->SetTextColor(0, 0, 0);
-    $pdf->Ln(2);
 
-    $pdf->renderTableHeader();
-    $pdf->drawTableHeaderNext = true;
+    $headers = $includeAnswers
+        ? ['No.', 'Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Ans']
+        : ['No.', 'Question', 'Option A', 'Option B', 'Option C', 'Option D'];
+    $widths = $includeAnswers
+        ? ['5%', '28%', '15%', '15%', '15%', '15%', '7%']
+        : ['5%', '30%', '16%', '16%', '16%', '17%'];
 
-    if (empty($questions)) {
-        $pdf->SetFont('Arial', 'I', 10);
-        $pdf->Cell(array_sum($pdf->colWidths), 10, 'No questions in this bank yet.', 1, 1, 'C');
+    $headHtml = '';
+    foreach ($headers as $i => $label) {
+        $headHtml .= '<th style="width:' . $widths[$i] . '">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</th>';
     }
 
+    $rowsHtml = '';
+    if ($questions === []) {
+        $rowsHtml = '<tr><td colspan="' . count($headers) . '" style="text-align:center">No questions in this bank yet.</td></tr>';
+    }
     foreach ($questions as $idx => $q) {
+        if (!is_array($q)) {
+            continue;
+        }
         $num = (int)($q['number'] ?? ($idx + 1));
-        $text = questionBankPdfText((string)($q['text'] ?? ''));
         $options = is_array($q['options'] ?? null) ? $q['options'] : [];
-        $correct = strtoupper(trim((string)($q['correct_answer'] ?? '')));
-
-        $byId = ['A' => '', 'B' => '', 'C' => '', 'D' => ''];
+        $byId = ['A' => '&nbsp;', 'B' => '&nbsp;', 'C' => '&nbsp;', 'D' => '&nbsp;'];
+        $seen = false;
         foreach ($options as $opt) {
+            if (!is_array($opt)) {
+                continue;
+            }
             $oid = strtoupper(trim((string)($opt['id'] ?? '')));
             if ($oid !== '' && array_key_exists($oid, $byId)) {
-                $byId[$oid] = questionBankPdfText((string)($opt['text'] ?? ''));
+                $byId[$oid] = questionBankPdfOptionText($opt);
+                $seen = true;
             }
         }
-        if ($byId['A'] === '' && $byId['B'] === '' && count($options) >= 1) {
+        if (!$seen && $options !== []) {
             $labels = ['A', 'B', 'C', 'D'];
             foreach ($options as $i => $opt) {
-                if (!isset($labels[$i])) {
+                if (!isset($labels[$i]) || !is_array($opt)) {
                     break;
                 }
-                $byId[$labels[$i]] = questionBankPdfText((string)($opt['text'] ?? ''));
+                $byId[$labels[$i]] = questionBankPdfOptionText($opt);
             }
         }
-
+        $qMr = $q['text_mr'] ?? $q['textMr'] ?? '';
         $cells = [
-            (string)$num,
-            $text,
-            $byId['A'],
-            $byId['B'],
-            $byId['C'],
-            $byId['D'],
+            '<td class="num">' . $num . '</td>',
+            '<td>' . questionBankPdfBilingual((string)($q['text'] ?? ''), is_string($qMr) ? $qMr : '') . '</td>',
+            '<td>' . $byId['A'] . '</td>',
+            '<td>' . $byId['B'] . '</td>',
+            '<td>' . $byId['C'] . '</td>',
+            '<td>' . $byId['D'] . '</td>',
         ];
         if ($includeAnswers) {
-            $cells[] = $correct !== '' ? $correct : '-';
+            $correct = strtoupper(trim((string)($q['correct_answer'] ?? '')));
+            $cells[] = '<td class="ans">' . htmlspecialchars($correct !== '' ? $correct : '-', ENT_QUOTES, 'UTF-8') . '</td>';
         }
-
-        $pdf->drawDataRow($cells, $idx % 2 === 1);
+        $rowsHtml .= '<tr class="' . ($idx % 2 === 1 ? 'alt' : '') . '">' . implode('', $cells) . '</tr>';
     }
+
+    $logo = $img($brand['logo'], 'height:10mm');
+    $letter = $img($brand['letterhead'], 'width:115mm');
+    $atcEsc = htmlspecialchars($atcCode, ENT_QUOTES, 'UTF-8');
+
+    $html = '<html><head><style>
+@page { header: html_later; footer: html_foot; margin-top: 22mm; }
+@page :first { header: _blank; margin-top: 10mm; }
+body { font-family: freeserif; font-size: 9pt; color: #111; }
+h1 { font-family: freeserif; color: #c52026; font-size: 14pt; margin: 0 0 1mm 0; }
+.meta { color: #444; font-size: 8pt; margin: 0 0 3mm 0; }
+.mr { color: #065f46; margin-top: 0.7mm; }
+table.qb { width: 100%; border-collapse: collapse; }
+table.qb th { background: #1d3e53; color: #fff; font-weight: bold; font-size: 8.5pt; padding: 1.5mm; border: 0.2mm solid #1d3e53; text-align: center; }
+table.qb td { border: 0.2mm solid #b4bec8; padding: 1.2mm 1.4mm; vertical-align: top; }
+table.qb tr.alt td { background: #f5f8fa; }
+td.num, td.ans { text-align: center; font-weight: bold; }
+td.ans { color: #047857; font-size: 11pt; }
+.brand { color: #c52026; font-weight: bold; font-size: 11pt; }
+.brandsub { color: #1d3e53; font-size: 8pt; }
+.foot { font-size: 7.5pt; color: #666; }
+</style></head><body>
+<htmlpageheader name="later"><table width="100%" style="border-bottom:0.4mm solid #c52026"><tr>
+<td width="14mm">' . $logo . '</td>
+<td><div class="brand">Gyanam Institute of Information Technology</div>
+<div class="brandsub">A Unit of IT Training - Gyanam India (ISO 9001 : 2015)</div></td>
+</tr></table></htmlpageheader>
+<htmlpagefooter name="foot"><table width="100%"><tr>
+<td class="foot">GIIT Question Bank | ATC ' . $atcEsc . '</td>
+<td class="foot" style="text-align:right">Page {PAGENO} / {nbpg}</td>
+</tr></table></htmlpagefooter>
+<div style="text-align:center;margin-bottom:2mm">' . $letter . '</div>
+<h1>' . questionBankPdfHtml($title) . '</h1>
+<div class="meta">' . questionBankPdfHtml(implode('   |   ', $metaBits)) . '</div>
+<table class="qb"><thead><tr>' . $headHtml . '</tr></thead><tbody>' . $rowsHtml . '</tbody></table>
+</body></html>';
+
+    $mpdf->WriteHTML($html);
 
     $safeName = preg_replace('/[^A-Za-z0-9_-]+/', '_', $title) ?: 'question_bank';
     $filename = $safeName . '_' . $atcCode . '.pdf';
-
-    $pdf->Output('D', $filename);
+    $mpdf->Output($filename, 'D');
     exit;
 }

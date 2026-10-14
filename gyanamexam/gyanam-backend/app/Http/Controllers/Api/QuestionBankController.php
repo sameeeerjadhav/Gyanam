@@ -55,10 +55,30 @@ class QuestionBankController extends Controller
             ->findOrFail($id);
 
         $questions = $bank->questions->values()->map(function ($q, $idx) use ($includeAnswers) {
+            $options = $q->options;
+            if (is_string($options)) {
+                $decoded = json_decode($options, true);
+                $options = is_array($decoded) ? $decoded : [];
+            }
+            $normalized = [];
+            foreach (is_array($options) ? $options : [] as $opt) {
+                if (!is_array($opt)) {
+                    continue;
+                }
+                $mr = $opt['text_mr'] ?? $opt['textMr'] ?? $opt['mr'] ?? null;
+                $mr = is_string($mr) ? trim($mr) : '';
+                $normalized[] = [
+                    'id'      => $opt['id'] ?? null,
+                    'text'    => (string) ($opt['text'] ?? ''),
+                    'text_mr' => $mr !== '' ? $mr : null,
+                ];
+            }
+            $textMr = is_string($q->text_mr) ? trim($q->text_mr) : '';
             $row = [
                 'number'  => $idx + 1,
                 'text'    => $q->text,
-                'options' => $q->options,
+                'text_mr' => $textMr !== '' ? $textMr : null,
+                'options' => $normalized,
             ];
             if ($includeAnswers) {
                 $row['correct_answer'] = $q->correct_answer;
