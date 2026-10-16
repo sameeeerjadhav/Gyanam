@@ -90,17 +90,17 @@ if ($embed !== '') {
   <table class="ht-print-tbl">
     <tr>
       <td class="ht-p-center" style="width:18%"><img src="<?= htmlspecialchars(admissionFormBrandLogoUrl('it', 'admin'), ENT_QUOTES, 'UTF-8') ?>" style="height:70px;object-fit:contain" alt="GIIT"></td>
-      <td class="ht-p-center ht-p-bold" style="width:52%;padding:10px 8px;vertical-align:middle">
-        <div style="font-size:26px;line-height:1.2;letter-spacing:0.02em">EXAMINATION HALL TICKET</div>
-        <div style="font-size:18px;line-height:1.3;margin-top:8px;font-weight:800"><?= htmlspecialchars($student['course'] ?? 'Examination') ?></div>
+      <td class="ht-p-center ht-p-bold" style="width:52%;padding:6px 8px;vertical-align:middle">
+        <div style="font-size:18px;line-height:1.25;letter-spacing:0.01em">EXAMINATION HALL TICKET</div>
+        <div style="font-size:13px;line-height:1.3;margin-top:4px;font-weight:700"><?= htmlspecialchars($student['course'] ?? 'Examination') ?></div>
       </td>
-      <td class="ht-p-center" style="width:30%;padding:8px 6px;vertical-align:middle;font-size:11px;line-height:1.35">
-        <div style="font-weight:800;font-size:12px"><?= htmlspecialchars((string)($atc['name'] ?? 'ATC Centre')) ?></div>
+      <td class="ht-p-center" style="width:30%;padding:6px;vertical-align:middle;font-size:10px;line-height:1.35">
+        <div style="font-weight:800;font-size:11px"><?= htmlspecialchars((string)($atc['name'] ?? 'ATC Centre')) ?></div>
         <?php if ($atcCodeHdr !== ''): ?>
-        <div style="margin-top:3px"><strong>ATC Code:</strong> <?= htmlspecialchars($atcCodeHdr) ?></div>
+        <div style="margin-top:2px"><strong>ATC Code:</strong> <?= htmlspecialchars($atcCodeHdr) ?></div>
         <?php endif; ?>
         <?php if ($atcPlaceHdr !== ''): ?>
-        <div style="margin-top:3px"><strong>Place:</strong> <?= htmlspecialchars($atcPlaceHdr) ?></div>
+        <div style="margin-top:2px"><strong>Place:</strong> <?= htmlspecialchars($atcPlaceHdr) ?></div>
         <?php endif; ?>
       </td>
     </tr>

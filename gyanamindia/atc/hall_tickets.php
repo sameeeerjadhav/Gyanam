@@ -1158,14 +1158,14 @@ function buildHallTicketHtml(student) {
               <td class="ht-p-center" style="width:18%">
                 <img src="${htBrandLogoUrl}" alt="GIIT" style="height:70px;object-fit:contain">
               </td>
-              <td class="ht-p-center ht-p-bold" style="width:52%;padding:10px 8px;vertical-align:middle">
-                <div style="font-size:26px;line-height:1.2;letter-spacing:0.02em">EXAMINATION HALL TICKET</div>
-                <div style="font-size:18px;line-height:1.3;margin-top:8px;font-weight:800">${student.course || 'Examination'}</div>
+              <td class="ht-p-center ht-p-bold" style="width:52%;padding:6px 8px;vertical-align:middle">
+                <div style="font-size:18px;line-height:1.25;letter-spacing:0.01em">EXAMINATION HALL TICKET</div>
+                <div style="font-size:13px;line-height:1.3;margin-top:4px;font-weight:700">${student.course || 'Examination'}</div>
               </td>
-              <td class="ht-p-center" style="width:30%;padding:8px 6px;vertical-align:middle;font-size:11px;line-height:1.35">
-                <div style="font-weight:800;font-size:12px">${atcDetails.name || 'ATC Centre'}</div>
-                ${atcCode ? `<div style="margin-top:3px"><strong>ATC Code:</strong> ${atcCode}</div>` : ''}
-                ${atcPlace ? `<div style="margin-top:3px"><strong>Place:</strong> ${atcPlace}</div>` : ''}
+              <td class="ht-p-center" style="width:30%;padding:6px;vertical-align:middle;font-size:10px;line-height:1.35">
+                <div style="font-weight:800;font-size:11px">${atcDetails.name || 'ATC Centre'}</div>
+                ${atcCode ? `<div style="margin-top:2px"><strong>ATC Code:</strong> ${atcCode}</div>` : ''}
+                ${atcPlace ? `<div style="margin-top:2px"><strong>Place:</strong> ${atcPlace}</div>` : ''}
               </td>
             </tr>
           </table>
