@@ -328,6 +328,7 @@ $displayDate = date('d M Y', strtotime($examDate));
 const atcDetails    = <?= json_encode($atcDetails) ?>;
 const examDateStr   = <?= json_encode($examDate) ?>;
 const scheduledData = <?= json_encode($scheduledStudents) ?>;
+const htBrandLogoUrl = <?= json_encode(admissionFormBrandLogoUrl('it', 'atc'), JSON_UNESCAPED_SLASHES) ?>;
 
 // ── DataTable with export buttons ──────────────────────────────────────────
 $(document).ready(function () {
@@ -413,9 +414,9 @@ function viewHallTicket(s) {
     document.getElementById('htContent').innerHTML = `
         <div class="hall-ticket">
             <div class="hall-ticket-header">
-                <div class="hall-ticket-logo"><img src="../assets/logo.png" alt="Gyanam India"></div>
+                <div class="hall-ticket-logo"><img src="${htBrandLogoUrl}" alt="GIIT"></div>
                 <div class="hall-ticket-title">
-                    <h1>GYANAM INDIA EDUCATIONAL SERVICES</h1>
+                    <h1>GYANAM INSTITUTE OF INFORMATION TECHNOLOGY</h1>
                     <h2>EXAMINATION HALL TICKET</h2>
                     <p class="hall-ticket-center">${atcDetails.name}</p>
                 </div>

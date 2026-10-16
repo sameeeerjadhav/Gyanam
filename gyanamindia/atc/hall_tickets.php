@@ -887,6 +887,7 @@ header('Content-Type: text/html; charset=UTF-8');
 const atcDetails = <?= json_encode($atcDetails) ?>;
 const students = <?= json_encode($students) ?>;
 const examAssignments = <?= json_encode($examAssignments) ?>;
+const htBrandLogoUrl = <?= json_encode(admissionFormBrandLogoUrl('it', 'atc'), JSON_UNESCAPED_SLASHES) ?>;
 initListPager({
     rows: '#htTable tbody tr',
     mount: '.ht-table-wrapper',
@@ -1087,7 +1088,7 @@ function buildHallTicketHtml(student) {
           <table class="ht-print-tbl">
             <tr>
               <td class="ht-p-center" style="width:20%">
-                <img src="../assets/logo.png" style="height:70px;object-fit:contain">
+                <img src="${htBrandLogoUrl}" alt="GIIT" style="height:70px;object-fit:contain">
               </td>
               <td class="ht-p-center ht-p-bold" style="width:60%">
                 <div style="font-size:20px">EXAMINATION HALL TICKET</div>
@@ -1678,7 +1679,7 @@ function getExamScheduleRows(student) {
 function printHallTicket() {
     const content = document.getElementById('hallTicketContent').innerHTML;
     const printWindow = window.open('', '', 'height=1123,width=794');
-    printWindow.document.write('<html><head><title>Hall Ticket - Gyanam India</title>');
+    printWindow.document.write('<html><head><title>Hall Ticket - GIIT</title>');
     printWindow.document.write('<link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">');
     printWindow.document.write('</head><body class="ht-a4-print">');
     printWindow.document.write(content);
