@@ -83,9 +83,9 @@ if ($embed !== '') {
   <table class="ht-print-tbl">
     <tr>
       <td class="ht-p-center" style="width:20%"><img src="<?= htmlspecialchars(admissionFormBrandLogoUrl('it', 'admin'), ENT_QUOTES, 'UTF-8') ?>" style="height:70px;object-fit:contain" alt="GIIT"></td>
-      <td class="ht-p-center ht-p-bold" style="width:60%">
-        <div style="font-size:20px">EXAMINATION HALL TICKET</div>
-        <div><?= htmlspecialchars($student['course'] ?? 'Examination') ?></div>
+      <td class="ht-p-center ht-p-bold" style="width:60%;padding:10px 8px;vertical-align:middle">
+        <div style="font-size:26px;line-height:1.2;letter-spacing:0.02em">EXAMINATION HALL TICKET</div>
+        <div style="font-size:18px;line-height:1.3;margin-top:8px;font-weight:800"><?= htmlspecialchars($student['course'] ?? 'Examination') ?></div>
       </td>
       <td style="width:20%"></td>
     </tr>
