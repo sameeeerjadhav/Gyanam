@@ -1505,7 +1505,7 @@ try {
 
                     <div class="es-bulk-group">
                         <label>Time:</label>
-                        <input type="time" class="es-bulk-input" id="bulkTimeInput" value="10:00" style="width:110px">
+                        <?= renderTime12Picker('bulkBar', '10:00', 'es-bulk-input', 'width:auto;min-width:200px') ?>
                         <button class="es-bulk-btn es-bulk-btn-time" onclick="bulkAssignTiming()">Set Time</button>
                     </div>
                 </div>
@@ -1749,7 +1749,7 @@ try {
                     </div>
                     <div>
                         <label class="es-form-label">Exam Time</label>
-                        <input type="time" class="es-form-input" id="schedTime" value="10:00">
+                        <?= renderTime12Picker('sched', '10:00', 'es-form-input') ?>
                     </div>
                 </div>
                 <div class="es-form-row">
@@ -1845,7 +1845,7 @@ try {
                     </div>
                     <div>
                         <label class="es-form-label">Exam Time</label>
-                        <input type="time" class="es-form-input" id="bulkTime" value="10:00">
+                        <?= renderTime12Picker('bulk', '10:00', 'es-form-input') ?>
                     </div>
                 </div>
                 <div class="es-form-row">
@@ -1880,6 +1880,7 @@ try {
     <div id="esToastWrap"></div>
 
     <script src="../assets/js/dashboard.js"></script>
+    <script src="../assets/js/time12-picker.js?v=<?= @filemtime(__DIR__ . '/../assets/js/time12-picker.js') ?: time() ?>"></script>
     <script src="../assets/js/list-pager.js"></script>
     <script>
         const esPager = initListPager({
@@ -1944,7 +1945,7 @@ try {
             document.getElementById('schedAdmId').value = admId;
             document.getElementById('schedModalSub').textContent = name;
             document.getElementById('schedDate').value = date || '';
-            document.getElementById('schedTime').value = time || '10:00';
+            Time12.set('sched', time || '10:00');
             document.getElementById('schedSlot').value = slot || 'Morning';
             const hallEl = document.getElementById('schedHall');
             if (hallEl) hallEl.value = hall || '';
@@ -2001,7 +2002,7 @@ try {
         async function saveSingleSchedule() {
             const admId = document.getElementById('schedAdmId').value;
             const date = document.getElementById('schedDate').value;
-            const time = document.getElementById('schedTime').value;
+            const time = Time12.get('sched', '10:00');
             const slot = document.getElementById('schedSlot').value;
             const hall = document.getElementById('schedHall')?.value || '';
             if (!date) { esToast('Please select an exam date.', 'error'); return; }
@@ -2070,7 +2071,7 @@ try {
         async function executeBulkSchedule() {
             const ids = getSelectedIds();
             const date = document.getElementById('bulkDate').value;
-            const time = document.getElementById('bulkTime').value;
+            const time = Time12.get('bulk', '10:00');
             const slot = document.getElementById('bulkSlot').value;
             const hall = document.getElementById('bulkHall').value;
             if (!date) { esToast('Please select a date.', 'error'); return; }
@@ -2130,7 +2131,7 @@ try {
         // ── Bulk Timing Assign ──────────────────────────────────────────────────────
         async function bulkAssignTiming() {
             const ids = getSelectedIds();
-            const time = document.getElementById('bulkTimeInput').value;
+            const time = Time12.get('bulkBar', '10:00');
             if (ids.length === 0) { esToast('Select students first.', 'error'); return; }
             if (!time) { esToast('Set a time first.', 'error'); return; }
 

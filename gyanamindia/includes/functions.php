@@ -51,6 +51,68 @@ function formatDate(?string $date, string $format = 'd M Y'): string {
     return date($format, strtotime($date));
 }
 
+/**
+ * 12-hour exam-time picker (hour / minute / AM-PM).
+ * JS helpers in assets/js/time12-picker.js read HH:MM via Time12.get(prefix).
+ *
+ * @param string $prefix      Id prefix → {$prefix}Hour, {$prefix}Min, {$prefix}AmPm
+ * @param string $value24     Default time as HH:MM (24-hour)
+ * @param string $selectClass Extra class on each select
+ * @param string $extraStyle  Inline style on the wrapper
+ */
+function renderTime12Picker(
+    string $prefix,
+    string $value24 = '10:00',
+    string $selectClass = '',
+    string $extraStyle = ''
+): string {
+    $parts = preg_split('/[:.]/', trim($value24));
+    $h24 = isset($parts[0]) ? (int)$parts[0] : 10;
+    $m = isset($parts[1]) ? (int)$parts[1] : 0;
+    if ($h24 < 0 || $h24 > 23) {
+        $h24 = 10;
+    }
+    if ($m < 0 || $m > 59) {
+        $m = 0;
+    }
+    $ampm = $h24 >= 12 ? 'PM' : 'AM';
+    $h12 = $h24 % 12;
+    if ($h12 === 0) {
+        $h12 = 12;
+    }
+    $cls = trim($selectClass);
+    $clsAttr = $cls !== '' ? ' class="' . htmlspecialchars($cls, ENT_QUOTES, 'UTF-8') . '"' : '';
+    $baseStyle = $cls !== ''
+        ? 'flex:1;min-width:0;box-sizing:border-box'
+        : 'height:42px;border:1.5px solid #e5e7eb;border-radius:10px;padding:0 .45rem;font-size:.9rem;font-family:inherit;outline:none;box-sizing:border-box;background:#fff;flex:1;min-width:0';
+    $ampmStyle = $cls !== ''
+        ? 'flex:0 0 72px;width:72px;box-sizing:border-box'
+        : 'height:42px;border:1.5px solid #e5e7eb;border-radius:10px;padding:0 .45rem;font-size:.9rem;font-family:inherit;outline:none;box-sizing:border-box;background:#fff;width:72px;flex:0 0 72px';
+    $wrapStyle = 'display:flex;gap:.4rem;align-items:stretch;width:100%;' . $extraStyle;
+    $pfx = htmlspecialchars($prefix, ENT_QUOTES, 'UTF-8');
+    $html = '<div class="time12-picker" data-prefix="' . $pfx . '" style="' . htmlspecialchars($wrapStyle, ENT_QUOTES, 'UTF-8') . '">';
+    $html .= '<select id="' . $pfx . 'Hour"' . $clsAttr . ' style="' . $baseStyle . '" aria-label="Hour">';
+    for ($h = 1; $h <= 12; $h++) {
+        $sel = $h === $h12 ? ' selected' : '';
+        $html .= '<option value="' . $h . '"' . $sel . '>' . sprintf('%02d', $h) . '</option>';
+    }
+    $html .= '</select>';
+    $html .= '<select id="' . $pfx . 'Min"' . $clsAttr . ' style="' . $baseStyle . '" aria-label="Minute">';
+    for ($i = 0; $i < 60; $i++) {
+        $val = sprintf('%02d', $i);
+        $sel = $i === $m ? ' selected' : '';
+        $html .= '<option value="' . $val . '"' . $sel . '>' . $val . '</option>';
+    }
+    $html .= '</select>';
+    $html .= '<select id="' . $pfx . 'AmPm"' . $clsAttr . ' style="' . $ampmStyle . '" aria-label="AM or PM">';
+    foreach (['AM', 'PM'] as $ap) {
+        $sel = $ap === $ampm ? ' selected' : '';
+        $html .= '<option value="' . $ap . '"' . $sel . '>' . $ap . '</option>';
+    }
+    $html .= '</select></div>';
+    return $html;
+}
+
 function baseURL(): string {
     return '';
 }

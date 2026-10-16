@@ -685,7 +685,7 @@ try {
                 </div>
                 <div style="display:flex;flex-direction:column;gap:.3rem">
                     <label style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">Exam Time <span style="color:#ef4444">*</span></label>
-                    <input type="time" id="htSchedTime" value="10:00" style="height:42px;border:1.5px solid #e5e7eb;border-radius:10px;padding:0 .9rem;font-size:.9rem;font-family:inherit;outline:none;width:100%;box-sizing:border-box">
+                    <?= renderTime12Picker('htSched', '10:00') ?>
                 </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
@@ -814,7 +814,7 @@ try {
                 </div>
                 <div style="display:flex;flex-direction:column;gap:.3rem">
                     <label style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">Exam Time <span style="color:#ef4444">*</span></label>
-                    <input type="time" id="enExamTime" style="height:42px;border:1.5px solid #e5e7eb;border-radius:10px;padding:0 .9rem;font-size:.9rem;font-family:inherit;outline:none;width:100%;box-sizing:border-box" onfocus="this.style.borderColor='#25D366'" onblur="this.style.borderColor='#e5e7eb'">
+                    <?= renderTime12Picker('enExam', '10:00') ?>
                 </div>
             </div>
             <!-- Row 3: Center + Director -->
@@ -880,6 +880,7 @@ try {
 
 <script src="../assets/js/dashboard.js"></script>
 <script src="../assets/js/list-pager.js"></script>
+<script src="../assets/js/time12-picker.js?v=<?= @filemtime(__DIR__ . '/../assets/js/time12-picker.js') ?: time() ?>"></script>
 <script>
 const atcDetails = <?= json_encode($atcDetails) ?>;
 const students = <?= json_encode($students) ?>;
@@ -942,7 +943,7 @@ function openBulkHallTicketGenerate() {
     document.getElementById('htSchedSub').textContent = ids.length + ' student(s) selected';
     document.getElementById('htSchedLoginHint').textContent = 'Each student\'s exam login User ID will be their registration number.';
     document.getElementById('htSchedDate').value = '';
-    document.getElementById('htSchedTime').value = '10:00';
+    Time12.set('htSched', '10:00');
     document.getElementById('htSchedSlot').value = 'Morning';
     document.getElementById('htSchedHall').value = '';
     document.getElementById('htSchedMsg').textContent = '';
@@ -978,7 +979,7 @@ function generateHallTicket(studentId) {
         ? 'Exam portal User ID / login will be: ' + loginId
         : 'Warning: no registration number on this student.';
     document.getElementById('htSchedDate').value = student.sched_exam_date || '';
-    document.getElementById('htSchedTime').value = (student.sched_exam_time || '10:00').slice(0, 5);
+    Time12.set('htSched', (student.sched_exam_time || '10:00').slice(0, 5));
     document.getElementById('htSchedSlot').value = student.sched_exam_slot || 'Morning';
     document.getElementById('htSchedHall').value = student.sched_exam_hall || '';
     document.getElementById('htSchedMsg').textContent = '';
@@ -994,7 +995,7 @@ function confirmHtScheduleAndGenerate() {
         ? rawIds.split(',').map(x => parseInt(x, 10)).filter(Boolean)
         : [parseInt(rawIds, 10)].filter(Boolean);
     const date = document.getElementById('htSchedDate').value;
-    const time = document.getElementById('htSchedTime').value || '10:00';
+    const time = Time12.get('htSched', '10:00');
     const slot = document.getElementById('htSchedSlot').value || 'Morning';
     const hall = document.getElementById('htSchedHall').value.trim();
     const msgEl = document.getElementById('htSchedMsg');
@@ -1478,14 +1479,18 @@ function openExamNotify(studentId) {
     document.getElementById('enCenter').value = atcCenter;
     document.getElementById('enCourseName').value = (s.course || '') + ' Final Exam';
     if (s.sched_exam_date) document.getElementById('enExamDate').value = s.sched_exam_date;
-    if (s.sched_exam_time) document.getElementById('enExamTime').value = String(s.sched_exam_time).slice(0, 5);
+    Time12.set('enExam', s.sched_exam_time ? String(s.sched_exam_time).slice(0, 5) : '10:00');
 
-    ['enExamTopic','enCourseName','enExamDate','enExamTime','enCenter','enDirector'].forEach(id => {
+    ['enExamTopic','enCourseName','enExamDate','enCenter','enDirector'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.oninput = updateExamPreview;
             el.onchange = updateExamPreview;
         }
+    });
+    ['enExamHour','enExamMin','enExamAmPm'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.onchange = updateExamPreview;
     });
 
     updateExamPreview();
@@ -1525,7 +1530,7 @@ function buildExamMsg() {
     const topic    = document.getElementById('enExamTopic').value.trim() || '[Exam Topic]';
     const course   = document.getElementById('enCourseName').value.trim() || '[Course Name]';
     const dateStr  = document.getElementById('enExamDate').value;
-    const timeStr  = document.getElementById('enExamTime').value;
+    const timeStr  = Time12.get('enExam', '');
     const center   = document.getElementById('enCenter').value.trim() || '[Center Name]';
     const director = document.getElementById('enDirector').value.trim();
     const atcLabel = atcDetails.name || center;

@@ -270,7 +270,7 @@ $displayDate = date('d M Y', strtotime($examDate));
                 </div>
                 <div class="cht-form-group">
                     <label>Exam Time</label>
-                    <input type="time" id="sch_time" value="10:00" class="cht-input">
+                    <?= renderTime12Picker('sch', '10:00', 'cht-input') ?>
                 </div>
             </div>
             <div class="cht-form-group">
@@ -314,6 +314,7 @@ $displayDate = date('d M Y', strtotime($examDate));
 
 <!-- Scripts -->
 <script src="../assets/js/dashboard.js"></script>
+<script src="../assets/js/time12-picker.js?v=<?= @filemtime(__DIR__ . '/../assets/js/time12-picker.js') ?: time() ?>"></script>
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
@@ -383,7 +384,7 @@ function closeScheduleModal() {
 async function saveSchedule() {
     const admId = document.getElementById('sch_student').value;
     const date  = document.getElementById('sch_date').value;
-    const time  = document.getElementById('sch_time').value;
+    const time  = Time12.get('sch', '10:00');
     const hall  = document.getElementById('sch_hall').value;
     if (!admId || !date || !time) { showToast('Please fill all required fields.', 'error'); return; }
     const fd = new FormData();
@@ -408,7 +409,7 @@ function viewHallTicket(s) {
     const fullName = `${s.first_name} ${s.middle_name ? s.middle_name + ' ' : ''}${s.last_name}`;
     const photo    = s.photo ? `../${s.photo}` : '../assets/logo.png';
     const examDt   = new Date(s.exam_date).toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'});
-    const examTm   = new Date('2000-01-01T' + s.exam_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    const examTm   = new Date('2000-01-01T' + s.exam_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
     document.getElementById('htContent').innerHTML = `
         <div class="hall-ticket">
             <div class="hall-ticket-header">
