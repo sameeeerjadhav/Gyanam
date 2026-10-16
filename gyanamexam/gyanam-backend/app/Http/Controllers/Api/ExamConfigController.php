@@ -154,14 +154,16 @@ class ExamConfigController extends Controller
                 continue;
             }
 
-            $show = min(40, $count);
+            $questionCap = $kind === 'demo' ? 20 : 40;
+            $durationMins = $kind === 'demo' ? 30 : 60;
+            $show = min($questionCap, $count);
             try {
                 $exam = ExamConfig::create([
                     'exam_id' => 'exam_' . Str::random(8),
                     'title' => $course . ' ' . $suffix,
                     'subject' => $course,
                     'exam_type' => $kind,
-                    'duration' => 60,
+                    'duration' => $durationMins,
                     'total_questions' => $show,
                     'passing_score' => 60,
                     'question_bank_id' => $bank->id,
@@ -179,7 +181,7 @@ class ExamConfigController extends Controller
                     'title' => $exam->title,
                     'questions' => $show,
                     'bank_questions' => $count,
-                    'capped' => $show < 40,
+                    'capped' => $show < $questionCap,
                 ];
                 $existingBankIds[] = (int) $bank->id;
             } catch (\Throwable $e) {

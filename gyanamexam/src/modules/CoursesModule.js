@@ -180,8 +180,10 @@ export async function renderCourses(ApiClient) {
     const isDemo = kind === 'demo';
     const label = isDemo ? 'Demo' : 'Main';
     const mode = isDemo ? 'Normal' : 'Proctored';
+    const durationLabel = isDemo ? '30 minutes' : '1 hour';
+    const questionCap = isDemo ? 20 : 40;
     const ok = await modalService.confirm(
-      `Create a ${label} exam for ${names.length} selected course(s).<br><br>Title: course name ${label.toUpperCase()}<br>Duration: 1 hour<br>Questions to show: 40<br>Mode: ${mode}<br>Questions are randomized.<br><br>A course that already has a ${label} exam is skipped. You can edit the exam afterwards.`,
+      `Create a ${label} exam for ${names.length} selected course(s).<br><br>Title: course name ${label.toUpperCase()}<br>Duration: ${durationLabel}<br>Questions to show: ${questionCap}<br>Mode: ${mode}<br>Questions are randomized.<br><br>A course that already has a ${label} exam is skipped. You can edit the exam afterwards.`,
       { title: `Create ${label} exams`, confirmText: `Create ${label} exams`, type: 'warning' }
     );
     if (!ok) return;
@@ -198,7 +200,7 @@ export async function renderCourses(ApiClient) {
       const capped = created.filter((row) => row.capped).length;
       const parts = [`Created ${created.length} ${label} exam(s).`];
       if (skipped.length) parts.push(`Skipped ${skipped.length} that already had a ${label} exam.`);
-      if (capped) parts.push(`${capped} show fewer than 40 questions because the bank is smaller.`);
+      if (capped) parts.push(`${capped} show fewer than ${questionCap} questions because the bank is smaller.`);
       if (failed.length) {
         const why = failed.slice(0, 3).map((row) => row.bank).join(', ');
         parts.push(`${failed.length} not created${why ? ` (${why})` : ''}.`);
