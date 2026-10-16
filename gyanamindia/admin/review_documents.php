@@ -135,8 +135,9 @@ if ($embed !== '') {
   <br>
   <table class="ht-print-tbl">
     <tr>
-      <td class="ht-p-center ht-p-bold" style="height:90px">Student Signature</td>
-      <td class="ht-p-center ht-p-bold" style="height:90px">Invigilator Signature</td>
+      <td class="ht-p-center ht-p-bold" style="height:90px;width:33.33%">Student Signature</td>
+      <td class="ht-p-center ht-p-bold" style="height:90px;width:33.33%">Invigilator Signature</td>
+      <td class="ht-p-center ht-p-bold" style="height:90px;width:33.34%">ATC Seal &amp; Signature</td>
     </tr>
   </table>
   <br>
