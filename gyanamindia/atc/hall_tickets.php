@@ -126,11 +126,11 @@ if (isset($_POST['ajax_save_hall_schedule']) || isset($_POST['ajax_save_hall_sch
         $ex = $pdo->prepare('SELECT id FROM exam_schedules WHERE admission_id = ? AND atc_id = ?');
         $ex->execute([$sid, $aId]);
         if ($row = $ex->fetch(PDO::FETCH_ASSOC)) {
-            $pdo->prepare('UPDATE exam_schedules SET exam_date=?, exam_time=?, exam_slot=?, exam_hall=?, exam_name=?, exam_portal_id=?, allowed_attempts=? WHERE id=?')
-                ->execute([$date, $time, $slot, $hall, $examName ?: null, $examPortalId, $allowedAttempts, $row['id']]);
+            $pdo->prepare('UPDATE exam_schedules SET exam_date=?, exam_time=?, exam_slot=?, exam_hall=?, exam_name=?, exam_portal_id=?, allowed_attempts=?, exam_status=? WHERE id=?')
+                ->execute([$date, $time, $slot, $hall, $examName ?: null, $examPortalId, $allowedAttempts, 'Scheduled', $row['id']]);
         } else {
-            $pdo->prepare('INSERT INTO exam_schedules (admission_id, atc_id, exam_date, exam_time, exam_slot, exam_hall, exam_name, exam_portal_id, allowed_attempts) VALUES (?,?,?,?,?,?,?,?,?)')
-                ->execute([$sid, $aId, $date, $time, $slot, $hall, $examName ?: null, $examPortalId, $allowedAttempts]);
+            $pdo->prepare('INSERT INTO exam_schedules (admission_id, atc_id, exam_date, exam_time, exam_slot, exam_hall, exam_name, exam_portal_id, allowed_attempts, exam_status) VALUES (?,?,?,?,?,?,?,?,?,?)')
+                ->execute([$sid, $aId, $date, $time, $slot, $hall, $examName ?: null, $examPortalId, $allowedAttempts, 'Scheduled']);
         }
 
         if ($portalReady) {
@@ -382,6 +382,45 @@ if (function_exists('examIntegrationReady') && examIntegrationReady() && functio
     }
 }
 
+// Auto-mark schedules as Absent when the exam datetime has passed and there is no portal attempt.
+$nowTs = time();
+$markAbsentIds = [];
+foreach ($students as $idx => $s) {
+    $schedDate = trim((string)($s['sched_exam_date'] ?? ''));
+    if ($schedDate === '') {
+        continue;
+    }
+    $localSt = (string)($s['sched_exam_status'] ?? 'Scheduled');
+    if (in_array($localSt, ['Passed', 'Failed', 'Appeared'], true)) {
+        continue;
+    }
+    if (!empty($examOutcome[(int)$s['id']])) {
+        continue;
+    }
+    $schedTime = trim((string)($s['sched_exam_time'] ?? ''));
+    if ($schedTime === '') {
+        $schedTime = '23:59:59';
+    } elseif (strlen($schedTime) === 5) {
+        $schedTime .= ':00';
+    }
+    $when = strtotime($schedDate . ' ' . $schedTime);
+    if ($when === false || $when >= $nowTs) {
+        continue;
+    }
+    $markAbsentIds[] = (int)$s['id'];
+    $students[$idx]['sched_exam_status'] = 'Absent';
+    $students[$idx]['not_conducted'] = true;
+}
+if ($markAbsentIds !== [] && $atcId) {
+    try {
+        $markAbsentIds = array_values(array_unique(array_filter($markAbsentIds)));
+        $ph = implode(',', array_fill(0, count($markAbsentIds), '?'));
+        $params = array_merge([(int)$atcId], $markAbsentIds);
+        $pdo->prepare("UPDATE exam_schedules SET exam_status='Absent' WHERE atc_id=? AND exam_status IN ('Scheduled','Absent') AND admission_id IN ($ph)")
+            ->execute($params);
+    } catch (Throwable $e) { /* ignore */ }
+}
+
 // ── Fetch exam assignments from Exam Portal for hall ticket schedule ──────────
 $examAssignments = []; // keyed by student identifier
 $portalExams = [];
@@ -570,21 +609,33 @@ header('Content-Type: text/html; charset=UTF-8');
                                     $canGenerate = $sharePaid && $hasPhoto;
                                     $ticketReady = !empty($student['sched_exam_date']);
                                     $localStatus = (string)($student['sched_exam_status'] ?? '');
+                                    $hasAttempt = !empty($examOutcome[(int)$student['id']]);
                                     $doneLabel = '';
-                                    if (in_array($localStatus, ['Passed', 'Failed', 'Absent'], true)) {
+                                    if (in_array($localStatus, ['Passed', 'Failed'], true)) {
                                         $doneLabel = $localStatus;
-                                    } elseif (!empty($examOutcome[(int)$student['id']])) {
+                                    } elseif ($hasAttempt) {
                                         $doneLabel = $examOutcome[(int)$student['id']];
                                     } elseif ($localStatus === 'Appeared') {
                                         $doneLabel = 'Exam done';
                                     }
-                                    $doneClass = $doneLabel === 'Passed' ? 'pass' : ($doneLabel === 'Failed' ? 'fail' : ($doneLabel === 'Absent' ? 'absent' : 'done'));
+                                    $schedDate = trim((string)($student['sched_exam_date'] ?? ''));
+                                    $schedTime = trim((string)($student['sched_exam_time'] ?? ''));
+                                    if ($schedTime === '') {
+                                        $schedTime = '23:59:59';
+                                    } elseif (strlen($schedTime) === 5) {
+                                        $schedTime .= ':00';
+                                    }
+                                    $schedulePast = $schedDate !== '' && ($st = strtotime($schedDate . ' ' . $schedTime)) !== false && $st < $nowTs;
+                                    $notConducted = $ticketReady && $canGenerate && !$hasAttempt
+                                        && !in_array($localStatus, ['Passed', 'Failed', 'Appeared'], true)
+                                        && ($schedulePast || $localStatus === 'Absent' || !empty($student['not_conducted']));
+                                    $doneClass = $doneLabel === 'Passed' ? 'pass' : ($doneLabel === 'Failed' ? 'fail' : 'done');
                                     $doneText = ($doneLabel === 'Passed' || $doneLabel === 'Exam done') ? 'Exam Done' : $doneLabel;
                                     $fullName = $student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name'];
                                 ?>
                                 <tr>
                                     <td>
-                                        <?php if ($canGenerate && !$ticketReady && $doneLabel === ''): ?>
+                                        <?php if ($canGenerate && (($notConducted) || (!$ticketReady && $doneLabel === ''))): ?>
                                             <input type="checkbox" class="ht-row-check" value="<?= (int)$student['id'] ?>" onchange="updateHtBulkBtn()">
                                         <?php endif; ?>
                                     </td>
@@ -607,7 +658,17 @@ header('Content-Type: text/html; charset=UTF-8');
                                     </td>
                                     <td class="ht-action-cell">
                                         <div class="ht-actions">
-                                        <?php if ($doneLabel !== ''): ?>
+                                        <?php if ($notConducted): ?>
+                                            <span class="ht-result-pill absent" title="Scheduled exam date/time passed with no attempt on the exam portal">Not conducted</span>
+                                            <button type="button" onclick="generateHallTicket(<?= (int)$student['id'] ?>)" class="ht-btn-generate" title="Set a new date and regenerate the hall ticket">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                                Regenerate
+                                            </button>
+                                            <button type="button" onclick="renderAndPrintHallTicket(<?= (int)$student['id'] ?>)" class="ht-btn-reprint" title="Print the previous hall ticket">Reprint</button>
+                                            <button onclick="sendHallTicketWhatsApp(<?= $student['id'] ?>)" class="ht-btn-wa-notify" title="Send hall ticket details via WhatsApp">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                            </button>
+                                        <?php elseif ($doneLabel !== ''): ?>
                                             <a class="ht-result-pill <?= $doneClass ?>" href="student_marks.php"><?= htmlspecialchars($doneText) ?></a>
                                             <?php if ($ticketReady): ?>
                                                 <button type="button" class="ht-link-btn" onclick="renderAndPrintHallTicket(<?= (int)$student['id'] ?>)">Reprint</button>
@@ -1059,6 +1120,8 @@ function confirmHtScheduleAndGenerate() {
                     student.sched_exam_time = time.length === 5 ? time + ':00' : time;
                     student.sched_exam_slot = slot;
                     student.sched_exam_hall = hall;
+                    student.sched_exam_status = 'Scheduled';
+                    student.not_conducted = false;
                 }
             });
             closeHtSchedModal();
@@ -1067,6 +1130,8 @@ function confirmHtScheduleAndGenerate() {
             } else {
                 renderAndPrintHallTicketsBulk(savedIds.map(id => parseInt(id, 10)));
             }
+            // Refresh row actions (Not conducted → scheduled / reprint)
+            setTimeout(() => { window.location.reload(); }, 1200);
         })
         .catch(() => {
             btn.disabled = false;
@@ -2158,7 +2223,7 @@ body { font-family: var(--font); }
 }
 .ht-result-pill.pass { background: #d1fae5; color: #065f46; }
 .ht-result-pill.fail { background: #fee2e2; color: #991b1b; }
-.ht-result-pill.absent { background: #f1f5f9; color: #475569; }
+.ht-result-pill.absent { background: #ffedd5; color: #9a3412; }
 .ht-result-pill.done { background: #e0e7ff; color: #3730a3; }
 
 .ht-btn-wa-notify {
