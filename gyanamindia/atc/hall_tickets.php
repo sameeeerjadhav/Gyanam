@@ -1382,7 +1382,9 @@ function normalizeWaPhone(mobile) {
 }
 
 function buildHallTicketWhatsAppMsg(student, extraNote) {
-    const fullName = studentDisplayNameFrom(student);
+    const fullName = (typeof studentDisplayNameFrom === 'function')
+        ? studentDisplayNameFrom(student)
+        : [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(' ');
     const regNo = studentLoginId(student) || '-';
     const sched = getExamScheduleInfo(student);
     const centre = atcDetails.name || 'Exam Centre';
@@ -1432,11 +1434,24 @@ function openWhatsAppWithMsg(mobile, msg) {
         alert('No valid mobile number found.');
         return false;
     }
-    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(msg), '_blank');
+    const url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(msg);
+    // Prefer an <a> click — more reliable than window.open (popup blockers / frozen tab).
+    try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    } catch (err) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
     return true;
 }
 
-/** Single-student: send hall ticket details via WhatsApp (+ open print for PDF attach). */
+/** Single-student: send hall ticket details via WhatsApp only (no print — print freezes the tab). */
 function sendHallTicketWhatsApp(studentId) {
     const student = students.find(s => s.id == studentId);
     if (!student) return;
@@ -1459,13 +1474,13 @@ function sendHallTicketWhatsApp(studentId) {
         return;
     }
 
-    const msg = buildHallTicketWhatsAppMsg(student);
-    openWhatsAppWithMsg(student.mobile, msg);
-    // Also prepare printable hall ticket so ATC can attach PDF in WhatsApp if needed
     try {
-        document.getElementById('hallTicketContent').innerHTML = buildHallTicketHtml(student);
-        printHallTicket();
-    } catch (e) { /* ignore print errors */ }
+        const msg = buildHallTicketWhatsAppMsg(student);
+        openWhatsAppWithMsg(student.mobile, msg);
+    } catch (err) {
+        console.error('WhatsApp hall ticket failed:', err);
+        alert('Could not open WhatsApp. Please try again, or use Reprint then share the PDF manually.');
+    }
 }
 
 function openBulkWhatsApp() {
@@ -1750,16 +1765,31 @@ function getExamScheduleRows(student) {
 }
 
 function printHallTicket() {
-    const content = document.getElementById('hallTicketContent').innerHTML;
-    const printWindow = window.open('', '', 'height=1123,width=794');
-    printWindow.document.write('<html><head><title>Hall Ticket - GIIT</title>');
-    printWindow.document.write('<link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">');
-    printWindow.document.write('</head><body class="ht-a4-print">');
-    printWindow.document.write(content);
-    printWindow.document.write('</body></html>');
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 350);
+    const contentEl = document.getElementById('hallTicketContent');
+    if (!contentEl || !contentEl.innerHTML.trim()) {
+        alert('Hall ticket content is not ready. Generate or Reprint first.');
+        return;
+    }
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,height=1123,width=794');
+    if (!printWindow) {
+        alert('Pop-up blocked. Please allow pop-ups for this site to print the hall ticket.');
+        return;
+    }
+    try {
+        printWindow.document.write('<html><head><title>Hall Ticket - GIIT</title>');
+        printWindow.document.write('<link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">');
+        printWindow.document.write('</head><body class="ht-a4-print">');
+        printWindow.document.write(contentEl.innerHTML);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            try { printWindow.print(); } catch (e) { /* ignore */ }
+        }, 350);
+    } catch (e) {
+        try { printWindow.close(); } catch (e2) { /* ignore */ }
+        alert('Could not open the print window. Please try Reprint again.');
+    }
 }
 </script>
 
