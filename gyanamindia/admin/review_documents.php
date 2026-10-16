@@ -45,7 +45,7 @@ if ($embed !== '') {
     }
 
     if ($embed === 'hall_ticket' && $student && $atc) {
-        $fullName = trim($student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name']);
+        $fullName = studentDisplayNameFrom($student);
         $regNo    = $student['registration_id'] ?: ($student['roll_no'] ?: '-');
         $photo    = !empty($student['photo']) ? '../' . htmlspecialchars($student['photo']) : '../assets/logo.png';
         $examDate = !empty($student['sched_exam_date']) ? date('d M Y, l', strtotime($student['sched_exam_date'])) : 'To Be Announced';
@@ -166,7 +166,7 @@ if ($embed !== '') {
     }
 
     if ($embed === 'completion_hall_ticket' && $student && $atc) {
-        $fullName = trim($student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name']);
+        $fullName = studentDisplayNameFrom($student);
         $regNo    = $student['registration_id'] ?: ($student['roll_no'] ?: '-');
         $rollNo   = $student['roll_no'] ?: '-';
         $photo    = !empty($student['photo']) ? '../' . htmlspecialchars($student['photo']) : '../assets/logo.png';

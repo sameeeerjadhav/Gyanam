@@ -45,8 +45,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     exit;
                 }
 
+                $newVal = $request['new_value'];
+                if (in_array($request['field_name'], ['first_name', 'middle_name', 'last_name', 'father_name', 'mother_name'], true)
+                    && function_exists('formatPersonNameTitleCase')) {
+                    $newVal = formatPersonNameTitleCase((string)$newVal);
+                }
                 $apply = $pdo->prepare("UPDATE admissions SET {$request['field_name']} = ? WHERE id = ? AND atc_id = ?");
-                $apply->execute([$request['new_value'], $request['admission_id'], $request['atc_id']]);
+                $apply->execute([$newVal, $request['admission_id'], $request['atc_id']]);
 
                 if ($apply->rowCount() === 0) {
                     $pdo->rollBack();
@@ -265,7 +270,7 @@ foreach (['Pending', 'Approved', 'Rejected'] as $s) {
                     </tr>
                 <?php else: ?>
                     <?php foreach ($requests as $i => $cr):
-                        $studentName = trim($cr['first_name'] . ' ' . ($cr['middle_name'] ? $cr['middle_name'] . ' ' : '') . $cr['last_name']);
+                        $studentName = studentDisplayNameFrom($cr);
                         $statusClass = strtolower($cr['status']);
                         if ($cr['status'] === 'Approved' && $cr['applied']) $statusClass = 'applied';
                     ?>

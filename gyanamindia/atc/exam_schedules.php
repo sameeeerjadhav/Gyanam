@@ -289,7 +289,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             $atcCodeStmt = $pdo->prepare("SELECT atc_code FROM atc_centers WHERE id = ?");
                             $atcCodeStmt->execute([$atcId]);
                             $syncAtcCode = $atcCodeStmt->fetchColumn() ?: 'ATC' . $atcId;
-                            $syncName = trim(($admRow['first_name'] ?? '') . ' ' . (($admRow['middle_name'] ?? '') ? $admRow['middle_name'] . ' ' : '') . ($admRow['last_name'] ?? ''));
+                            $syncName = studentDisplayNameFrom($admRow);
                             $portalSlot = (stripos($slot, 'afternoon') !== false || stripos($slot, 'slot2') !== false) ? 'SLOT2'
                                 : ((stripos($slot, 'evening') !== false || stripos($slot, 'slot3') !== false) ? 'SLOT3' : 'SLOT1');
                             if (function_exists('syncStudentToExamPortal')) {
@@ -379,7 +379,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if (!empty($admRow['registration_id'])) {
                         $syncIds[$admRow['registration_id']] = true;
                         if ($examPortalId && function_exists('syncStudentToExamPortal') && defined('EXAM_API_TOKEN') && EXAM_API_TOKEN !== 'PASTE_YOUR_TOKEN_HERE') {
-                            $syncName = trim(($admRow['first_name'] ?? '') . ' ' . (($admRow['middle_name'] ?? '') ? $admRow['middle_name'] . ' ' : '') . ($admRow['last_name'] ?? ''));
+                            $syncName = studentDisplayNameFrom($admRow);
                             try {
                                 syncStudentToExamPortal(
                                     $admRow['registration_id'],
@@ -1556,7 +1556,7 @@ try {
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($allStudents as $i => $stu):
-                                        $fullName = trim($stu['first_name'] . ' ' . ($stu['middle_name'] ? $stu['middle_name'] . ' ' : '') . $stu['last_name']);
+                                        $fullName = studentDisplayNameFrom($stu);
                                         $hasPhoto = !empty($stu['photo']);
                                         $initial = strtoupper(substr($stu['first_name'], 0, 1));
                                         $isScheduled = !empty($stu['exam_date']);

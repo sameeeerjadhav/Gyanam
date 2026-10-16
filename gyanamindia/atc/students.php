@@ -264,10 +264,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 ];
                 $sets = [];
                 $vals = [];
+                $nameFields = ['first_name', 'middle_name', 'last_name', 'father_name', 'mother_name'];
                 foreach ($allowedFields as $f) {
                     if (isset($_POST[$f])) {
                         $sets[] = "$f = ?";
-                        $vals[] = trim($_POST[$f]);
+                        $v = trim((string)$_POST[$f]);
+                        if (in_array($f, $nameFields, true) && function_exists('formatPersonNameTitleCase')) {
+                            $v = formatPersonNameTitleCase($v);
+                        }
+                        $vals[] = $v;
                     }
                 }
 
@@ -746,7 +751,7 @@ $courses = $stmt->fetchAll(PDO::FETCH_COLUMN);
                         <?php else: ?>
                             <?php foreach ($students as $student): ?>
                                 <?php
-                                    $fullName = $student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name'];
+                                    $fullName = studentDisplayNameFrom($student);
                                     $netPayable = floatval($student['net_payable'] ?: $student['fees_total']);
                                     $feesPaid = floatval($student['fees_paid']);
                                     $netBalance = $netPayable - $feesPaid;
@@ -1153,7 +1158,7 @@ async function viewStudent(id) {
         
         if (result.success && result.data) {
             const student = result.data;
-            const fullName = `${student.first_name} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name}`;
+            const fullName = studentDisplayNameFrom(student);
             const netPayable = parseFloat(student.net_payable || student.fees_total || 0);
             const feesPaid = parseFloat(student.fees_paid || 0);
             const netBalance = netPayable - feesPaid;

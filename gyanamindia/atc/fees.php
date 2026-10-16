@@ -195,7 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         'installment_no' => $installmentNo,
                         'new_paid'       => $newPaid,
                         'new_pending'    => $newPending,
-                        'student_name'   => trim($student['first_name'] . ' ' . ($student['middle_name'] ?? '') . ' ' . $student['last_name']),
+                        'student_name'   => studentDisplayNameFrom($student),
                         'student_mobile' => $student['mobile'] ?? null,
                         'roll_no'        => $student['roll_no'],
                         'course'         => $student['course']
@@ -734,7 +734,7 @@ $collectionPct   = $totalFees > 0 ? round(($totalCollected / $totalFees) * 100) 
 $rowNum = 0;
 foreach ($allStudents as $s):
     $rowNum++;
-    $sName   = trim($s['first_name'] . ' ' . ($s['middle_name'] ?? '') . ' ' . $s['last_name']);
+    $sName   = studentDisplayNameFrom($s);
     $sInit   = mb_strtoupper(mb_substr($sName, 0, 1));
     $sNet    = floatval($s['net_payable'] ?? $s['fees_total']);
     $sPaid   = floatval($s['fees_paid']);
@@ -922,7 +922,7 @@ function selectStudentById(id) {
 /* Populate and open the collect modal */
 function openCollectModal(s) {
     currentStudent = s;
-    const name = [s.first_name, s.middle_name, s.last_name].filter(Boolean).join(' ');
+    const name = studentDisplayNameFrom(s);
     const net  = parseFloat(s.net_payable)  || 0;
     const paid = parseFloat(s.fees_paid)    || 0;
     const bal  = Math.max(0, parseFloat(s.fees_pending) || (net - paid));

@@ -36,6 +36,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (($_POST['action'] ?? '') === 'add_
             exit;
         }
 
+        if (function_exists('applyTitleCaseToNameFields')) {
+            applyTitleCaseToNameFields($_POST);
+        }
         $stmt = $pdo->prepare("
             INSERT INTO telephonic_inquiries (
                 atc_id, first_name, middle_name, last_name, interested_course,
@@ -70,6 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     try {
         switch ($_POST['action']) {
             case 'add':
+                if (function_exists('applyTitleCaseToNameFields')) {
+                    applyTitleCaseToNameFields($_POST);
+                }
                 $stmt = $pdo->prepare("
                     INSERT INTO telephonic_inquiries (
                         atc_id, first_name, middle_name, last_name, interested_course, 
@@ -92,6 +98,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
                 
             case 'edit':
+                if (function_exists('applyTitleCaseToNameFields')) {
+                    applyTitleCaseToNameFields($_POST);
+                }
                 $stmt = $pdo->prepare("
                     UPDATE telephonic_inquiries 
                     SET first_name = ?, middle_name = ?, last_name = ?, interested_course = ?,
@@ -165,13 +174,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         ho_share_snapshot, dlc_share_snapshot
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), 'Active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
+                $telFn = formatPersonNameTitleCase((string)($inq['first_name'] ?? ''));
+                $telMn = trim((string)($inq['middle_name'] ?? '')) === ''
+                    ? ($inq['middle_name'] ?? null)
+                    : formatPersonNameTitleCase((string)$inq['middle_name']);
+                $telLn = formatPersonNameTitleCase((string)($inq['last_name'] ?? ''));
                 $stmt->execute([
                     $atcId,
                     $rollNo,
                     $registrationId,
-                    $inq['first_name'],
-                    $inq['middle_name'],
-                    $inq['last_name'],
+                    $telFn,
+                    $telMn,
+                    $telLn,
                     $inq['mobile'],
                     $inq['interested_course'],
                     !empty($_POST['uniform_size']) ? trim($_POST['uniform_size']) : null,
@@ -687,7 +701,7 @@ foreach ($counts as $count) {
                         <?php else: ?>
                             <?php foreach ($inquiries as $inquiry):
                                 $initials = strtoupper(substr($inquiry['first_name'], 0, 1) . substr($inquiry['last_name'], 0, 1));
-                                $fullName = trim($inquiry['first_name'] . ' ' . ($inquiry['middle_name'] ? $inquiry['middle_name'] . ' ' : '') . $inquiry['last_name']);
+                                $fullName = studentDisplayNameFrom($inquiry);
                                 $statusClass = 'tel-badge-' . strtolower($inquiry['status']);
                             ?>
                                 <tr>
@@ -1484,7 +1498,7 @@ async function viewInquiry(id) {
         
         if (result.success) {
             const inquiry = result.data;
-            const fullName = inquiry.first_name + (inquiry.middle_name ? ' ' + inquiry.middle_name : '') + ' ' + inquiry.last_name;
+            const fullName = studentDisplayNameFrom(inquiry);
             
             const content = `
                 <div class="detail-grid">

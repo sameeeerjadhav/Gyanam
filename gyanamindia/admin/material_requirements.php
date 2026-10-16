@@ -702,7 +702,7 @@ function mrStudentUrl(array $s): string {
                 <tr>
                     <td style="color:#9ca3af;font-weight:700;text-align:center"><?= $idx + 1 ?></td>
                     <?php if ($showAtcCol): ?><td><?= htmlspecialchars($s['atc_name'] ?? '—') ?></td><?php endif; ?>
-                    <td><strong><?= htmlspecialchars($s['student_name']) ?></strong></td>
+                    <td><strong><?= htmlspecialchars(formatPersonNameTitleCase((string)$s['student_name'])) ?></strong></td>
                     <td style="font-family:monospace;font-size:7.5pt"><?= htmlspecialchars(admissionDisplayRegistrationId($s)) ?></td>
                     <td style="font-family:monospace;font-size:7.5pt;color:#6b7280"><?= htmlspecialchars($s['roll_no'] ?? '—') ?></td>
                     <td style="color:#6b7280"><?= htmlspecialchars($s['course'] ?? '—') ?></td>
@@ -879,7 +879,7 @@ function mrStudentUrl(array $s): string {
                     <td><span class="atc-chip" title="<?= htmlspecialchars($s['atc_name'] ?? '') ?>"><?= htmlspecialchars($s['atc_name'] ?? '—') ?></span></td>
                     <?php endif; ?>
                     <td>
-                        <div style="font-weight:800;font-size:.88rem"><?= htmlspecialchars($s['student_name']) ?></div>
+                        <div style="font-weight:800;font-size:.88rem"><?= htmlspecialchars(formatPersonNameTitleCase((string)$s['student_name'])) ?></div>
                         <div style="font-size:.7rem;color:#94a3b8"><?= htmlspecialchars($s['roll_no'] ?? '') ?></div>
                     </td>
                     <td><code style="font-size:.78rem;background:#f1f5f9;padding:.15rem .4rem;border-radius:4px"><?= htmlspecialchars(admissionDisplayRegistrationId($s)) ?></code></td>
@@ -937,7 +937,7 @@ function mrStudentUrl(array $s): string {
                     <td><span class="atc-chip" title="<?= htmlspecialchars($s['atc_name'] ?? '') ?>"><?= htmlspecialchars($s['atc_name'] ?? '—') ?></span></td>
                     <?php endif; ?>
                     <td>
-                        <div style="font-weight:800;font-size:.88rem"><?= htmlspecialchars($s['student_name']) ?></div>
+                        <div style="font-weight:800;font-size:.88rem"><?= htmlspecialchars(formatPersonNameTitleCase((string)$s['student_name'])) ?></div>
                         <div style="font-size:.7rem;color:#94a3b8"><?= htmlspecialchars($s['roll_no'] ?? '') ?></div>
                     </td>
                     <td><code style="font-size:.78rem;background:#f1f5f9;padding:.15rem .4rem;border-radius:4px"><?= htmlspecialchars(admissionDisplayRegistrationId($s)) ?></code></td>

@@ -189,7 +189,7 @@ $txnDate = date('d M Y, h:i A', strtotime($txnSource));
                 </tr>
             <?php else: ?>
                 <?php foreach ($students as $idx => $s):
-                    $name = trim($s['first_name'] . ' ' . ($s['middle_name'] ? $s['middle_name'] . ' ' : '') . $s['last_name']);
+                    $name = studentDisplayNameFrom($s);
                 ?>
                 <tr>
                     <td><?= $idx + 1 ?></td>

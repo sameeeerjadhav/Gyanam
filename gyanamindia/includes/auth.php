@@ -50,6 +50,12 @@ function requireLogin(array $allowedRoles = []): void {
         header('Location: /index.php');
         exit;
     }
+    // One-time: title-case admission names so every student display is consistent
+    if (function_exists('ensureAdmissionNamesTitleCased') && function_exists('getDBConnection')) {
+        try {
+            ensureAdmissionNamesTitleCased(getDBConnection());
+        } catch (Throwable $e) { /* ignore */ }
+    }
 }
 
 /**

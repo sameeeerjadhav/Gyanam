@@ -94,7 +94,7 @@ if (!$nextDate && !empty($thisPayment['remarks'])) {
     if (preg_match('/Installment amt[^0-9]*([0-9,]+)/', $thisPayment['remarks'], $m)) $nextAmount = str_replace(',', '', $m[1]);
 }
 
-$studentName = trim($student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name']);
+$studentName = studentDisplayNameFrom($student);
 $totalPaid   = floatval($student['fees_paid']);
 $netPayable  = floatval($student['net_payable'] ?? $student['fees_total']);
 $balance     = max(0, $netPayable - $totalPaid);

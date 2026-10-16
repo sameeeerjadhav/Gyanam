@@ -1,6 +1,28 @@
 /**
  * Gyanam Portal — Dashboard Interactions
  */
+
+/** First Letter Of Each Word Capital (matches PHP formatPersonNameTitleCase). */
+function formatPersonNameTitleCase(name) {
+    const s = String(name ?? '').trim().replace(/\s+/g, ' ');
+    if (!s) return '';
+    return s.toLowerCase().replace(/(^|[\s\-'])(\S)/g, (_, a, b) => a + b.toUpperCase());
+}
+
+/** Join first / middle / last into a title-cased display name. */
+function studentDisplayName(first, middle, last) {
+    return formatPersonNameTitleCase([first, middle, last].filter(Boolean).join(' '));
+}
+
+/** Title-case from a student/admission object. */
+function studentDisplayNameFrom(obj) {
+    if (!obj || typeof obj !== 'object') return '';
+    if (obj.first_name != null || obj.last_name != null) {
+        return studentDisplayName(obj.first_name, obj.middle_name, obj.last_name);
+    }
+    return formatPersonNameTitleCase(obj.student_name || obj.full_name || obj.name || '');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
 
     /* ---- Sidebar Toggle (Mobile) ---- */

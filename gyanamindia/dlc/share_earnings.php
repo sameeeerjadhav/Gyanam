@@ -131,7 +131,7 @@ $studentPage = array_slice($summary['students'], $pager['offset'], $pager['per_p
                         <?php foreach ($studentPage as $i => $s): ?>
                         <tr>
                             <td><?= $pager['from'] + $i ?></td>
-                            <td><div class="cell-name"><?= htmlspecialchars($s['student_name']) ?></div></td>
+                            <td><div class="cell-name"><?= htmlspecialchars(formatPersonNameTitleCase((string)$s['student_name'])) ?></div></td>
                             <td>
                                 <?= htmlspecialchars($s['roll_no']) ?>
                                 <?php if (!empty($s['registration_id'])): ?>

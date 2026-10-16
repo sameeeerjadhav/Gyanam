@@ -866,7 +866,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                                     <div class="sm-stu-initials"><?= $initial ?></div>
                                 <?php endif; ?>
                                 <div>
-                                    <div class="sm-stu-name"><?= htmlspecialchars($g['student_name']) ?></div>
+                                    <div class="sm-stu-name"><?= htmlspecialchars(formatPersonNameTitleCase((string)$g['student_name'])) ?></div>
                                 </div>
                             </div>
                         </td>
@@ -938,7 +938,7 @@ $totalAttempts  = array_sum(array_column($grouped, 'total_attempts'));
                         <td colspan="11">
                             <div class="sm-sub-label">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                Exam History — <?= htmlspecialchars($g['student_name']) ?>
+                                Exam History — <?= htmlspecialchars(formatPersonNameTitleCase((string)$g['student_name'])) ?>
                             </div>
                             <?php if (empty($g['exams'])): ?>
                                 <div style="padding:.75rem;color:#64748b;font-size:.82rem;font-weight:600">No exam attempts yet. You can still save internal marks above.</div>

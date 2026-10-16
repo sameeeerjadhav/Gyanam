@@ -448,7 +448,7 @@ try {
                             <tr>
                                 <td style="color:var(--text-secondary);font-size:.8rem;"><?= $i + 1 ?></td>
                                 <td>
-                                    <div class="student-name"><?= htmlspecialchars($req['student_name']) ?></div>
+                                    <div class="student-name"><?= htmlspecialchars(formatPersonNameTitleCase((string)$req['student_name'])) ?></div>
                                     <div class="student-meta"><?= htmlspecialchars($req['roll_no'] ?? '') ?> · <?= htmlspecialchars($req['course'] ?? '') ?></div>
                                 </td>
                                 <td style="font-size:.82rem;font-weight:600;"><?= htmlspecialchars($req['cert_type']) ?></td>

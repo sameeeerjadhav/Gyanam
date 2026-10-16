@@ -99,7 +99,7 @@ if (strpos($logoUrl, '../uploads/atc_logos/') === 0) {
 }
 
 // --- Derived values ---
-$fullName      = trim($student['first_name'] . ' ' . ($student['middle_name'] ?? '') . ' ' . $student['last_name']);
+$fullName      = studentDisplayNameFrom($student);
 $netPayable    = floatval($student['net_payable'] ?? $student['fees_total'] ?? 0);
 $paymentAmount = floatval($payment['amount']);
 $batchInfo     = trim((string)($payment['description'] ?? ''));

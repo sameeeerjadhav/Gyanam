@@ -602,6 +602,11 @@ function createMissingAdmissionFromConvertedInquiry(
 
     $fkInquiryId = ($source === 'telephonic') ? null : $inquiryId;
 
+    $fn = formatPersonNameTitleCase((string)($src['first_name'] ?? $inq['first_name'] ?? ''));
+    $mnRaw = $src['middle_name'] ?? ($inq['middle_name'] ?? null);
+    $mn = ($mnRaw === null || trim((string)$mnRaw) === '') ? null : formatPersonNameTitleCase((string)$mnRaw);
+    $ln = formatPersonNameTitleCase((string)($src['last_name'] ?? $inq['last_name'] ?? ''));
+
     $stmt = $pdo->prepare("
         INSERT INTO admissions (
             atc_id, inquiry_id, roll_no, registration_id,
@@ -618,9 +623,9 @@ function createMissingAdmissionFromConvertedInquiry(
         $fkInquiryId,
         $ident['roll_no'],
         $ident['registration_id'],
-        $src['first_name'] ?? $inq['first_name'],
-        $src['middle_name'] ?? ($inq['middle_name'] ?? null),
-        $src['last_name'] ?? $inq['last_name'],
+        $fn,
+        $mn,
+        $ln,
         $src['gender'] ?? ($inq['gender'] ?? null),
         $src['dob'] ?? ($inq['dob'] ?? null),
         $src['qualification'] ?? ($inq['qualification'] ?? null),
@@ -3466,7 +3471,7 @@ function findIssuedCertificateByCertNo(PDO $pdo, string $certNo): ?array
 }
 
 /**
- * Person name for certificates: First Letter Of Each Word Capital, rest small.
+ * Person name display: First Letter Of Each Word Capital, rest small.
  * Collapses whitespace; empty → ''.
  */
 function formatPersonNameTitleCase(string $name): string
@@ -3479,6 +3484,90 @@ function formatPersonNameTitleCase(string $name): string
         return mb_convert_case(mb_strtolower($name, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
     }
     return ucwords(strtolower($name));
+}
+
+/** Join first / middle / last into a title-cased display name. */
+function studentDisplayName(?string $first, ?string $middle = null, ?string $last = null): string
+{
+    $parts = [];
+    foreach ([$first, $middle, $last] as $part) {
+        $t = trim((string)$part);
+        if ($t !== '') {
+            $parts[] = $t;
+        }
+    }
+    return formatPersonNameTitleCase(implode(' ', $parts));
+}
+
+/**
+ * Title-case a student name from a DB/API row.
+ * Prefers first/middle/last; falls back to student_name / full_name / name.
+ */
+function studentDisplayNameFrom(array $row, string $fallbackKey = 'student_name'): string
+{
+    if (isset($row['first_name']) || isset($row['last_name'])) {
+        return studentDisplayName(
+            $row['first_name'] ?? '',
+            $row['middle_name'] ?? null,
+            $row['last_name'] ?? ''
+        );
+    }
+    foreach ([$fallbackKey, 'full_name', 'name', 'student_name'] as $key) {
+        if (!empty($row[$key]) && is_string($row[$key])) {
+            return formatPersonNameTitleCase($row[$key]);
+        }
+    }
+    return '';
+}
+
+/** Title-case common name keys on a POST/row array (mutates in place). */
+function applyTitleCaseToNameFields(array &$data, array $keys = [
+    'first_name', 'middle_name', 'last_name',
+    'cvt_first_name', 'cvt_middle_name', 'cvt_last_name',
+    'father_name', 'mother_name',
+]): void {
+    foreach ($keys as $key) {
+        if (!array_key_exists($key, $data) || !is_string($data[$key])) {
+            continue;
+        }
+        $data[$key] = formatPersonNameTitleCase($data[$key]);
+    }
+}
+
+/**
+ * One-time backfill: store admission names in title case so every list/receipt shows correctly.
+ */
+function ensureAdmissionNamesTitleCased(PDO $pdo): void
+{
+    if (isSchemaFlagSet('schema_admission_names_titlecase_v1')) {
+        return;
+    }
+    try {
+        $pdo->query('SELECT first_name FROM admissions LIMIT 1');
+    } catch (Throwable $e) {
+        return;
+    }
+    try {
+        $stmt = $pdo->query('SELECT id, first_name, middle_name, last_name FROM admissions');
+        $upd = $pdo->prepare('UPDATE admissions SET first_name=?, middle_name=?, last_name=? WHERE id=?');
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $f = formatPersonNameTitleCase((string)($row['first_name'] ?? ''));
+            $mRaw = $row['middle_name'];
+            $m = ($mRaw === null || trim((string)$mRaw) === '')
+                ? $mRaw
+                : formatPersonNameTitleCase((string)$mRaw);
+            $l = formatPersonNameTitleCase((string)($row['last_name'] ?? ''));
+            if ($f === (string)($row['first_name'] ?? '')
+                && (string)$m === (string)($row['middle_name'] ?? '')
+                && $l === (string)($row['last_name'] ?? '')) {
+                continue;
+            }
+            $upd->execute([$f, $m, $l, (int)$row['id']]);
+        }
+        markSchemaFlag('schema_admission_names_titlecase_v1');
+    } catch (Throwable $e) {
+        // Leave flag unset so a later request can retry
+    }
 }
 
 /** Whether a course should use the typing Statement of Marks particulars table. */

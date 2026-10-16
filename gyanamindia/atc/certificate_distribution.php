@@ -324,7 +324,7 @@ sort($courseOptions);
                         ?>
                             <tr data-search="<?= htmlspecialchars($search) ?>" data-collected="<?= $collected ? '1' : '0' ?>" data-item="<?= (int)$row['dispatch_item_id'] ?>">
                                 <td>
-                                    <div class="cd-name"><?= htmlspecialchars($row['student_name']) ?></div>
+                                    <div class="cd-name"><?= htmlspecialchars(formatPersonNameTitleCase((string)$row['student_name'])) ?></div>
                                     <div class="cd-sub"><?= htmlspecialchars($row['roll_no'] ?: ('#' . $row['admission_id'])) ?><?= $row['mobile'] ? ' · ' . htmlspecialchars($row['mobile']) : '' ?></div>
                                 </td>
                                 <td>
@@ -386,7 +386,7 @@ sort($courseOptions);
                         <?php foreach ($records as $rec): ?>
                             <tr>
                                 <td><?= !empty($rec['date_issued']) ? date('d/m/Y', strtotime($rec['date_issued'])) : '—' ?></td>
-                                <td class="cd-name"><?= htmlspecialchars($rec['student_name']) ?></td>
+                                <td class="cd-name"><?= htmlspecialchars(formatPersonNameTitleCase((string)$rec['student_name'])) ?></td>
                                 <td><?= htmlspecialchars($rec['course_name']) ?></td>
                                 <td><?= htmlspecialchars($rec['received_by'] ?: '—') ?></td>
                                 <td><?= htmlspecialchars($rec['narration'] ?: '—') ?></td>

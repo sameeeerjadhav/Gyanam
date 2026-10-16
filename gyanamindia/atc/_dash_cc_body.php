@@ -503,7 +503,7 @@ $todayFeeTotal = $todayCash + $todayOnline;
                                 <tbody>
                                 <?php foreach ($pendingApprovals as $pa): ?>
                                     <tr>
-                                        <td class="name"><?= htmlspecialchars($pa['student_name']) ?></td>
+                                        <td class="name"><?= htmlspecialchars(formatPersonNameTitleCase((string)$pa['student_name'])) ?></td>
                                         <td class="muted"><?= htmlspecialchars($pa['field_label']) ?></td>
                                     </tr>
                                 <?php endforeach; ?>

@@ -396,7 +396,7 @@ $grandTotal       = array_sum(array_column($dlcs, 'total_paid'));
             <?php else: $n=0; foreach ($stuRows as $s): $n++; ?>
               <tr>
                 <td><?= $n ?></td>
-                <td style="font-weight:700"><?= htmlspecialchars($s['student_name']) ?></td>
+                <td style="font-weight:700"><?= htmlspecialchars(formatPersonNameTitleCase((string)$s['student_name'])) ?></td>
                 <td style="font-family:var(--mono);font-size:.78rem">
                   <?= htmlspecialchars($s['roll_no']) ?>
                   <?php if (!empty($s['registration_id'])): ?><div style="color:var(--text-secondary)"><?= htmlspecialchars($s['registration_id']) ?></div><?php endif; ?>

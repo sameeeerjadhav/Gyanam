@@ -135,7 +135,7 @@ if (isset($_POST['ajax_save_hall_schedule']) || isset($_POST['ajax_save_hall_sch
 
         if ($portalReady) {
             try {
-                $syncName = trim(($admRow['first_name'] ?? '') . ' ' . (($admRow['middle_name'] ?? '') ? $admRow['middle_name'] . ' ' : '') . ($admRow['last_name'] ?? ''));
+                $syncName = studentDisplayNameFrom($admRow);
                 syncStudentToExamPortal(
                     $loginId,
                     $syncName,
@@ -631,7 +631,7 @@ header('Content-Type: text/html; charset=UTF-8');
                                         && ($schedulePast || $localStatus === 'Absent' || !empty($student['not_conducted']));
                                     $doneClass = $doneLabel === 'Passed' ? 'pass' : ($doneLabel === 'Failed' ? 'fail' : 'done');
                                     $doneText = ($doneLabel === 'Passed' || $doneLabel === 'Exam done') ? 'Exam Done' : $doneLabel;
-                                    $fullName = $student['first_name'] . ' ' . ($student['middle_name'] ? $student['middle_name'] . ' ' : '') . $student['last_name'];
+                                    $fullName = studentDisplayNameFrom($student);
                                 ?>
                                 <tr>
                                     <td>
@@ -1034,7 +1034,7 @@ function generateHallTicket(studentId) {
         return;
     }
 
-    const fullName = `${student.first_name} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name}`;
+    const fullName = studentDisplayNameFrom(student);
     const loginId = studentLoginId(student);
     document.getElementById('htSchedMode').value = 'single';
     document.getElementById('htSchedAdmId').value = String(student.id);
@@ -1142,7 +1142,7 @@ function confirmHtScheduleAndGenerate() {
 }
 
 function buildHallTicketHtml(student) {
-    const fullName = `${student.first_name} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name}`;
+    const fullName = studentDisplayNameFrom(student);
     const photoPath = student.photo ? `../${student.photo}` : '../assets/logo.png';
     const examAddr = [atcDetails.address, atcDetails.city, atcDetails.district, atcDetails.state].filter(Boolean).join(', ') + (atcDetails.pin_code ? ' - ' + atcDetails.pin_code : '');
     const regNo = studentLoginId(student) || '-';
@@ -1266,7 +1266,7 @@ function renderAndPrintHallTicketsBulk(studentIds) {
 function openPhotoUpload(studentId) {
     const s = students.find(x => x.id == studentId);
     if (!s) return;
-    const fullName = [s.first_name, s.middle_name, s.last_name].filter(Boolean).join(' ');
+    const fullName = studentDisplayNameFrom(s);
     const dob = s.dob ? new Date(s.dob+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
     document.getElementById('puStudentId').value = s.id;
     document.getElementById('puModalTitle').textContent = 'Upload Photo — ' + fullName;
@@ -1382,7 +1382,7 @@ function normalizeWaPhone(mobile) {
 }
 
 function buildHallTicketWhatsAppMsg(student, extraNote) {
-    const fullName = [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(' ');
+    const fullName = studentDisplayNameFrom(student);
     const regNo = studentLoginId(student) || '-';
     const sched = getExamScheduleInfo(student);
     const centre = atcDetails.name || 'Exam Centre';
@@ -1526,7 +1526,7 @@ function updateBulkWaPreview() {
         box.textContent = 'All selected students processed.';
         return;
     }
-    const name = [s.first_name, s.middle_name, s.last_name].filter(Boolean).join(' ');
+    const name = studentDisplayNameFrom(s);
     meta.textContent = `Student ${_bulkWaIndex + 1} of ${_bulkWaQueue.length}: ${name} · ${s.mobile || ''}`;
     box.textContent = buildHallTicketWhatsAppMsg(s, note);
 }
@@ -1564,7 +1564,7 @@ function openExamNotify(studentId) {
     if (!s) return;
     _enStudent = s;
 
-    const fullName = [s.first_name, s.middle_name, s.last_name].filter(Boolean).join(' ');
+    const fullName = studentDisplayNameFrom(s);
     document.getElementById('enStudentId').value = s.id;
     document.getElementById('enStudentBadge').textContent = fullName + ' · ' + (s.mobile || 'No mobile');
 
@@ -1619,7 +1619,7 @@ function buildExamMsg() {
     if (_enStudent.sched_exam_date) {
         return buildHallTicketWhatsAppMsg(_enStudent);
     }
-    const fullName = [_enStudent.first_name, _enStudent.middle_name, _enStudent.last_name].filter(Boolean).join(' ');
+    const fullName = studentDisplayNameFrom(_enStudent);
     const topic    = document.getElementById('enExamTopic').value.trim() || '[Exam Topic]';
     const course   = document.getElementById('enCourseName').value.trim() || '[Course Name]';
     const dateStr  = document.getElementById('enExamDate').value;

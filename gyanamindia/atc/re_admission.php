@@ -107,6 +107,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $matTypeRA = $_POST['material_type'] ?? 'Without Material';
                 $hoShareSnapshotRA  = getHoShareForCourse($pdo, $newCourse, $matTypeRA);
                 $dlcShareSnapshotRA = getDlcShareForCourse($pdo, $newCourse, $matTypeRA);
+                $raFirst = formatPersonNameTitleCase((string)($srcRow['first_name'] ?? ''));
+                $raMid = trim((string)($srcRow['middle_name'] ?? '')) === ''
+                    ? ($srcRow['middle_name'] ?? null)
+                    : formatPersonNameTitleCase((string)$srcRow['middle_name']);
+                $raLast = formatPersonNameTitleCase((string)($srcRow['last_name'] ?? ''));
 
                 $stmt = $pdo->prepare("
                     INSERT INTO admissions (
@@ -126,9 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $atcId,
                     $rollNo,
                     $registrationId,
-                    $srcRow['first_name'],
-                    $srcRow['middle_name'],
-                    $srcRow['last_name'],
+                    $raFirst,
+                    $raMid,
+                    $raLast,
                     $_POST['gender']        ?? $srcRow['gender'],
                     $_POST['dob']           ?? $srcRow['dob'],
                     $_POST['category']      ?? $srcRow['category'] ?? 'General',
@@ -581,7 +586,7 @@ async function doSearch() {
     }
 
     searchResults.innerHTML = data.data.map(s => {
-        const full = [s.first_name, s.middle_name, s.last_name].filter(Boolean).join(' ');
+        const full = studentDisplayNameFrom(s);
         const init = (s.first_name || '?')[0].toUpperCase();
         const badge = s.status === 'Active'
             ? '<span class="ra-result-badge active">Active</span>'
@@ -600,7 +605,7 @@ async function doSearch() {
 /* ── Select ── */
 function selectStudent(s) {
     selectedStudent = s;
-    const full = [s.first_name, s.middle_name, s.last_name].filter(Boolean).join(' ');
+    const full = studentDisplayNameFrom(s);
     const init = (s.first_name || '?')[0].toUpperCase();
 
     let photoHtml = '';

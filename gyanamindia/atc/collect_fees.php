@@ -118,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'installment_no' => $installmentNo,
                 'new_paid'       => $newPaid,
                 'new_pending'    => $newPending,
-                'student_name'   => trim($student['first_name'] . ' ' . ($student['middle_name'] ?? '') . ' ' . $student['last_name']),
+                'student_name'   => studentDisplayNameFrom($student),
                 'student_mobile' => $student['mobile'] ?? null,
             ]);
         } catch (Exception $e) {
@@ -135,7 +135,7 @@ $stmt->execute([$stuId, $atcId]);
 $stu = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$stu) { header('Location: fees.php'); exit; }
 
-$fullName   = trim(($stu['first_name'] ?? '') . ' ' . ($stu['middle_name'] ? $stu['middle_name'] . ' ' : '') . ($stu['last_name'] ?? ''));
+$fullName   = studentDisplayNameFrom($stu);
 $netPayable = floatval($stu['net_payable'] ?? $stu['fees_total'] ?? 0);
 $feesPaid   = floatval($stu['fees_paid'] ?? 0);
 $balance    = max(0, floatval($stu['fees_pending'] ?? ($netPayable - $feesPaid)));

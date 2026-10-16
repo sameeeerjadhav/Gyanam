@@ -269,7 +269,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $studentDetails[] = [
                         'id' => $student['id'],
                         'roll_no' => $student['roll_no'],
-                        'name' => $student['first_name'] . ' ' . $student['last_name'],
+                        'name' => studentDisplayName($student['first_name'] ?? '', null, $student['last_name'] ?? ''),
                         'course' => $course,
                         'share_amount' => $shareAmount
                     ];
@@ -441,11 +441,7 @@ foreach ($students as $student) {
         $student['material_type'] ?? null,
         $courseShareAmounts
     );
-    $student['full_name'] = trim(
-        ($student['first_name'] ?? '') . ' '
-        . ((($student['middle_name'] ?? '') !== '') ? $student['middle_name'] . ' ' : '')
-        . ($student['last_name'] ?? '')
-    );
+    $student['full_name'] = studentDisplayNameFrom($student);
     if (!empty($student['share_paid'])) {
         $paidRows[] = $student;
     } else {

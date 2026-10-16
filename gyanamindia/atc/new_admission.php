@@ -75,6 +75,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
                 
             case 'convert_to_admission':
+                if (function_exists('applyTitleCaseToNameFields')) {
+                    applyTitleCaseToNameFields($_POST);
+                }
                 $inqSource = $_POST['inquiry_source'] ?? 'walkin';
 
                 // Get inquiry data from the correct table
@@ -246,6 +249,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
 
             case 'convert_telephonic_to_admission':
+                if (function_exists('applyTitleCaseToNameFields')) {
+                    applyTitleCaseToNameFields($_POST);
+                }
                 // Get telephonic inquiry data
                 $stmt = $pdo->prepare("SELECT * FROM telephonic_inquiries WHERE id = ? AND atc_id = ?");
                 $stmt->execute([$_POST['inquiry_id'], $atcId]);
@@ -390,6 +396,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
                 
             case 'add':
+                if (function_exists('applyTitleCaseToNameFields')) {
+                    applyTitleCaseToNameFields($_POST);
+                }
                 // Fetch ATC center_type for Registration ID
                 $atcStmt3 = $pdo->prepare("SELECT center_type FROM atc_centers WHERE id = ?");
                 $atcStmt3->execute([$atcId]);
@@ -700,7 +709,7 @@ foreach ($atcCourses as $ac) {
 }
 
 function inqFullName(array $r): string {
-    return trim($r['first_name'].' '.($r['middle_name'] ? $r['middle_name'].' ' : '').$r['last_name']);
+    return studentDisplayNameFrom($r);
 }
 ?>
 <!DOCTYPE html>
@@ -1419,7 +1428,7 @@ function inqFullName(array $r): string {
                                     </td>
                                     <td>
                                         <div class="cell-name">
-                                            <?= htmlspecialchars($admission['first_name'] . ' ' . ($admission['middle_name'] ? $admission['middle_name'] . ' ' : '') . $admission['last_name']) ?>
+                                            <?= htmlspecialchars(studentDisplayNameFrom($admission)) ?>
                                         </div>
                                         <div class="cell-sub"><?= htmlspecialchars($admission['city']) ?></div>
                                     </td>
@@ -2864,7 +2873,7 @@ async function loadInquiriesDropdown() {
             result.data.forEach(inquiry => {
                 const option = document.createElement('option');
                 option.value = inquiry.id;
-                option.textContent = `${inquiry.first_name} ${inquiry.middle_name || ''} ${inquiry.last_name} - ${inquiry.mobile} (${inquiry.interested_course})`;
+                option.textContent = `${studentDisplayNameFrom(inquiry)} - ${inquiry.mobile} (${inquiry.interested_course})`;
                 select.appendChild(option);
             });
         }
@@ -3160,7 +3169,7 @@ function displaySearchResults(data) {
         `;
         
         data.inquiries.forEach(inquiry => {
-            const fullName = `${inquiry.first_name} ${inquiry.middle_name ? inquiry.middle_name + ' ' : ''}${inquiry.last_name}`;
+            const fullName = studentDisplayNameFrom(inquiry);
             html += `
                 <div style="background: var(--bg-surface); border: 2px solid var(--primary-200); border-radius: var(--radius-lg); padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
                     <div>
@@ -3200,7 +3209,7 @@ function displaySearchResults(data) {
         `;
         
         data.admissions.forEach(admission => {
-            const fullName = `${admission.first_name} ${admission.middle_name ? admission.middle_name + ' ' : ''}${admission.last_name}`;
+            const fullName = studentDisplayNameFrom(admission);
             html += `
                 <div style="background: var(--bg-surface); border: 2px solid var(--success-200); border-radius: var(--radius-lg); padding: 1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: start;">
@@ -3260,7 +3269,7 @@ async function openConvertModal(inquiryId) {
         
         if (result.success && result.data) {
             const inquiry = result.data;
-            const fullName = `${inquiry.first_name} ${inquiry.middle_name ? inquiry.middle_name + ' ' : ''}${inquiry.last_name}`;
+            const fullName = studentDisplayNameFrom(inquiry);
             
             document.getElementById('convert_inquiry_id').value = inquiryId;
             document.getElementById('convert_student_name').textContent = fullName;
@@ -3473,7 +3482,7 @@ async function viewAdmission(id) {
         
         if (result.success && result.data) {
             const a = result.data;
-            const fullName = `${a.first_name} ${a.middle_name ? a.middle_name + ' ' : ''}${a.last_name}`;
+            const fullName = studentDisplayNameFrom(a);
             
             document.getElementById('viewContent').innerHTML = `
                 <div class="view-details">

@@ -350,7 +350,7 @@ $kpiPending = count($pendingStudents) + count($approvedDupCerts);
                     <?php foreach ($pendingStudents as $i => $s): ?>
                     <tr>
                         <td style="color:var(--text-muted);font-size:.78rem"><?= $i + 1 ?></td>
-                        <td style="font-weight:700;color:var(--text-primary)"><?= htmlspecialchars($s['student_name']) ?><br><span style="font-size:.7rem;color:var(--text-muted)"><?= htmlspecialchars($s['roll_no'] ?? '') ?></span></td>
+                        <td style="font-weight:700;color:var(--text-primary)"><?= htmlspecialchars(formatPersonNameTitleCase((string)$s['student_name'])) ?><br><span style="font-size:.7rem;color:var(--text-muted)"><?= htmlspecialchars($s['roll_no'] ?? '') ?></span></td>
                         <td><code style="font-size:.78rem"><?= htmlspecialchars($s['registration_id'] ?? '') ?></code></td>
                         <td><?= htmlspecialchars($s['course'] ?? '—') ?></td>
                         <td><?php if (!empty($s['material_language'])): ?>

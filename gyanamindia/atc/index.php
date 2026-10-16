@@ -2202,7 +2202,7 @@ atc_dash_ready:
             }
 
             const rows = list.map((s, i) => {
-                const name = (s.name || [s.first_name, s.last_name].filter(Boolean).join(' ')).trim();
+                const name = formatPersonNameTitleCase(s.name || [s.first_name, s.last_name].filter(Boolean).join(' '));
                 const initials = name.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
                 const avatarHtml = s.photo
                     ? `<img src="../${s.photo}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;border:1.5px solid #e5e7eb;flex-shrink:0" onerror="this.outerHTML='<span style=\\'display:inline-flex;width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#4361ee,#8b5cf6);color:#fff;font-size:.65rem;font-weight:800;align-items:center;justify-content:center;flex-shrink:0\\'>${initials}</span>'">`
@@ -2240,7 +2240,7 @@ atc_dash_ready:
                 body.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem 1rem;color:#9ca3af;font-weight:600">No students found for this category.</div>';
             } else {
                 body.innerHTML = students.map(s => {
-                    const name = (s.student_name || '').trim().replace(/\s+/g, ' ');
+                    const name = formatPersonNameTitleCase(s.student_name || '');
                     const initials = name.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
                     const photoEl = s.photo
                         ? `<img class="exam-student-photo" src="../${s.photo}" alt="${name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="exam-student-avatar" style="display:none">${initials}</div>`
@@ -2353,7 +2353,7 @@ atc_dash_ready:
                 const modeColor = r.payment_mode === 'Cash' ? '#059669' : '#2563eb';
                 const time = r.payment_date ? new Date(r.payment_date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
                 html += `<tr style="background:${bg};border-bottom:1px solid #f3f4f6">
-            <td style="padding:.65rem 1.25rem;font-weight:700;color:#111827">${r.student_name}<br><small style="font-weight:500;color:#9ca3af;font-family:monospace">${r.roll_no || ''}</small></td>
+            <td style="padding:.65rem 1.25rem;font-weight:700;color:#111827">${formatPersonNameTitleCase(r.student_name)}<br><small style="font-weight:500;color:#9ca3af;font-family:monospace">${r.roll_no || ''}</small></td>
             <td style="padding:.65rem 1rem;color:#4b5563">${r.course || '—'}</td>
             <td style="padding:.65rem 1rem;text-align:right;font-weight:800;color:#111827">₹${fmt.format(parseFloat(r.amount))}</td>
             <td style="padding:.65rem 1rem;text-align:center"><span style="background:${modeColor}22;color:${modeColor};font-size:.72rem;font-weight:700;padding:.2rem .6rem;border-radius:999px">${r.payment_mode}</span></td>
@@ -2402,7 +2402,7 @@ atc_dash_ready:
             const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
             const raw = <?= json_encode(array_map(static function ($r) {
                 return [
-                    'name' => trim((string)($r['name'] ?? '')),
+                    'name' => formatPersonNameTitleCase((string)($r['name'] ?? '')),
                     'course' => (string)($r['course'] ?? ''),
                     'mobile' => (string)($r['mobile'] ?? ''),
                     'month' => (int)($r['b_month'] ?? 0),

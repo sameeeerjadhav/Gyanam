@@ -214,7 +214,7 @@ $displayDate = date('d M Y', strtotime($examDate));
                             <?php else: ?>
                                 <?php foreach ($scheduledStudents as $i => $s): ?>
                                     <?php
-                                        $fullName = $s['first_name'] . ' ' . ($s['middle_name'] ? $s['middle_name'].' ' : '') . $s['last_name'];
+                                        $fullName = studentDisplayNameFrom($s);
                                         $regId = $s['registration_id'] ?? $s['roll_no'];
                                     ?>
                                     <tr>
@@ -258,7 +258,7 @@ $displayDate = date('d M Y', strtotime($examDate));
                 <select id="sch_student" class="cht-select-lg">
                     <option value="">— Select Student —</option>
                     <?php foreach ($allStudents as $st): ?>
-                        <?php $fn = $st['first_name'].' '.($st['middle_name'] ? $st['middle_name'].' ':'').$st['last_name']; ?>
+                        <?php $fn = studentDisplayNameFrom($st); ?>
                         <option value="<?= $st['id'] ?>"><?= htmlspecialchars("#{$st['roll_no']} — $fn ({$st['course']})") ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -407,7 +407,7 @@ async function saveSchedule() {
 
 // ── Hall Ticket Preview ─────────────────────────────────────────────────────
 function viewHallTicket(s) {
-    const fullName = `${s.first_name} ${s.middle_name ? s.middle_name + ' ' : ''}${s.last_name}`;
+    const fullName = studentDisplayNameFrom(s);
     const photo    = s.photo ? `../${s.photo}` : '../assets/logo.png';
     const examDt   = new Date(s.exam_date).toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'});
     const examTm   = new Date('2000-01-01T' + s.exam_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
@@ -545,7 +545,7 @@ function generateAttendanceSheet() {
     }
     const examDateFormatted = <?= json_encode($displayDate) ?>;
     const rows = scheduledData.map((s, i) => {
-        const fullName = `${s.first_name} ${s.middle_name ? s.middle_name + ' ' : ''}${s.last_name}`;
+        const fullName = studentDisplayNameFrom(s);
         const photo    = s.photo ? `../${s.photo}` : '';
         const regId    = s.registration_id || s.roll_no;
         return `
