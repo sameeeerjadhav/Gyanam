@@ -1147,19 +1147,26 @@ function buildHallTicketHtml(student) {
     const examAddr = [atcDetails.address, atcDetails.city, atcDetails.district, atcDetails.state].filter(Boolean).join(', ') + (atcDetails.pin_code ? ' - ' + atcDetails.pin_code : '');
     const regNo = studentLoginId(student) || '-';
     const examSchedule = getExamScheduleInfo(student);
+    const atcCode = atcDetails.atc_code || atcDetails.code || '';
+    const atcPlace = [atcDetails.city, atcDetails.district, atcDetails.state].filter(Boolean).join(', ')
+        || (atcDetails.address || '');
 
     return `
         <div class="ht-print" style="page-break-after:always">
           <table class="ht-print-tbl">
             <tr>
-              <td class="ht-p-center" style="width:20%">
+              <td class="ht-p-center" style="width:18%">
                 <img src="${htBrandLogoUrl}" alt="GIIT" style="height:70px;object-fit:contain">
               </td>
-              <td class="ht-p-center ht-p-bold" style="width:60%;padding:10px 8px;vertical-align:middle">
+              <td class="ht-p-center ht-p-bold" style="width:52%;padding:10px 8px;vertical-align:middle">
                 <div style="font-size:26px;line-height:1.2;letter-spacing:0.02em">EXAMINATION HALL TICKET</div>
                 <div style="font-size:18px;line-height:1.3;margin-top:8px;font-weight:800">${student.course || 'Examination'}</div>
               </td>
-              <td style="width:20%"></td>
+              <td class="ht-p-center" style="width:30%;padding:8px 6px;vertical-align:middle;font-size:11px;line-height:1.35">
+                <div style="font-weight:800;font-size:12px">${atcDetails.name || 'ATC Centre'}</div>
+                ${atcCode ? `<div style="margin-top:3px"><strong>ATC Code:</strong> ${atcCode}</div>` : ''}
+                ${atcPlace ? `<div style="margin-top:3px"><strong>Place:</strong> ${atcPlace}</div>` : ''}
+              </td>
             </tr>
           </table>
           <br>
