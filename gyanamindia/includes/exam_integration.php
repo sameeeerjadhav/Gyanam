@@ -1027,18 +1027,22 @@ function questionBankPdfHtml(string $text): string
 }
 
 /**
- * English line, then the Marathi line when the bank has one.
+ * English line, then Marathi and/or Hindi when present.
  */
-function questionBankPdfBilingual(?string $english, ?string $marathi): string
+function questionBankPdfBilingual(?string $english, ?string $marathi = '', ?string $hindi = ''): string
 {
     $english = trim((string)$english);
     $marathi = trim((string)$marathi);
+    $hindi = trim((string)$hindi);
     $parts = [];
     if ($english !== '') {
         $parts[] = '<div class="en">' . questionBankPdfHtml($english) . '</div>';
     }
     if ($marathi !== '' && $marathi !== $english) {
         $parts[] = '<div class="mr">' . questionBankPdfHtml($marathi) . '</div>';
+    }
+    if ($hindi !== '' && $hindi !== $english && $hindi !== $marathi) {
+        $parts[] = '<div class="hi">' . questionBankPdfHtml($hindi) . '</div>';
     }
     return $parts !== [] ? implode('', $parts) : '&nbsp;';
 }
@@ -1049,12 +1053,17 @@ function questionBankPdfBilingual(?string $english, ?string $marathi): string
 function questionBankPdfOptionText(array $option): string
 {
     $mr = $option['text_mr'] ?? $option['textMr'] ?? $option['mr'] ?? '';
-    return questionBankPdfBilingual((string)($option['text'] ?? ''), is_string($mr) ? $mr : '');
+    $hi = $option['text_hi'] ?? $option['textHi'] ?? $option['hi'] ?? '';
+    return questionBankPdfBilingual(
+        (string)($option['text'] ?? ''),
+        is_string($mr) ? $mr : '',
+        is_string($hi) ? $hi : ''
+    );
 }
 
 /**
  * Stream a branded landscape question-bank PDF.
- * English and Marathi are both printed. Marathi uses a Unicode font with Indic shaping.
+ * English, Marathi, and Hindi are printed when present (Unicode Indic shaping).
  *
  * @param array $export Data from fetchQuestionBankExport()['data']
  */
@@ -1073,19 +1082,26 @@ function streamQuestionBankPdf(array $export, string $atcCode): void
     $brand = questionBankPdfBrandPaths();
 
     $hasMarathi = false;
+    $hasHindi = false;
     foreach ($questions as $q) {
         if (!is_array($q)) {
             continue;
         }
-        $qMr = trim((string)($q['text_mr'] ?? ''));
-        if ($qMr !== '') {
+        if (trim((string)($q['text_mr'] ?? '')) !== '') {
             $hasMarathi = true;
-            break;
+        }
+        if (trim((string)($q['text_hi'] ?? '')) !== '') {
+            $hasHindi = true;
         }
         foreach (is_array($q['options'] ?? null) ? $q['options'] : [] as $opt) {
-            if (is_array($opt) && trim((string)($opt['text_mr'] ?? $opt['textMr'] ?? '')) !== '') {
+            if (!is_array($opt)) {
+                continue;
+            }
+            if (trim((string)($opt['text_mr'] ?? $opt['textMr'] ?? '')) !== '') {
                 $hasMarathi = true;
-                break 2;
+            }
+            if (trim((string)($opt['text_hi'] ?? $opt['textHi'] ?? '')) !== '') {
+                $hasHindi = true;
             }
         }
     }
@@ -1124,8 +1140,15 @@ function streamQuestionBankPdf(array $export, string $atcCode): void
     }
     $metaBits[] = 'ATC: ' . $atcCode;
     $metaBits[] = 'Total Questions: ' . count($questions);
+    $langBits = ['English'];
     if ($hasMarathi) {
-        $metaBits[] = 'Languages: English + Marathi';
+        $langBits[] = 'Marathi';
+    }
+    if ($hasHindi) {
+        $langBits[] = 'Hindi';
+    }
+    if (count($langBits) > 1) {
+        $metaBits[] = 'Languages: ' . implode(' + ', $langBits);
     }
     $metaBits[] = 'Generated: ' . date('d M Y H:i');
     $metaBits[] = $includeAnswers ? 'Copy: ATC staff (with answers)' : 'Copy: Practice (no answers)';
@@ -1174,9 +1197,14 @@ function streamQuestionBankPdf(array $export, string $atcCode): void
             }
         }
         $qMr = $q['text_mr'] ?? $q['textMr'] ?? '';
+        $qHi = $q['text_hi'] ?? $q['textHi'] ?? '';
         $cells = [
             '<td class="num">' . $num . '</td>',
-            '<td>' . questionBankPdfBilingual((string)($q['text'] ?? ''), is_string($qMr) ? $qMr : '') . '</td>',
+            '<td>' . questionBankPdfBilingual(
+                (string)($q['text'] ?? ''),
+                is_string($qMr) ? $qMr : '',
+                is_string($qHi) ? $qHi : ''
+            ) . '</td>',
             '<td>' . $byId['A'] . '</td>',
             '<td>' . $byId['B'] . '</td>',
             '<td>' . $byId['C'] . '</td>',
@@ -1200,6 +1228,7 @@ body { font-family: freeserif; font-size: 9pt; color: #111; }
 h1 { font-family: freeserif; color: #c52026; font-size: 14pt; margin: 0 0 1mm 0; }
 .meta { color: #444; font-size: 8pt; margin: 0 0 3mm 0; }
 .mr { color: #065f46; margin-top: 0.7mm; }
+.hi { color: #1d4ed8; margin-top: 0.7mm; }
 table.qb { width: 100%; border-collapse: collapse; }
 table.qb th { background: #1d3e53; color: #fff; font-weight: bold; font-size: 8.5pt; padding: 1.5mm; border: 0.2mm solid #1d3e53; text-align: center; }
 table.qb td { border: 0.2mm solid #b4bec8; padding: 1.2mm 1.4mm; vertical-align: top; }

@@ -22,18 +22,18 @@ export class QuestionView {
     return /[\u0900-\u097F]/.test(String(s || ''));
   }
 
-  /** Split a single field that may contain EN + MR (newline or " | "). */
+  /** Split a single field that may contain EN + Devanagari (newline or " | "). */
   _splitBilingualField(text) {
     const raw = String(text ?? '').trim();
-    if (!raw) return { en: '', mr: '' };
+    if (!raw) return { en: '', mr: '', hi: '' };
 
     const pipe = raw.split('|').map((p) => p.trim()).filter(Boolean);
     if (pipe.length === 2) {
       if (!this._hasDevanagari(pipe[0]) && this._hasDevanagari(pipe[1])) {
-        return { en: pipe[0], mr: pipe[1] };
+        return { en: pipe[0], mr: pipe[1], hi: '' };
       }
       if (this._hasDevanagari(pipe[0]) && !this._hasDevanagari(pipe[1])) {
-        return { en: pipe[1], mr: pipe[0] };
+        return { en: pipe[1], mr: pipe[0], hi: '' };
       }
     }
 
@@ -41,21 +41,22 @@ export class QuestionView {
     if (lines.length >= 2) {
       const rest = lines.slice(1).join(' ');
       if (!this._hasDevanagari(lines[0]) && this._hasDevanagari(rest)) {
-        return { en: lines[0], mr: rest };
+        return { en: lines[0], mr: rest, hi: '' };
       }
       if (this._hasDevanagari(lines[0]) && !this._hasDevanagari(lines[1])) {
-        return { en: rest, mr: lines[0] };
+        return { en: rest, mr: lines[0], hi: '' };
       }
     }
 
-    return { en: raw, mr: '' };
+    return { en: raw, mr: '', hi: '' };
   }
 
   _bilingualPair(obj) {
-    if (!obj || typeof obj !== 'object') return { en: '', mr: '' };
+    if (!obj || typeof obj !== 'object') return { en: '', mr: '', hi: '' };
     const explicitMr = String(obj.text_mr ?? obj.textMr ?? obj.mr ?? obj.marathi ?? '').trim();
+    const explicitHi = String(obj.text_hi ?? obj.textHi ?? obj.hi ?? obj.hindi ?? '').trim();
     const rawText = String(obj.text ?? '').trim();
-    if (explicitMr) return { en: rawText, mr: explicitMr };
+    if (explicitMr || explicitHi) return { en: rawText, mr: explicitMr, hi: explicitHi };
     return this._splitBilingualField(rawText);
   }
 
@@ -92,7 +93,7 @@ export class QuestionView {
         color: #0f2744;
         font-family: 'Source Sans 3', 'Segoe UI', sans-serif;
       }
-      .qv-mr {
+      .qv-mr, .qv-hi {
         margin-top: 0.35rem;
         font-size: 0.94rem;
         font-weight: 550;
@@ -169,7 +170,9 @@ export class QuestionView {
         line-height: 1.35;
       }
       .qv-opt-text .qv-en { font-size: 0.9rem; font-weight: 550; color: #1e293b; }
-      .qv-opt-text .qv-mr { margin-top: 0; font-size: 0.84rem; color: #475569; }
+      .qv-opt-text .qv-mr, .qv-opt-text .qv-hi { margin-top: 0; font-size: 0.84rem; color: #475569; }
+      .qv-hi { color: #1d4ed8; }
+      .qv-opt-text .qv-hi { color: #1d4ed8; }
       @media (max-width: 640px) {
         .options-container { grid-template-columns: 1fr !important; }
       }
@@ -224,6 +227,12 @@ export class QuestionView {
       mrLine.className = 'qv-mr';
       mrLine.innerHTML = this._sanitizeText(pair.mr);
       questionText.appendChild(mrLine);
+    }
+    if (pair.hi) {
+      const hiLine = document.createElement('div');
+      hiLine.className = 'qv-hi';
+      hiLine.innerHTML = this._sanitizeText(pair.hi);
+      questionText.appendChild(hiLine);
     }
 
     questionDiv.appendChild(questionText);
@@ -282,6 +291,12 @@ export class QuestionView {
         mrOpt.className = 'qv-mr';
         mrOpt.innerHTML = this._sanitizeText(optPair.mr);
         text.appendChild(mrOpt);
+      }
+      if (optPair.hi) {
+        const hiOpt = document.createElement('span');
+        hiOpt.className = 'qv-hi';
+        hiOpt.innerHTML = this._sanitizeText(optPair.hi);
+        text.appendChild(hiOpt);
       }
 
       label.appendChild(input);

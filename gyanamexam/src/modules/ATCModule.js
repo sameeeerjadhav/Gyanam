@@ -445,12 +445,21 @@ async function viewQBQuestions(el, ApiClient, banks, bank) {
                 ${questions.map((q, i) => {
                   const opts = atcQuestionOptions(q);
                   const hasMr = !!(q.text_mr || opts.some(o => o.text_mr));
+                  const hasHi = !!(q.text_hi || opts.some(o => o.text_hi));
+                  const langBadge = hasMr && hasHi
+                    ? '<span class="badge badge-green">EN+MR+HI</span>'
+                    : hasMr
+                      ? '<span class="badge badge-green">EN+MR</span>'
+                      : hasHi
+                        ? '<span class="badge" style="background:#dbeafe;color:#1d4ed8">EN+HI</span>'
+                        : '<span class="badge" style="background:#f1f5f9;color:#64748b">EN</span>';
                   const answerOpt = opts.find(o => String(o.id) === String(q.correct_answer));
                   const answerLabel = atcEsc(answerOpt?.text || q.correct_answer || '—');
                   const optionsHtml = opts.map(o =>
                     '<span style="display:inline-block;background:var(--gray-50);border:1px solid var(--gray-200);padding:0.15rem 0.4rem;border-radius:4px;margin:0.1rem">'
                     + atcEsc(String(o.id || '').toUpperCase()) + ': ' + atcEsc(o.text)
                     + (o.text_mr ? '<br><span style="color:#047857">' + atcEsc(o.text_mr) + '</span>' : '')
+                    + (o.text_hi ? '<br><span style="color:#1d4ed8">' + atcEsc(o.text_hi) + '</span>' : '')
                     + '</span>'
                   ).join(' ');
                   return `
@@ -460,9 +469,15 @@ async function viewQBQuestions(el, ApiClient, banks, bank) {
                         <div>${atcEsc(q.text)}</div>
                         ${q.text_mr
                           ? `<div style="margin-top:0.25rem;color:#047857;font-size:0.88rem;font-family:'Noto Sans Devanagari',sans-serif">${atcEsc(q.text_mr)}</div>`
-                          : '<div style="margin-top:0.2rem;font-size:0.75rem;color:#94a3b8">No Marathi</div>'}
+                          : ''}
+                        ${q.text_hi
+                          ? `<div style="margin-top:0.25rem;color:#1d4ed8;font-size:0.88rem;font-family:'Noto Sans Devanagari',sans-serif">${atcEsc(q.text_hi)}</div>`
+                          : ''}
+                        ${!q.text_mr && !q.text_hi
+                          ? '<div style="margin-top:0.2rem;font-size:0.75rem;color:#94a3b8">English only</div>'
+                          : ''}
                       </td>
-                      <td>${hasMr ? '<span class="badge badge-green">EN+MR</span>' : '<span class="badge" style="background:#f1f5f9;color:#64748b">EN</span>'}</td>
+                      <td>${langBadge}</td>
                       <td style="font-size:0.8rem;color:var(--text-muted);max-width:240px">${optionsHtml || '—'}</td>
                       <td><span class="badge badge-green">${answerLabel}</span></td>
                     </tr>`;

@@ -67,17 +67,22 @@ class QuestionBankController extends Controller
                 }
                 $mr = $opt['text_mr'] ?? $opt['textMr'] ?? $opt['mr'] ?? null;
                 $mr = is_string($mr) ? trim($mr) : '';
+                $hi = $opt['text_hi'] ?? $opt['textHi'] ?? $opt['hi'] ?? null;
+                $hi = is_string($hi) ? trim($hi) : '';
                 $normalized[] = [
                     'id'      => $opt['id'] ?? null,
                     'text'    => (string) ($opt['text'] ?? ''),
                     'text_mr' => $mr !== '' ? $mr : null,
+                    'text_hi' => $hi !== '' ? $hi : null,
                 ];
             }
             $textMr = is_string($q->text_mr) ? trim($q->text_mr) : '';
+            $textHi = is_string($q->text_hi) ? trim($q->text_hi) : '';
             $row = [
                 'number'  => $idx + 1,
                 'text'    => $q->text,
                 'text_mr' => $textMr !== '' ? $textMr : null,
+                'text_hi' => $textHi !== '' ? $textHi : null,
                 'options' => $normalized,
             ];
             if ($includeAnswers) {
@@ -282,16 +287,19 @@ class QuestionBankController extends Controller
         $data = $request->validate([
             'text'              => 'required|string',
             'text_mr'           => 'nullable|string',
+            'text_hi'           => 'nullable|string',
             'options'           => 'required|array|min:2',
             'options.*.id'      => 'required|string',
             'options.*.text'    => 'required|string',
             'options.*.text_mr' => 'nullable|string',
+            'options.*.text_hi' => 'nullable|string',
             'correct_answer'    => 'required|string',
         ]);
 
         $q = $bank->questions()->create([
             'text'           => $data['text'],
             'text_mr'        => $data['text_mr'] ?? null,
+            'text_hi'        => $data['text_hi'] ?? null,
             'options'        => $data['options'],
             'correct_answer' => $data['correct_answer'],
             'order'          => $bank->questions()->count(),
@@ -309,10 +317,12 @@ class QuestionBankController extends Controller
         $data = $request->validate([
             'text'              => 'sometimes|string',
             'text_mr'           => 'nullable|string',
+            'text_hi'           => 'nullable|string',
             'options'           => 'sometimes|array',
             'options.*.id'      => 'required_with:options|string',
             'options.*.text'    => 'required_with:options|string',
             'options.*.text_mr' => 'nullable|string',
+            'options.*.text_hi' => 'nullable|string',
             'correct_answer'    => 'sometimes|string',
         ]);
         $q->update($data);
@@ -367,6 +377,8 @@ class QuestionBankController extends Controller
         $lines  = array_filter(explode("\n", str_replace("\r\n", "\n", trim($request->csv))));
         $added  = 0;
         $errors = [];
+        // Default 11-col bilingual pair is Marathi (legacy). Header "Question HI" switches to Hindi.
+        $bilingualLang = 'mr';
 
         foreach ($lines as $i => $line) {
             $line = trim($line);
@@ -376,13 +388,23 @@ class QuestionBankController extends Controller
             $cols = str_getcsv($line);
             $cols = array_map(static fn ($c) => trim((string)$c), $cols);
 
-            // Skip header rows
+            // Skip header rows and detect EN+HI vs EN+MR
             $first = strtolower($cols[0] ?? '');
             if (in_array($first, ['question', 'question en', 'question_en', 'quee', 'qno'], true)) {
+                $second = strtolower($cols[1] ?? '');
+                if (in_array($second, ['question hi', 'question_hi', 'queh', 'hi'], true)
+                    || str_contains($second, 'hindi')
+                    || preg_match('/\bhi\b/', $second)) {
+                    $bilingualLang = 'hi';
+                } elseif (in_array($second, ['question mr', 'question_mr', 'quem', 'mr'], true)
+                    || str_contains($second, 'marathi')
+                    || preg_match('/\bmr\b/', $second)) {
+                    $bilingualLang = 'mr';
+                }
                 continue;
             }
 
-            $parsed = $this->parseImportRow($cols);
+            $parsed = $this->parseImportRow($cols, $bilingualLang);
             if ($parsed === null) {
                 $errors[] = 'Row ' . ($i + 1) . ': need English 6-col or bilingual 11-col format (see template)';
                 continue;
@@ -402,6 +424,7 @@ class QuestionBankController extends Controller
             $bank->questions()->create([
                 'text'           => $parsed['text'],
                 'text_mr'        => $parsed['text_mr'] !== '' ? $parsed['text_mr'] : null,
+                'text_hi'        => $parsed['text_hi'] !== '' ? $parsed['text_hi'] : null,
                 'options'        => $parsed['options'],
                 'correct_answer' => $parsed['correct'],
                 'order'          => $bank->questions()->count(),
@@ -419,26 +442,42 @@ class QuestionBankController extends Controller
     }
 
     /**
-     * Parse English-only (6 cols) or bilingual EN+MR (11 cols) CSV row.
+     * Parse English-only (6 cols) or bilingual EN+MR / EN+HI (11 cols) CSV row.
      *
      * English: Question, Option A, Option B, Option C, Option D, Correct
-     * Bilingual: Question EN, Question MR, Option A EN, Option A MR, … Option D MR, Correct
+     * Bilingual: Question EN, Question MR|HI, Option A EN, Option A MR|HI, … Correct
      *
      * @param  list<string> $cols
-     * @return array{text:string,text_mr:string,options:list<array{id:string,text:string,text_mr:?string}>,correct:string}|null
+     * @param  'mr'|'hi' $bilingualLang Which second-language column the 11-col file uses
+     * @return array{text:string,text_mr:string,text_hi:string,options:list<array{id:string,text:string,text_mr:?string,text_hi:?string}>,correct:string}|null
      */
-    private function parseImportRow(array $cols): ?array
+    private function parseImportRow(array $cols, string $bilingualLang = 'mr'): ?array
     {
         $n = count($cols);
         if ($n >= 11) {
+            $lang = $bilingualLang === 'hi' ? 'hi' : 'mr';
+            $mkOpt = function (string $id, string $en, string $l2) use ($lang): array {
+                $opt = [
+                    'id' => $id,
+                    'text' => $this->nonEmptyOption($en),
+                    'text_mr' => null,
+                    'text_hi' => null,
+                ];
+                $trim = trim($l2);
+                if ($trim !== '') {
+                    $opt[$lang === 'hi' ? 'text_hi' : 'text_mr'] = $trim;
+                }
+                return $opt;
+            };
             return [
                 'text' => $cols[0],
-                'text_mr' => $cols[1],
+                'text_mr' => $lang === 'mr' ? $cols[1] : '',
+                'text_hi' => $lang === 'hi' ? $cols[1] : '',
                 'options' => [
-                    ['id' => 'a', 'text' => $this->nonEmptyOption($cols[2]), 'text_mr' => $cols[3] !== '' ? $cols[3] : null],
-                    ['id' => 'b', 'text' => $this->nonEmptyOption($cols[4]), 'text_mr' => $cols[5] !== '' ? $cols[5] : null],
-                    ['id' => 'c', 'text' => $this->nonEmptyOption($cols[6]), 'text_mr' => $cols[7] !== '' ? $cols[7] : null],
-                    ['id' => 'd', 'text' => $this->nonEmptyOption($cols[8]), 'text_mr' => $cols[9] !== '' ? $cols[9] : null],
+                    $mkOpt('a', $cols[2], $cols[3]),
+                    $mkOpt('b', $cols[4], $cols[5]),
+                    $mkOpt('c', $cols[6], $cols[7]),
+                    $mkOpt('d', $cols[8], $cols[9]),
                 ],
                 'correct' => $this->normalizeCorrectLetter($cols[10]),
             ];
@@ -447,11 +486,12 @@ class QuestionBankController extends Controller
             return [
                 'text' => $cols[0],
                 'text_mr' => '',
+                'text_hi' => '',
                 'options' => [
-                    ['id' => 'a', 'text' => $this->nonEmptyOption($cols[1]), 'text_mr' => null],
-                    ['id' => 'b', 'text' => $this->nonEmptyOption($cols[2]), 'text_mr' => null],
-                    ['id' => 'c', 'text' => $this->nonEmptyOption($cols[3]), 'text_mr' => null],
-                    ['id' => 'd', 'text' => $this->nonEmptyOption($cols[4]), 'text_mr' => null],
+                    ['id' => 'a', 'text' => $this->nonEmptyOption($cols[1]), 'text_mr' => null, 'text_hi' => null],
+                    ['id' => 'b', 'text' => $this->nonEmptyOption($cols[2]), 'text_mr' => null, 'text_hi' => null],
+                    ['id' => 'c', 'text' => $this->nonEmptyOption($cols[3]), 'text_mr' => null, 'text_hi' => null],
+                    ['id' => 'd', 'text' => $this->nonEmptyOption($cols[4]), 'text_mr' => null, 'text_hi' => null],
                 ],
                 'correct' => $this->normalizeCorrectLetter($cols[5]),
             ];
@@ -481,7 +521,7 @@ class QuestionBankController extends Controller
     /**
      * Accept a/b/c/d or option text (EN/MR) matching OpAns-style answers.
      *
-     * @param  list<array{id:string,text:string,text_mr:?string}> $options
+     * @param  list<array{id:string,text:string,text_mr:?string,text_hi:?string}> $options
      * @param  list<string> $cols
      */
     private function resolveCorrectAnswer(string $parsedCorrect, array $options, array $cols): string
@@ -512,6 +552,9 @@ class QuestionBankController extends Controller
                     return $opt['id'];
                 }
                 if (!empty($opt['text_mr']) && strtolower(trim((string) $opt['text_mr'])) === $needle) {
+                    return $opt['id'];
+                }
+                if (!empty($opt['text_hi']) && strtolower(trim((string) $opt['text_hi'])) === $needle) {
                     return $opt['id'];
                 }
             }

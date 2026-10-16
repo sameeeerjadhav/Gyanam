@@ -334,7 +334,7 @@ class StudentExamController extends Controller
         // Hydrate from DB — strictly this exam's question bank only (never leak correct_answer)
         $fresh = Question::where('question_bank_id', $bankId)
             ->whereIn('id', $questionIds)
-            ->get(['id', 'text', 'text_mr', 'options'])
+            ->get(['id', 'text', 'text_mr', 'text_hi', 'options'])
             ->keyBy(fn ($q) => (string) $q->id);
         $safeQuestions = [];
         foreach ($questionIds as $qid) {
@@ -347,6 +347,7 @@ class StudentExamController extends Controller
                 'id'      => $row->id,
                 'text'    => $row->text,
                 'text_mr' => $row->text_mr,
+                'text_hi' => $row->text_hi,
                 'options' => $this->normalizeOptionsForStudent($row->options),
             ];
         }
@@ -1028,10 +1029,10 @@ class StudentExamController extends Controller
     }
 
     /**
-     * Ensure each option exposes id/text/text_mr for the student exam UI.
+     * Ensure each option exposes id/text/text_mr/text_hi for the student exam UI.
      *
      * @param  mixed  $options
-     * @return list<array{id:mixed,text:string,text_mr:?string}>
+     * @return list<array{id:mixed,text:string,text_mr:?string,text_hi:?string}>
      */
     private function normalizeOptionsForStudent(mixed $options): array
     {
@@ -1050,10 +1051,13 @@ class StudentExamController extends Controller
             }
             $mr = $opt['text_mr'] ?? $opt['textMr'] ?? $opt['mr'] ?? null;
             $mr = is_string($mr) ? trim($mr) : '';
+            $hi = $opt['text_hi'] ?? $opt['textHi'] ?? $opt['hi'] ?? null;
+            $hi = is_string($hi) ? trim($hi) : '';
             $out[] = [
                 'id'      => $opt['id'] ?? null,
                 'text'    => (string) ($opt['text'] ?? ''),
                 'text_mr' => $mr !== '' ? $mr : null,
+                'text_hi' => $hi !== '' ? $hi : null,
             ];
         }
         return $out;
@@ -1082,6 +1086,7 @@ class StudentExamController extends Controller
                         'id'      => $q->id,
                         'text'    => $q->text,
                         'text_mr' => $q->text_mr,
+                        'text_hi' => $q->text_hi,
                         'options' => $q->options,
                         'order'   => $q->order,
                         'question_bank_id' => $q->question_bank_id,

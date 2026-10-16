@@ -529,12 +529,21 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
               ${questions.map((q, i) => {
                 const opts = questionOptions(q);
                 const hasMr = !!(q.text_mr || opts.some(o => o.text_mr));
+                const hasHi = !!(q.text_hi || opts.some(o => o.text_hi));
+                const langBadge = hasMr && hasHi
+                  ? '<span class="badge badge-green">EN+MR+HI</span>'
+                  : hasMr
+                    ? '<span class="badge badge-green">EN+MR</span>'
+                    : hasHi
+                      ? '<span class="badge" style="background:#dbeafe;color:#1d4ed8">EN+HI</span>'
+                      : '<span class="badge" style="background:#f1f5f9;color:#64748b">EN</span>';
                 const answerOpt = opts.find(o => String(o.id) === String(q.correct_answer));
                 const answerLabel = escapeHtml(answerOpt?.text || q.correct_answer || '—');
                 const optionsHtml = opts.map(o =>
                   '<span style="display:inline-block;background:var(--gray-50);border:1px solid var(--gray-200);padding:0.15rem 0.4rem;border-radius:4px;margin:0.1rem">'
                   + escapeHtml(String(o.id || '').toUpperCase()) + ': ' + escapeHtml(o.text)
                   + (o.text_mr ? '<br><span style="color:#047857">' + escapeHtml(o.text_mr) + '</span>' : '')
+                  + (o.text_hi ? '<br><span style="color:#1d4ed8">' + escapeHtml(o.text_hi) + '</span>' : '')
                   + '</span>'
                 ).join(' ');
                 return `
@@ -547,9 +556,15 @@ async function renderBankDetailPage(el, ApiClient, bank, currentUser, courses) {
                   <div>${escapeHtml(q.text)}</div>
                   ${q.text_mr
                     ? `<div style="margin-top:0.25rem;color:#047857;font-size:0.88rem;font-family:'Noto Sans Devanagari',sans-serif">${escapeHtml(q.text_mr)}</div>`
-                    : '<div style="margin-top:0.2rem;font-size:0.75rem;color:#94a3b8">No Marathi</div>'}
+                    : ''}
+                  ${q.text_hi
+                    ? `<div style="margin-top:0.25rem;color:#1d4ed8;font-size:0.88rem;font-family:'Noto Sans Devanagari',sans-serif">${escapeHtml(q.text_hi)}</div>`
+                    : ''}
+                  ${!q.text_mr && !q.text_hi
+                    ? '<div style="margin-top:0.2rem;font-size:0.75rem;color:#94a3b8">English only</div>'
+                    : ''}
                 </td>
-                <td>${hasMr ? '<span class="badge badge-green">EN+MR</span>' : '<span class="badge" style="background:#f1f5f9;color:#64748b">EN</span>'}</td>
+                <td>${langBadge}</td>
                 <td style="font-size:0.8rem;color:var(--text-muted);max-width:240px">${optionsHtml || '—'}</td>
                 <td><span class="badge badge-green">${answerLabel}</span></td>
                 <td>
@@ -769,8 +784,12 @@ function showQuestionModal(ApiClient, bankId, question = null, bank = null, curr
           <textarea id="q-text" class="form-textarea" style="min-height:70px">${question?.text || ''}</textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Question (Marathi) — optional bilingual</label>
+          <label class="form-label">Question (Marathi) — optional</label>
           <textarea id="q-text-mr" class="form-textarea" style="min-height:70px" placeholder="मराठी प्रश्न">${question?.text_mr || ''}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Question (Hindi) — optional</label>
+          <textarea id="q-text-hi" class="form-textarea" style="min-height:70px" placeholder="हिंदी प्रश्न">${question?.text_hi || ''}</textarea>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
           ${['a','b','c','d'].map((x, i) => {
@@ -783,7 +802,8 @@ function showQuestionModal(ApiClient, bankId, question = null, bank = null, curr
               Option ${letter}
             </label>
             <input id="q-${x}" class="form-input" value="${(opt?.text || '').replace(/"/g, '&quot;')}" placeholder="English option ${letter} *" style="margin-bottom:0.4rem">
-            <input id="q-${x}-mr" class="form-input" value="${(opt?.text_mr || '').replace(/"/g, '&quot;')}" placeholder="मराठी पर्याय ${letter} (optional)">
+            <input id="q-${x}-mr" class="form-input" value="${(opt?.text_mr || '').replace(/"/g, '&quot;')}" placeholder="मराठी पर्याय ${letter} (optional)" style="margin-bottom:0.4rem">
+            <input id="q-${x}-hi" class="form-input" value="${(opt?.text_hi || '').replace(/"/g, '&quot;')}" placeholder="हिंदी विकल्प ${letter} (optional)">
           </div>`;
           }).join('')}
         </div>
@@ -806,15 +826,17 @@ function showQuestionModal(ApiClient, bankId, question = null, bank = null, curr
   window.saveQuestion = async (bankId, qId) => {
     const text = document.getElementById('q-text').value.trim();
     const text_mr = (document.getElementById('q-text-mr')?.value || '').trim();
+    const text_hi = (document.getElementById('q-text-hi')?.value || '').trim();
     const opts = ['a', 'b', 'c', 'd'].map(x => ({
       id: x,
       text: document.getElementById('q-' + x).value.trim(),
       text_mr: (document.getElementById('q-' + x + '-mr')?.value || '').trim() || null,
+      text_hi: (document.getElementById('q-' + x + '-hi')?.value || '').trim() || null,
     }));
     const ans = document.getElementById('q-ans').value;
     if (!text || opts.some(o => !o.text)) { modalService.toast('Please fill English question and all options', 'error'); return; }
     try {
-      const payload = { text, text_mr: text_mr || null, options: opts, correct_answer: ans };
+      const payload = { text, text_mr: text_mr || null, text_hi: text_hi || null, options: opts, correct_answer: ans };
       if (qId) { await ApiClient.updateQuestion(bankId, qId, payload); }
       else { await ApiClient.addQuestion(bankId, payload); }
       window.closeModal();
@@ -857,9 +879,10 @@ async function showImportQuestionsModal(ApiClient) {
 
         <div class="form-group" style="margin-bottom:0.9rem">
           <label class="form-label">Paper type</label>
-          <div style="display:flex;gap:0;background:var(--gray-100);border-radius:8px;padding:3px">
-            <button type="button" id="fmt-en" onclick="setImportFormat('en')" style="flex:1;padding:0.5rem 0.75rem;border:none;border-radius:6px;font-size:0.84rem;font-weight:600;cursor:pointer;background:#fff;color:#1d4ed8;box-shadow:0 1px 3px rgba(0,0,0,0.08)">English</button>
-            <button type="button" id="fmt-bilingual" onclick="setImportFormat('bilingual')" style="flex:1;padding:0.5rem 0.75rem;border:none;border-radius:6px;font-size:0.84rem;font-weight:600;cursor:pointer;background:transparent;color:var(--text-muted)">English + Marathi</button>
+          <div style="display:flex;gap:0;background:var(--gray-100);border-radius:8px;padding:3px;flex-wrap:wrap">
+            <button type="button" id="fmt-en" onclick="setImportFormat('en')" style="flex:1;min-width:90px;padding:0.5rem 0.6rem;border:none;border-radius:6px;font-size:0.8rem;font-weight:600;cursor:pointer;background:#fff;color:#1d4ed8;box-shadow:0 1px 3px rgba(0,0,0,0.08)">English</button>
+            <button type="button" id="fmt-bilingual" onclick="setImportFormat('bilingual')" style="flex:1;min-width:110px;padding:0.5rem 0.6rem;border:none;border-radius:6px;font-size:0.8rem;font-weight:600;cursor:pointer;background:transparent;color:var(--text-muted)">English + Marathi</button>
+            <button type="button" id="fmt-bilingual-hi" onclick="setImportFormat('bilingual_hi')" style="flex:1;min-width:110px;padding:0.5rem 0.6rem;border:none;border-radius:6px;font-size:0.8rem;font-weight:600;cursor:pointer;background:transparent;color:var(--text-muted)">English + Hindi</button>
           </div>
           <p id="import-format-hint" style="margin:0.45rem 0 0;font-size:0.78rem;color:var(--text-muted)">English questions and options only.</p>
         </div>
@@ -907,19 +930,23 @@ async function showImportQuestionsModal(ApiClient) {
 
   // ── Parsed rows cache ──────────────────────────────────────────────────────
   let _parsedCSV = null;
+  let _parsedBilingualLang = 'mr'; // 'mr' | 'hi' for 11-col sheets (API header detection)
   let _importFormat = 'en';
 
   window.setImportFormat = (fmt) => {
-    _importFormat = fmt === 'bilingual' ? 'bilingual' : 'en';
-    const enBtn = document.getElementById('fmt-en');
-    const biBtn = document.getElementById('fmt-bilingual');
+    if (fmt === 'bilingual' || fmt === 'bilingual_mr') _importFormat = 'bilingual';
+    else if (fmt === 'bilingual_hi') _importFormat = 'bilingual_hi';
+    else _importFormat = 'en';
     const active = { background: '#fff', color: '#1d4ed8', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' };
     const idle = { background: 'transparent', color: 'var(--text-muted)', boxShadow: 'none' };
-    Object.assign(enBtn.style, _importFormat === 'en' ? active : idle);
-    Object.assign(biBtn.style, _importFormat === 'bilingual' ? active : idle);
+    Object.assign(document.getElementById('fmt-en').style, _importFormat === 'en' ? active : idle);
+    Object.assign(document.getElementById('fmt-bilingual').style, _importFormat === 'bilingual' ? active : idle);
+    Object.assign(document.getElementById('fmt-bilingual-hi').style, _importFormat === 'bilingual_hi' ? active : idle);
     document.getElementById('import-format-hint').textContent = _importFormat === 'bilingual'
       ? 'English on top, Marathi below — for each question and option.'
-      : 'English questions and options only.';
+      : _importFormat === 'bilingual_hi'
+        ? 'English on top, Hindi below — for each question and option.'
+        : 'English questions and options only.';
   };
 
   window.downloadImportTemplate = (kind) => {
@@ -941,18 +968,19 @@ async function showImportQuestionsModal(ApiClient) {
   };
 
   // ── Show preview table ─────────────────────────────────────────────────────
-  function showPreview(rows, containerId) {
+  function showPreview(rows, containerId, bilingualLang = 'mr') {
     const el = document.getElementById(containerId);
     if (!rows || rows.length === 0) { el.style.display = 'none'; return; }
     const preview = rows.slice(0, 5);
     const bilingual = preview.some(r => r.length >= 11);
+    const biLabel = bilingualLang === 'hi' ? 'HI' : 'MR';
     el.style.display = '';
     el.innerHTML = `
       <div style="border-radius:8px;overflow:hidden;border:1px solid var(--gray-200)">
-        <div style="background:var(--gray-50);padding:0.5rem 0.75rem;font-size:0.78rem;font-weight:600;color:var(--text-secondary)">Preview — first ${preview.length} of ${rows.length} rows ${bilingual ? '(EN+MR)' : '(EN)'}</div>
+        <div style="background:var(--gray-50);padding:0.5rem 0.75rem;font-size:0.78rem;font-weight:600;color:var(--text-secondary)">Preview — first ${preview.length} of ${rows.length} rows ${bilingual ? '(EN+' + biLabel + ')' : '(EN)'}</div>
         <div class="table-wrap" style="max-height:200px;overflow-y:auto">
           <table style="font-size:0.78rem">
-            <thead><tr><th>#</th><th>Question EN</th>${bilingual ? '<th>Question MR</th>' : ''}<th>A</th><th>B</th><th>C</th><th>D</th><th>Ans</th></tr></thead>
+            <thead><tr><th>#</th><th>Question EN</th>${bilingual ? '<th>Question ' + biLabel + '</th>' : ''}<th>A</th><th>B</th><th>C</th><th>D</th><th>Ans</th></tr></thead>
             <tbody>${preview.map((r, i) => {
               if (r.length >= 11) {
                 return '<tr><td>' + (i+1) + '</td><td style="max-width:160px">' + esc(r[0]) + '</td><td style="max-width:160px">' + esc(r[1]) + '</td><td>' + esc(r[2]) + '</td><td>' + esc(r[4]) + '</td><td>' + esc(r[6]) + '</td><td>' + esc(r[8]) + '</td><td><strong>' + esc(r[10]) + '</strong></td></tr>';
@@ -973,8 +1001,16 @@ async function showImportQuestionsModal(ApiClient) {
     return '"' + String(v ?? '').replace(/"/g, '""') + '"';
   }
 
-  function rowsToCSV(rows) {
-    return rows.map(r => r.map(csvEscape).join(',')).join('\n');
+  function rowsToCSV(rows, bilingualLang = 'mr') {
+    if (!rows || rows.length === 0) return '';
+    const body = rows.map(r => r.map(csvEscape).join(',')).join('\n');
+    if (rows[0].length >= 11) {
+      const header = bilingualLang === 'hi'
+        ? 'Question EN,Question HI,Option A EN,Option A HI,Option B EN,Option B HI,Option C EN,Option C HI,Option D EN,Option D HI,Correct'
+        : 'Question EN,Question MR,Option A EN,Option A MR,Option B EN,Option B MR,Option C EN,Option C MR,Option D EN,Option D MR,Correct';
+      return header + '\n' + body;
+    }
+    return 'Question,Option A,Option B,Option C,Option D,Correct\n' + body;
   }
 
   function normalizeAnsLetter(raw, optionTexts) {
@@ -992,9 +1028,9 @@ async function showImportQuestionsModal(ApiClient) {
     return t || '—';
   }
 
-  /** Detect & normalize Excel rows → EN 6-col or EN+MR 11-col arrays */
+  /** Detect & normalize Excel rows → { rows, bilingualLang } */
   function normalizeExcelDataRows(allRows) {
-    if (!allRows || allRows.length < 2) return [];
+    if (!allRows || allRows.length < 2) return { rows: [], bilingualLang: 'mr' };
     const header = (allRows[0] || []).map(h => String(h ?? '').trim());
     const lower = header.map(h => h.toLowerCase());
     const dataRows = allRows.slice(1).filter(r => r && r.some(c => String(c ?? '').trim() !== ''));
@@ -1003,8 +1039,7 @@ async function showImportQuestionsModal(ApiClient) {
     const isTally = idx('quee') >= 0 && (idx('ope1') >= 0 || idx('opans') >= 0);
 
     if (isTally) {
-      // Fixed layout matching Questionpaper_TallyPrime.xlsx:
-      // Qno, QueM?, QueE, QueM, OpM1, OpE1, spacer, OpM2, OpE2, spacer, OpM3, OpE3, spacer, OpM4, OpE4, OpAns, Topic
+      // Fixed layout matching Questionpaper_TallyPrime.xlsx (Marathi QueM columns)
       const iQueE = idx('quee') >= 0 ? idx('quee') : 2;
       const quemIdxs = lower.map((h, i) => (h === 'quem' ? i : -1)).filter(i => i >= 0);
       const iQueM = quemIdxs.find(i => i > iQueE) ?? quemIdxs[quemIdxs.length - 1] ?? (iQueE + 1);
@@ -1014,7 +1049,6 @@ async function showImportQuestionsModal(ApiClient) {
         { e: idx('ope3') >= 0 ? idx('ope3') : 11, m: 10 },
         { e: idx('ope4') >= 0 ? idx('ope4') : 14, m: 13 },
       ];
-      // Prefer OpM column immediately before each OpE when header is messy
       pairs.forEach((p, n) => {
         const before = p.e - 1;
         if (before >= 0 && /^opm/i.test(header[before] || '')) p.m = before;
@@ -1022,45 +1056,57 @@ async function showImportQuestionsModal(ApiClient) {
       });
       const iAns = idx('opans') >= 0 ? idx('opans') : 15;
 
-      return dataRows.map(r => {
-        const text = String(r[iQueE] ?? '').trim();
-        const textMr = String(r[iQueM] ?? '').trim();
-        if (!text) return null;
-        const enOpts = pairs.map(p => fillOpt(r[p.e]));
-        const mrOpts = pairs.map(p => String(r[p.m] ?? '').trim());
-        const correct = normalizeAnsLetter(r[iAns], enOpts);
-        return [text, textMr, enOpts[0], mrOpts[0], enOpts[1], mrOpts[1], enOpts[2], mrOpts[2], enOpts[3], mrOpts[3], correct];
-      }).filter(Boolean);
+      return {
+        bilingualLang: 'mr',
+        rows: dataRows.map(r => {
+          const text = String(r[iQueE] ?? '').trim();
+          const textMr = String(r[iQueM] ?? '').trim();
+          if (!text) return null;
+          const enOpts = pairs.map(p => fillOpt(r[p.e]));
+          const mrOpts = pairs.map(p => String(r[p.m] ?? '').trim());
+          const correct = normalizeAnsLetter(r[iAns], enOpts);
+          return [text, textMr, enOpts[0], mrOpts[0], enOpts[1], mrOpts[1], enOpts[2], mrOpts[2], enOpts[3], mrOpts[3], correct];
+        }).filter(Boolean),
+      };
     }
 
-    // Clean bilingual 11-col (header starts with Question EN / Question,…)
     const firstData = dataRows[0] || [];
-    const looksBilingual = firstData.length >= 11 || lower.some(h => h.includes('question mr') || h.includes('option a mr') || h === 'question_mr');
+    const looksBilingual = firstData.length >= 11 || lower.some(h =>
+      h.includes('question mr') || h.includes('question hi')
+      || h.includes('option a mr') || h.includes('option a hi')
+      || h === 'question_mr' || h === 'question_hi'
+    );
     if (looksBilingual || (firstData.length >= 11 && String(firstData[1] || '').trim() !== '' && !/^[abcd]$/i.test(String(firstData[5] || '').trim()))) {
-      return dataRows.map(r => {
-        const text = String(r[0] ?? '').trim();
-        if (!text || /^question/i.test(text)) return null;
-        const enOpts = [fillOpt(r[2]), fillOpt(r[4]), fillOpt(r[6]), fillOpt(r[8])];
-        const correct = normalizeAnsLetter(r[10], enOpts);
-        return [
-          text,
-          String(r[1] ?? '').trim(),
-          enOpts[0], String(r[3] ?? '').trim(),
-          enOpts[1], String(r[5] ?? '').trim(),
-          enOpts[2], String(r[7] ?? '').trim(),
-          enOpts[3], String(r[9] ?? '').trim(),
-          correct,
-        ];
-      }).filter(Boolean);
+      const isHi = lower.some(h => h.includes('question hi') || h.includes('option a hi') || h === 'question_hi' || /\bhi\b/.test(h));
+      return {
+        bilingualLang: isHi ? 'hi' : 'mr',
+        rows: dataRows.map(r => {
+          const text = String(r[0] ?? '').trim();
+          if (!text || /^question/i.test(text)) return null;
+          const enOpts = [fillOpt(r[2]), fillOpt(r[4]), fillOpt(r[6]), fillOpt(r[8])];
+          const correct = normalizeAnsLetter(r[10], enOpts);
+          return [
+            text,
+            String(r[1] ?? '').trim(),
+            enOpts[0], String(r[3] ?? '').trim(),
+            enOpts[1], String(r[5] ?? '').trim(),
+            enOpts[2], String(r[7] ?? '').trim(),
+            enOpts[3], String(r[9] ?? '').trim(),
+            correct,
+          ];
+        }).filter(Boolean),
+      };
     }
 
-    // English-only 6-col
-    return dataRows.map(r => {
-      const text = String(r[0] ?? '').trim();
-      if (!text || /^question$/i.test(text)) return null;
-      const enOpts = [fillOpt(r[1]), fillOpt(r[2]), fillOpt(r[3]), fillOpt(r[4])];
-      return [text, enOpts[0], enOpts[1], enOpts[2], enOpts[3], normalizeAnsLetter(r[5], enOpts)];
-    }).filter(Boolean);
+    return {
+      bilingualLang: 'mr',
+      rows: dataRows.map(r => {
+        const text = String(r[0] ?? '').trim();
+        if (!text || /^question$/i.test(text)) return null;
+        const enOpts = [fillOpt(r[1]), fillOpt(r[2]), fillOpt(r[3]), fillOpt(r[4])];
+        return [text, enOpts[0], enOpts[1], enOpts[2], enOpts[3], normalizeAnsLetter(r[5], enOpts)];
+      }).filter(Boolean),
+    };
   }
 
   // ── Excel file handling ────────────────────────────────────────────────────
@@ -1091,16 +1137,21 @@ async function showImportQuestionsModal(ApiClient) {
       const workbook = window.XLSX.read(arrayBuffer, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-      const normalized = normalizeExcelDataRows(rows);
+      const parsed = normalizeExcelDataRows(rows);
+      const normalized = parsed.rows;
+      _parsedBilingualLang = parsed.bilingualLang === 'hi' ? 'hi' : 'mr';
 
       if (normalized.length === 0) {
-        dropZone.innerHTML = '<div style="font-size:1.5rem">⚠️</div><p>No data found. Use English, EN+MR template, or TallyPrime QueE/QueM sheet.</p>';
+        dropZone.innerHTML = '<div style="font-size:1.5rem">⚠️</div><p>No data found. Use English, EN+MR, EN+HI template, or TallyPrime QueE/QueM sheet.</p>';
         return;
       }
 
-      _parsedCSV = rowsToCSV(normalized);
-      dropZone.innerHTML = '<div style="font-size:1.5rem">✅</div><p style="font-weight:600;color:#16a34a">' + file.name + ' — ' + normalized.length + ' questions parsed' + (normalized[0].length >= 11 ? ' (EN+MR)' : ' (EN)') + '</p>';
-      showPreview(normalized, 'excel-preview');
+      _parsedCSV = rowsToCSV(normalized, _parsedBilingualLang);
+      const langTag = normalized[0].length >= 11
+        ? (_parsedBilingualLang === 'hi' ? ' (EN+HI)' : ' (EN+MR)')
+        : ' (EN)';
+      dropZone.innerHTML = '<div style="font-size:1.5rem">✅</div><p style="font-weight:600;color:#16a34a">' + file.name + ' — ' + normalized.length + ' questions parsed' + langTag + '</p>';
+      showPreview(normalized, 'excel-preview', _parsedBilingualLang);
 
     } catch (err) {
       dropZone.innerHTML = '<div style="font-size:1.5rem">❌</div><p style="color:var(--error)">Failed to read file: ' + err.message + '</p>';
@@ -1127,6 +1178,7 @@ async function showImportQuestionsModal(ApiClient) {
       const normalized = data.map((item, i) => {
         const q = item.question || item.text || item.Question || item.question_en || '';
         const qMr = item.question_mr || item.text_mr || item.Question_MR || '';
+        const qHi = item.question_hi || item.text_hi || item.Question_HI || '';
         const a = item.a || item.A || item.option_a || item.optionA || '';
         const b = item.b || item.B || item.option_b || item.optionB || '';
         const c = item.c || item.C || item.option_c || item.optionC || '';
@@ -1135,19 +1187,28 @@ async function showImportQuestionsModal(ApiClient) {
         const bMr = item.b_mr || item.option_b_mr || '';
         const cMr = item.c_mr || item.option_c_mr || '';
         const dMr = item.d_mr || item.option_d_mr || '';
+        const aHi = item.a_hi || item.option_a_hi || '';
+        const bHi = item.b_hi || item.option_b_hi || '';
+        const cHi = item.c_hi || item.option_c_hi || '';
+        const dHi = item.d_hi || item.option_d_hi || '';
         const ansRaw = (item.correct || item.answer || item.correct_answer || 'a');
         if (!q) throw new Error('Row ' + (i+1) + ' has no question text.');
         const enOpts = [fillOpt(a), fillOpt(b), fillOpt(c), fillOpt(d)];
         const ans = normalizeAnsLetter(ansRaw, enOpts);
+        if (qHi || aHi || bHi || cHi || dHi) {
+          return [q, qHi, enOpts[0], aHi, enOpts[1], bHi, enOpts[2], cHi, enOpts[3], dHi, ans];
+        }
         if (qMr || aMr || bMr || cMr || dMr) {
           return [q, qMr, enOpts[0], aMr, enOpts[1], bMr, enOpts[2], cMr, enOpts[3], dMr, ans];
         }
         return [q, enOpts[0], enOpts[1], enOpts[2], enOpts[3], ans];
       });
 
-      _parsedCSV = rowsToCSV(normalized);
+      _parsedBilingualLang = normalized.some(r => r.length >= 11) && data.some(item => item.question_hi || item.text_hi || item.a_hi)
+        ? 'hi' : 'mr';
+      _parsedCSV = rowsToCSV(normalized, _parsedBilingualLang);
       dropZone.innerHTML = '<div style="font-size:1.5rem">✅</div><p style="font-weight:600;color:#16a34a">' + file.name + ' — ' + normalized.length + ' questions parsed</p>';
-      showPreview(normalized, 'json-preview');
+      showPreview(normalized, 'json-preview', _parsedBilingualLang);
 
     } catch (err) {
       dropZone.innerHTML = '<div style="font-size:1.5rem">❌</div><p style="color:var(--error)">' + err.message + '</p>';
@@ -1158,7 +1219,12 @@ async function showImportQuestionsModal(ApiClient) {
   window.downloadCSVTemplate = (mode = 'en') => {
     let content;
     let filename;
-    if (mode === 'bilingual') {
+    if (mode === 'bilingual_hi') {
+      filename = 'question_bank_bilingual_en_hi.csv';
+      content = 'Question EN,Question HI,Option A EN,Option A HI,Option B EN,Option B HI,Option C EN,Option C HI,Option D EN,Option D HI,Correct\n'
+        + '"Which Shortcut Key Used For Export File?","एक्सपोर्ट फाइल के लिए कौन सी शॉर्टकट कुंजी उपयोग होती है?","Ctrl + E","कंट्रोल + ई","Shift + E","शिफ्ट + ई","Alt + E","ऑल्ट + ई","none of the above","इनमें से कोई नहीं","c"\n'
+        + '"Can We Add Discount Column In Voucher?","क्या हम वाउचर में डिस्काउंट कॉलम जोड़ सकते हैं?","Yes","हाँ","No","नहीं","—","","—","","a"';
+    } else if (mode === 'bilingual') {
       filename = 'question_bank_bilingual_en_mr.csv';
       content = 'Question EN,Question MR,Option A EN,Option A MR,Option B EN,Option B MR,Option C EN,Option C MR,Option D EN,Option D MR,Correct\n'
         + '"Which Shortcut Key Used For Export File?","एक्सपोर्ट फाइलसाठी कोणती शॉर्टकट की वापरली जाते?","Ctrl + E","कंट्रोल + E","Shift + E","शिफ्ट + E","Alt + E","अल्टर + E","none of the above","वरीलपैकी काहीही नाही","c"\n'
@@ -1186,7 +1252,14 @@ async function showImportQuestionsModal(ApiClient) {
     }
     let aoa;
     let filename;
-    if (mode === 'bilingual') {
+    if (mode === 'bilingual_hi') {
+      filename = 'question_bank_bilingual_en_hi.xlsx';
+      aoa = [
+        ['Question EN', 'Question HI', 'Option A EN', 'Option A HI', 'Option B EN', 'Option B HI', 'Option C EN', 'Option C HI', 'Option D EN', 'Option D HI', 'Correct'],
+        ['Which Shortcut Key Used For Export File?', 'एक्सपोर्ट फाइल के लिए कौन सी शॉर्टकट कुंजी उपयोग होती है?', 'Ctrl + E', 'कंट्रोल + ई', 'Shift + E', 'शिफ्ट + ई', 'Alt + E', 'ऑल्ट + ई', 'none of the above', 'इनमें से कोई नहीं', 'c'],
+        ['Can We Add Discount Column In Voucher?', 'क्या हम वाउचर में डिस्काउंट कॉलम जोड़ सकते हैं?', 'Yes', 'हाँ', 'No', 'नहीं', '—', '', '—', '', 'a'],
+      ];
+    } else if (mode === 'bilingual') {
       filename = 'question_bank_bilingual_en_mr.xlsx';
       aoa = [
         ['Question EN', 'Question MR', 'Option A EN', 'Option A MR', 'Option B EN', 'Option B MR', 'Option C EN', 'Option C MR', 'Option D EN', 'Option D MR', 'Correct'],

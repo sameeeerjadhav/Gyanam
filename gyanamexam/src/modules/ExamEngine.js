@@ -123,6 +123,7 @@ export class ExamEngine {
       type: q.type,
       text: q.text,
       text_mr: q.text_mr ?? q.textMr ?? null,
+      text_hi: q.text_hi ?? q.textHi ?? null,
       options: q.options,
       answer: null,
       markedForReview: false,
