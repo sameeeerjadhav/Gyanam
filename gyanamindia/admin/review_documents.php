@@ -135,9 +135,9 @@ if ($embed !== '') {
   <br>
   <table class="ht-print-tbl">
     <tr>
-      <td class="ht-p-center ht-p-bold" style="height:90px;width:33.33%">Student Signature</td>
-      <td class="ht-p-center ht-p-bold" style="height:90px;width:33.33%">Invigilator Signature</td>
-      <td class="ht-p-center ht-p-bold" style="height:90px;width:33.34%">ATC Seal &amp; Signature</td>
+      <td class="ht-p-center ht-p-bold" style="height:100px;width:33.33%;vertical-align:bottom">Student Signature</td>
+      <td class="ht-p-center ht-p-bold" style="height:100px;width:33.33%;vertical-align:bottom">Invigilator Signature</td>
+      <td class="ht-p-center ht-p-bold" style="height:100px;width:33.34%;vertical-align:bottom">ATC Seal &amp; Signature</td>
     </tr>
   </table>
   <br>
@@ -263,7 +263,7 @@ if ($embed !== '') {
         <div class="hall-ticket-signature">
             <div class="signature-box"><div class="signature-line"></div><p>Candidate's Signature</p></div>
             <div class="signature-box"><div class="signature-line"></div><p>Invigilator's Signature</p></div>
-            <div class="signature-box"><div class="signature-line"></div><p>Center Superintendent</p></div>
+            <div class="signature-box"><div class="signature-line"></div><p>ATC Seal &amp; Signature</p></div>
         </div>
         <div class="hall-ticket-note">
             <p><strong>Note:</strong> Computer-generated, does not require stamp.</p>

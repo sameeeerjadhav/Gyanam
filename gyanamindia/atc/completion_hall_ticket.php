@@ -472,7 +472,7 @@ function viewHallTicket(s) {
                 <div class="hall-ticket-signature">
                     <div class="signature-box"><div class="signature-line"></div><p>Candidate's Signature</p></div>
                     <div class="signature-box"><div class="signature-line"></div><p>Invigilator's Signature</p></div>
-                    <div class="signature-box"><div class="signature-line"></div><p>Center Superintendent</p></div>
+                    <div class="signature-box"><div class="signature-line"></div><p>ATC Seal &amp; Signature</p></div>
                 </div>
                 <div class="hall-ticket-note">
                     <p><strong>Note:</strong> Computer-generated, does not require stamp.</p>
@@ -604,7 +604,7 @@ function generateAttendanceSheet() {
         </table>
         <div class="att-footer">
             <div class="sign-area"><div class="sign-line"></div><div class="sign-label">Invigilator's Signature</div></div>
-            <div class="sign-area"><div class="sign-line"></div><div class="sign-label">Center Superintendent</div></div>
+            <div class="sign-area"><div class="sign-line"></div><div class="sign-label">ATC Seal &amp; Signature</div></div>
             <div class="sign-area"><div class="sign-line"></div><div class="sign-label">Head Office Stamp</div></div>
         </div>
         </body></html>`;
