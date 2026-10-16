@@ -1329,7 +1329,7 @@ function buildHallTicketWhatsAppMsg(student, extraNote) {
     msg += `\n⚠️ Report 30 minutes early. Bring original photo ID with this hall ticket.\n`;
     msg += `🔑 Login at https://exam.gyanamindia.com with User ID: *${regNo}*\n`;
     if (note) msg += `\n📌 ${note}\n`;
-    msg += `\nRegards,\n${centre}\nGyanam India`;
+    msg += `\nRegards,\n${centre}\nGyanam Institute of Information Technology (GIIT)`;
     return msg;
 }
 
