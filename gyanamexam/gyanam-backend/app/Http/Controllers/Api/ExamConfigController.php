@@ -165,7 +165,7 @@ class ExamConfigController extends Controller
                     'exam_type' => $kind,
                     'duration' => $durationMins,
                     'total_questions' => $show,
-                    'passing_score' => 60,
+                    'passing_score' => 50,
                     'question_bank_id' => $bank->id,
                     'created_by_user_id' => $request->user()->id,
                     'instructions' => null,

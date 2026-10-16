@@ -183,7 +183,7 @@ export async function renderCourses(ApiClient) {
     const durationLabel = isDemo ? '30 minutes' : '1 hour';
     const questionCap = isDemo ? 20 : 40;
     const ok = await modalService.confirm(
-      `Create a ${label} exam for ${names.length} selected course(s).<br><br>Title: course name ${label.toUpperCase()}<br>Duration: ${durationLabel}<br>Questions to show: ${questionCap}<br>Mode: ${mode}<br>Questions are randomized.<br><br>A course that already has a ${label} exam is skipped. You can edit the exam afterwards.`,
+      `Create a ${label} exam for ${names.length} selected course(s).<br><br>Title: course name ${label.toUpperCase()}<br>Duration: ${durationLabel}<br>Questions to show: ${questionCap}<br>Passing score: 50%<br>Mode: ${mode}<br>Questions are randomized.<br><br>A course that already has a ${label} exam is skipped. You can edit the exam afterwards.`,
       { title: `Create ${label} exams`, confirmText: `Create ${label} exams`, type: 'warning' }
     );
     if (!ok) return;
