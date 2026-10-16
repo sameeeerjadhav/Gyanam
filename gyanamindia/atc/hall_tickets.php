@@ -404,12 +404,14 @@ try {
         }
     }
 } catch (Exception $e) { /* silently fail */ }
+header('Content-Type: text/html; charset=UTF-8');
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hall Tickets — ATC Center | Gyanam India</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1313,22 +1315,39 @@ function buildHallTicketWhatsAppMsg(student, extraNote) {
     const addr = [atcDetails.address, atcDetails.city, atcDetails.district, atcDetails.state]
         .filter(Boolean).join(', ') + (atcDetails.pin_code ? ' - ' + atcDetails.pin_code : '');
     const note = String(extraNote || '').trim();
+    // Unicode escapes so emojis survive even if the PHP page is served with a wrong charset.
+    const e = {
+        ticket: '\u{1F3AB}',
+        line: '\u{2501}'.repeat(20),
+        person: '\u{1F464}',
+        id: '\u{1F194}',
+        books: '\u{1F4DA}',
+        date: '\u{1F4C5}',
+        clock: '\u{23F0}',
+        slot: '\u{1F5D3}',
+        school: '\u{1F3EB}',
+        pin: '\u{1F4CD}',
+        warn: '\u{26A0}\u{FE0F}',
+        key: '\u{1F511}',
+        note: '\u{1F4CC}',
+        dash: '\u{2014}',
+    };
 
-    let msg = `🎫 *EXAMINATION HALL TICKET*\n`;
-    msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    let msg = `${e.ticket} *EXAMINATION HALL TICKET*\n`;
+    msg += `${e.line}\n\n`;
     msg += `Dear *${fullName}*,\n\n`;
     msg += `Please find your hall ticket details below. Carry this message / print to the exam centre.\n\n`;
-    msg += `👤 *Candidate:* ${fullName}\n`;
-    msg += `🆔 *Registration / Exam User ID:* ${regNo}\n`;
-    msg += `📚 *Course:* ${student.course || '—'}\n\n`;
-    msg += `📅 *Exam Date:* ${sched.date}\n`;
-    msg += `⏰ *Exam Time:* ${sched.time}\n`;
-    msg += `🗓 *Slot:* ${sched.slot || '—'}\n`;
-    msg += `🏫 *Centre:* ${centre}\n`;
-    if (addr) msg += `📍 *Address:* ${addr}\n`;
-    msg += `\n⚠️ Report 30 minutes early. Bring original photo ID with this hall ticket.\n`;
-    msg += `🔑 Login at https://exam.gyanamindia.com with User ID: *${regNo}*\n`;
-    if (note) msg += `\n📌 ${note}\n`;
+    msg += `${e.person} *Candidate:* ${fullName}\n`;
+    msg += `${e.id} *Registration / Exam User ID:* ${regNo}\n`;
+    msg += `${e.books} *Course:* ${student.course || e.dash}\n\n`;
+    msg += `${e.date} *Exam Date:* ${sched.date}\n`;
+    msg += `${e.clock} *Exam Time:* ${sched.time}\n`;
+    msg += `${e.slot} *Slot:* ${sched.slot || e.dash}\n`;
+    msg += `${e.school} *Centre:* ${centre}\n`;
+    if (addr) msg += `${e.pin} *Address:* ${addr}\n`;
+    msg += `\n${e.warn} Report 30 minutes early. Bring original photo ID with this hall ticket.\n`;
+    msg += `${e.key} Login at https://exam.gyanamindia.com with User ID: *${regNo}*\n`;
+    if (note) msg += `\n${e.note} ${note}\n`;
     msg += `\nRegards,\n${centre}\nGyanam Institute of Information Technology (GIIT)`;
     return msg;
 }
@@ -1535,7 +1554,17 @@ function buildExamMsg() {
     const director = document.getElementById('enDirector').value.trim();
     const atcLabel = atcDetails.name || center;
 
-    return `📢 *Important Notice Regarding ${topic}* 🖥\n\nDear Student ${fullName},\n\nYour ${course} is scheduled on:\n\n🗓 *${formatExamDate(dateStr)}*\n📍 ${center}\n⏰ *At ${formatExamTime(timeStr)}*\n\n🎟 Hall tickets will be distributed before the exam.\n\n❗ Absence will not be permitted.\n\n🙏 Your presence is mandatory.\n\nRegards,\n${director ? director + '\nDirector, ' : ''}${atcLabel}`;
+    const e = {
+        megaphone: '\u{1F4E2}',
+        pc: '\u{1F5A5}',
+        slot: '\u{1F5D3}',
+        pin: '\u{1F4CD}',
+        clock: '\u{23F0}',
+        ticket: '\u{1F39F}',
+        bang: '\u{2757}',
+        pray: '\u{1F64F}',
+    };
+    return `${e.megaphone} *Important Notice Regarding ${topic}* ${e.pc}\n\nDear Student ${fullName},\n\nYour ${course} is scheduled on:\n\n${e.slot} *${formatExamDate(dateStr)}*\n${e.pin} ${center}\n${e.clock} *At ${formatExamTime(timeStr)}*\n\n${e.ticket} Hall tickets will be distributed before the exam.\n\n${e.bang} Absence will not be permitted.\n\n${e.pray} Your presence is mandatory.\n\nRegards,\n${director ? director + '\nDirector, ' : ''}${atcLabel}`;
 }
 
 function updateExamPreview() {
