@@ -9,7 +9,7 @@ class LiveExamSession extends Model
     protected $fillable = [
         'student_id', 'exam_config_id', 'exam_code', 'student_name', 'exam_title',
         'centre_name', 'duration_minutes', 'extra_minutes', 'question_ids',
-        'attempt_number', 'started_at', 'last_seen_at',
+        'option_orders', 'attempt_number', 'started_at', 'last_seen_at',
         'proctor_photo_path', 'camera_active',
     ];
 
@@ -20,6 +20,7 @@ class LiveExamSession extends Model
         'duration_minutes' => 'integer',
         'attempt_number'   => 'integer',
         'question_ids'     => 'array',
+        'option_orders'    => 'array',
         'camera_active'    => 'boolean',
     ];
 

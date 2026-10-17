@@ -6,6 +6,7 @@ use App\Events\StudentExamActivity;
 use App\Http\Controllers\Controller;
 use App\Models\ExamAnswerDraft;
 use App\Models\ExamConfig;
+use App\Models\LiveExamSession;
 use App\Models\ProctoringEvent;
 use App\Models\Question;
 use App\Models\Submission;
@@ -351,6 +352,10 @@ class StudentExamController extends Controller
                 'options' => $this->normalizeOptionsForStudent($row->options),
             ];
         }
+
+        // Shuffle option display order per attempt (ids stay stable for scoring).
+        // Locked on the live session so resume/refresh shows the same order.
+        $safeQuestions = $this->applyOptionOrderShuffle($session, $safeQuestions);
 
         if (empty($safeQuestions)) {
             abort(422, 'Could not load questions for this exam. Contact admin.');
@@ -1026,6 +1031,77 @@ class StudentExamController extends Controller
         }
 
         return array_slice($qs, 0, max(1, $needed));
+    }
+
+    /**
+     * Randomize option positions for the student paper without changing option ids.
+     * Persists order on the live session so refresh/resume stays consistent.
+     *
+     * @param  list<array{id:mixed,text:string,text_mr:?string,text_hi:?string,options:list<array<string,mixed>>}>  $questions
+     * @return list<array<string,mixed>>
+     */
+    private function applyOptionOrderShuffle(LiveExamSession $session, array $questions): array
+    {
+        $stored = is_array($session->option_orders) ? $session->option_orders : [];
+        $nextOrders = [];
+        $dirty = false;
+
+        foreach ($questions as &$q) {
+            $qid = (string) ($q['id'] ?? '');
+            $opts = is_array($q['options'] ?? null) ? $q['options'] : [];
+            if ($qid === '' || count($opts) < 2) {
+                $q['options'] = $opts;
+                continue;
+            }
+
+            $byId = [];
+            foreach ($opts as $opt) {
+                if (!is_array($opt) || !array_key_exists('id', $opt) || $opt['id'] === null || $opt['id'] === '') {
+                    continue;
+                }
+                $byId[(string) $opt['id']] = $opt;
+            }
+
+            $preferred = $stored[$qid] ?? null;
+            $ordered = [];
+            if (is_array($preferred) && !empty($preferred)) {
+                foreach ($preferred as $oid) {
+                    $ok = (string) $oid;
+                    if (isset($byId[$ok])) {
+                        $ordered[] = $byId[$ok];
+                        unset($byId[$ok]);
+                    }
+                }
+                // Append any new/missing options not in the saved order
+                foreach ($byId as $opt) {
+                    $ordered[] = $opt;
+                    $dirty = true;
+                }
+            } else {
+                $ordered = array_values($opts);
+                shuffle($ordered);
+                $dirty = true;
+            }
+
+            $q['options'] = $ordered;
+            $nextOrders[$qid] = array_values(array_map(
+                static fn ($o) => (string) ($o['id'] ?? ''),
+                $ordered
+            ));
+        }
+        unset($q);
+
+        // Persist when missing/changed, or prune keys for questions no longer on the paper
+        $prevKeys = array_map('strval', array_keys($stored));
+        $nextKeys = array_keys($nextOrders);
+        sort($prevKeys);
+        sort($nextKeys);
+        if ($dirty || $prevKeys !== $nextKeys || $session->option_orders === null) {
+            $session->option_orders = $nextOrders;
+            $session->save();
+        }
+
+        return $questions;
     }
 
     /**

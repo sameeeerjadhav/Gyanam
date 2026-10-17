@@ -82,6 +82,8 @@ class LiveSessionService
             return;
         }
         $session->question_ids = $next;
+        // New paper → new option shuffle (do not reuse old permutations)
+        $session->option_orders = null;
         $session->save();
     }
 
