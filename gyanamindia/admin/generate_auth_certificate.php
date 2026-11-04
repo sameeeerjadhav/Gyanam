@@ -143,9 +143,33 @@ try {
         $pdf->Cell($W, 0, $text, 0, 0, 'C');
     };
 
+    $putFittedCentered = function (
+        string $text,
+        float $y,
+        float $maxSize,
+        string $style = 'B',
+        string $color = '0,0,0'
+    ) use ($pdf, $W) {
+        [$r, $g, $b] = array_map('intval', explode(',', $color));
+        $maxWidth = $W - 24;
+        $fontSize = $maxSize;
+
+        do {
+            $pdf->SetFont('Times', $style, $fontSize);
+            if ($pdf->GetStringWidth($text) <= $maxWidth || $fontSize <= 12) {
+                break;
+            }
+            $fontSize -= 0.5;
+        } while ($fontSize > 12);
+
+        $pdf->SetTextColor($r, $g, $b);
+        $pdf->SetXY(($W - $maxWidth) / 2, $y);
+        $pdf->Cell($maxWidth, 0, $text, 0, 0, 'C');
+    };
+
     // Y positions tuned per template (Abacus page is taller with lower body area)
     if ($variant === 'abacus') {
-        $put($atcName, 140, 26, 'BI', '0,0,128');
+        $putFittedCentered($atcName, 140, 26, 'BI', '0,0,128');
         $put('Centre registration code ' . $atcCode, 158, 15, 'B', '30,30,30');
         $put('Has been recognized as our Authorized Training Centre for', 170, 15, 'B', '30,30,30');
         $put($conductingLine, 182, 15, 'B', '30,30,30');
@@ -156,7 +180,7 @@ try {
             $put($period, 194, 15, 'B', '30,30,30');
         }
     } else {
-        $put($atcName, 132, 26, 'BI', '0,0,128');
+        $putFittedCentered($atcName, 132, 26, 'BI', '0,0,128');
         $put('Centre registration code ' . $atcCode, 150, 15, 'B', '30,30,30');
         $put('Has been recognized as our Authorized Training Centre for', 162, 15, 'B', '30,30,30');
         $put($conductingLine, 174, 15, 'B', '30,30,30');
