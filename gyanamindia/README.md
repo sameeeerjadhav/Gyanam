@@ -58,6 +58,13 @@ Gyanam India Portal is a multi-role web application designed to streamline opera
 - Dispatch tracking reports
 - Performance metrics
 
+### 📜 Authorization Certificates
+- Generate authorization certificates for ATC centers from the Admin portal
+- Supports separate Abacus, Vedic Maths, and GIIT/IT certificate variants
+- Long centre names wrap within the certificate template without overflowing the border
+- Certificate locations include the city and district label where available
+- Authorization Certificate listings can be filtered by expiry status, DLC office, search text, and recently joined date (7, 30, or 90 days)
+
 ## 🏗️ System Architecture
 
 ### Technology Stack
@@ -88,6 +95,8 @@ Gyanam/
 │   ├── index.php          # Dashboard
 │   ├── dlc_offices.php    # DLC management
 │   ├── atc_centers.php    # ATC statistics
+│   ├── authorization_certificates.php # Authorization certificate management
+│   ├── generate_auth_certificate.php  # Certificate PDF generation
 │   ├── dispatches.php     # Dispatch creation
 │   ├── documents.php      # Document upload
 │   └── sidebar.php        # Navigation
