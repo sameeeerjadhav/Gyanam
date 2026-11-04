@@ -151,16 +151,17 @@ try {
         string $color = '0,0,0'
     ) use ($pdf, $W) {
         [$r, $g, $b] = array_map('intval', explode(',', $color));
-        $maxWidth = $W - 24;
+        // Keep long names inside the template's inner decorative border.
+        $maxWidth = $W - 44;
         $fontSize = $maxSize;
 
         do {
             $pdf->SetFont('Times', $style, $fontSize);
-            if ($pdf->GetStringWidth($text) <= $maxWidth || $fontSize <= 12) {
+            if ($pdf->GetStringWidth($text) <= $maxWidth || $fontSize <= 10) {
                 break;
             }
             $fontSize -= 0.5;
-        } while ($fontSize > 12);
+        } while ($fontSize > 10);
 
         $pdf->SetTextColor($r, $g, $b);
         $pdf->SetXY(($W - $maxWidth) / 2, $y);
