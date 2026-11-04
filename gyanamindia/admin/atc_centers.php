@@ -404,6 +404,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $searchTerm = trim($_GET['search'] ?? '');
 $dlcFilter = $_GET['dlc'] ?? 'all';
 $statusFilter = $_GET['status'] ?? 'all';
+$recentFilter = (string)($_GET['recent'] ?? 'all');
+$allowedRecentFilters = ['all' => null, '7' => 7, '30' => 30, '90' => 90];
+if (!array_key_exists($recentFilter, $allowedRecentFilters)) {
+    $recentFilter = 'all';
+}
+$recentDays = $allowedRecentFilters[$recentFilter];
 
 $sql = "SELECT 
             atc.*,
@@ -437,6 +443,10 @@ if ($statusFilter !== 'all') {
     $params[] = $statusFilter;
 }
 
+if ($recentDays !== null) {
+    $sql .= " AND atc.date_created >= DATE_SUB(CURDATE(), INTERVAL {$recentDays} DAY)";
+}
+
 // Count matching ATCs for pagination
 $countSql = "SELECT COUNT(*) FROM atc_centers atc
              LEFT JOIN dlc_offices dlc ON atc.dlc_id = dlc.id
@@ -449,6 +459,9 @@ if ($dlcFilter !== 'all') {
 if ($statusFilter !== 'all') {
     $countSql .= " AND atc.status = ?";
     $countParams[] = $statusFilter;
+}
+if ($recentDays !== null) {
+    $countSql .= " AND atc.date_created >= DATE_SUB(CURDATE(), INTERVAL {$recentDays} DAY)";
 }
 $countStmt = $pdo->prepare($countSql);
 $countStmt->execute($countParams);
@@ -2223,17 +2236,17 @@ try {
 
                 <!-- Status Filter Tabs -->
                 <div class="status-tabs">
-                    <a href="?status=all<?= $searchTerm ? '&search=' . urlencode($searchTerm) : '' ?><?= $dlcFilter !== 'all' ? '&dlc=' . $dlcFilter : '' ?>"
+                    <a href="?status=all<?= $searchTerm ? '&search=' . urlencode($searchTerm) : '' ?><?= $dlcFilter !== 'all' ? '&dlc=' . $dlcFilter : '' ?><?= $recentFilter !== 'all' ? '&recent=' . urlencode($recentFilter) : '' ?>"
                         class="status-tab <?= $statusFilter === 'all' ? 'active' : '' ?>">
                         <span>All Centers</span>
                         <span class="tab-pill"><?= $totalCount ?></span>
                     </a>
-                    <a href="?status=Active<?= $searchTerm ? '&search=' . urlencode($searchTerm) : '' ?><?= $dlcFilter !== 'all' ? '&dlc=' . $dlcFilter : '' ?>"
+                    <a href="?status=Active<?= $searchTerm ? '&search=' . urlencode($searchTerm) : '' ?><?= $dlcFilter !== 'all' ? '&dlc=' . $dlcFilter : '' ?><?= $recentFilter !== 'all' ? '&recent=' . urlencode($recentFilter) : '' ?>"
                         class="status-tab <?= $statusFilter === 'Active' ? 'active' : '' ?>">
                         <span>Active</span>
                         <span class="tab-pill"><?= $activeCount ?></span>
                     </a>
-                    <a href="?status=Inactive<?= $searchTerm ? '&search=' . urlencode($searchTerm) : '' ?><?= $dlcFilter !== 'all' ? '&dlc=' . $dlcFilter : '' ?>"
+                    <a href="?status=Inactive<?= $searchTerm ? '&search=' . urlencode($searchTerm) : '' ?><?= $dlcFilter !== 'all' ? '&dlc=' . $dlcFilter : '' ?><?= $recentFilter !== 'all' ? '&recent=' . urlencode($recentFilter) : '' ?>"
                         class="status-tab <?= $statusFilter === 'Inactive' ? 'active' : '' ?>">
                         <span>Inactive</span>
                         <span class="tab-pill"><?= $inactiveCount ?></span>
@@ -2255,6 +2268,12 @@ try {
                                         <?= htmlspecialchars($dlc['name']) ?>
                                     </option>
                                 <?php endforeach; ?>
+                            </select>
+                            <select name="recent" id="atcRecentFilter" class="select-sm" aria-label="Filter recently joined ATCs">
+                                <option value="all" <?= $recentFilter === 'all' ? 'selected' : '' ?>>All Joining Dates</option>
+                                <option value="7" <?= $recentFilter === '7' ? 'selected' : '' ?>>Joined in last 7 days</option>
+                                <option value="30" <?= $recentFilter === '30' ? 'selected' : '' ?>>Joined in last 30 days</option>
+                                <option value="90" <?= $recentFilter === '90' ? 'selected' : '' ?>>Joined in last 90 days</option>
                             </select>
                             <div class="search-wrap">
                                 <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
@@ -2703,6 +2722,7 @@ Best Regards,
             const btn = document.getElementById('atcSearchBtn');
             const countEl = document.getElementById('atcListCount');
             const dlcSel = document.getElementById('atcDlcFilter');
+            const recentSel = document.getElementById('atcRecentFilter');
             const tbody = document.querySelector('.atc-table tbody');
             if (!input || !tbody) return;
 
@@ -2758,6 +2778,15 @@ Best Regards,
                 const q = (input.value || '').trim();
                 if (q) url.searchParams.set('search', q);
                 else url.searchParams.delete('search');
+                url.searchParams.delete('page');
+                window.location.href = url.pathname + url.search;
+            });
+
+            recentSel?.addEventListener('change', () => {
+                const url = new URL(window.location.href);
+                const recent = recentSel.value || 'all';
+                if (recent === 'all') url.searchParams.delete('recent');
+                else url.searchParams.set('recent', recent);
                 url.searchParams.delete('page');
                 window.location.href = url.pathname + url.search;
             });
