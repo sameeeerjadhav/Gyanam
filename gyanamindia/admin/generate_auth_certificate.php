@@ -81,11 +81,11 @@ $city     = trim($atc['city'] ?? $atc['taluka'] ?? '');
 $district = trim($atc['district'] ?? '');
 if ($variant === 'abacus') {
     if ($city && $district) {
-        $location = "at $city, $district";
+        $location = "at $city, Dist. $district";
     } elseif ($city) {
         $location = "at $city";
     } elseif ($district) {
-        $location = "at $district";
+        $location = "at Dist. $district";
     } else {
         $location = '';
     }
