@@ -143,34 +143,42 @@ try {
         $pdf->Cell($W, 0, $text, 0, 0, 'C');
     };
 
-    $putFittedCentered = function (
+    $putWrappedCentered = function (
         string $text,
         float $y,
-        float $maxSize,
+        float $fontSize,
         string $style = 'B',
         string $color = '0,0,0'
     ) use ($pdf, $W) {
         [$r, $g, $b] = array_map('intval', explode(',', $color));
-        // Keep long names inside the template's inner decorative border.
         $maxWidth = $W - 44;
-        $fontSize = $maxSize;
+        $pdf->SetFont('Times', $style, $fontSize);
+        $lines = [];
+        $line = '';
 
-        do {
-            $pdf->SetFont('Times', $style, $fontSize);
-            if ($pdf->GetStringWidth($text) <= $maxWidth || $fontSize <= 10) {
-                break;
+        foreach (preg_split('/\s+/', trim($text)) as $word) {
+            $candidate = $line === '' ? $word : $line . ' ' . $word;
+            if ($line !== '' && $pdf->GetStringWidth($candidate) > $maxWidth) {
+                $lines[] = $line;
+                $line = $word;
+            } else {
+                $line = $candidate;
             }
-            $fontSize -= 0.5;
-        } while ($fontSize > 10);
+        }
+        if ($line !== '') {
+            $lines[] = $line;
+        }
 
         $pdf->SetTextColor($r, $g, $b);
-        $pdf->SetXY(($W - $maxWidth) / 2, $y);
-        $pdf->Cell($maxWidth, 0, $text, 0, 0, 'C');
+        foreach ($lines as $index => $line) {
+            $pdf->SetXY(($W - $maxWidth) / 2, $y + ($index * 8));
+            $pdf->Cell($maxWidth, 0, $line, 0, 0, 'C');
+        }
     };
 
     // Y positions tuned per template (Abacus page is taller with lower body area)
     if ($variant === 'abacus') {
-        $putFittedCentered($atcName, 140, 26, 'BI', '0,0,128');
+        $putWrappedCentered($atcName, 140, 26, 'BI', '0,0,128');
         $put('Centre registration code ' . $atcCode, 158, 15, 'B', '30,30,30');
         $put('Has been recognized as our Authorized Training Centre for', 170, 15, 'B', '30,30,30');
         $put($conductingLine, 182, 15, 'B', '30,30,30');
@@ -181,7 +189,7 @@ try {
             $put($period, 194, 15, 'B', '30,30,30');
         }
     } else {
-        $putFittedCentered($atcName, 132, 26, 'BI', '0,0,128');
+        $putWrappedCentered($atcName, 132, 26, 'BI', '0,0,128');
         $put('Centre registration code ' . $atcCode, 150, 15, 'B', '30,30,30');
         $put('Has been recognized as our Authorized Training Centre for', 162, 15, 'B', '30,30,30');
         $put($conductingLine, 174, 15, 'B', '30,30,30');
