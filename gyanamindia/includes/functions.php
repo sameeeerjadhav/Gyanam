@@ -1491,9 +1491,11 @@ function atcAuthCertificateVariants(?string $centerType): array {
     if ($hasAbacus || $hasVedic) {
         $variants[] = [
             'variant'     => 'abacus',
-            'label'       => 'Abacus / Vedic Maths Authorization',
-            'brand'       => 'Gyanam Abacus',
-            'course_line' => 'Conducting our Gyanam Abacus Academy',
+            'label'       => $hasVedic ? 'Vedic Maths Authorization' : 'Abacus Authorization',
+            'brand'       => $hasVedic ? 'Gyanam Vedic Maths' : 'Gyanam Abacus',
+            'course_line' => $hasVedic
+                ? 'Conducting our Gyanam Vedic Maths Academy'
+                : 'Conducting our Gyanam Abacus Academy',
             'code_prefix' => 'Gyanam ATC-',
         ];
     }
@@ -5994,5 +5996,4 @@ function buildAtcMaterialRequirementReport(PDO $pdo, ?int $filterAtcId = null): 
     }
     return $report;
 }
-
 
