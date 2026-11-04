@@ -170,8 +170,9 @@ try {
         }
 
         $pdf->SetTextColor($r, $g, $b);
+        $startY = $y - (max(0, count($lines) - 1) * 10);
         foreach ($lines as $index => $line) {
-            $pdf->SetXY(($W - $maxWidth) / 2, $y + ($index * 8));
+            $pdf->SetXY(($W - $maxWidth) / 2, $startY + ($index * 8));
             $pdf->Cell($maxWidth, 0, $line, 0, 0, 'C');
         }
     };
