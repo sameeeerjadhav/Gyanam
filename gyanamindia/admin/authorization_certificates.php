@@ -16,6 +16,12 @@ $pdo = getDBConnection();
 $search    = trim($_GET['q']  ?? '');
 $dlcFilter = intval($_GET['dlc'] ?? 0);
 $expFilter = trim($_GET['exp'] ?? 'all');   // all | expiring | expired | valid
+$recentFilter = (string)($_GET['recent'] ?? 'all');
+$allowedRecentFilters = ['all' => null, '7' => 7, '30' => 30, '90' => 90];
+if (!array_key_exists($recentFilter, $allowedRecentFilters)) {
+    $recentFilter = 'all';
+}
+$recentDays = $allowedRecentFilters[$recentFilter];
 
 $where  = '1=1';
 $params = [];
@@ -29,13 +35,16 @@ switch ($expFilter) {
     case 'expiring': $where .= ' AND a.authorization_expires_at BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)'; break;
     case 'valid':    $where .= ' AND a.authorization_expires_at > DATE_ADD(CURDATE(), INTERVAL 30 DAY)'; break;
 }
+if ($recentDays !== null) {
+    $where .= " AND a.date_created >= DATE_SUB(CURDATE(), INTERVAL {$recentDays} DAY)";
+}
 
 $atcs = [];
 try {
     $q = $pdo->prepare("
         SELECT a.id, a.atc_code, a.name, a.city, a.district, a.taluka, a.state,
                a.center_type, a.contact_person, a.mobile, a.status,
-               a.authorization_expires_at,
+               a.authorization_expires_at, a.date_created,
                d.name AS dlc_name
         FROM atc_centers a
         LEFT JOIN dlc_offices d ON d.id = a.dlc_id
@@ -354,10 +363,10 @@ function acCenterTypeLabel(?string $centerType): string {
         <!-- Filters -->
         <form method="GET" class="ac-toolbar" id="filterForm">
             <div class="ac-toolbar-meta" id="acListCount">Showing <?= count($atcs) ?> center<?= count($atcs) === 1 ? '' : 's' ?></div>
-            <a href="?exp=all" class="ac-filter-btn <?= $expFilter==='all' ? 'active' : '' ?>">All</a>
-            <a href="?exp=valid" class="ac-filter-btn valid <?= $expFilter==='valid' ? 'active' : '' ?>">Valid</a>
-            <a href="?exp=expiring" class="ac-filter-btn expiring <?= $expFilter==='expiring' ? 'active' : '' ?>">Expiring</a>
-            <a href="?exp=expired" class="ac-filter-btn expired <?= $expFilter==='expired' ? 'active' : '' ?>">Expired</a>
+            <a href="?exp=all<?= $dlcFilter ? '&dlc='.$dlcFilter : '' ?><?= $recentFilter !== 'all' ? '&recent='.$recentFilter : '' ?>" class="ac-filter-btn <?= $expFilter==='all' ? 'active' : '' ?>">All</a>
+            <a href="?exp=valid<?= $dlcFilter ? '&dlc='.$dlcFilter : '' ?><?= $recentFilter !== 'all' ? '&recent='.$recentFilter : '' ?>" class="ac-filter-btn valid <?= $expFilter==='valid' ? 'active' : '' ?>">Valid</a>
+            <a href="?exp=expiring<?= $dlcFilter ? '&dlc='.$dlcFilter : '' ?><?= $recentFilter !== 'all' ? '&recent='.$recentFilter : '' ?>" class="ac-filter-btn expiring <?= $expFilter==='expiring' ? 'active' : '' ?>">Expiring</a>
+            <a href="?exp=expired<?= $dlcFilter ? '&dlc='.$dlcFilter : '' ?><?= $recentFilter !== 'all' ? '&recent='.$recentFilter : '' ?>" class="ac-filter-btn expired <?= $expFilter==='expired' ? 'active' : '' ?>">Expired</a>
             <input type="hidden" name="exp" value="<?= htmlspecialchars($expFilter) ?>">
             <select name="dlc" id="acDlcFilter" class="ac-select">
                 <option value="0">All DLC Offices</option>
@@ -365,9 +374,15 @@ function acCenterTypeLabel(?string $centerType): string {
                 <option value="<?= $d['id'] ?>" <?= $dlcFilter == $d['id'] ? 'selected' : '' ?>><?= htmlspecialchars($d['name']) ?></option>
                 <?php endforeach; ?>
             </select>
+            <select name="recent" id="acRecentFilter" class="ac-select" aria-label="Filter recently joined ATCs">
+                <option value="all" <?= $recentFilter === 'all' ? 'selected' : '' ?>>All Joining Dates</option>
+                <option value="7" <?= $recentFilter === '7' ? 'selected' : '' ?>>Joined in last 7 days</option>
+                <option value="30" <?= $recentFilter === '30' ? 'selected' : '' ?>>Joined in last 30 days</option>
+                <option value="90" <?= $recentFilter === '90' ? 'selected' : '' ?>>Joined in last 90 days</option>
+            </select>
             <input type="search" name="q" id="acSearchInput" class="ac-search-input" placeholder="Search name, code, district…" value="<?= htmlspecialchars($search) ?>" autocomplete="off">
             <button type="button" class="ac-btn-search" id="acSearchBtn">Search</button>
-            <?php if ($search || $dlcFilter): ?>
+            <?php if ($search || $dlcFilter || $recentFilter !== 'all'): ?>
             <a href="?exp=<?= urlencode($expFilter) ?>" class="ac-btn-clear">Clear</a>
             <?php endif; ?>
 
@@ -488,7 +503,11 @@ function acCenterTypeLabel(?string $centerType): string {
                     <div class="ac-cert-row">
                     <?php foreach ($certVars as $cv):
                         $vKey = $cv['variant'];
-                        $vLabel = $vKey === 'it' ? 'GIIT Certificate' : 'Abacus Certificate';
+                        $vLabel = $vKey === 'it'
+                            ? 'GIIT Certificate'
+                            : (($cv['brand'] ?? '') === 'Gyanam Vedic Maths'
+                                ? 'Vedic Maths Certificate'
+                                : 'Abacus Certificate');
                         $tplOk = atcAuthCertificateTemplatePath($vKey) !== null;
                         $previewUrl = 'generate_auth_certificate.php?atc_id=' . (int)$atc['id'] . '&variant=' . urlencode($vKey) . '&preview=1';
                         $downloadUrl = 'generate_auth_certificate.php?atc_id=' . (int)$atc['id'] . '&variant=' . urlencode($vKey);
@@ -503,7 +522,7 @@ function acCenterTypeLabel(?string $centerType): string {
                             </a>
                             <a class="btn-cert-ghost<?= $tplOk ? '' : ' disabled' ?>" href="<?= $tplOk ? htmlspecialchars($downloadUrl) : '#' ?>"<?= $tplOk ? '' : ' style="pointer-events:none;opacity:.45"' ?>>
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                Download <?= $vKey === 'it' ? 'GIIT' : 'Abacus' ?>
+                                Download <?= $vKey === 'it' ? 'GIIT' : (($cv['brand'] ?? '') === 'Gyanam Vedic Maths' ? 'Vedic Maths' : 'Abacus') ?>
                             </a>
                         </div>
                     <?php endforeach; ?>
@@ -601,7 +620,9 @@ function acCenterTypeLabel(?string $centerType): string {
                                 foreach ($certVars2 as $cv2):
                                     $vk = $cv2['variant'];
                                     $tplOk2 = atcAuthCertificateTemplatePath($vk) !== null;
-                                    $short = $vk === 'it' ? 'GIIT' : 'Abacus';
+                                    $short = $vk === 'it'
+                                        ? 'GIIT'
+                                        : (($cv2['brand'] ?? '') === 'Gyanam Vedic Maths' ? 'Vedic Maths' : 'Abacus');
                                 ?>
                                 <a href="generate_auth_certificate.php?atc_id=<?= (int)$atc['id'] ?>&variant=<?= urlencode($vk) ?>&preview=1" target="_blank"
                                    class="btn-cert <?= htmlspecialchars($vk) ?>" style="padding:.38rem .6rem;font-size:.72rem;<?= $tplOk2 ? '' : 'opacity:.45;pointer-events:none' ?>">
@@ -761,7 +782,7 @@ GyanamLiveFilter({
     countFormat: (n) => 'Showing ' + n + ' center' + (n === 1 ? '' : 's'),
     searchParam: 'q',
     emptyColspan: 7,
-    reloadSelects: ['#acDlcFilter'],
+    reloadSelects: ['#acDlcFilter', '#acRecentFilter'],
 });
 </script>
 </body>
