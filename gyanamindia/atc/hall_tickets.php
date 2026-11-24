@@ -1770,13 +1770,16 @@ function printHallTicket() {
         alert('Hall ticket content is not ready. Generate or Reprint first.');
         return;
     }
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer,height=1123,width=794');
+    // NOTE: do not use 'noopener' here — browsers return null for it, so the
+    // window stays blank and the hall ticket never gets written into it.
+    const printWindow = window.open('', '_blank', 'height=1123,width=794');
     if (!printWindow) {
         alert('Pop-up blocked. Please allow pop-ups for this site to print the hall ticket.');
         return;
     }
     try {
-        printWindow.document.write('<html><head><title>Hall Ticket - GIIT</title>');
+        printWindow.document.open();
+        printWindow.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Hall Ticket - GIIT</title>');
         printWindow.document.write('<link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">');
         printWindow.document.write('</head><body class="ht-a4-print">');
         printWindow.document.write(contentEl.innerHTML);
@@ -1785,10 +1788,11 @@ function printHallTicket() {
         printWindow.focus();
         setTimeout(() => {
             try { printWindow.print(); } catch (e) { /* ignore */ }
-        }, 350);
+        }, 500);
     } catch (e) {
+        console.error('Hall ticket print failed:', e);
         try { printWindow.close(); } catch (e2) { /* ignore */ }
-        alert('Could not open the print window. Please try Reprint again.');
+        alert('Could not open the hall ticket. Please click Reprint again.');
     }
 }
 </script>
