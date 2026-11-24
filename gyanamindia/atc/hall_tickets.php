@@ -1770,30 +1770,55 @@ function printHallTicket() {
         alert('Hall ticket content is not ready. Generate or Reprint first.');
         return;
     }
-    // NOTE: do not use 'noopener' here — browsers return null for it, so the
-    // window stays blank and the hall ticket never gets written into it.
-    const printWindow = window.open('', '_blank', 'height=1123,width=794');
-    if (!printWindow) {
-        alert('Pop-up blocked. Please allow pop-ups for this site to print the hall ticket.');
-        return;
+    // Print through a hidden same-page frame: no pop-up window, so pop-up blockers
+    // (and noopener/null-window problems) can never break hall ticket printing.
+    const cssUrl = new URL('../assets/css/hall_ticket_a4.css', window.location.href).href;
+    const old = document.getElementById('htPrintFrame');
+    if (old) old.remove();
+
+    const frame = document.createElement('iframe');
+    frame.id = 'htPrintFrame';
+    frame.setAttribute('aria-hidden', 'true');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none;';
+    document.body.appendChild(frame);
+
+    const doc = frame.contentWindow.document;
+    doc.open();
+    doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Hall Ticket - GIIT</title>'
+        + '<link rel="stylesheet" href="' + cssUrl + '">'
+        + '</head><body class="ht-a4-print">' + contentEl.innerHTML + '</body></html>');
+    doc.close();
+
+    let printed = false;
+    const doPrint = function () {
+        if (printed) return;
+        printed = true;
+        try {
+            frame.contentWindow.focus();
+            frame.contentWindow.print();
+        } catch (e) {
+            console.error('Hall ticket print failed:', e);
+            alert('Could not print the hall ticket. Please click Reprint again.');
+        }
+        setTimeout(function () { try { frame.remove(); } catch (e) { /* ignore */ } }, 60000);
+    };
+
+    // Wait for the stylesheet + images (photo/logo) before opening the print dialog
+    const waitFor = Array.from(frame.contentWindow.document.querySelectorAll('img')).map(function (img) {
+        return img.complete ? Promise.resolve() : new Promise(function (res) {
+            img.addEventListener('load', res); img.addEventListener('error', res);
+        });
+    });
+    const link = frame.contentWindow.document.querySelector('link[rel="stylesheet"]');
+    if (link) {
+        waitFor.push(new Promise(function (res) {
+            link.addEventListener('load', res); link.addEventListener('error', res);
+        }));
     }
-    try {
-        printWindow.document.open();
-        printWindow.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Hall Ticket - GIIT</title>');
-        printWindow.document.write('<link rel="stylesheet" href="../assets/css/hall_ticket_a4.css">');
-        printWindow.document.write('</head><body class="ht-a4-print">');
-        printWindow.document.write(contentEl.innerHTML);
-        printWindow.document.write('</body></html>');
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-            try { printWindow.print(); } catch (e) { /* ignore */ }
-        }, 500);
-    } catch (e) {
-        console.error('Hall ticket print failed:', e);
-        try { printWindow.close(); } catch (e2) { /* ignore */ }
-        alert('Could not open the hall ticket. Please click Reprint again.');
-    }
+    Promise.race([
+        Promise.all(waitFor),
+        new Promise(function (res) { setTimeout(res, 2500); })
+    ]).then(function () { setTimeout(doPrint, 150); });
 }
 </script>
 
