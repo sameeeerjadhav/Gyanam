@@ -9,12 +9,13 @@
     <link rel="icon" href="assets/giit_brand_logo.png?v=2" type="image/png">
 
     <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" defer></script>
 
     <!-- Google Fonts - Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
 
     <!-- Custom Styles -->
     <link rel="stylesheet" href="src/styles/main.css?v=23">
@@ -31,7 +32,7 @@
     <div id="app"></div>
 
     <!-- Main Application Script (ES6 Module) -->
-    <script type="module" src="src/main.js?v=34"></script>
+    <script type="module" src="src/main.js?v=35"></script>
 </body>
 
 </html>

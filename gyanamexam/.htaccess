@@ -45,5 +45,16 @@
     </FilesMatch>
 </IfModule>
 
+# Cache static images for 30 days. Logo references carry ?v= query strings,
+# so bump the version when an image file is replaced.
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/png "access plus 30 days"
+    ExpiresByType image/jpeg "access plus 30 days"
+    ExpiresByType image/gif "access plus 30 days"
+    ExpiresByType image/webp "access plus 30 days"
+    ExpiresByType image/svg+xml "access plus 30 days"
+</IfModule>
+
 # Disable Directory Listing
 Options -Indexes

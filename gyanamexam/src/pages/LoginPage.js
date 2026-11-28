@@ -527,7 +527,7 @@ class LoginPage {
         <div class="gep-header-pattern" aria-hidden="true"></div>
         <div class="gep-header-inner">
           <div class="gep-brand">
-            <img class="gep-brand-logo" src="assets/giit_brand_logo.png?v=2" alt="GIIT"
+            <img class="gep-brand-logo" src="assets/giit_brand_logo_160.png?v=1" alt="GIIT"
                  onerror="this.onerror=null;this.src='assets/giit_logo.png?v=2';this.onerror=function(){this.src='assets/logo.png'}">
             <div class="gep-brand-text">
               <strong>Gyanam Institute of Information Technology</strong>
