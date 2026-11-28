@@ -64,6 +64,16 @@
     opacity: 1;
 }
 
+.edu-slide picture {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.brand-logo picture {
+    display: block;
+}
+
 .edu-slide img {
     width: 100%;
     height: 100%;

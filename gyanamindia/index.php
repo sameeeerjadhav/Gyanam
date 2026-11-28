@@ -53,15 +53,15 @@ $csrfToken = generateCSRFToken();
     <!-- ── Left Panel: Brand Showcase ── -->
     <div class="login-left">
         <div class="edu-carousel" aria-hidden="true">
-            <div class="edu-slide is-on"><img src="assets/login/edu-abacus.jpg?v=2" alt="" width="1280" height="720" fetchpriority="high" decoding="async"></div>
-            <div class="edu-slide"><img src="assets/login/edu-vedic.jpg?v=2" alt="" width="1280" height="720" loading="lazy" decoding="async"></div>
-            <div class="edu-slide"><img src="assets/login/edu-reading.jpg?v=2" alt="" width="1280" height="720" loading="lazy" decoding="async"></div>
-            <div class="edu-slide"><img src="assets/login/edu-computers.jpg?v=2" alt="" width="1280" height="720" loading="lazy" decoding="async"></div>
+            <div class="edu-slide is-on"><picture><source type="image/webp" srcset="assets/login/edu-abacus.webp?v=2"><img src="assets/login/edu-abacus.jpg?v=2" alt="" width="1280" height="720" fetchpriority="high" decoding="async"></picture></div>
+            <div class="edu-slide"><picture><source type="image/webp" srcset="assets/login/edu-vedic.webp?v=2"><img src="assets/login/edu-vedic.jpg?v=2" alt="" width="1280" height="720" loading="lazy" decoding="async"></picture></div>
+            <div class="edu-slide"><picture><source type="image/webp" srcset="assets/login/edu-reading.webp?v=2"><img src="assets/login/edu-reading.jpg?v=2" alt="" width="1280" height="720" loading="lazy" decoding="async"></picture></div>
+            <div class="edu-slide"><picture><source type="image/webp" srcset="assets/login/edu-computers.webp?v=2"><img src="assets/login/edu-computers.jpg?v=2" alt="" width="1280" height="720" loading="lazy" decoding="async"></picture></div>
         </div>
         <div class="edu-shade"></div>
 
         <div class="brand-logo">
-            <img src="assets/logo-480.png?v=1" alt="Gyanam India" width="827" height="327" fetchpriority="high" decoding="async">
+            <picture><source type="image/webp" srcset="assets/logo-480.webp?v=1"><img src="assets/logo-480.png?v=1" alt="Gyanam India" width="827" height="327" fetchpriority="high" decoding="async"></picture>
         </div>
 
         <div class="brand-text">
