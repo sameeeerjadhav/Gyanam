@@ -28,6 +28,10 @@ $csrfToken = generateCSRFToken();
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"></noscript>
     <meta name="description" content="Gyanam India Educational Services — Secure Login Portal for Super Admin, DLC Office, and ATC Login users.">
     <title>Login — Gyanam India</title>
     <!-- deploy-probe: 2026-09-20-v3.0.1 -->
@@ -49,15 +53,15 @@ $csrfToken = generateCSRFToken();
     <!-- ── Left Panel: Brand Showcase ── -->
     <div class="login-left">
         <div class="edu-carousel" aria-hidden="true">
-            <div class="edu-slide is-on"><img src="assets/login/edu-abacus.jpg" alt=""></div>
-            <div class="edu-slide"><img src="assets/login/edu-vedic.jpg" alt=""></div>
-            <div class="edu-slide"><img src="assets/login/edu-reading.jpg" alt=""></div>
-            <div class="edu-slide"><img src="assets/login/edu-computers.jpg" alt=""></div>
+            <div class="edu-slide is-on"><img src="assets/login/edu-abacus.jpg?v=2" alt="" width="1280" height="720" fetchpriority="high" decoding="async"></div>
+            <div class="edu-slide"><img src="assets/login/edu-vedic.jpg?v=2" alt="" width="1280" height="720" loading="lazy" decoding="async"></div>
+            <div class="edu-slide"><img src="assets/login/edu-reading.jpg?v=2" alt="" width="1280" height="720" loading="lazy" decoding="async"></div>
+            <div class="edu-slide"><img src="assets/login/edu-computers.jpg?v=2" alt="" width="1280" height="720" loading="lazy" decoding="async"></div>
         </div>
         <div class="edu-shade"></div>
 
         <div class="brand-logo">
-            <img src="assets/logo.png" alt="Gyanam India">
+            <img src="assets/logo-480.png?v=1" alt="Gyanam India" width="827" height="327" fetchpriority="high" decoding="async">
         </div>
 
         <div class="brand-text">

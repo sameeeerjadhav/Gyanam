@@ -3,7 +3,7 @@
    Premium split-screen design with natural logo display
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+/* Inter is loaded via <link> in index.php (non-blocking). Never @import here. */
 
 /* ---------- Full-screen wrapper ---------- */
 .login-wrapper {
