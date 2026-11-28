@@ -1,0 +1,20 @@
+# Root routing for exam.gyanamindia.com (this repo root is the exam public_html).
+# Keep this file in sync with the server copy. Do not edit only on the server.
+
+# Never serve the portal app folder from the exam domain (its PHP would run here).
+<IfModule mod_alias.c>
+RedirectMatch 403 ^/gyanamindia(/|$)
+</IfModule>
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+# Block dotfiles (except .well-known)
+RewriteRule (^|/)\.(?!well-known) - [F]
+# Laravel API: only public/ is reachable
+RewriteRule ^gyanam-backend/public(/|$) - [L]
+RewriteRule ^gyanam-backend(/|$) - [F]
+RewriteRule ^gyanamindia(/|$) - [F]
+# Exam SPA lives in gyanamexam/
+RewriteRule ^gyanamexam(/|$) - [L]
+RewriteRule ^(.*)$ gyanamexam/$1 [L]
+</IfModule>
